@@ -1,0 +1,57 @@
+# =============================================================================
+# Flock — simulated SSH nodes for multi-node testing (3 nodes).
+#
+#   ./scripts/sim-nodes.sh up      # gen key, build, start, register in Flock
+#   ./scripts/sim-nodes.sh down    # stop + remove
+#
+# Each node is a container running sshd + tmux + the agent CLIs. The native
+# orchestrator (on the host) reaches them via the published 127.0.0.1 ports
+# below, logging in as `flock` with the key the setup script generates.
+#
+# FLOCK_PUBKEY is supplied by the setup script (the public half of ./secrets/
+# sim_nodes_key); nothing secret is committed.
+# =============================================================================
+name: flock-nodes
+
+x-node-common: &node-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.node
+  image: flock-node:latest
+  environment:
+    FLOCK_PUBKEY: ${FLOCK_PUBKEY:-}
+  restart: unless-stopped
+
+services:
+  node-alpha:
+    <<: *node-common
+    hostname: node-alpha
+    ports:
+      - '127.0.0.1:2231:22'
+    # Persist the agent home (incl. ~/.claude, ~/.codex creds) across container
+    # recreation so an agent login STAYS logged in between Flock sessions. The
+    # entrypoint re-installs authorized_keys on every boot, so a persistent home
+    # is safe; Docker seeds the empty volume from the image's /home/flock skeleton.
+    volumes:
+      - node-alpha-home:/home/flock
+  node-bravo:
+    <<: *node-common
+    hostname: node-bravo
+    ports:
+      - '127.0.0.1:2232:22'
+    volumes:
+      - node-bravo-home:/home/flock
+  node-charlie:
+    <<: *node-common
+    hostname: node-charlie
+    ports:
+      - '127.0.0.1:2233:22'
+    volumes:
+      - node-charlie-home:/home/flock
+
+# Per-node so each node keeps its own credentials (login is per-host). Survives
+# `up`/`down`; only `down -v` clears them.
+volumes:
+  node-alpha-home:
+  node-bravo-home:
+  node-charlie-home:

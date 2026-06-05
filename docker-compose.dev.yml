@@ -1,0 +1,143 @@
+# Flock development + CI environment.
+# Host needs ONLY docker. Build/test/run all happen inside these containers.
+#
+#   make up        -> start postgres, orchestrator, web
+#   make verify    -> UNIT gate: install + typecheck + build + unit tests (builder)
+#   make test-int  -> integration gate (needs postgres + sshd + chromium)
+#   make e2e       -> playwright UI smokes
+#   make sh        -> shell into the builder
+
+name: flock-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flock
+      POSTGRES_PASSWORD: flock
+      POSTGRES_DB: flock
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U flock -d flock']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - flock
+
+  # The test/CI runner. `docker compose run --rm builder sh -lc '...'` executes
+  # the unit/integration gates here. Stays alive via `sleep infinity` for `make sh`.
+  builder:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    image: flock-dev:latest
+    working_dir: /workspace
+    command: ['sleep', 'infinity']
+    environment:
+      DATABASE_URL: postgres://flock:flock@postgres:5432/flock
+      CHROME_BIN: /usr/bin/chromium
+      # Integration tests reach the test ssh server via this host on the network.
+      FLOCK_TEST_SSH_HOST: sshd
+      FLOCK_TEST_SSH_PORT: '22'
+      FLOCK_TEST_SSH_USER: flock
+    volumes:
+      - .:/workspace
+      - pnpm-store:/pnpm-store
+      - ssh-keys:/ssh-keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - flock
+
+  orchestrator:
+    image: flock-dev:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: ['pnpm', '--filter', '@flock/orchestrator', 'dev']
+    environment:
+      DATABASE_URL: postgres://flock:flock@postgres:5432/flock
+      PORT: '8080'
+      # Bind all interfaces INSIDE the container so the web service can reach it as
+      # orchestrator:8080 (the daemon default is loopback-only).
+      HOST: 0.0.0.0
+      CHROME_BIN: /usr/bin/chromium
+    ports:
+      - '8080:8080'
+    volumes:
+      - .:/workspace
+      - pnpm-store:/pnpm-store
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - flock
+
+  web:
+    image: flock-dev:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: ['pnpm', '--filter', '@flock/web', 'dev', '--host', '0.0.0.0', '--port', '5173']
+    environment:
+      VITE_API_URL: http://localhost:8080
+    ports:
+      - '5173:5173'
+    volumes:
+      - .:/workspace
+      - pnpm-store:/pnpm-store
+    depends_on:
+      - orchestrator
+    networks:
+      - flock
+
+  # OpenSSH test server for SSH-transport integration tests. Generates an
+  # ephemeral host key + a test keypair at startup and writes the private key to
+  # the shared `ssh-keys` volume so the builder can authenticate as user `flock`.
+  # No secrets are committed to the repo.
+  sshd:
+    image: flock-dev:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        # Ensure host keys exist.
+        ssh-keygen -A
+        # Create unprivileged test user with a tmux-capable shell.
+        id flock >/dev/null 2>&1 || useradd -m -s /bin/bash flock
+        mkdir -p /home/flock/.ssh /ssh-keys
+        # Generate a client keypair once; share private key via the volume.
+        if [ ! -f /ssh-keys/id_test ]; then
+          ssh-keygen -t ed25519 -N '' -f /ssh-keys/id_test -C flock-test
+        fi
+        cp /ssh-keys/id_test.pub /home/flock/.ssh/authorized_keys
+        chown -R flock:flock /home/flock/.ssh
+        chmod 700 /home/flock/.ssh
+        chmod 600 /home/flock/.ssh/authorized_keys
+        # Loopback note: in production reverse tunnels bind to loopback only;
+        # here sshd is reachable only on the internal `flock` network.
+        exec /usr/sbin/sshd -D -e
+    volumes:
+      - ssh-keys:/ssh-keys
+    networks:
+      - flock
+
+networks:
+  flock:
+    driver: bridge
+
+volumes:
+  pg-data:
+  pnpm-store:
+  ssh-keys:

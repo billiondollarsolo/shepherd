@@ -1,0 +1,21 @@
+# =============================================================================
+# Flock session-chrome — the per-session headless Chrome that Layer A launches
+# (one isolated container per session, US-25). Plain Chrome images can't expose
+# CDP over a published port (Chrome 111+ binds the debugger to loopback and
+# ignores --remote-debugging-address), so this image adds a socat bridge via the
+# entrypoint. Built on zenika/alpine-chrome (full chromium → supports
+# --headless=new and the flags Layer A passes).
+# =============================================================================
+# T16: pinned to a digest for reproducible builds (the :latest tag floats).
+FROM zenika/alpine-chrome:latest@sha256:b7421e26b9cd26b44d4e3d1c791e34ab25a088ceb692ea620d803c759ffb618c
+
+USER root
+RUN apk add --no-cache socat
+
+COPY docker/session-chrome-entrypoint.sh /usr/local/bin/session-chrome-entrypoint.sh
+RUN chmod +x /usr/local/bin/session-chrome-entrypoint.sh
+
+# Chrome flags arrive as the container Cmd (from Layer A); the entrypoint bridges
+# CDP and execs chromium-browser. Runs as root with --no-sandbox (Layer A passes
+# it); the container is loopback-published only (NFR-SEC5).
+ENTRYPOINT ["/usr/local/bin/session-chrome-entrypoint.sh"]

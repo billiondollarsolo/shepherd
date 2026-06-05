@@ -1,0 +1,1 @@
+ALTER TABLE "agent_sessions" ADD COLUMN "permission_mode" text DEFAULT 'default' NOT NULL;

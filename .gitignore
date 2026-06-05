@@ -1,0 +1,37 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-types/
+**/dist-types/
+build/
+**/build/
+coverage/
+**/coverage/
+*.tsbuildinfo
+.pnpm-store/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Secrets — SSH keys, agentd secret, node credentials (NEVER commit)
+secrets/
+*.pem
+*_key
+*.key
+!*.pub
+.claude/settings.local.json
+
+# Vagrant machine state (contains generated private keys)
+vagrant/.vagrant/
+
+# Vendored external reference repos (their own git history, ~730MB) — not part of
+# the Flock codebase. Re-clone separately if needed; do not embed.
+/codex/
+/orca/

@@ -1,0 +1,51 @@
+/*
+ * Responsive styles for US-36 (FR-UI6).
+ *
+ * The desktop ⇄ phone surface swap is driven in JS by `useIsPhone`
+ * (matchMedia '(max-width: 767px)'), so only one of the two layouts is ever in
+ * the DOM. These rules are the CSS-side guarantees that pair with that swap:
+ *
+ *  1. A single breakpoint token, kept in lock-step with PHONE_MEDIA_QUERY, so
+ *     layout and JS agree on what "phone" means.
+ *  2. Touch-friendly hit targets and comfortable density on small screens.
+ *  3. A defensive fallback: if JS is slow/disabled and the dense desktop shell
+ *     ever paints on a narrow screen, it must scroll rather than clip the
+ *     "needs me" content off-screen.
+ *  4. Honour the notch (safe-area insets) for the home-screen PWA.
+ */
+
+:root {
+  /* Mirror of PHONE_MEDIA_QUERY (apps/web/src/features/responsive/useIsPhone.ts). */
+  --flock-phone-max: 767px;
+}
+
+/* Comfortable tap targets + edge padding on phones. */
+@media (max-width: 767px) {
+  [data-testid='phone-view'] {
+    /* Respect the iOS notch / home indicator when launched as a PWA. */
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Decision buttons (Approve / Deny) keep a 44px minimum touch target. */
+  [data-testid='phone-decision'] button {
+    min-height: 44px;
+  }
+
+  /* Defensive: if the desktop grid shell ever renders on a phone, let it scroll
+     both axes instead of clipping the urgent sessions out of view. */
+  [data-testid='app-shell'] {
+    overflow: auto;
+  }
+}
+
+/* In a standalone (installed) PWA, fill the whole viewport with no rubber-band
+   gap at the top, on any viewport size. */
+@media (display-mode: standalone) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+}

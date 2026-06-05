@@ -1,0 +1,164 @@
+/*
+ * Flock US-37 design polish.
+ *
+ * Theme-INDEPENDENT scales (type, space, radius, layout, elevation, motion)
+ * plus the signature status-indicator rendering and micro-motion. The per-theme
+ * COLOUR tokens live in theme.css (--flock-surface-*, --flock-ink-*,
+ * --flock-status-*, …) and flip with light/dark; the values here do NOT change
+ * between themes, so they are declared once on :root.
+ *
+ * Same `--flock-*` namespace as theme.css. Token names are guarded by
+ * polish.test.ts (every name in ALL_POLISH_TOKENS must appear here). Honors
+ * Appendix A.4 "calm density" and the §7 status model (awaiting_input/error
+ * ring; awaiting_input gets the signature pulse — the "which agent needs me"
+ * moment). Imported from index.css right after theme.css.
+ */
+
+:root {
+  /* --- deliberate type scale (bumped +2px from the original for legibility) --- */
+  --flock-text-3xs: 10px;
+  --flock-text-2xs: 11px;
+  --flock-text-xs: 12px;
+  --flock-text-sm: 13px;
+  --flock-text-md: 14px;
+  --flock-text-lg: 16px;
+  --flock-text-xl: 19px;
+  --flock-text-2xl: 24px;
+
+  --flock-leading-3xs: 14px;
+  --flock-leading-2xs: 15px;
+  --flock-leading-xs: 16px;
+  --flock-leading-sm: 18px;
+  --flock-leading-md: 20px;
+  --flock-leading-lg: 24px;
+  --flock-leading-xl: 26px;
+  --flock-leading-2xl: 32px;
+
+  /* --- weights + tracking (max two weights visible per view) --- */
+  --flock-weight-regular: 400;
+  --flock-weight-medium: 500;
+  --flock-weight-semibold: 600;
+  --flock-tracking-label: 0.06em;
+  --flock-tracking-tight: -0.01em;
+
+  /* --- spacing scale (4px base) --- */
+  --flock-space-0: 0;
+  --flock-space-1: 2px;
+  --flock-space-2: 4px;
+  --flock-space-3: 8px;
+  --flock-space-4: 12px;
+  --flock-space-5: 16px;
+  --flock-space-6: 24px;
+  --flock-space-7: 32px;
+  --flock-space-8: 48px;
+
+  /* --- radius (Linear: 6–8px, restrained) --- */
+  --flock-radius-xs: 3px;
+  --flock-radius-sm: 5px;
+  --flock-radius-md: 8px;
+  --flock-radius-lg: 12px;
+  --flock-radius-full: 999px;
+
+  /* --- layout sizing (Codex three-region proportions, FR-UI1; tightened) --- */
+  --flock-sidebar-w: 252px;
+  --flock-rail-w: 56px;
+  --flock-activity-w: 320px;
+  --flock-topbar-h: 40px;
+  --flock-drawer-h: 260px;
+  --flock-row-h: 32px;
+  --flock-indicator: 7px;
+  --flock-tab-h: 34px;
+  --flock-max-content: 1440px;
+
+  /* --- borders (quiet hairlines derived from ink; carry elevation) ---
+   * In dark, ink-primary is near-white, so these resolve to the Linear-style
+   * white-alpha hairlines (≈8% / 16%) that do all the structural work. */
+  --flock-border: color-mix(in srgb, var(--flock-ink-primary) 8%, transparent);
+  --flock-border-strong: color-mix(in srgb, var(--flock-ink-primary) 16%, transparent);
+  /* tinted accent surface for the selected/active row */
+  --flock-accent-soft: color-mix(in srgb, var(--flock-accent) 16%, transparent);
+  /* hover wash — a faint ink overlay (white in dark, black in light), Linear-style */
+  --flock-surface-hover: color-mix(in srgb, var(--flock-ink-primary) 6%, transparent);
+  /* lighter accent for hovered primary actions / links */
+  --flock-accent-hover: color-mix(in srgb, var(--flock-accent) 84%, white);
+
+  /* --- elevation (borders carry elevation; shadows only for overlays) --- */
+  --flock-shadow-none: none;
+  --flock-shadow-overlay: 0 6px 24px -8px rgb(16 24 32 / 0.18), 0 1px 2px rgb(16 24 32 / 0.1);
+  --flock-shadow-focus: 0 0 0 2px var(--flock-surface-0), 0 0 0 4px var(--flock-accent);
+
+  /* --- motion (tasteful micro-motion) --- */
+  --flock-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --flock-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --flock-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --flock-dur-fast: 120ms;
+  --flock-dur-base: 180ms;
+  --flock-dur-slow: 240ms;
+  --flock-pulse-dur: 2000ms;
+}
+
+/* Slightly deeper overlay shadow in dark (explicit choice). */
+:root[data-theme='dark'] {
+  --flock-shadow-overlay: 0 8px 28px -10px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+/*
+ * The status indicator "bird": a small colored dot whose colour is supplied by
+ * the caller via --flock-indicator-color (the per-status --flock-status-* var)
+ * and whose size defaults to --flock-indicator. This makes the dot visible even
+ * for plain markup; the React StatusIndicator drives colour through Tailwind
+ * bg-status-* utilities and adds the pulse via data-rings.
+ */
+.flock-status-indicator {
+  display: inline-block;
+  inline-size: var(--flock-indicator-size, var(--flock-indicator));
+  block-size: var(--flock-indicator-size, var(--flock-indicator));
+  border-radius: var(--flock-radius-full);
+  background: var(--flock-indicator-color, var(--flock-status-idle));
+  flex: none;
+  transition: background var(--flock-dur-fast) var(--flock-ease-standard);
+}
+
+/*
+ * awaiting_input + error ring and emit the signature pulse. The StatusIndicator
+ * component already sets data-rings="true" for exactly those states (sourced
+ * from the shared ringsSidebar() policy), so this targets them precisely.
+ */
+[data-rings='true'] {
+  animation: flock-pulse var(--flock-pulse-dur) var(--flock-ease-out) infinite;
+}
+
+@keyframes flock-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--flock-indicator-color, currentColor) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
+  }
+}
+
+/* small reusable keyboard-hint chip (Cmd+K / Cmd+J), Appendix A.2 */
+.flock-kbd {
+  font-family: var(--flock-font-code);
+  font-size: var(--flock-text-2xs);
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--flock-radius-xs);
+  background: var(--flock-surface-2);
+  color: var(--flock-ink-muted);
+  border: 1px solid var(--flock-border);
+}
+
+/* reduced motion: collapse all transitions + the pulse */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

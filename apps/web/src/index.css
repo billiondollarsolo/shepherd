@@ -1,0 +1,57 @@
+/*
+ * flock-theme tokens (US-31, spec Appendix A.3).
+ *
+ * The authoritative `--flock-*` token set + light/dark resolution lives in
+ * ./styles/theme.css (mirrored 1:1 from ../theme/tokens.ts). The @import must
+ * precede the @tailwind directives per CSS rules.
+ */
+@import './styles/theme.css';
+/* US-37 polish: theme-independent scales + signature micro-motion. Must come
+   after theme.css (uses its --flock-* colour vars) and before @tailwind. */
+@import './styles/polish.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Legacy aliases — earlier skeleton code (and tailwind.config.cjs) referenced
+ * --flock-bg / --flock-surface / --flock-fg / --flock-muted / --flock-attention
+ * / --flock-error. Map them onto the new first-class tokens so existing
+ * components stay correct AND theme automatically (these resolve through the
+ * theme-scoped --flock-* vars, so they flip with light/dark too).
+ */
+:root {
+  --flock-bg: var(--flock-surface-0);
+  --flock-surface: var(--flock-surface-1);
+  --flock-fg: var(--flock-ink-primary);
+  --flock-muted: var(--flock-ink-muted);
+  --flock-attention: var(--flock-status-awaiting);
+  --flock-error: var(--flock-status-error);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* US-37 polish: deliberate base type, one-confident-accent focus, mono nums. */
+body {
+  font-size: var(--flock-text-md);
+  line-height: var(--flock-leading-md);
+}
+
+:focus-visible {
+  outline: 2px solid var(--flock-accent);
+  outline-offset: 2px;
+  border-radius: var(--flock-radius-xs);
+}
+
+code,
+pre,
+kbd,
+samp,
+.flock-mono {
+  font-variant-numeric: tabular-nums;
+}

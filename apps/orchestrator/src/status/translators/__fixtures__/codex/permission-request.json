@@ -1,0 +1,6 @@
+{
+  "event": "PermissionRequest",
+  "session_id": "22222222-2222-4222-8222-222222222222",
+  "tool": "shell",
+  "message": "Codex needs your approval to run: rm -rf build/"
+}

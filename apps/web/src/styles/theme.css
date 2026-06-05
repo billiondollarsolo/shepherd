@@ -1,0 +1,162 @@
+/*
+ * Flock theme tokens — CSS custom properties (US-31, spec Appendix A.3).
+ *
+ * These `--flock-*` variables are the runtime face of the design tokens defined
+ * in `apps/web/src/theme/tokens.ts`. They MUST stay 1:1 with that file
+ * (theme.contract.test.ts asserts this). Every component styles itself from
+ * these variables; nothing hardcodes a colour, so flipping `data-theme` on the
+ * document root re-themes every surface at once.
+ *
+ * Resolution order:
+ *   1. `:root` carries the LIGHT tokens as the baseline.
+ *   2. `@media (prefers-color-scheme: dark)` overrides with DARK tokens when the
+ *      OS prefers dark AND no explicit choice has been made — this gives correct
+ *      first-paint colours before the ThemeProvider JS runs (no flash).
+ *   3. An explicit `[data-theme="light"]` / `[data-theme="dark"]` on <html>
+ *      (set by the ThemeProvider) wins over the media query, so the persisted
+ *      user choice always takes precedence.
+ *
+ * Status tokens drive the sidebar status dots and mirror the shared StatusEnum
+ * (starting | running | awaiting_input | idle | done | error | disconnected).
+ * Per Appendix A.3 the awaiting_input colour is exposed as --flock-status-awaiting.
+ */
+
+:root,
+:root[data-theme='light'] {
+  --flock-surface-0: #ffffff;
+  --flock-surface-1: #f5f6f8;
+  --flock-surface-2: #eaecf0;
+  --flock-accent: #2563eb;
+  --flock-ink-primary: #1c2024;
+  --flock-ink-muted: #5b6470;
+  --flock-status-starting: #64748b;
+  --flock-status-running: #2563eb;
+  --flock-status-awaiting: #d97706;
+  --flock-status-idle: #16a34a;
+  --flock-status-done: #0d9488;
+  --flock-status-error: #dc2626;
+  --flock-status-disconnected: #9aa3af;
+  --flock-diff-add: #e6f4ea;
+  --flock-diff-remove: #fce8e6;
+  --flock-diff-context: #f5f6f8;
+  --flock-font-ui: 'Inter Variable', 'Inter', 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --flock-font-code: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
+    'Liberation Mono', ui-monospace, monospace;
+
+  color-scheme: light;
+}
+
+/* OS prefers dark and the user has not made an explicit choice yet. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --flock-surface-0: #0a0b0d;
+    --flock-surface-1: #101216;
+    --flock-surface-2: #181b20;
+    --flock-accent: #4f7cc4;
+    --flock-ink-primary: #e7e9ec;
+    --flock-ink-muted: #888f9a;
+    --flock-status-starting: #8a93a3;
+    --flock-status-running: #4f7cc4;
+    --flock-status-awaiting: #f59e0b;
+    --flock-status-idle: #3fb950;
+    --flock-status-done: #2bb6a3;
+    --flock-status-error: #ef4444;
+    --flock-status-disconnected: #6b7280;
+    --flock-diff-add: #11261a;
+    --flock-diff-remove: #2f1518;
+    --flock-diff-context: #101216;
+
+    color-scheme: dark;
+  }
+}
+
+/* Explicit dark choice (persisted) — always wins over the media query.
+ * Linear-style refined graphite + calm blue (mirrors darkTheme in tokens.ts). */
+:root[data-theme='dark'] {
+  --flock-surface-0: #0a0b0d;
+  --flock-surface-1: #101216;
+  --flock-surface-2: #181b20;
+  --flock-accent: #4f7cc4;
+  --flock-ink-primary: #e7e9ec;
+  --flock-ink-muted: #888f9a;
+  --flock-status-starting: #8a93a3;
+  --flock-status-running: #4f7cc4;
+  --flock-status-awaiting: #f59e0b;
+  --flock-status-idle: #3fb950;
+  --flock-status-done: #2bb6a3;
+  --flock-status-error: #ef4444;
+  --flock-status-disconnected: #6b7280;
+  --flock-diff-add: #11261a;
+  --flock-diff-remove: #2f1518;
+  --flock-diff-context: #101216;
+
+  color-scheme: dark;
+}
+
+/* Baseline application of tokens so the page is legible in both themes. */
+html {
+  background-color: var(--flock-surface-0);
+  color: var(--flock-ink-primary);
+}
+
+body {
+  margin: 0;
+  background-color: var(--flock-surface-0);
+  color: var(--flock-ink-primary);
+  font-family: var(--flock-font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth, but cheap, transition when the user toggles themes. */
+@media (prefers-reduced-motion: no-preference) {
+  html,
+  body {
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--flock-font-code);
+}
+
+/*
+ * Sidebar status dots — driven entirely by the status.* tokens. Renderers add
+ * `data-status="starting|running|awaiting_input|idle|done|error|disconnected"`
+ * to a `.flock-status-dot`. (awaiting_input maps to the awaiting colour.)
+ */
+.flock-status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: var(--flock-status-disconnected);
+}
+.flock-status-dot[data-status='starting'] {
+  background-color: var(--flock-status-starting);
+}
+.flock-status-dot[data-status='running'] {
+  background-color: var(--flock-status-running);
+}
+.flock-status-dot[data-status='awaiting'],
+.flock-status-dot[data-status='awaiting_input'] {
+  background-color: var(--flock-status-awaiting);
+}
+.flock-status-dot[data-status='idle'] {
+  background-color: var(--flock-status-idle);
+}
+.flock-status-dot[data-status='done'] {
+  background-color: var(--flock-status-done);
+}
+.flock-status-dot[data-status='error'] {
+  background-color: var(--flock-status-error);
+}
+.flock-status-dot[data-status='disconnected'] {
+  background-color: var(--flock-status-disconnected);
+}

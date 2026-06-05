@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Flock</title>
+
+    <!-- All fonts are SELF-HOSTED via @fontsource (src/styles/terminal-fonts.ts):
+         Geist Variable for the paddock chrome + JetBrains Mono (& Nerd Font) for
+         the terminal/code. No CDN — instant paint, works air-gapped. -->
+
+    <!-- US-36 (FR-UI6) — installable PWA: link the manifest + declare the
+         on-brand chrome colour (matches flock-theme dark surface #06090d). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#06090d" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+
+    <!-- Full-screen standalone launch on Android (modern) + iOS 16.4+ (legacy
+         Apple key, still required for home-screen install). -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Flock" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

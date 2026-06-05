@@ -1,0 +1,112 @@
+/**
+ * Session list/create routes (spec §8.1, FR-S2/FR-S3, NFR-SEC6).
+ *
+ *   GET  /api/sessions[?projectId=...]   { sessions: Session[] }
+ *   POST /api/sessions                   body CreateSessionRequest → 201
+ *                                        CreateSessionResponse { session, hookToken }
+ *
+ * Cookie-authed via the shared `requireAuth` guard. Query/body validated with the
+ * shared zod contracts (`ListSessionsQuery`, `CreateSessionRequest`); an unknown
+ * project on create maps to 404. The success body is the shared
+ * `CreateSessionResponse`: the plaintext hook token is returned EXACTLY ONCE here
+ * (only its hash is stored) and never by any GET.
+ *
+ * NOTE: this registers ONLY `GET`/`POST /api/sessions`. `DELETE /api/sessions/:id`
+ * (terminate, US-13) is owned by `registerTerminateSessionRoute`.
+ */
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  CreateSessionRequest,
+  ListSessionsQuery,
+  SessionIdParams,
+  UpdateSessionRequest,
+} from '@flock/shared';
+import { badRequest } from '../http/reply.js';
+
+import type { AuthGuardDeps } from '../auth/middleware.js';
+import { makeRequireAuth } from '../auth/middleware.js';
+import {
+  SessionProjectNotFoundError,
+  type SessionRestService,
+} from './session-rest-service.js';
+import { WorktreeError } from './worktree-service.js';
+
+/**
+ * Register `GET`/`POST /api/sessions` against a {@link SessionRestService}. Plain
+ * function so `buildServer` wires it with the concrete service + auth guard.
+ */
+export function registerSessionRestRoutes(
+  app: FastifyInstance,
+  deps: { service: SessionRestService; auth: AuthGuardDeps },
+): void {
+  const requireAuth = makeRequireAuth(deps.auth);
+
+  // --- list sessions -----------------------------------------------------
+  app.get(
+    '/api/sessions',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = ListSessionsQuery.safeParse(request.query);
+      if (!parsed.success) {
+        return badRequest(reply, 'projectId, when provided, must be a valid id.');
+      }
+      const sessions = await deps.service.listSessions(parsed.data.projectId);
+      return reply.code(200).send({ sessions });
+    },
+  );
+
+  // --- create session ----------------------------------------------------
+  app.post(
+    '/api/sessions',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = CreateSessionRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return badRequest(reply, 'projectId and agentType are required.');
+      }
+      // requireAuth guarantees authUser is set (else it already replied 401).
+      const actor = request.authUser!;
+      try {
+        const result = await deps.service.createSession(parsed.data, {
+          userId: actor.id,
+          ip: request.ip ?? null,
+        });
+        return reply.code(201).send(result);
+      } catch (err) {
+        if (err instanceof SessionProjectNotFoundError) {
+          return reply
+            .code(404)
+            .send({ error: { code: 'project_not_found', message: err.message } });
+        }
+        // Worktree opt-in failed (e.g. the project dir isn't a git repo): surface a
+        // clean 422 with the reason, never a 500. The UI also gates the toggle on
+        // gitRepo so this is a backstop.
+        if (err instanceof WorktreeError) {
+          return reply
+            .code(422)
+            .send({ error: { code: 'worktree_failed', message: err.message } });
+        }
+        throw err;
+      }
+    },
+  );
+
+  // --- update session metadata (pin / note) ------------------------------
+  app.patch(
+    '/api/sessions/:id',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = SessionIdParams.safeParse(request.params);
+      if (!params.success) return badRequest(reply, 'a valid session id is required.');
+      const body = UpdateSessionRequest.safeParse(request.body);
+      if (!body.success) return badRequest(reply, 'provide pinned and/or note to update.');
+      const session = await deps.service.updateSession(params.data.id, body.data);
+      if (!session) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'session_not_found', message: 'Session not found.' } });
+      }
+      return reply.code(200).send({ session });
+    },
+  );
+}

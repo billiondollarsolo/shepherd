@@ -1,0 +1,18 @@
+{
+  "type": "message.updated",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "info": {
+      "role": "assistant",
+      "modelID": "deepseek-v4-flash-free",
+      "providerID": "opencode",
+      "cost": 0.0123,
+      "tokens": {
+        "input": 23520,
+        "output": 129,
+        "reasoning": 0,
+        "cache": { "read": 20864, "write": 0 }
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+# =============================================================================
+# Flock — LOCAL bring-up (quick same-origin look on a single high port).
+#
+#   docker compose --env-file .env.flock-local -f docker-compose.local.yml up -d
+#   open http://localhost:48080
+#
+# Reuses the already-built dev image (flock-dev:latest) instead of building the
+# prod images, and serves the web bundle + proxies the API/WS through Caddy on
+# :48080 over plain HTTP (no TLS cert warning). For real deployment use the
+# production docker-compose.yml (Caddy TLS) instead.
+# =============================================================================
+name: flock-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flock
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flock}
+      POSTGRES_DB: flock
+    volumes:
+      - flock-local-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U flock -d flock']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - flock-local
+
+  orchestrator:
+    image: flock-dev:latest
+    working_dir: /workspace
+    # Apply migrations (tsx) then run the orchestrator (tsx). Uses the workspace
+    # node_modules already installed in the dev image.
+    command:
+      - sh
+      - -lc
+      - 'pnpm --filter @flock/orchestrator db:migrate && pnpm --filter @flock/orchestrator dev'
+    environment:
+      DATABASE_URL: postgres://flock:${POSTGRES_PASSWORD:-flock}@postgres:5432/flock
+      HOST: 0.0.0.0
+      PORT: '8080'
+      # Plain HTTP locally -> do NOT mark the session cookie Secure, otherwise
+      # the browser drops it and login can't persist. The code gates Secure on
+      # FLOCK_INSECURE_COOKIES (see auth/cookie.ts), not COOKIE_SECURE.
+      FLOCK_INSECURE_COOKIES: '1'
+      PUBLIC_BASE_URL: http://localhost:48080
+      FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY}
+      FLOCK_MASTER_KEY_VERSION: '1'
+      SESSION_SECRET: ${SESSION_SECRET}
+      CHROME_BIN: /usr/bin/chromium
+      BROWSER_IMAGE: zenika/alpine-chrome:latest
+      BROWSER_MAX_CONCURRENT: '4'
+      DOCKER_SOCKET: /var/run/docker.sock
+      BROWSER_NETWORK: flock-local_flock-local
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - flock-local
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: ['caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile']
+    ports:
+      - '48080:48080'
+    volumes:
+      - ./docker/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ./apps/web/dist:/srv/web:ro
+    depends_on:
+      - orchestrator
+    networks:
+      - flock-local
+
+networks:
+  flock-local:
+    driver: bridge
+
+volumes:
+  flock-local-pg:

@@ -1,0 +1,54 @@
+# =============================================================================
+# Flock — simulated SSH "node" for multi-node testing.
+#
+# A lightweight stand-in for a remote machine Flock connects to over SSH. It runs
+# sshd + tmux (what the SSH transport + remote tmux need) AND installs the three
+# first-class agent CLIs (claude / codex / opencode) so a session created on this
+# node launches a REAL agent binary in tmux. (Provider auth is out of scope here
+# — "install all, run none for real" — so the agents start but aren't logged in.)
+#
+# Auth: the orchestrator connects as user `flock` with a public key passed in at
+# build/run via the FLOCK_PUBKEY env (written to authorized_keys on boot).
+# =============================================================================
+FROM node:22-bookworm-slim
+
+# --- UTF-8 locale --------------------------------------------------------------
+# Without a UTF-8 locale, tmux runs in 8-bit mode and mangles every multibyte
+# glyph an agent TUI draws (box-drawing, block-element logos, the ellipsis,
+# Powerline icons) into blanks/garbage. C.UTF-8 ships with glibc (no locale-gen).
+# Flock also forces this per tmux command (TMUX_UTF8_LOCALE_ENV) since SSH exec
+# sessions don't inherit it; this ENV is belt-and-suspenders for interactive use.
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LC_CTYPE=C.UTF-8
+
+# --- system: sshd + tmux + tools agents may shell out to ---------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openssh-server tmux git curl ca-certificates ripgrep \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd
+
+# --- agent CLIs (best-effort; image still builds if a download is unavailable)-
+# codex: npm global. claude + opencode: official install scripts → /usr/local/bin.
+RUN npm install -g @openai/codex || echo "WARN: codex install skipped"
+RUN npm install -g @google/gemini-cli || echo "WARN: gemini install skipped"
+RUN curl -fsSL https://x.ai/cli/install.sh | bash \
+      && (cp /root/.grok/bin/grok /usr/local/bin/grok 2>/dev/null \
+          || cp /root/.local/bin/grok /usr/local/bin/grok 2>/dev/null || true) \
+      || echo "WARN: grok install skipped"
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- --bin-dir /usr/local/bin \
+      || npm install -g @anthropic-ai/claude-code \
+      || echo "WARN: claude install skipped"
+RUN curl -fsSL https://opencode.ai/install | bash \
+      && (cp /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || true) \
+      || echo "WARN: opencode install skipped"
+
+# --- the unprivileged user the orchestrator logs in as -----------------------
+RUN useradd -m -s /bin/bash flock
+
+# --- boot: install the injected pubkey, then run sshd in the foreground -------
+COPY docker/node-entrypoint.sh /usr/local/bin/node-entrypoint.sh
+RUN chmod +x /usr/local/bin/node-entrypoint.sh
+
+EXPOSE 22
+ENTRYPOINT ["/usr/local/bin/node-entrypoint.sh"]

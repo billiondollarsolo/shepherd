@@ -1,0 +1,52 @@
+# Flock development / CI image.
+# Host is assumed to have ONLY docker — everything (node/pnpm/tsc/tmux/ssh/chromium)
+# lives here. Used by docker-compose.dev.yml services: builder, orchestrator, web, sshd.
+FROM node:22-bookworm-slim
+
+# ---- System deps -----------------------------------------------------------
+# tmux              : node-side session multiplexing (orchestrator drives it over ssh)
+# openssh-client    : ssh2/native ssh for the SSH transport + reverse tunnels
+# openssh-server    : lets this image double as the integration sshd test server
+# git               : project/repo operations
+# ca-certificates   : TLS for registries, web-push, etc.
+# curl              : healthchecks / debugging
+# chromium          : per-session browser driving + Playwright e2e
+# build-essential, python3, pkg-config : native module builds (node-pty, argon2, ssh2 crypto)
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    tmux \
+    openssh-client \
+    openssh-server \
+    git \
+    ca-certificates \
+    curl \
+    chromium \
+    build-essential \
+    python3 \
+    pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+
+# ---- Chromium / Puppeteer paths -------------------------------------------
+# Tell Puppeteer/Playwright to use the system chromium instead of downloading one.
+ENV CHROME_BIN=/usr/bin/chromium \
+    CHROME_PATH=/usr/bin/chromium \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_SKIP_DOWNLOAD=true \
+    PLAYWRIGHT_BROWSERS_PATH=0 \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# ---- pnpm via corepack -----------------------------------------------------
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+
+# ---- sshd prep (image can act as the integration test ssh server) ----------
+# The actual host keys / authorized_keys are provisioned at runtime by the
+# `sshd` service command in docker-compose.dev.yml so the repo holds no secrets.
+RUN mkdir -p /var/run/sshd
+
+WORKDIR /workspace
+
+# Default: stay alive so `docker compose run --rm builder ...` can exec commands.
+CMD ["sleep", "infinity"]

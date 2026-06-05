@@ -1,0 +1,70 @@
+# =============================================================================
+# Flock — reverse proxy + TLS termination (US-39, NFR-SEC1).
+#
+# Caddy terminates TLS in front of the orchestrator and web bundle so that ALL
+# UI/API/WS traffic is encrypted on the wire (NFR-SEC1). The orchestrator and
+# web services speak plain HTTP/WS on the internal compose network only; nothing
+# but this proxy is published to the public interface.
+#
+# Auth itself is enforced by the orchestrator's global default-deny surface
+# guard (NFR-SEC6, see apps/orchestrator/src/auth/surface-guard.ts); the proxy's
+# job is purely transport security + routing. The hook endpoint (per-session
+# token, spec §8.1) is routed to the orchestrator like the rest of /api — its
+# own token check authorizes it.
+#
+# Configuration is data-driven via env (NFR-DEP2):
+#   FLOCK_DOMAIN   public hostname; with a real domain Caddy auto-provisions a
+#                  Let's Encrypt certificate. Defaults to `localhost`, for which
+#                  Caddy mints a locally-trusted internal cert (good for dev/CI
+#                  and IP-only deploys).
+#   ACME_EMAIL     contact email for the ACME account (optional but recommended).
+# Certificates + ACME account keys persist in the `caddy_data` named volume so
+# they survive restarts and are never baked into the image.
+# =============================================================================
+
+# NOTE: the ACME account email is intentionally NOT set as a global option here.
+# A global `email {$ACME_EMAIL}` fails to parse when ACME_EMAIL is empty (the
+# placeholder expands to zero arguments). Caddy provisions certs fine without an
+# explicit email (internal cert for localhost; Let's Encrypt for a real domain).
+# To register an ACME contact email, set it per-site via a `tls {$ACME_EMAIL}`
+# directive only when you know it is non-empty.
+
+{$FLOCK_DOMAIN:localhost} {
+	# --- Security headers --------------------------------------------------
+	header {
+		# Force HTTPS for a year incl. subdomains (NFR-SEC1). Caddy already
+		# redirects http->https; HSTS keeps clients on TLS thereafter.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Don't advertise the server software.
+		-Server
+	}
+
+	# --- API + hook callbacks ---------------------------------------------
+	# All /api/* (cookie-authed UI/API + the per-session-token hook endpoint)
+	# go to the orchestrator. Auth is enforced INSIDE the orchestrator.
+	handle /api/* {
+		reverse_proxy orchestrator:8080
+	}
+
+	# --- WebSocket channels (status | pty | screencast | nodes, spec §8.2) -
+	# Caddy proxies the Upgrade/Connection handshake transparently; the
+	# orchestrator authenticates the upgrade from the session cookie
+	# (authenticateUpgrade, NFR-SEC6) and rejects anonymous sockets.
+	handle /ws* {
+		reverse_proxy orchestrator:8080
+	}
+
+	# --- Health probe ------------------------------------------------------
+	handle /health* {
+		reverse_proxy orchestrator:8080
+	}
+
+	# --- Static PWA bundle (everything else) -------------------------------
+	# The React/Vite SPA + service worker. Served by the web (nginx) container.
+	handle {
+		reverse_proxy web:80
+	}
+}

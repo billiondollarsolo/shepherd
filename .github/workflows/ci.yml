@@ -1,0 +1,87 @@
+# T13 — CI gate. Blocks merge on red typecheck / lint / unit tests (web +
+# orchestrator + shared) and on a broken agentd (go vet / go test / cross-build).
+# This mirrors `make verify` but runs natively on the runner (no Docker-in-Docker)
+# for speed. Integration/e2e suites (need Postgres + sshd + chromium) are out of
+# scope here and run separately.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · build · unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Shared contracts must be built before the apps typecheck against its dist.
+      - name: Build
+        run: pnpm -r build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      # Vuln gate: fail the build on a known-vulnerable production npm dependency
+      # (high/critical). Keeps fastify/ws/drizzle/etc. patched over time.
+      - name: Audit (npm)
+        run: pnpm audit --prod --audit-level high
+
+  agentd:
+    name: agentd · vet · test · dist
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agentd
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: agentd/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      # Vuln gate: scan agentd (and its module graph) for known Go CVEs that the
+      # code actually reaches — including stdlib CVEs, which is why the build runs
+      # on a current Go (1.25) toolchain.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      # Cross-compile the release binaries the remote-node bootstrap ships, so a
+      # build break (or a bad VERSION) is caught in CI, not at deploy time (T14).
+      - name: make dist
+        run: make dist

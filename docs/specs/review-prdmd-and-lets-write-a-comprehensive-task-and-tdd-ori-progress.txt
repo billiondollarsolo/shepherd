@@ -1,0 +1,84 @@
+FLOCK — IMPLEMENTATION PROGRESS
+Spec: docs/specs/review-prdmd-and-lets-write-a-comprehensive-task-and-tdd-ori.md
+Built by flock-build workflow (run wf_5ccd8de2-4d9, 51 agents). Gates RE-RUN FIRSTHAND by the operator 2026-05-29.
+
+FIRSTHAND VERIFICATION (re-executed inside the dev container, not agent self-report):
+  typecheck (tsc -b x3) ......... GREEN
+  lint (eslint) ................. GREEN (0 errors; 1 cosmetic unused-var warning in apps/web/src/features/center/diffApi.ts)
+  build (incl web vite build) ... GREEN
+  test:unit ..................... GREEN  830 passing  (shared 59 / orchestrator 506 / web 265)
+  test:int (real pg+sshd+tmux) .. GREEN  86 passing  (14 files)   [bring up postgres+sshd first, or `make test-int`]
+  test:e2e (Playwright/chromium)  16 passing + 2 skipped (18)     (skipped = US-41/US-42, need the live full stack)
+  TOTAL TESTS PASSING ........... 932  (+2 e2e authored, skip without a live orchestrator+pg backend)
+
+  NOTE: the flock-build workflow's Deploy gate ran the e2e gate but NOT test:int, so two
+  deploy-acceptance assertions (deploy.int.test.ts) went unchecked. Re-running test:int
+  firsthand found them red; they were STALE tests (asserted exactly 3 services before US-39
+  added the Caddy TLS proxy, and a docker.sock regex that didn't allow the ${VAR:-default}
+  host-side form). Fixed the assertions to the real spec intent; test:int now 86/86 green.
+
+PHASE 0 — Spikes .......................................... [GREEN] (deferred to safe defaults: xterm.js + native/MCP browser; see docs/decisions/)
+PHASE 1 — Foundation ...................................... [GREEN]  US-1..US-6
+PHASE 2 — Node transport, tmux, terminal .................. [GREEN]  US-7..US-13
+PHASE 3 — Status, hooks, notifications .................... [GREEN]  US-14..US-24
+PHASE 4 — Three-layer per-session browser ................. [GREEN]  US-25..US-29
+PHASE 5 — Codex-style UI shell + design polish ............ [GREEN]  US-30..US-37
+PHASE 6 — Deploy, audit, hardening, e2e ................... [GREEN]  US-38..US-40 green; US-41/US-42 e2e authored (skip w/o live stack)
+
+DETAIL (all stories implemented with co-located TDD tests):
+  US-1  Monorepo + shared contracts ...................... [GREEN]
+  US-2  Postgres schema + migrations (Drizzle) ........... [GREEN]
+  US-3  Secret store (AES-256-GCM, key_version) .......... [GREEN]
+  US-4  First-run admin setup (409 if admin exists) ...... [GREEN]
+  US-5  Login / httpOnly cookies / role gating .......... [GREEN]
+  US-6  User invite (admin) .............................. [GREEN]
+  US-7  NodeTransport interface + LocalTransport ......... [GREEN]
+  US-8  SshTransport + supervised reconnect .............. [GREEN]  (same contract suite over real sshd)
+  US-9  Reverse tunnel for hooks (loopback-only) ........ [GREEN]
+  US-10 tmux create/attach + boot re-attach survives restart [GREEN]
+  US-11 PTY <-> WebSocket bridge (multi-client+reconnect)  [GREEN]
+  US-12 Terminal renders (xterm.js) ..................... [GREEN]
+  US-13 Terminate session (+audit) ...................... [GREEN]
+  US-14 In-memory status map + WS fan-out (DB-free path) . [GREEN]
+  US-15 Hook endpoint + per-session token auth .......... [GREEN]
+  US-16 Claude Code translator (contract fixtures) ...... [GREEN]
+  US-17 Codex translator (contract fixtures) ............ [GREEN]
+  US-18 OpenCode translator + plugin template ........... [GREEN]
+  US-19 Session-scoped hook config injection (no clobber)  [GREEN]
+  US-20 OSC 9/777 + BEL fallback ........................ [GREEN]
+  US-21 Async write-behind event log .................... [GREEN]
+  US-22 Web Push (VAPID, trigger predicate) ............. [GREEN]
+  US-23 Sidebar status + needs-attention ordering ....... [GREEN]
+  US-24 Disconnect + reconcile (probe+scrollback+resync)  [GREEN]
+  US-25 Layer A isolated Chrome container (cap+teardown).. [GREEN]
+  US-26 Layer B agent-driving via opaque CDP endpoint ... [GREEN]
+  US-27 Layer C screencast (on-demand) .................. [GREEN]
+  US-28 Layer C input takeover/release (single-ctrl+audit) [GREEN]
+  US-29 Screencast bandwidth controls (all 4) ........... [GREEN]
+  US-30 Three-region layout + Cmd+K palette + Cmd+J drawer [GREEN]
+  US-31 Light/dark flock-theme tokens (OS-aware) ........ [GREEN]
+  US-32 Tree as supervision dashboard (live ordering) ... [GREEN]
+  US-33 Center tabs Terminal|Browser|read-only Diff ..... [GREEN]
+  US-34 Right activity sidebar .......................... [GREEN]
+  US-35 Bottom shell drawer ............................. [GREEN]
+  US-36 Responsive / PWA (manifest+SW) .................. [GREEN]
+  US-37 frontend-design polish pass (docs/design-tokens.md)[GREEN]
+  US-38 Production docker-compose (Caddy+pg+orch+web) .... [GREEN]
+  US-39 TLS proxy + default-deny authz (hook excepted) .. [GREEN]
+  US-40 Audit log surface (admin read) .................. [GREEN]
+  US-41 e2e happy path .................................. [AUTHORED] (skips without a live orchestrator+pg backend)
+  US-42 e2e reconnect/restart resilience ................ [AUTHORED] (skips without a live orchestrator+pg backend)
+
+KNOWN NON-BLOCKING NOTES:
+  - docker-compose.dev.yml `builder` only depends_on postgres; the SSH integration suites
+    need `sshd` too. Use `make test-int` (brings up postgres+sshd) or run
+    `docker compose -f docker-compose.dev.yml up -d postgres sshd` before `... run --rm builder pnpm -r test:int`.
+  - 1 eslint warning (unused `url`) in apps/web/src/features/center/diffApi.ts — cosmetic.
+  - Project is not yet a git repo (`git init` to start versioning).
+  - Per-session browser containers pull BROWSER_IMAGE (zenika/alpine-chrome) at runtime in prod.
+
+VERIFICATION COMMANDS:
+  Fast gate:  docker compose -f docker-compose.dev.yml run --rm builder sh -lc 'pnpm install && pnpm -r typecheck && pnpm -r lint && pnpm -r test:unit && pnpm -r build'
+  Int gate:   docker compose -f docker-compose.dev.yml up -d postgres sshd && docker compose -f docker-compose.dev.yml run --rm builder sh -lc 'pnpm -r test:int'   (or: make test-int)
+  E2E:        docker compose -f docker-compose.dev.yml run --rm builder sh -lc 'cd apps/web && PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium) pnpm exec playwright test'
+  Prod up:    cp .env.example .env; mkdir -p secrets; (set FLOCK_MASTER_KEY + postgres_password); docker compose up -d --build

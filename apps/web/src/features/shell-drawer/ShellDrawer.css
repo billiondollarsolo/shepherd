@@ -1,0 +1,77 @@
+/*
+ * Bottom shell drawer (US-35). Chrome only — quiet surface, single accent,
+ * tight spacing per Codex "calm density" (spec Appendix A.4). Colors come from
+ * the flock-theme token set (Appendix A.3); fallbacks keep it legible before a
+ * theme is applied. The drawer fills the AppShell bottom `drawer` region.
+ */
+.flock-shell-drawer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--flock-surface, #14151a);
+  color: var(--flock-fg, #e6e6e6);
+  font-family: var(--flock-font-ui, system-ui, sans-serif);
+}
+
+.flock-shell-drawer__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 28px;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--flock-muted, #24262e);
+  font-size: 12px;
+  user-select: none;
+}
+
+.flock-shell-drawer__title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.flock-shell-drawer__cwd {
+  color: var(--flock-muted, #9aa0aa);
+  font-family: var(--flock-font-code, ui-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+
+.flock-shell-drawer__spacer {
+  flex: 1 1 auto;
+}
+
+.flock-shell-drawer__status {
+  color: var(--flock-muted, #9aa0aa);
+  font-style: italic;
+}
+
+.flock-shell-drawer__close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--flock-muted, #9aa0aa);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+}
+
+.flock-shell-drawer__close:hover {
+  color: var(--flock-fg, #e6e6e6);
+  background: var(--flock-muted, #24262e);
+}
+
+.flock-shell-drawer__close:focus-visible {
+  outline: 2px solid var(--flock-accent, #5b8cff);
+  outline-offset: 1px;
+}
+
+.flock-shell-drawer__term {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.25rem 0.5rem;
+}

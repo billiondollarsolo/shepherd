@@ -1,0 +1,146 @@
+# =============================================================================
+# Flock orchestrator — production image (US-38, NFR-DEP1/DEP2)
+# Multi-stage: deps -> build -> runtime. No secrets baked in (NFR-DEP2);
+# everything sensitive is supplied at runtime via env / Docker secrets.
+# Build context is the repo root.
+#   docker build -f docker/Dockerfile.orchestrator -t flock-orchestrator .
+# =============================================================================
+
+# ---- Stage 0: build flock-agentd (T10) --------------------------------------
+# The orchestrator uses flock-agentd as the ONLY transport for the LOCAL node, so
+# the single-box deploy must ship + run the daemon in this image. Built here from
+# source (arch-matched via BuildKit's TARGETARCH) and stamped from the single
+# VERSION file (T14). Build-stage only — not shipped, so the tag float is low-risk.
+FROM golang:1.22-bookworm AS agentd-build
+WORKDIR /agentd
+COPY agentd/ ./
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+    go build -ldflags "-s -w -X main.Version=$(cat VERSION)" -o /out/flock-agentd .
+
+# ---- Stage 1: base toolchain (Node 22 + pnpm via corepack) ------------------
+# T16: node base pinned to a digest for reproducible builds (the tag floats).
+FROM node:22-bookworm-slim@sha256:7af03b14a13c8cdd38e45058fd957bf00a72bbe17feac43b1c15a689c029c732 AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+WORKDIR /app
+
+# ---- Stage 2: install ALL workspace deps (cached on lockfile) ---------------
+FROM base AS deps
+# Copy only manifests first so the dependency layer is cached across code edits.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY apps/orchestrator/package.json apps/orchestrator/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# ---- Stage 3: build shared + orchestrator -----------------------------------
+FROM deps AS build
+COPY . .
+# Build the shared contracts package first, then the orchestrator.
+RUN pnpm --filter "@flock/shared" run build \
+    && pnpm --filter "@flock/orchestrator" run build
+
+# ---- Stage 4: production deps only (prune dev) ------------------------------
+FROM base AS prod-deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY apps/orchestrator/package.json apps/orchestrator/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod \
+    --filter "@flock/orchestrator..." --filter "@flock/shared"
+
+# ---- Stage 5: lean runtime --------------------------------------------------
+# T16: pinned to a digest for reproducible builds (the tag floats).
+FROM node:22-bookworm-slim@sha256:7af03b14a13c8cdd38e45058fd957bf00a72bbe17feac43b1c15a689c029c732 AS runtime
+ENV NODE_ENV=production
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+# UTF-8 locale so the LOCAL node's tmux (running inside this container) renders
+# agent TUIs correctly. Without it, the container's POSIX locale makes tmux mangle
+# box-drawing / block / icon glyphs (Flock also forces it per command, but this is
+# belt-and-suspenders + helps any interactive use). C.UTF-8 ships with glibc.
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LC_CTYPE=C.UTF-8
+RUN corepack enable
+
+# Runtime OS deps:
+#  - tmux: process persistence for sessions on the local node (PRD §6.1)
+#  - openssh-client: SshTransport + reverse tunnels (PRD §6.2)
+#  - git: read-only diff pane (US-33)
+#  - ca-certificates: outbound TLS (Web Push, etc.)
+#  - curl: fetch the agent CLI installers below
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tmux \
+        openssh-client \
+        git \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Agent CLIs on PATH so a session on the LOCAL node (i.e. this container, when
+# Flock is deployed in Docker) can launch a real agent — same set the SSH node
+# image installs. Best-effort: the image still builds if a download is offline,
+# and a `terminal` (plain shell) local session works regardless. Real multi-node
+# deploys still run agents on SSH nodes; this makes the single-box deploy work too.
+RUN npm install -g @openai/codex || echo "WARN: codex install skipped"
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- --bin-dir /usr/local/bin \
+      || npm install -g @anthropic-ai/claude-code \
+      || echo "WARN: claude install skipped"
+RUN curl -fsSL https://opencode.ai/install | bash \
+      && (cp /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || true) \
+      || echo "WARN: opencode install skipped"
+
+WORKDIR /app
+
+# Bring over pruned production node_modules (root + workspace symlinks).
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=prod-deps /app/apps/orchestrator/node_modules ./apps/orchestrator/node_modules
+
+# Manifests (needed for workspace resolution + `pnpm` runtime scripts).
+COPY pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY apps/orchestrator/package.json ./apps/orchestrator/package.json
+
+# Built artifacts + Drizzle migrations.
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/apps/orchestrator/dist ./apps/orchestrator/dist
+COPY apps/orchestrator/drizzle ./apps/orchestrator/drizzle
+COPY apps/orchestrator/drizzle.config.ts ./apps/orchestrator/drizzle.config.ts
+
+# T10: ship flock-agentd (the local-node PTY transport) + the entrypoint that
+# supervises it alongside the orchestrator. agentd/VERSION ships too so
+# `flock-agentd version` agrees with the orchestrator (T14).
+COPY --from=agentd-build /out/flock-agentd /usr/local/bin/flock-agentd
+COPY agentd/VERSION /app/agentd/VERSION
+COPY docker/orchestrator-entrypoint.sh /usr/local/bin/flock-entrypoint.sh
+RUN chmod +x /usr/local/bin/flock-agentd /usr/local/bin/flock-entrypoint.sh
+
+# The unix socket the daemon listens on and the orchestrator dials (must match;
+# the orchestrator reads FLOCK_AGENTD_SOCKET). /tmp is writable by the node user.
+ENV FLOCK_AGENTD_SOCKET=/tmp/flock-agentd.sock
+
+# Default internal port (overridable via env). TLS is terminated upstream.
+ENV PORT=8080
+EXPOSE 8080
+
+# A node-owned workspace for LOCAL-node session working dirs. A named volume
+# mounted here (see docker-compose.yml) initialises with this dir's ownership, so
+# the non-root `node` user can write — and local sessions survive restarts.
+RUN mkdir -p /home/node/workspace && chown -R node:node /home/node/workspace
+
+# Run as the non-root `node` user shipped by the base image. Note: when the
+# Docker socket is mounted for dockerode (per-session browser containers),
+# socket group permissions must allow access; see docker-compose.yml.
+USER node
+
+# Entrypoint (T10): supervises flock-agentd, runs idempotent migrations, then
+# execs the orchestrator. `pnpm` workspace scripts stay the single source of
+# truth for migrate/start (invoked inside the entrypoint).
+CMD ["/usr/local/bin/flock-entrypoint.sh"]

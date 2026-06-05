@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flock terminal harness (e2e)</title>
+    <!--
+      Vite serves deep .html files raw (no HTML-transform), so @vitejs/plugin-react's
+      refresh preamble is not auto-injected here. Inject it manually so the harness
+      module (which Vite DOES transform, adding $RefreshReg$/$RefreshSig$ calls) runs
+      without throwing "@vitejs/plugin-react can't detect preamble".
+    -->
+    <script type="module">
+      import RefreshRuntime from '/@react-refresh';
+      RefreshRuntime.injectIntoGlobalHook(window);
+      window.$RefreshReg$ = () => {};
+      window.$RefreshSig$ = () => (type) => type;
+      window.__vite_plugin_react_preamble_installed__ = true;
+    </script>
+  </head>
+  <body>
+    <!--
+      US-12 e2e harness page. Served by the Vite dev server at
+      /src/features/terminal/harness.html (Vite injects the React-refresh
+      preamble for served HTML, which a page.route-fulfilled body cannot get),
+      it mounts the real <Terminal> against a fake echoing PTY socket.
+
+      Used ONLY by apps/web/e2e/terminal.spec.ts; it is NOT a production build
+      input (the build's only input is index.html), so it never ships.
+    -->
+    <div id="root"></div>
+    <script type="module" src="/src/features/terminal/terminalHarness.tsx"></script>
+  </body>
+</html>

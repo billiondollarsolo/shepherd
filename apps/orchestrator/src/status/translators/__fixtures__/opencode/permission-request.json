@@ -1,0 +1,11 @@
+{
+  "type": "permission.request",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "permissionID": "perm_a91f",
+    "title": "Run shell command",
+    "metadata": {
+      "command": "rm -rf build"
+    }
+  }
+}

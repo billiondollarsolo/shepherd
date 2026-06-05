@@ -1,0 +1,8 @@
+{
+  "type": "question.ask",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "questionID": "q_5c20",
+    "text": "Which database should I migrate first?"
+  }
+}

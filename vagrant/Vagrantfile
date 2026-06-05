@@ -1,0 +1,48 @@
+# =============================================================================
+# Flock — REALISTIC VM node(s) via Vagrant + libvirt (KVM).
+#
+# Why VMs (vs the lighter Docker sim nodes in docker-compose.nodes.yml): a real
+# kernel + persistent disk lets us validate the things containers can't fully
+# vouch for —
+#   - agent permission/sandbox modes (Codex landlock/seccomp, Claude guards) run
+#     for real instead of silently no-opping inside an unprivileged container;
+#   - credential persistence (~/.claude) across reboots is the disk's default.
+# Use the Docker nodes for fast everyday dev; bring a VM up when validating modes.
+#
+# Driven by scripts/sim-nodes-vm.sh (gen key → up → register in Flock), mirroring
+# scripts/sim-nodes.sh. The orchestrator (native, :8080) dials each VM on a
+# stable host-loopback SSH port, exactly like the Docker nodes.
+#
+#   FLOCK_VM_NODES      node count          (default 2)
+#   FLOCK_VM_BOX        libvirt base box    (default generic/ubuntu2204)
+#   FLOCK_VM_MEM/CPUS   per-VM resources    (default 8192 MB / 4 vCPU)
+#   FLOCK_PUBKEY        orchestrator pubkey installed for the `flock` user
+#
+# NETWORKING: unlike VirtualBox, the libvirt provider does NOT honor
+# `forwarded_port` to a host loopback port — each VM gets an IP on libvirt's
+# default NAT network (192.168.121.0/24), routable from the host. So the native
+# orchestrator registers each VM by that NAT IP:22 (not 127.0.0.1:<port>);
+# scripts/sim-nodes-vm.sh discovers it via `virsh domifaddr vagrant_node-vm-<n>`.
+# =============================================================================
+
+NODE_COUNT = Integer(ENV.fetch("FLOCK_VM_NODES", "2"))
+PUBKEY     = ENV.fetch("FLOCK_PUBKEY", "")
+
+Vagrant.configure("2") do |config|
+  config.vm.box = ENV.fetch("FLOCK_VM_BOX", "generic/ubuntu2204")
+
+  (1..NODE_COUNT).each do |i|
+    config.vm.define "node-vm-#{i}" do |node|
+      node.vm.hostname = "node-vm-#{i}"
+
+      node.vm.provider :libvirt do |lv|
+        lv.memory = Integer(ENV.fetch("FLOCK_VM_MEM", "8192"))
+        lv.cpus   = Integer(ENV.fetch("FLOCK_VM_CPUS", "4"))
+      end
+
+      # Same software as docker/Dockerfile.node; installs the agent CLIs and
+      # authorizes the `flock` user with the orchestrator pubkey.
+      node.vm.provision "shell", path: "provision.sh", args: [PUBKEY]
+    end
+  end
+end

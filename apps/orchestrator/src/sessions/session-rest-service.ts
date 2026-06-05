@@ -1,0 +1,316 @@
+/**
+ * SessionRestService — REST list/create over the agent_sessions registry,
+ * preserving the single authoritative record invariant (spec §4.2).
+ *
+ *   GET  /api/sessions[?projectId=...]   list sessions (mapped, no plaintext)
+ *   POST /api/sessions                   create a session (one id threads the
+ *                                        record name + hook token + browser endpoint)
+ *
+ * Create resolves the project → its node + working_dir, mints a per-session hook
+ * token (returned ONCE; only its hash is stored, NFR-SEC3), and inserts the ONE
+ * authoritative record via the shared session mappers. It then launches the agent
+ * on the node's flock-agentd daemon best-effort: a launch failure marks the
+ * session 'error' (the connection dot shows disconnected) but the record is still
+ * persisted (the paddock must always see the session) — never a silent shell.
+ *
+ * Postgres here is the registry/identity write path, NOT the live status path
+ * (spec §6.6). The hook token hash is produced by the injected hasher so this
+ * service has no crypto of its own and stays unit-testable.
+ */
+import { randomBytes, randomUUID } from 'node:crypto';
+
+import type {
+  CreateSessionRequest,
+  CreateSessionResponse,
+  Session,
+} from '@flock/shared';
+
+import type { AuditLogger } from '../audit/audit.js';
+import type { Database } from '../db/client.js';
+import { rowToSession, sessionToRow } from '../db/mappers.js';
+import { agentSessions, nodes, projects } from '../db/schema.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { agentLaunchCommand, initialSessionStatus } from './agent-launch.js';
+
+/** Raised when the target project id does not resolve (→ 404, spec §10). */
+export class SessionProjectNotFoundError extends Error {
+  constructor(public readonly projectId: string) {
+    super(`Project "${projectId}" was not found.`);
+    this.name = 'SessionProjectNotFoundError';
+  }
+}
+
+/** Hashes a plaintext hook token; only the hash is persisted (NFR-SEC3). */
+export type HookTokenHasher = (plaintext: string) => Promise<string>;
+
+/** Outcome of an {@link SessionRestServiceDeps.agentdLaunch} attempt. */
+export type AgentdLaunchOutcome = 'launched' | 'failed';
+
+export interface SessionRestServiceDeps {
+  db: Database;
+  /** Hashes the minted hook token (e.g. argon2id). */
+  hashToken: HookTokenHasher;
+  audit: AuditLogger;
+  /**
+   * Per-session env injected into the launched agent (hook URL/token/config dir,
+   * US-19). Resolver so the caller can mint session-scoped values. Optional.
+   */
+  sessionEnv?: (session: Session, hookToken: string) => Promise<Record<string, string>>;
+  /**
+   * Called synchronously after the authoritative record is persisted, BEFORE the
+   * tmux launch, so live channels (status map + hook binding + PTY) can track the
+   * session immediately (the sidebar shows "starting" and the terminal can
+   * attach). Receives the persisted session + its plaintext hook token (the token
+   * is needed nowhere else; only its hash is stored).
+   */
+  onSessionCreated?: (session: Session, hookToken: string) => void;
+  /**
+   * Launch the agent on the node's flock-agentd daemon (the only transport).
+   * Returns 'launched' on success or 'failed' on a hard failure — in which case
+   * it has already marked the session 'error' (the connection dot shows
+   * disconnected), so the failure is visible, never a silent shell.
+   */
+  agentdLaunch?: (args: {
+    session: Session;
+    nodeKind: string;
+    command?: string[];
+    env?: Record<string, string>;
+  }) => Promise<AgentdLaunchOutcome>;
+  /**
+   * Optional: create an isolated git worktree+branch for a session (US-worktree).
+   * When the request opts in, this runs BEFORE persist/launch and its returned
+   * path becomes the session's working dir. Throws (aborting create) if the dir
+   * isn't a git repo.
+   */
+  createWorktree?: (args: {
+    nodeId: string;
+    repoDir: string;
+    branch: string;
+  }) => Promise<{ path: string; branch: string }>;
+  /** Optional sink for best-effort tmux failures; defaults to console.warn. */
+  logger?: { warn(msg: string, err: unknown): void };
+}
+
+export interface SessionActionContext {
+  userId: string;
+  ip?: string | null;
+}
+
+export class SessionRestService {
+  private readonly db: Database;
+  private readonly hashToken: HookTokenHasher;
+  private readonly audit: AuditLogger;
+  private readonly sessionEnv?: (
+    session: Session,
+    hookToken: string,
+  ) => Promise<Record<string, string>>;
+  private readonly onSessionCreated?: (session: Session, hookToken: string) => void;
+  private readonly agentdLaunch?: (args: {
+    session: Session;
+    nodeKind: string;
+    command?: string[];
+    env?: Record<string, string>;
+  }) => Promise<AgentdLaunchOutcome>;
+  private readonly createWorktree?: (args: {
+    nodeId: string;
+    repoDir: string;
+    branch: string;
+  }) => Promise<{ path: string; branch: string }>;
+  private readonly logger: { warn(msg: string, err: unknown): void };
+
+  constructor(deps: SessionRestServiceDeps) {
+    this.db = deps.db;
+    this.hashToken = deps.hashToken;
+    this.audit = deps.audit;
+    this.sessionEnv = deps.sessionEnv;
+    this.onSessionCreated = deps.onSessionCreated;
+    this.agentdLaunch = deps.agentdLaunch;
+    this.createWorktree = deps.createWorktree;
+    this.logger = deps.logger ?? {
+      warn(msg, err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[flock-orchestrator] ${msg}`, err);
+      },
+    };
+  }
+
+  /**
+   * List OPEN sessions (closed_at IS NULL), optionally narrowed to a project.
+   * Terminated sessions are excluded so they leave the paddock tree immediately;
+   * their history lives in the registry/audit log, not the live session list.
+   */
+  async listSessions(projectId?: string): Promise<Session[]> {
+    const openOnly = isNull(agentSessions.closedAt);
+    const where = projectId
+      ? and(eq(agentSessions.projectId, projectId), openOnly)
+      : openOnly;
+    const rows = await this.db.select().from(agentSessions).where(where);
+    return rows.map(rowToSession);
+  }
+
+  /**
+   * Create a session for a project. Resolves project → node + working_dir, mints
+   * the per-session hook token (returned once), inserts the ONE authoritative
+   * record, and launches the agent on the node's flock-agentd daemon best-effort.
+   * Throws {@link SessionProjectNotFoundError} (→ 404) for an unknown project.
+   */
+  async createSession(
+    input: CreateSessionRequest,
+    ctx: SessionActionContext,
+  ): Promise<CreateSessionResponse> {
+    const [project] = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .limit(1);
+    if (!project) {
+      throw new SessionProjectNotFoundError(input.projectId);
+    }
+
+    const [node] = await this.db
+      .select()
+      .from(nodes)
+      .where(eq(nodes.id, project.nodeId))
+      .limit(1);
+    if (!node) {
+      // A project always references a node (FK), but guard defensively.
+      throw new SessionProjectNotFoundError(input.projectId);
+    }
+
+    const id = randomUUID();
+    // Stable per-session name (the daemon keys by session id; this is a legacy
+    // label still stored on the record + used as the terminate lookup key).
+    const tmuxSessionName = `flock-${id.replace(/[.:]/g, '-')}`;
+    let workingDir = input.workingDir ?? project.workingDir;
+
+    // Isolated worktree (opt-in): create a dedicated git worktree + branch off the
+    // project repo and run the agent THERE, so parallel sessions don't collide.
+    // Done BEFORE persist/launch so workingDir points at the worktree. A failure
+    // (e.g. not a git repo) aborts create with a clear error — never a silent
+    // non-isolated session.
+    let worktreeBranch: string | null = null;
+    if (input.worktree && this.createWorktree) {
+      const requested = input.worktreeBranch ?? `flock/${id.slice(0, 8)}`;
+      const wt = await this.createWorktree({
+        nodeId: node.id,
+        repoDir: workingDir,
+        branch: requested,
+      });
+      workingDir = wt.path;
+      worktreeBranch = wt.branch;
+    }
+
+    // Mint the per-session hook token: returned ONCE, only its hash is stored.
+    const hookToken = randomBytes(32).toString('base64url');
+    const hookTokenHash = await this.hashToken(hookToken);
+
+    const now = new Date().toISOString();
+    // ONE id threads the session name + hook token hash + (null) browser endpoint (§4.2).
+    const record: Session = {
+      id,
+      nodeId: node.id,
+      projectId: project.id,
+      agentType: input.agentType,
+      tmuxSessionName,
+      workingDir,
+      browserCdpEndpoint: null,
+      hookTokenHash,
+      // Agents wait for their hook stream (`starting`); a hook-less terminal is
+      // `running` the moment its shell spawns (see initialSessionStatus).
+      status: initialSessionStatus(input.agentType),
+      statusDetail: null,
+      worktreeBranch,
+      pinned: false,
+      note: null,
+      // T18: persist the autonomy level so it survives restart + shows in the UI.
+      permissionMode: input.permissionMode ?? 'default',
+      createdAt: now,
+      lastStatusAt: now,
+      createdBy: ctx.userId,
+      closedAt: null,
+    };
+
+    const [row] = await this.db.insert(agentSessions).values(sessionToRow(record)).returning();
+    if (!row) {
+      throw new Error('Failed to persist agent_session record.');
+    }
+    const persisted = rowToSession(row);
+
+    // Track the session in the live channels (status map + hook binding + PTY)
+    // BEFORE the agent launch, so the sidebar shows "starting" and the terminal
+    // can attach the moment the daemon session exists.
+    if (this.onSessionCreated) {
+      try {
+        this.onSessionCreated(persisted, hookToken);
+      } catch {
+        /* tracking is best-effort; create succeeds regardless. */
+      }
+    }
+
+    // Launch the agent on the node's flock-agentd daemon (best-effort): a failure
+    // must NOT 500 — the record is already persisted and listable. permissionMode
+    // is persisted on the record (T18) AND drives the launch flags here.
+    // Defaults to interactive when omitted. A `dev` session runs its configured
+    // command through the node shell so the daemon can supervise + auto-restart it.
+    const command =
+      persisted.agentType === 'dev' && input.devCommand
+        ? ['sh', '-lc', input.devCommand]
+        : agentLaunchCommand(persisted.agentType, input.permissionMode);
+    const env = this.sessionEnv
+      ? await this.sessionEnv(persisted, hookToken).catch(() => undefined)
+      : undefined;
+    // Launch path: flock-agentd owns the agent/terminal process. On a hard failure
+    // it marks the session 'error' (the connection dot shows disconnected) — the
+    // record persists with no live process; there is no tmux fallback.
+    if (this.agentdLaunch) {
+      try {
+        await this.agentdLaunch({ session: persisted, nodeKind: node.kind, command, env });
+      } catch (err) {
+        this.logger.warn(`agentd launch failed for session ${persisted.id}`, err);
+      }
+    }
+
+    // Append the security-relevant audit row (FR-A3). Best-effort, off the live path.
+    try {
+      await this.audit.recordSessionCreate({
+        sessionId: persisted.id,
+        userId: ctx.userId,
+        ip: ctx.ip ?? null,
+        detail: { agentType: persisted.agentType, nodeId: persisted.nodeId },
+      });
+    } catch {
+      /* swallow — create succeeds regardless (FR-A3 best-effort here). */
+    }
+
+    return { session: persisted, hookToken };
+  }
+
+  /**
+   * Update supervisor-facing metadata (pin / note) on a session. Cosmetic
+   * registry fields only — never touches the live status or process. Returns the
+   * updated session, or null when the id is unknown (→ 404). Omitted fields are
+   * left unchanged; `note: null` clears the note.
+   */
+  async updateSession(
+    id: string,
+    patch: { pinned?: boolean; note?: string | null },
+  ): Promise<Session | null> {
+    const set: { pinned?: boolean; note?: string | null } = {};
+    if (patch.pinned !== undefined) set.pinned = patch.pinned;
+    if (patch.note !== undefined) set.note = patch.note;
+    if (Object.keys(set).length === 0) {
+      const [row] = await this.db
+        .select()
+        .from(agentSessions)
+        .where(eq(agentSessions.id, id))
+        .limit(1);
+      return row ? rowToSession(row) : null;
+    }
+    const [row] = await this.db
+      .update(agentSessions)
+      .set(set)
+      .where(eq(agentSessions.id, id))
+      .returning();
+    return row ? rowToSession(row) : null;
+  }
+}

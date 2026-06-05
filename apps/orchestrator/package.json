@@ -1,0 +1,55 @@
+{
+  "name": "@flock/orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Flock orchestrator: holds the brains. SSH/tmux orchestration, in-memory status fan-out over WS, async write-behind event log, per-session browser isolation.",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:int": "vitest run --config vitest.int.config.ts --passWithNoTests",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@flock/shared": "workspace:*",
+    "argon2": "0.41.1",
+    "chrome-remote-interface": "0.33.3",
+    "cookie": "1.0.2",
+    "dockerode": "4.0.2",
+    "drizzle-orm": "0.45.2",
+    "fastify": "5.8.5",
+    "node-pty": "1.0.0",
+    "pg": "8.13.1",
+    "ssh2": "1.16.0",
+    "web-push": "3.6.7",
+    "ws": "8.21.0",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/dockerode": "3.3.34",
+    "@types/node": "22.10.2",
+    "@types/pg": "8.11.10",
+    "@types/ssh2": "1.15.1",
+    "@types/web-push": "3.6.4",
+    "@types/ws": "8.5.13",
+    "drizzle-kit": "0.30.1",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}

@@ -1,0 +1,210 @@
+# =============================================================================
+# Flock — PRODUCTION Docker Compose deploy (US-38/US-39, NFR-DEP1/DEP2/SEC1)
+#
+#   docker compose up -d        # caddy(TLS) + orchestrator + postgres + web
+#
+# US-39: Caddy terminates TLS in front (NFR-SEC1) and is the ONLY service that
+# publishes host ports (80/443). The orchestrator and web speak plain HTTP/WS on
+# the internal network and are never exposed directly. ALL UI/API/WS require
+# auth, enforced by the orchestrator's default-deny surface guard (NFR-SEC6);
+# the per-session-token hook endpoint is the one exception (spec §8.1).
+#
+# Per-session browser containers (Layer A, PRD §6.5) are DELIBERATELY NOT
+# declared here: they are launched/destroyed dynamically at runtime by the
+# orchestrator via dockerode against the mounted Docker socket (NFR-DEP1). One
+# isolated Chrome container per session, on the orchestrator VPS.
+#
+# Secrets are supplied at runtime via env / Docker secret files — never baked
+# into images (NFR-DEP2). Copy `.env.example` -> `.env` and fill it in, and (in
+# production) populate the secret files under `./secrets/`.
+#
+# Dev/local iteration uses docker-compose.dev.yml instead.
+# =============================================================================
+
+name: flock
+
+services:
+  # ---------------------------------------------------------------------------
+  # Caddy — reverse proxy + TLS termination (US-39, NFR-SEC1). The ONLY service
+  # published to the public interface. Terminates HTTPS and proxies /api + /ws +
+  # /health to the orchestrator and everything else to the web bundle. Auth is
+  # enforced inside the orchestrator (default-deny surface guard, NFR-SEC6); the
+  # hook endpoint stays the per-session-token exception (spec §8.1).
+  #
+  # With a real FLOCK_DOMAIN, Caddy auto-provisions a Let's Encrypt certificate;
+  # for `localhost`/IP-only deploys it mints a locally-trusted internal cert.
+  # Certs/ACME keys persist in caddy_data — never baked into the image (NFR-DEP2).
+  # ---------------------------------------------------------------------------
+  caddy:
+    # T16: pinned to a digest for reproducible builds (the 2-alpine tag floats).
+    image: caddy:2-alpine@sha256:86deaf5e3d3408a6ccec08fbb79989783dd26e206ae10bcf78a801dc8c9ab794
+    restart: unless-stopped
+    depends_on:
+      - orchestrator
+      - web
+    environment:
+      FLOCK_DOMAIN: ${FLOCK_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "${HTTP_HOST_PORT:-80}:80"
+      - "${HTTPS_HOST_PORT:-443}:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Postgres — durable system of record. NOT on the live status path (PRD §6.6).
+  # ---------------------------------------------------------------------------
+  postgres:
+    # T16: pinned to a digest for reproducible builds (the 16-bookworm tag floats).
+    image: postgres:16-bookworm@sha256:da514b7d293c5e9126503f85ecd835f4fb0942a77e012fe74f016c114c3e25b8
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flock}
+      POSTGRES_DB: ${POSTGRES_DB:-flock}
+      # Prefer the secret-file form in production (NFR-DEP2); falls back to the
+      # plain env var for simple deploys.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flock}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Bind to host loopback only (debugging); remove entirely in hardened prod.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flock} -d ${POSTGRES_DB:-flock}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Orchestrator — the brain. Status model, hooks, SSH, browser lifecycle, auth.
+  # Mounts the Docker socket so it can launch per-session browser containers
+  # at runtime via dockerode (NFR-DEP1). TLS is terminated by an upstream proxy
+  # (US-39 / NFR-SEC1) — this service speaks plain HTTP/WS internally.
+  # ---------------------------------------------------------------------------
+  orchestrator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.orchestrator
+    image: flock-orchestrator:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-8080}
+      # Bind all interfaces INSIDE the container so Caddy/web can reach it as
+      # orchestrator:8080 (the app default is loopback-only). The published port is
+      # still gated by the compose `ports:`/reverse proxy, not this bind.
+      HOST: ${HOST:-0.0.0.0}
+      DATABASE_URL: ${DATABASE_URL:-postgres://flock:flock@postgres:5432/flock}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      # Secret-store master key (encryption at rest, NFR-SEC2). Prefer the file.
+      FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY:-}
+      FLOCK_MASTER_KEY_FILE: /run/secrets/flock_master_key
+      FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-1}
+      # T16: removed dead SESSION_SECRET / COOKIE_SECURE knobs (never read by the
+      # app). Cookie security is controlled by FLOCK_INSECURE_COOKIES (unset in
+      # prod = Secure cookies). T14: the agentd version is single-sourced.
+      FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-0.2.8-dev}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+      # Per-session browser containers managed dynamically (PRD §6.5, US-25): the
+      # user's screencast browser pane. MUST be the Flock session-chrome image —
+      # it bridges CDP to the published port (plain Chrome binds the debugger to
+      # loopback only). Build once on the host:
+      #   docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-flock/session-chrome:latest}
+      BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
+      DOCKER_SOCKET: /var/run/docker.sock
+      # Attach per-session browser containers to this compose network so the
+      # orchestrator can reach their loopback-bound CDP endpoint.
+      BROWSER_NETWORK: flock_internal
+    secrets:
+      - flock_master_key
+    volumes:
+      # dockerode needs the host Docker socket to manage browser containers.
+      # Read-write is required to create/destroy containers (NFR-DEP1).
+      - "${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
+      # Persistent working dir for LOCAL-node sessions (agents run inside this
+      # container). Point a local project's working dir under /home/node/workspace
+      # so its files survive orchestrator restarts/redeploys.
+      - "flock_workdir:/home/node/workspace"
+    # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
+    # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
+    # network. `expose` documents the internal port without publishing it.
+    expose:
+      - "8080"
+    networks:
+      - internal
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Web — static React/Vite PWA bundle served by nginx. Fronted by the Caddy TLS
+  # proxy (US-39); Caddy routes /api + /ws to the orchestrator and everything
+  # else here. NO public port mapping — reachable only via Caddy (NFR-SEC1).
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    image: flock-web:latest
+    restart: unless-stopped
+    depends_on:
+      - orchestrator
+    expose:
+      - "80"
+    networks:
+      - internal
+
+# -----------------------------------------------------------------------------
+# Named volumes
+# -----------------------------------------------------------------------------
+volumes:
+  pgdata:
+  # Working dir for LOCAL-node sessions (agents run inside the orchestrator
+  # container). Persisted so local session files survive restarts/redeploys.
+  flock_workdir:
+  # Caddy TLS certificates + ACME account keys (US-39, NFR-SEC1/DEP2). Persisted
+  # so certs survive restarts and are never baked into an image.
+  caddy_data:
+  caddy_config:
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  internal:
+    name: flock_internal
+
+# -----------------------------------------------------------------------------
+# Secret files (NFR-DEP2) — populate these on the host before `compose up`.
+# Each is mounted at /run/secrets/<name> inside the consuming container and is
+# NEVER copied into an image. Create with e.g.:
+#   mkdir -p secrets
+#   openssl rand -base64 32 > secrets/flock_master_key
+#   printf '%s' 'strong-db-password' > secrets/postgres_password
+# -----------------------------------------------------------------------------
+secrets:
+  flock_master_key:
+    file: ./secrets/flock_master_key
+  postgres_password:
+    file: ./secrets/postgres_password

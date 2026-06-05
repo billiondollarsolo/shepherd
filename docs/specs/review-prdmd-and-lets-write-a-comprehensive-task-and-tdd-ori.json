@@ -1,0 +1,41 @@
+{
+  "project": "Flock",
+  "former_name": "Conductor",
+  "spec_type": "implementation + TDD phased plan",
+  "source": "PRD.md",
+  "created": "2026-05-29",
+  "summary": "Self-hosted web cockpit for supervising multiple CLI coding agents (Claude Code, Codex, OpenCode) across local + SSH nodes, styled after the OpenAI Codex desktop app but running on the web. Sessions persist via tmux; identity/history in Postgres; unified status model with live WebSocket fan-out + Web Push; three-layer per-session browser.",
+  "decisions": {
+    "backend": "Node.js + TypeScript",
+    "frontend": "React + Vite + TypeScript (Tailwind + Radix/shadcn)",
+    "terminal_emulator": "wterm primary / xterm.js fallback (decided by Phase-0 OSC spike)",
+    "repo": "pnpm monorepo: apps/orchestrator, apps/web, packages/shared",
+    "mobile": "PWA now + native-ready API (shared TS types; native app later needs only APNs/FCM push adapter)",
+    "v1_scope": "Full PRD Phase 1 + read-only Diff pane; browser comments (FR-B5) and worktrees deferred to v1.x",
+    "node_transport": "Local + SSH in parallel behind a shared NodeTransport interface",
+    "browser_location": "Per-session Chrome containers always on the orchestrator VPS (nodes stay dumb)",
+    "hook_injection": "Session-scoped config dirs + env (reversible, no clobber)",
+    "reconcile": "Re-attach + ground-truth probe + resync event + coarse PTY-scrollback heuristic; missed transitions not replayed",
+    "screencast_controls": ["cap concurrent streams", "throttle/pause unfocused", "adjustable JPEG quality", "on-demand only"],
+    "spikes": "Phase 0, gated before commit (wterm OSC; browser-harness 3-gate)",
+    "auth": "First-run admin setup + invite; argon2id; httpOnly secure cookies; roles admin/member; TLS",
+    "secrets": "App-level encryption at rest (libsodium/AES-GCM), ciphertext in Postgres, key_version rotation, pluggable for KMS/Vault",
+    "center_pane": "Terminal-first; summary in right activity sidebar; tabs Terminal|Browser|Diff",
+    "design_fidelity": "Codex-faithful skeleton + distinctive Flock polish via frontend-design skill. JSON-driven flock-theme token set mirroring codex-theme-v1 (surface/accent/ink/status/diff/fonts), light+dark first-class, OS-aware. Keybindings: Cmd+K palette, Cmd+J terminal, Ctrl+L clear. Full Codex UI reference captured in spec Appendix A.",
+    "testing": "Layered pyramid: vitest unit, dockerized integration, Playwright e2e, per-agent hook contract tests",
+    "ci_gate": "typecheck + lint + unit + integration + e2e + build"
+  },
+  "phases": [
+    {"id": 0, "name": "Spikes", "stories": ["US-0a", "US-0b"], "verification": "decisions recorded in docs/decisions/; no spike code in production paths", "status": "PENDING"},
+    {"id": 1, "name": "Foundation", "stories": ["US-1", "US-2", "US-3", "US-4", "US-5", "US-6"], "verification": "pnpm -r typecheck && test:unit && test:int && build", "status": "PENDING"},
+    {"id": 2, "name": "Node transport, tmux, terminal", "stories": ["US-7", "US-8", "US-9", "US-10", "US-11", "US-12", "US-13"], "verification": "full gate incl. local+sshd integration + terminal Playwright smoke", "status": "PENDING"},
+    {"id": 3, "name": "Status, hooks, notifications", "stories": ["US-14", "US-15", "US-16", "US-17", "US-18", "US-19", "US-20", "US-21", "US-22", "US-23", "US-24"], "verification": "full gate incl. hook contract tests + push + reconcile integration", "status": "PENDING"},
+    {"id": 4, "name": "Three-layer per-session browser", "stories": ["US-25", "US-26", "US-27", "US-28", "US-29"], "verification": "full gate incl. container lifecycle + screencast integration", "status": "PENDING"},
+    {"id": 5, "name": "Codex-style UI shell + design polish", "stories": ["US-30", "US-31", "US-32", "US-33", "US-34", "US-35", "US-36", "US-37"], "verification": "full gate incl. Playwright e2e both themes + mobile viewport", "status": "PENDING"},
+    {"id": 6, "name": "Deploy, audit, hardening, e2e", "stories": ["US-38", "US-39", "US-40", "US-41", "US-42"], "verification": "docker compose up smoke + full e2e (US-41/US-42) green in CI", "status": "PENDING"}
+  ],
+  "status_enum": ["starting", "running", "awaiting_input", "idle", "done", "error", "disconnected"],
+  "out_of_scope_v1": ["supervisor-agent (Phase 2)", "SSO/RBAC/multi-tenancy (Phase 3)", "node-side daemon/thin relay", "native mobile app", "browser comments FR-B5", "git worktree mode", "diff stage/commit/PR actions", "WebRTC streaming"],
+  "definition_of_done": "All US acceptance criteria pass; all 7 phases verified; full CI gate green; docker compose up yields a working cockpit per US-41/US-42",
+  "verification_commands": ["pnpm -r typecheck", "pnpm -r lint", "pnpm -r test:unit", "pnpm -r test:int", "pnpm -r test:e2e", "pnpm -r build", "docker compose up"]
+}

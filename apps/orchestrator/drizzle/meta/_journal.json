@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1780022486264,
+      "tag": "0000_lame_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780423408609,
+      "tag": "0001_worktree_branch",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780435814000,
+      "tag": "0002_session_pin_note",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780519427320,
+      "tag": "0003_ssh_host_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780521583061,
+      "tag": "0004_session_permission_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780598400000,
+      "tag": "0005_node_auth_method",
+      "breakpoints": true
+    }
+  ]
+}

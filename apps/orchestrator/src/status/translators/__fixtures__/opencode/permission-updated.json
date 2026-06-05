@@ -1,0 +1,13 @@
+{
+  "type": "permission.updated",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "id": "perm_a91f",
+    "type": "bash",
+    "title": "Run shell command",
+    "sessionID": "ses_3f1a9c0b",
+    "metadata": {
+      "command": "rm -rf build"
+    }
+  }
+}

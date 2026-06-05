@@ -1,0 +1,10 @@
+{
+  "type": "session.error",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "error": {
+      "name": "ProviderError",
+      "message": "model request failed"
+    }
+  }
+}

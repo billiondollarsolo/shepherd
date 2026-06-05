@@ -1,0 +1,115 @@
+/**
+ * Flock OpenCode plugin (US-18, spec §7.1, §8.1).
+ *
+ * Flock installs this file per session into the session's scoped config dir at
+ * `.opencode/plugin/flock.js` (US-19 seeds the scoped `.opencode/` over the
+ * user's real config and removes it on teardown — the user's own plugins are
+ * never touched). OpenCode auto-loads every file under `.opencode/plugin/`.
+ *
+ * The plugin is a DUMB COURIER (PRD §6.4): it holds no logic of its own. It
+ * subscribes to the OpenCode event bus and POSTs each relevant event verbatim to
+ * the orchestrator's hook endpoint. All status derivation happens server-side in
+ * the OpenCode translator (`status/translators/opencode.ts`). The node never
+ * interprets events.
+ *
+ * Auth + addressing — read from the per-session environment Flock injects when
+ * it launches the agent (one `session_id` threads the tmux session name, the
+ * hook token, and the browser CDP endpoint — the single authoritative session
+ * record, spec §4.2 invariant):
+ *
+ *   FLOCK_HOOK_URL    full URL of `POST /api/hooks/:sessionId` reached over the
+ *                     loopback-bound reverse tunnel (SSH nodes) or directly
+ *                     (local node). Already contains the sessionId path segment.
+ *   FLOCK_HOOK_TOKEN  the per-session hook token; sent as a Bearer token in the
+ *                     `Authorization` header (NOT a cookie). The endpoint
+ *                     compares it against `hook_token_hash` (NFR-SEC3).
+ *
+ * The POST body is the raw OpenCode event `{ type, sessionID?, properties? }`
+ * plus `{ agentType: "opencode" }` so the orchestrator can pick the OpenCode
+ * translator without a DB lookup (keeping the hook path DB-free, spec §15).
+ *
+ * Events forwarded (the ones the translator maps, spec §7.1 OpenCode column):
+ *   session.start        -> starting
+ *   tool.execute.before  -> running
+ *   tool.execute.after   -> running | error
+ *   permission.request   -> awaiting_input   (the money state)
+ *   question.ask         -> awaiting_input   (the money state)
+ *   session.idle         -> idle
+ *   session.error        -> error
+ *   session.complete     -> done
+ *   message.updated      -> (telemetry only) model + tokens + cost
+ *   session.updated      -> (telemetry only) model + tokens + cost
+ *
+ * Failures to reach the orchestrator are swallowed: a status hiccup must never
+ * crash or block the agent. Hooks lost during a gap are lost, not queued
+ * (spec §4.2 out-of-scope: no node-side queue).
+ */
+
+/** OpenCode event names Flock forwards to its hook endpoint. */
+const FORWARDED_EVENTS = new Set([
+  // CURRENT OpenCode bus event names (verified against the SDK Event union):
+  'session.created', // session start
+  'tool.execute.before',
+  'tool.execute.after',
+  'permission.updated', // approval / awaiting-input (the money state)
+  'session.idle', // turn complete
+  'session.error',
+  'todo.updated', // plan / todo list
+  // Telemetry: the assistant message + session objects carry model/tokens/cost
+  // (the server extracts it; status is unaffected).
+  'message.updated',
+  'session.updated',
+  // Legacy/guessed names kept for tolerance across versions (harmless if unused):
+  'session.start',
+  'permission.request',
+  'question.ask',
+  'session.complete',
+]);
+
+/**
+ * @param {{ type: string, properties?: Record<string, unknown> }} event
+ * @returns {Promise<void>}
+ */
+async function postToFlock(event) {
+  const url = process.env.FLOCK_HOOK_URL;
+  const token = process.env.FLOCK_HOOK_TOKEN;
+  // Without the injected session env this is not a Flock-managed session; do
+  // nothing rather than error.
+  if (!url || !token) return;
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ agentType: 'opencode', ...event }),
+    });
+  } catch {
+    // Never let a status POST disrupt the agent (dumb courier, best-effort).
+  }
+}
+
+/**
+ * OpenCode plugin entrypoint. OpenCode calls this with a context object and
+ * expects a hooks object back. We implement the single `event` hook, which fires
+ * for every event on the OpenCode bus, and forward the ones the Flock translator
+ * understands.
+ *
+ * @param {{ project?: unknown, client?: unknown, directory?: string, worktree?: string }} _ctx
+ */
+export const FlockPlugin = async (_ctx) => {
+  return {
+    /**
+     * Fires for every OpenCode bus event.
+     * @param {{ event: { type: string, properties?: Record<string, unknown> } }} input
+     */
+    event: async ({ event }) => {
+      if (!event || !FORWARDED_EVENTS.has(event.type)) return;
+      await postToFlock(event);
+    },
+  };
+};
+
+export default FlockPlugin;

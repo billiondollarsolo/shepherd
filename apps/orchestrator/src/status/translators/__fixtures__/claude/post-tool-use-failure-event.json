@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "PostToolUseFailure",
+  "session_id": "sess_abc123",
+  "tool_name": "Bash"
+}

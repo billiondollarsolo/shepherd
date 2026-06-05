@@ -1,0 +1,10 @@
+{
+  "type": "tool.execute.after",
+  "sessionID": "ses_3f1a9c0b",
+  "properties": {
+    "tool": "bash",
+    "callID": "call_7d2e",
+    "success": true,
+    "exit": 0
+  }
+}

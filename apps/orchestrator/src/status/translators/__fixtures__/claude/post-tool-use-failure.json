@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "11111111-1111-4111-8111-111111111111",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "pnpm build"
+  },
+  "tool_response_exit_code": 2
+}
