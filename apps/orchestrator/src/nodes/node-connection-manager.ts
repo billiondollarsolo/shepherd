@@ -74,6 +74,10 @@ export class NodeConnectionManager {
   private readonly local = new LocalTransport();
   /** Live SSH connections by node id. */
   private readonly ssh = new Map<string, SupervisedSshConnection>();
+  /** In-flight connectNode() per node id — coalesces concurrent connects so a
+   *  node-edit reconnect racing connectAll / a session launch can't build two
+   *  SSH connections + hook tunnels and leak one. Cleared on settle. */
+  private readonly connecting = new Map<string, Promise<void>>();
 
   constructor(deps: NodeConnectionManagerDeps) {
     this.db = deps.db;
@@ -102,6 +106,16 @@ export class NodeConnectionManager {
    * managed node is a no-op.
    */
   async connectNode(nodeId: string): Promise<void> {
+    if (this.ssh.has(nodeId)) return;
+    const inflight = this.connecting.get(nodeId);
+    if (inflight) return inflight;
+    const p = this.doConnectNode(nodeId).finally(() => this.connecting.delete(nodeId));
+    this.connecting.set(nodeId, p);
+    return p;
+  }
+
+  /** The actual connect — serialized per node by {@link connectNode}'s in-flight map. */
+  private async doConnectNode(nodeId: string): Promise<void> {
     if (this.ssh.has(nodeId)) return;
 
     const [row] = await this.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);

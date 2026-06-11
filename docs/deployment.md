@@ -40,6 +40,15 @@ container is launched **per session at runtime** by the orchestrator (via `docke
 against the mounted Docker socket) and destroyed on teardown. This keeps isolation at the
 container boundary while keeping the static topology minimal.
 
+> **Prerequisite:** browser panes need the **`flock/session-chrome`** image (a custom
+> Chrome that bridges CDP to a published port; stock Chrome images bind the debugger to
+> loopback only). Build it before using browser panes — it is NOT pulled automatically:
+> ```
+> docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
+> ```
+> Override the name with `BROWSER_IMAGE`. Without it, sessions still work but the
+> Browser pane fails to start.
+
 ## Quick start
 
 ```bash

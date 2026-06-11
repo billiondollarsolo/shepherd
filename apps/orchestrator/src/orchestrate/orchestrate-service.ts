@@ -7,9 +7,14 @@
  *
  * Auth is the caller's PER-SESSION hook token (the same `FLOCK_HOOK_TOKEN` the
  * agent already has) — NOT the user cookie — and every call is SCOPED to the
- * caller's own project (an agent can never see or wait on another project). The
- * powerful `spawn`/`send` verbs are a deliberate next increment (they need caps +
- * guardrails); read/await carries no footgun.
+ * caller's own project (an agent can never see or wait on another project).
+ *
+ * ⚠️ BLAST RADIUS: the hook token doubles as the orchestration-capability token,
+ * so a session that can post status hooks can ALSO spawn/send/kill any sibling in
+ * its OWN project (never another project). Mitigations: per-project concurrent cap
+ * (`maxPerProject`) + a per-project spawn RATE limit (below). A future hardening
+ * would issue a separate, narrower callback-only token; for now the project scope
+ * + caps bound the damage.
  */
 import { and, count, eq, isNull, isNotNull } from 'drizzle-orm';
 import type { Status } from '@flock/shared';
@@ -75,7 +80,29 @@ export class OrchestrationService {
     private readonly readOutputFn: (targetId: string, limit: number) => Promise<Array<{ role: string; text: string }>>,
     /** Runaway guard: max OPEN agents per project (spawn rejects beyond this). */
     private readonly maxPerProject = 12,
+    /** Anti-runaway: max spawns per project within `spawnRateWindowMs`. */
+    private readonly spawnRateLimit = 10,
+    private readonly spawnRateWindowMs = 60_000,
+    private readonly now: () => number = () => Date.now(),
   ) {}
+
+  /** Per-project recent spawn timestamps for the sliding-window rate limit. */
+  private readonly spawnTimes = new Map<string, number[]>();
+
+  /** Throw if the project exceeded its spawn rate. The hook token grants the spawn
+   *  verb, so this bounds a runaway/compromised agent's blast radius. */
+  private checkSpawnRate(projectId: string): void {
+    const cutoff = this.now() - this.spawnRateWindowMs;
+    const recent = (this.spawnTimes.get(projectId) ?? []).filter((t) => t >= cutoff);
+    if (recent.length >= this.spawnRateLimit) {
+      throw new OrchestrationError(
+        'bad_request',
+        `spawn rate limit reached (${this.spawnRateLimit} per ${Math.round(this.spawnRateWindowMs / 1000)}s) for this project`,
+      );
+    }
+    recent.push(this.now());
+    this.spawnTimes.set(projectId, recent);
+  }
 
   /** Look up a target that MUST be in the caller's project; returns its row. */
   private async requireTargetInProject(projectId: string, targetId: string): Promise<{ agentType: string }> {
@@ -160,6 +187,7 @@ export class OrchestrationService {
     if (!agentType || typeof agentType !== 'string') {
       throw new OrchestrationError('bad_request', 'agentType is required');
     }
+    this.checkSpawnRate(projectId);
     const [row] = await this.db
       .select({ n: count() })
       .from(agentSessions)
@@ -169,7 +197,8 @@ export class OrchestrationService {
     }
     try {
       const id = await this.spawnFn(projectId, createdBy, agentType);
-      await this.recordHandoff(callerId, id); // persist the collaboration edge
+      // Collaboration edge is cosmetic (teams graph) — never fail a live spawn on it.
+      void this.recordHandoff(callerId, id).catch(() => undefined);
       return { id };
     } catch (e) {
       throw new OrchestrationError('bad_request', e instanceof Error ? e.message : 'spawn failed');
@@ -221,7 +250,7 @@ export class OrchestrationService {
     const { agentType } = await this.requireTargetInProject(projectId, targetId);
     await this.killFn(targetId);
     const id = await this.spawnFn(projectId, createdBy, agentType);
-    await this.recordHandoff(callerId, id);
+    void this.recordHandoff(callerId, id).catch(() => undefined);
     return { id };
   }
 }

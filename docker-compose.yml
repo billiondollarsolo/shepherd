@@ -112,7 +112,7 @@ services:
       # Secret-store master key (encryption at rest, NFR-SEC2). Prefer the file.
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY:-}
       FLOCK_MASTER_KEY_FILE: /run/secrets/flock_master_key
-      FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-1}
+      FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-0}
       # T16: removed dead SESSION_SECRET / COOKIE_SECURE knobs (never read by the
       # app). Cookie security is controlled by FLOCK_INSECURE_COOKIES (unset in
       # prod = Secure cookies). T14: the agentd version is SINGLE-SOURCED from the

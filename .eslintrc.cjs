@@ -7,7 +7,7 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', 'react-hooks'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
@@ -47,11 +47,21 @@ module.exports = {
     // This is a terminal cockpit: parsing/emitting raw VT escape & control
     // sequences (\x1b, \x00…) in regexes is intentional, not a bug.
     'no-control-regex': 'off',
+    // React hooks: rules-of-hooks is a real-bug guard (error); exhaustive-deps is
+    // advisory (warn) so intentional partial-dep effects don't fail the lint gate.
+    'react-hooks/rules-of-hooks': 'error',
+    'react-hooks/exhaustive-deps': 'warn',
   },
   overrides: [
     {
       files: ['**/*.test.ts', '**/*.test.tsx'],
       env: { node: true },
+      // Test fixtures define throwaway inline components/effects that don't follow
+      // the component-naming convention — the hooks rules are for production code.
+      rules: {
+        'react-hooks/rules-of-hooks': 'off',
+        'react-hooks/exhaustive-deps': 'off',
+      },
     },
   ],
 };

@@ -3,7 +3,7 @@
  * worktree) side by side with their live status + git changes. Keep the winner and
  * the rest are terminated. Rendered as a full-screen layer when a race is active.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, ExternalLink, FileDiff, X } from 'lucide-react';
 import { statusLabel, type Session, type Status } from '@flock/shared';
@@ -35,11 +35,14 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
   // "Keep" TERMINATES the other racers — destructive, so require a 2nd click to
   // confirm (matches the app's confirm-before-destroy rule) rather than a dialog.
   const [confirming, setConfirming] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(confirmTimer.current), []); // clear on unmount
   const others = raceIds.filter((id) => id !== session.id).length;
   const onKeep = (): void => {
     if (!confirming) {
       setConfirming(true);
-      setTimeout(() => setConfirming(false), 4000);
+      clearTimeout(confirmTimer.current);
+      confirmTimer.current = setTimeout(() => setConfirming(false), 4000);
       return;
     }
     pick.mutate();
