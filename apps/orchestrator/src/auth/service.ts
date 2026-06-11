@@ -89,6 +89,7 @@ export function rowToUser(row: UserRow): User {
   return {
     id: row.id,
     username: row.username,
+    displayName: row.displayName ?? null,
     role: row.role as Role,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
@@ -345,5 +346,24 @@ export class AuthService {
       ip: ctx.ip ?? null,
       detail: { purpose: 'password_change' },
     });
+  }
+
+  /**
+   * Update the user's profile (display name). A blank/whitespace name clears it
+   * (stored null → the UI falls back to the username). Returns the updated user,
+   * or null when the id is unknown/inactive. Not security-sensitive, so unaudited.
+   */
+  async updateProfile(
+    userId: string,
+    input: { displayName: string | null },
+  ): Promise<User | null> {
+    const trimmed = input.displayName?.trim();
+    const displayName = trimmed && trimmed.length > 0 ? trimmed : null;
+    const [row] = await this.db
+      .update(users)
+      .set({ displayName })
+      .where(eq(users.id, userId))
+      .returning();
+    return row ? rowToUser(row) : null;
   }
 }

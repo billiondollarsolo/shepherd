@@ -15,23 +15,12 @@
 
 /**
  * Security-relevant actions recorded in the audit log (FR-A3, spec §6).
- *
- * Kept in lock-step with the SHARED `AuditActionEnum` (`@flock/shared`) and the
- * `audit_log` column enum (`db/schema.ts`) — those are the source of truth; this
- * local union is a convenience that must not drift from them.
+ * Single source of truth: the shared `AuditActionEnum` (asserted against the
+ * `audit_log` column enum by the schema drift test) — re-exported here so call
+ * sites can keep importing it from the audit util.
  */
-export type AuditAction =
-  | 'login'
-  | 'logout'
-  | 'node_add'
-  | 'node_update'
-  | 'node_remove'
-  | 'session_create'
-  | 'session_terminate'
-  | 'browser_takeover'
-  | 'browser_release'
-  | 'secret_access'
-  | 'user_create';
+export type { AuditAction } from '@flock/shared';
+import type { AuditAction } from '@flock/shared';
 
 /** A single audit-log entry to persist. `id`/`ts` are filled by the writer. */
 export interface AuditEntry {

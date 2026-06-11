@@ -18,6 +18,7 @@ import {
   CreateUserRequest,
   LoginRequest,
   SetupRequest,
+  UpdateProfileRequest,
 } from '@flock/shared';
 import { buildClearSessionCookie, buildSessionCookie, readSessionCookie } from './cookie.js';
 import { buildGuards } from './middleware.js';
@@ -128,6 +129,19 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
   app.get('/api/auth/me', { preHandler: requireAuth }, async (request, reply) => {
     // requireAuth guarantees authUser is set (else it already replied 401).
     return reply.code(200).send({ user: request.authUser });
+  });
+
+  // --- update own profile (display name) ---------------------------------
+  app.patch('/api/auth/me', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = UpdateProfileRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return badRequest(reply, 'a valid displayName (string or null) is required.');
+    }
+    const user = await service.updateProfile(request.authUser!.id, parsed.data);
+    if (!user) {
+      return reply.code(404).send({ error: { code: 'user_not_found', message: 'User was not found.' } });
+    }
+    return reply.code(200).send({ user });
   });
 
   // --- change own password (self-serve) ----------------------------------

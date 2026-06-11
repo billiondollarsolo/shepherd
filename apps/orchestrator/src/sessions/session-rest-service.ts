@@ -30,7 +30,7 @@ import type { Database } from '../db/client.js';
 import { rowToSession, sessionToRow } from '../db/mappers.js';
 import { agentSessions, nodes, projects } from '../db/schema.js';
 import { and, eq, isNull } from 'drizzle-orm';
-import { agentLaunchCommand, initialSessionStatus } from './agent-launch.js';
+import { acpLaunchCommand, agentSupportsAcp, agentLaunchCommand, initialSessionStatus } from './agent-launch.js';
 
 /** Raised when the target project id does not resolve (→ 404, spec §10). */
 export class SessionProjectNotFoundError extends Error {
@@ -75,6 +75,8 @@ export interface SessionRestServiceDeps {
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
+    /** Session transport: "acp" for the structured path; undefined = PTY. */
+    mode?: string;
   }) => Promise<AgentdLaunchOutcome>;
   /**
    * Optional: create an isolated git worktree+branch for a session (US-worktree).
@@ -110,6 +112,8 @@ export class SessionRestService {
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
+    /** Session transport: "acp" for the structured path; undefined = PTY. */
+    mode?: string;
   }) => Promise<AgentdLaunchOutcome>;
   private readonly createWorktree?: (args: {
     nodeId: string;
@@ -222,6 +226,7 @@ export class SessionRestService {
       worktreeBranch,
       pinned: false,
       note: null,
+      reviewedAt: null,
       // T18: persist the autonomy level so it survives restart + shows in the UI.
       permissionMode: input.permissionMode ?? 'default',
       createdAt: now,
@@ -252,10 +257,22 @@ export class SessionRestService {
     // is persisted on the record (T18) AND drives the launch flags here.
     // Defaults to interactive when omitted. A `dev` session runs its configured
     // command through the node shell so the daemon can supervise + auto-restart it.
+    // Transport is AUTO-SELECTED per agent so the user never chooses (and always
+    // gets a structured Chat log): native PTY for agents Flock can tail a live
+    // transcript from — claude/codex (+ opencode via hooks) — preserving their
+    // native TUI; ACP for agents with NO live transcript (gemini/grok) so their
+    // conversation is still captured as structured messages. `dev` is always a
+    // supervised shell command.
+    const acpArgv =
+      persisted.agentType === 'dev' ? null : agentSupportsAcp(persisted.agentType)
+        ? acpLaunchCommand(persisted.agentType, input.permissionMode)
+        : null;
+    const mode = acpArgv ? 'acp' : undefined;
     const command =
-      persisted.agentType === 'dev' && input.devCommand
+      acpArgv ??
+      (persisted.agentType === 'dev' && input.devCommand
         ? ['sh', '-lc', input.devCommand]
-        : agentLaunchCommand(persisted.agentType, input.permissionMode);
+        : agentLaunchCommand(persisted.agentType, input.permissionMode, input.systemPrompt));
     const env = this.sessionEnv
       ? await this.sessionEnv(persisted, hookToken).catch(() => undefined)
       : undefined;
@@ -264,7 +281,7 @@ export class SessionRestService {
     // record persists with no live process; there is no tmux fallback.
     if (this.agentdLaunch) {
       try {
-        await this.agentdLaunch({ session: persisted, nodeKind: node.kind, command, env });
+        await this.agentdLaunch({ session: persisted, nodeKind: node.kind, command, env, mode });
       } catch (err) {
         this.logger.warn(`agentd launch failed for session ${persisted.id}`, err);
       }
@@ -293,11 +310,22 @@ export class SessionRestService {
    */
   async updateSession(
     id: string,
-    patch: { pinned?: boolean; note?: string | null },
+    patch: { pinned?: boolean; note?: string | null; reviewed?: boolean },
+    ctx?: { userId?: string | null },
   ): Promise<Session | null> {
-    const set: { pinned?: boolean; note?: string | null } = {};
+    const set: {
+      pinned?: boolean;
+      note?: string | null;
+      reviewedAt?: Date | null;
+      reviewedBy?: string | null;
+    } = {};
     if (patch.pinned !== undefined) set.pinned = patch.pinned;
     if (patch.note !== undefined) set.note = patch.note;
+    if (patch.reviewed !== undefined) {
+      // Stamp who/when on review; clearing review wipes both.
+      set.reviewedAt = patch.reviewed ? new Date() : null;
+      set.reviewedBy = patch.reviewed ? (ctx?.userId ?? null) : null;
+    }
     if (Object.keys(set).length === 0) {
       const [row] = await this.db
         .select()

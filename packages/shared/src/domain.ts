@@ -48,6 +48,11 @@ export const AgentTypeEnum = z.enum([
   // OAuth / GROK_CODE_XAI_API_KEY). No documented transcript/hook format yet, so —
   // like gemini — its status is derived from PTY activity (liveness), not per-turn.
   'grok',
+  // Additional CLI agents (launchable if installed on the node; status via PTY
+  // activity like gemini/grok — no transcript/hook integration yet):
+  'aider', // Aider (pip) — `aider`
+  'cursor-agent', // Cursor's headless agent CLI — `cursor-agent`
+  'amp', // Sourcegraph Amp CLI — `amp`
   'generic',
   // A plain shell session — no agent program, just the node's default shell over
   // the PTY bridge (like SSHing in). Same infra as agent sessions; no hooks.
@@ -80,7 +85,7 @@ export type SessionPermissionMode = z.infer<typeof SessionPermissionModeEnum>;
 export const EventSourceEnum = z.enum(['hook', 'osc', 'pty', 'orchestrator']);
 export type EventSource = z.infer<typeof EventSourceEnum>;
 
-export const SecretKindEnum = z.enum(['ssh_key', 'hook_token']);
+export const SecretKindEnum = z.enum(['ssh_key', 'hook_token', 'node_env']);
 export type SecretKind = z.infer<typeof SecretKindEnum>;
 
 export const AuditActionEnum = z.enum([
@@ -114,6 +119,8 @@ export const IsoTimestamp = z.string().datetime();
 export const UserSchema = z.object({
   id: Uuid,
   username: z.string().min(1),
+  /** Optional human display name; null = use the username. */
+  displayName: z.string().nullable(),
   role: RoleEnum,
   createdAt: IsoTimestamp,
   lastLoginAt: IsoTimestamp.nullable(),
@@ -132,6 +139,8 @@ export const NodeSchema = z.object({
   sshKeyRef: Uuid.nullable(),
   /** Auth method for ssh nodes ('key' | 'password'); null for local nodes. */
   sshAuthMethod: SshAuthMethodEnum.nullable(),
+  /** Optional pool/group label for organizing the fleet; null = ungrouped. */
+  pool: z.string().nullable(),
   connectionStatus: ConnectionStatusEnum,
   lastSeenAt: IsoTimestamp.nullable(),
   createdBy: Uuid,
@@ -181,6 +190,9 @@ export const SessionSchema = z.object({
   pinned: z.boolean(),
   /** Free-text supervisor note about this session (what it's working on); null = none. */
   note: z.string().nullable(),
+  /** When the supervisor marked this session reviewed (ISO); null = not reviewed.
+   *  Server-durable so "Ready to review" is consistent across devices + restarts. */
+  reviewedAt: z.string().nullable(),
   /**
    * The autonomy level the agent was launched with (T18). Persisted so it
    * survives restarts and is visible to a supervisor (an `autonomous` agent is a

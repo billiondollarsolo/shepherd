@@ -4,6 +4,7 @@
  * no domain type or contract is ever duplicated outside this package.
  */
 export * from './status.js';
+export * from './agentEvents.js';
 export * from './domain.js';
 export * from './contracts.js';
 export * from './hooks.js';

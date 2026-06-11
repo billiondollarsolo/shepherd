@@ -15,12 +15,14 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUp, Minus, Plus, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUp, GitBranchPlus, GitPullRequest, Minus, Plus, RefreshCw } from 'lucide-react';
 import type { GitFileStatus } from '@flock/shared';
 
 import { usePaddock } from '../../store/paddock';
 import {
   useCommit,
+  useCreateBranch,
+  useCreatePr,
   useGitStatus,
   usePush,
   useStageFiles,
@@ -100,6 +102,7 @@ export default function SourceControlPanel({ sessionId }: SourceControlPanelProp
   return (
     <div className="flex h-full min-h-0 flex-col bg-flock-bg" data-testid="source-control">
       <BranchHeader
+        sessionId={sessionId}
         branch={data.branch}
         ahead={data.ahead}
         behind={data.behind}
@@ -135,29 +138,66 @@ export default function SourceControlPanel({ sessionId }: SourceControlPanelProp
 }
 
 function BranchHeader({
+  sessionId,
   branch,
   ahead,
   behind,
   onRefresh,
 }: {
+  sessionId: string;
   branch: string | null;
   ahead: number;
   behind: number;
   onRefresh: () => void;
 }): JSX.Element {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const createBranch = useCreateBranch(sessionId);
+  const submit = (): void => {
+    const n = name.trim();
+    if (!n) return;
+    createBranch.mutate({ name: n }, { onSuccess: () => { setName(''); setCreating(false); } });
+  };
   return (
     <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 text-xs">
-      <span className="font-medium text-flock-ink-primary" data-testid="sc-branch">
-        {branch ?? 'detached'}
-      </span>
-      {ahead > 0 ? <span className="text-flock-muted">↑{ahead}</span> : null}
-      {behind > 0 ? <span className="text-flock-muted">↓{behind}</span> : null}
+      {creating ? (
+        <input
+          data-testid="sc-branch-name"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') setCreating(false);
+          }}
+          placeholder="new-branch-name"
+          className="min-w-0 flex-1 rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-0.5 text-flock-fg placeholder:text-flock-muted focus:outline-none focus:ring-1 focus:ring-flock-accent"
+        />
+      ) : (
+        <>
+          <span className="font-medium text-flock-ink-primary" data-testid="sc-branch">
+            {branch ?? 'detached'}
+          </span>
+          {ahead > 0 ? <span className="text-flock-muted">↑{ahead}</span> : null}
+          {behind > 0 ? <span className="text-flock-muted">↓{behind}</span> : null}
+        </>
+      )}
+      <button
+        type="button"
+        data-testid="sc-new-branch"
+        onClick={() => (creating ? submit() : setCreating(true))}
+        aria-label="New branch"
+        title="Create a new branch from here"
+        className="ml-auto rounded p-1 text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+      >
+        <GitBranchPlus className="size-3.5" />
+      </button>
       <button
         type="button"
         onClick={onRefresh}
         aria-label="Refresh"
         title="Refresh"
-        className="ml-auto rounded p-1 text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+        className="rounded p-1 text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
       >
         <RefreshCw className="size-3.5" />
       </button>
@@ -248,8 +288,11 @@ function CommitBar({
   ahead: number;
 }): JSX.Element {
   const [message, setMessage] = useState('');
+  const [prOpen, setPrOpen] = useState(false);
+  const [prTitle, setPrTitle] = useState('');
   const commit = useCommit(sessionId);
   const push = usePush(sessionId);
+  const pr = useCreatePr(sessionId);
   const canCommit = stagedCount > 0 && message.trim().length > 0 && !commit.isPending;
 
   return (
@@ -285,7 +328,48 @@ function CommitBar({
           <ArrowUp className="size-3.5" />
           Push{ahead > 0 ? ` ${ahead}` : ''}
         </button>
+        <button
+          type="button"
+          data-testid="sc-pr-toggle"
+          onClick={() => setPrOpen((v) => !v)}
+          title="Open a pull request (commit + push first)"
+          className="flex items-center gap-1 rounded border border-[var(--flock-border)] px-2 py-1 text-xs text-flock-ink-primary hover:bg-flock-surface-2"
+        >
+          <GitPullRequest className="size-3.5" />
+          PR
+        </button>
       </div>
+
+      {prOpen ? (
+        <div className="mt-2 flex items-center gap-2 border-t border-[var(--flock-border)] pt-2">
+          <input
+            data-testid="sc-pr-title"
+            value={prTitle}
+            onChange={(e) => setPrTitle(e.target.value)}
+            placeholder="Pull request title"
+            className="min-w-0 flex-1 rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1 text-xs text-flock-fg placeholder:text-flock-muted focus:outline-none focus:ring-1 focus:ring-flock-accent"
+          />
+          <button
+            type="button"
+            data-testid="sc-pr-open"
+            disabled={prTitle.trim().length === 0 || pr.isPending}
+            onClick={() =>
+              pr.mutate(
+                { title: prTitle.trim() },
+                {
+                  onSuccess: () => {
+                    setPrTitle('');
+                    setPrOpen(false);
+                  },
+                },
+              )
+            }
+            className="rounded bg-flock-accent px-2 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Open PR
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

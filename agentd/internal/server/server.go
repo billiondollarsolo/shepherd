@@ -114,7 +114,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 	case "open":
 		_, err := c.s.mgr.Open(session.Spec{
 			ID: ctrl.ID, Kind: ctrl.Kind, Cwd: ctrl.Cwd, Env: ctrl.Env,
-			Command: ctrl.Command, Cols: ctrl.Cols, Rows: ctrl.Rows,
+			Command: ctrl.Command, Mode: ctrl.Mode, Cols: ctrl.Cols, Rows: ctrl.Rows,
 			ConfigDirEnv: ctrl.ConfigDirEnv, ConfigFiles: ctrl.ConfigFiles,
 			ConfigBaseSubdir: ctrl.ConfigBaseSubdir,
 			Sandbox:          ctrl.Sandbox,

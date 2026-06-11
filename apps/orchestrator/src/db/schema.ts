@@ -60,11 +60,13 @@ const CONNECTION_STATUS_VALUES: EnumTuple = [
   'disconnected',
   'error',
 ];
-const AGENT_TYPE_VALUES: EnumTuple = ['claude-code', 'codex', 'opencode', 'gemini', 'grok', 'generic', 'terminal', 'dev'];
+const AGENT_TYPE_VALUES: EnumTuple = ['claude-code', 'codex', 'opencode', 'gemini', 'grok', 'aider', 'cursor-agent', 'amp', 'generic', 'terminal', 'dev'];
 // T18: persisted agent autonomy level (mirrors shared SessionPermissionModeEnum).
 const PERMISSION_MODE_VALUES: EnumTuple = ['default', 'acceptEdits', 'plan', 'autonomous'];
 const EVENT_SOURCE_VALUES: EnumTuple = ['hook', 'osc', 'pty', 'orchestrator'];
-const SECRET_KIND_VALUES: EnumTuple = ['ssh_key', 'hook_token'];
+// Mirrors shared SshAuthMethodEnum (named so the enum-drift guard can assert it).
+const SSH_AUTH_METHOD_VALUES: EnumTuple = ['key', 'password'];
+const SECRET_KIND_VALUES: EnumTuple = ['ssh_key', 'hook_token', 'node_env'];
 const AUDIT_ACTION_VALUES: EnumTuple = [
   'login',
   'logout',
@@ -101,6 +103,9 @@ const createdAt = () =>
 export const users = pgTable('users', {
   id: id(),
   username: text('username').notNull().unique(),
+  /** Optional human display name (e.g. "Mike Johnson"); drives the avatar
+   *  initials + greeting. Null = fall back to the username. */
+  displayName: text('display_name'),
   /** argon2id hash; never plaintext, never serialized to clients. */
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ROLE_VALUES }).notNull(),
@@ -164,7 +169,14 @@ export const nodes = pgTable(
     }),
     // 'key' | 'password' — how this ssh node authenticates. Null for local nodes
     // (and legacy rows, which the connector treats as 'key').
-    sshAuthMethod: text('ssh_auth_method', { enum: ['key', 'password'] }),
+    sshAuthMethod: text('ssh_auth_method', { enum: SSH_AUTH_METHOD_VALUES }),
+    // #3a per-node env: an encrypted JSON envelope ({KEY:value,…}) in `secrets`,
+    // merged (under) the per-session launch env for every agent on this node.
+    // Null = no node-level env. set-null on secret delete (env just clears).
+    envRef: uuid('env_ref').references(() => secrets.id, { onDelete: 'set null' }),
+    // #3c node pools: an optional free-text group label (e.g. "gpu", "us-east")
+    // for organizing the fleet + scoping opt-in auto-placement. Null = ungrouped.
+    pool: text('pool'),
     // T7: pinned SSH host-key fingerprint ("SHA256:..."). Null until the first
     // successful connect (trust-on-first-use); thereafter every reconnect must
     // present the same key or the connection is rejected (MITM defence).
@@ -240,6 +252,14 @@ export const agentSessions = pgTable(
     pinned: boolean('pinned').notNull().default(false),
     /** Free-text supervisor note about this session; null = none. */
     note: text('note'),
+    /** Collaboration lineage: the session that spawned/handed off to this one
+     *  (durable teams graph; rehydrates the spatial graph on boot). No FK — a
+     *  missing parent just drops the edge. */
+    parentSessionId: uuid('parent_session_id'),
+    /** Server-durable "reviewed" marker (closes the supervision loop across
+     *  devices/restarts; was localStorage). Null = not reviewed. */
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
     /** T18: the autonomy level the agent was launched with (restart-as-is + UI badge). */
     permissionMode: text('permission_mode', { enum: PERMISSION_MODE_VALUES })
       .notNull()

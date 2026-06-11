@@ -115,8 +115,15 @@ services:
       FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-1}
       # T16: removed dead SESSION_SECRET / COOKIE_SECURE knobs (never read by the
       # app). Cookie security is controlled by FLOCK_INSECURE_COOKIES (unset in
-      # prod = Secure cookies). T14: the agentd version is single-sourced.
-      FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-0.2.8-dev}
+      # prod = Secure cookies). T14: the agentd version is SINGLE-SOURCED from the
+      # COPYed agentd/VERSION (resolveAgentdVersion reads it when this is empty).
+      # Do NOT bake a literal default here: a stale value shadows the shipped
+      # binary's version → ensureRunning re-ships+relaunches the daemon on every
+      # connect (kills live sessions). Leave empty unless intentionally overriding.
+      FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-}
+      # Orchestrator sits behind Caddy (one hop) → trust it so request.ip is the
+      # real client (correct login-throttle keying + audit actor IP).
+      FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
@@ -151,7 +158,7 @@ services:
     healthcheck:
       test:
         - "CMD-SHELL"
-        - "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        - "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
       interval: 10s
       timeout: 5s
       retries: 6

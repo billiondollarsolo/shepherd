@@ -9,7 +9,8 @@ import { statusLabel, type Status } from '@flock/shared';
 import { useNodeInfo, useNodes, useSessions } from '../../data/queries';
 import { usePaddock } from '../../store/paddock';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
-import { formatCostUsd, formatGB, formatTokens } from '../../lib/utils';
+import { ContextMeter } from './ContextMeter';
+import { formatCostUsd, formatGB, formatTokens, isShellProcess } from '../../lib/utils';
 import { StatusDot } from '../../components/StatusDot';
 
 export function BottomBar(): JSX.Element {
@@ -29,7 +30,9 @@ export function BottomBar(): JSX.Element {
   const usage = session ? health?.sessions[session.id] : undefined;
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-3 text-2xs text-flock-ink-muted">
+    <footer
+      className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-3 text-2xs text-flock-ink-muted"
+    >
       {node ? (
         <button
           type="button"
@@ -74,21 +77,11 @@ export function BottomBar(): JSX.Element {
               {usage.model}
             </span>
           ) : null}
-          {usage?.tool ? <span className="max-w-[18rem] truncate">{usage.tool}</span> : null}
+          {usage?.tool && !isShellProcess(usage.tool) ? (
+            <span className="max-w-[18rem] truncate">{usage.tool}</span>
+          ) : null}
           {usage?.contextPct != null ? (
-            <span
-              className="tabular-nums"
-              title={`Context window used (close to 100% = compaction soon)${
-                usage.contextTokens != null && usage.contextLimit != null
-                  ? ` — ${usage.contextTokens.toLocaleString()} / ${usage.contextLimit.toLocaleString()} tokens`
-                  : ''
-              }`}
-              data-context-pct={usage.contextPct}
-            >
-              {usage.contextTokens != null && usage.contextLimit != null
-                ? `${formatTokens(usage.contextTokens)}/${formatTokens(usage.contextLimit)} ctx (${usage.contextPct}%)`
-                : `${usage.contextPct}% ctx`}
-            </span>
+            <ContextMeter pct={usage.contextPct} tokens={usage.contextTokens} limit={usage.contextLimit} />
           ) : null}
           {usage?.tokens ? (
             <span className="tabular-nums">{formatTokens(usage.tokens)} tok</span>

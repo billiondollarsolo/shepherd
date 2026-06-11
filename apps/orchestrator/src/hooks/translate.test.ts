@@ -14,8 +14,8 @@ import { translateHookEvent } from './translate.js';
 describe('translateHookEvent — Claude Code (spec §7.1)', () => {
   const claude = (body: Record<string, unknown>) => translateHookEvent(body, 'claude-code');
 
-  it('SessionStart -> starting', () => {
-    expect(claude({ hook_event_name: 'SessionStart' })?.status).toBe('starting');
+  it('SessionStart -> idle (ready)', () => {
+    expect(claude({ hook_event_name: 'SessionStart' })?.status).toBe('idle');
   });
 
   it('PreToolUse / PostToolUse -> running', () => {

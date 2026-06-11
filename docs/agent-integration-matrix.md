@@ -3,7 +3,8 @@
 How Flock derives live supervision signals for each supported coding-agent CLI —
 what we capture, the mechanism, and the known gaps. This is the authoritative
 reference for "how well do we work with agent X." Verified against real on-disk
-transcripts/hooks (last reviewed 2026-06-05).
+transcripts/hooks (last reviewed 2026-06-05; **transport/Chat/trust + live
+validation updated 2026-06-08 — see the section immediately below**).
 
 Flock's model: **leverage what the agent already produces on the node** — its
 transcript files (tailed by `flock-agentd`) and/or its lifecycle hooks (forwarded
@@ -11,9 +12,65 @@ to `POST /api/hooks/:id`). The orchestrator normalizes everything into the share
 `Status` enum + telemetry (rides the status WS → bottom bar + grid + sidebar) +
 the `plan` event artifact (`/plan`).
 
+## Transport, Chat & Trust (updated 2026-06-08)
+
+Three additions supersede parts of the older matrix below:
+
+**Transport is auto-selected per agent (no user toggle).** Flock picks the path
+that yields a structured **Chat** log while preserving the best interaction:
+- **claude / codex / opencode → native PTY.** Native TUI; Flock tails the
+  transcript (claude/codex) or hook stream (opencode) for status/telemetry.
+- **gemini → ACP** (`gemini --experimental-acp`) over stdio — no live transcript,
+  so ACP captures its conversation as structured messages. (Chosen over scraping
+  gemini's OTel: pretty-printed concatenated JSON interleaved with internal
+  sub-calls — fragile + noisy vs the clean ACP stream.)
+- **grok → native PTY.** VERIFIED 2026-06-08: grok does NOT speak ACP — `grok agent
+  stdio` is a JSON line protocol but ignores ACP's `initialize` (no response;
+  gemini answers it). So grok runs native PTY with status from its Claude-compatible
+  hooks. It has no transcript either → **no Chat source** (status works, chat is a
+  gap until grok exposes a transcript or real ACP).
+
+**Chat tab** (per-session structured conversation) fills from:
+- transcript → chat for **claude** (`claudeLineToChat`) and **codex**
+  (`codexLineToChat`, `event_msg.agent_message`); whole messages POSTed to the
+  hook endpoint → event log → web.
+- the ACP stream for **gemini** (agentd posts user/assistant/tool messages;
+  assistant text is flushed when the prompt turn RETURNS — ACP agents don't send a
+  turn-complete update).
+- **OpenCode ✅** (2026-06-08) — the plugin now forwards `message.part.updated` and
+  `OpenCodeChatAssembler` (hooks/opencode-chat.ts) reconstructs whole messages by
+  message id + role, flushed on `session.idle` → `chat` events. Validated live
+  (user + assistant).
+- **grok ❌** — native PTY, no transcript/ACP → no chat source (status only).
+
+**Folder-trust is pre-accepted at launch** (`agentd .../session/trust.go`,
+`ensureFolderTrust`) so a session starts READY rather than blocked on an
+onboarding/trust prompt (which also ate the first piped input): claude
+`~/.claude.json projects[cwd].hasTrustDialogAccepted=true`, gemini
+`~/.gemini/trustedFolders.json {cwd:"TRUST_FOLDER"}`, codex `config.toml
+trust_level` (already trusted). Non-destructive merge.
+
+**Live-validation status (2026-06-08, driving real prompts via the PTY WS):**
+gemini (ACP) ✅ end-to-end (user+assistant); claude (transcript) ✅ end-to-end;
+**opencode ✅ end-to-end (user+assistant via the parts assembler)**; codex
+mechanism-validated (status/tokens/model + user-chat live; `agent_message` format
+confirmed in real rollouts — headless TUI drive of a clean assistant turn is flaky,
+not a product issue); **grok ✅ native PTY live (status via hooks); not ACP, so no
+chat**. So Chat is proven for claude/codex/gemini/opencode; grok has status only.
+
 ## Capability matrix
 
 ✅ captured · ⚠️ partial / wired-but-not-flowing · ❌ missing
+
+> Note: the columns below describe each agent's **status** path. Transports differ
+> by SIGNAL and don't all ride the same channel:
+> - **Gemini**: its **chat** rides ACP (structured messages — see above), but its
+>   **status** rides Gemini v0.26+ **hooks** (footnote 5), not ACP. Tokens/model/
+>   context%/plan are ❌ (hooks carry status only; needs a transcript tailer).
+> - **Grok**: **native PTY**, status via Claude-compatible **hooks** — NOT ACP, and
+>   no chat transcript (status only).
+>
+> The **Chat** capability is summarized in the section above.
 
 | Signal | Claude Code | Codex | Gemini | OpenCode | Grok |
 |---|---|---|---|---|---|

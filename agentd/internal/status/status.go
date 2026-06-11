@@ -89,14 +89,23 @@ func DetectAgent(command []string) string {
 // configDir is the session's scoped agent-config dir (Flock hook injection), or
 // "" — the transcript tailers must follow it because claude/codex write their
 // transcripts under that scoped dir, not the default ~/.claude · ~/.codex.
-func Watch(ctx context.Context, agent, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update)) {
+// chat receives whole conversation messages (role ∈ user|assistant|tool) parsed
+// from the transcript, so the structured Chat tab fills in for NATIVE sessions —
+// no ACP required. nil = caller doesn't want chat (status-only).
+func Watch(ctx context.Context, agent, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
 	switch agent {
 	case "codex":
-		watchCodex(ctx, cwd, configDir, startedAt, claim, emit)
+		watchCodex(ctx, cwd, configDir, startedAt, claim, emit, chat)
 	case "claude":
-		watchClaude(ctx, cwd, configDir, startedAt, claim, emit)
+		watchClaude(ctx, cwd, configDir, startedAt, claim, emit, chat)
 	// "opencode" is handled via its hook plugin (T1/T21), not transcript tailing.
 	}
+}
+
+// ChatMsg is one whole conversation message extracted from a transcript line.
+type ChatMsg struct {
+	Role string // user | assistant | tool
+	Text string
 }
 
 // homeDir resolves the node user's home (where agents store their transcripts).

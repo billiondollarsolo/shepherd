@@ -82,10 +82,9 @@ export function pathToNav(pathname: string): NavPatch {
       nodeInfoNodeId: null,
     };
   }
-  // / — home: the current project's grid, nothing focused
+  // / — home is Paddock: the whole fleet at a glance (fleet-first).
   return {
-    view: 'paddock',
-    viewMode: 'grid',
+    view: 'overview',
     selectedSessionId: null,
     selectedProjectId: null,
     nodeInfoNodeId: null,
@@ -106,6 +105,7 @@ export interface NavToPathInput {
 /** store → canonical path. Inverse of {@link pathToNav} for the round-trip cases. */
 export function navToPath(n: NavToPathInput): string {
   if (n.view === 'settings') return `/settings/${n.settingsSection}`;
+  if (n.view === 'overview') return '/';
   if (n.nodeInfoNodeId) return `/n/${n.nodeInfoNodeId}`;
   if (n.viewMode === 'focus' && n.selectedSessionId) return `/s/${n.selectedSessionId}`;
   if (n.gridProjectId) return `/p/${n.gridProjectId}`;

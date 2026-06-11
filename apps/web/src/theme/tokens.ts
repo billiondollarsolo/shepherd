@@ -152,7 +152,7 @@ export const darkTheme: ThemeTokens = {
     1: '#101216', // panels / cards
     2: '#181b20', // raised / hover
   },
-  accent: '#4f7cc4', // calm, de-saturated blue (restrained, enterprise)
+  accent: '#5b8cff', // vivid signature blue (energetic, premium)
   ink: {
     primary: '#e7e9ec', // near-white, neutral
     muted: '#888f9a', // cool grey secondary text

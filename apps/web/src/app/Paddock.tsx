@@ -10,11 +10,16 @@
 import { useEffect } from 'react';
 import { AppShell } from './AppShell';
 import { KeyboardProvider } from './KeyboardProvider';
+import { PaddockCommands } from './usePaddockCommands';
+import { FleetView } from '../features/overview/FleetView';
+import { CompareView } from '../features/overview/CompareView';
 import { TooltipProvider, Toaster } from '../components/ui';
 import { Sidebar } from '../features/paddock/Sidebar';
 import { SessionPane } from '../features/paddock/SessionPane';
 import { LiveDataProvider } from '../features/paddock/liveData';
 import { BottomBar } from '../features/paddock/BottomBar';
+import { TopBar } from '../features/paddock/TopBar';
+import { ConnectivityBanner } from '../features/paddock/ConnectivityBanner';
 import { NodePage } from '../features/paddock/NodePage';
 import { PaddockDialogs } from '../features/paddock/PaddockDialogs';
 import { SettingsPage } from '../features/settings/SettingsPage';
@@ -72,6 +77,7 @@ function DrawerContent(): JSX.Element {
 export function Paddock(): JSX.Element {
   const view = usePaddock((s) => s.view);
   const sidebarCollapsed = usePaddock((s) => s.sidebarCollapsed);
+  const zenMode = usePaddock((s) => s.zenMode);
   useAutoFocusSingleSession();
 
   return (
@@ -82,19 +88,32 @@ export function Paddock(): JSX.Element {
         ) : (
           // ONE status WS + agentd-health query shared by sidebar, tabs, and grid.
           <LiveDataProvider>
-            <div className="flex h-screen w-screen flex-col overflow-hidden">
-              <div className="min-h-0 flex-1">
-                <AppShell
-                  tree={<Sidebar />}
-                  session={<CenterPane />}
-                  drawer={<DrawerContent />}
-                  treeCollapsed={sidebarCollapsed}
-                />
+            {zenMode ? (
+              // Immersive focus: just the agent, full-bleed — no sidebar/bottom bar.
+              <div className="h-screen w-screen overflow-hidden bg-flock-bg">
+                <CenterPane />
               </div>
-              <BottomBar />
-            </div>
+            ) : (
+              <div className="flex h-screen w-screen flex-col overflow-hidden">
+                <TopBar />
+                <ConnectivityBanner />
+                <div className="min-h-0 flex-1">
+                  <AppShell
+                    tree={<Sidebar />}
+                    session={view === 'overview' ? <FleetView /> : <CenterPane />}
+                    drawer={<DrawerContent />}
+                    treeCollapsed={sidebarCollapsed}
+                  />
+                </div>
+                <BottomBar />
+              </div>
+            )}
+            {/* Compare/race overlay — self-hides unless a race is active. */}
+            <CompareView />
           </LiveDataProvider>
         )}
+        {/* Register the palette command set (navigation + actions, roadmap P9). */}
+        <PaddockCommands />
         {/* Create dialogs stay mounted so "Add node" works from Settings too. */}
         <PaddockDialogs />
       </KeyboardProvider>

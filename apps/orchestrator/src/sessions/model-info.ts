@@ -9,6 +9,8 @@
  * tokens; cost is an ESTIMATE (we only have a cumulative token total from the
  * transcript, not the input/output split, so a blended rate is applied).
  */
+import { readFileSync } from 'node:fs';
+
 export interface ModelInfo {
   /** Context window size in tokens. */
   contextLimit: number;
@@ -50,13 +52,46 @@ const MODEL_TABLE: Record<string, ModelInfo> = {
 /** Fallback for an unknown model — a conservative 200k window + mid pricing. */
 const DEFAULT_INFO: ModelInfo = { contextLimit: 200 * K, inputPer1M: 3, outputPer1M: 15 };
 
+/**
+ * Optional file-over-defaults overrides (configurability, no rebuild): point
+ * `FLOCK_MODEL_INFO_FILE` at a JSON object keyed by model-id PREFIX → partial
+ * ModelInfo, e.g. `{ "claude-opus-5": { "contextLimit": 500000, "inputPer1M": 5,
+ * "outputPer1M": 25 } }`. Overrides MERGE OVER the built-ins (a partial entry
+ * inherits the rest from DEFAULT_INFO). Lets ops add new models / adjust prices /
+ * set Bedrock-or-enterprise limits without shipping code. Loaded + memoized once;
+ * a malformed file is ignored (defaults stand) with a warning.
+ */
+let effectiveTable: Record<string, ModelInfo> | undefined;
+function table(): Record<string, ModelInfo> {
+  if (effectiveTable) return effectiveTable;
+  effectiveTable = { ...MODEL_TABLE };
+  const file = process.env.FLOCK_MODEL_INFO_FILE?.trim();
+  if (file) {
+    try {
+      const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, Partial<ModelInfo>>;
+      for (const [prefix, info] of Object.entries(raw)) {
+        effectiveTable[prefix.toLowerCase()] = { ...DEFAULT_INFO, ...effectiveTable[prefix.toLowerCase()], ...info };
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[flock] FLOCK_MODEL_INFO_FILE could not be loaded (${file}); using built-in model table.`, err);
+    }
+  }
+  return effectiveTable;
+}
+
+/** Test seam: drop the memoized override table so a new env/file is re-read. */
+export function resetModelInfoCache(): void {
+  effectiveTable = undefined;
+}
+
 /** Resolve a model id to its info by longest-prefix match (case-insensitive). */
 export function lookupModel(model: string | undefined): ModelInfo {
   if (!model) return DEFAULT_INFO;
   const id = model.toLowerCase();
   let best: ModelInfo | undefined;
   let bestLen = -1;
-  for (const [prefix, info] of Object.entries(MODEL_TABLE)) {
+  for (const [prefix, info] of Object.entries(table())) {
     if (id.startsWith(prefix) && prefix.length > bestLen) {
       best = info;
       bestLen = prefix.length;

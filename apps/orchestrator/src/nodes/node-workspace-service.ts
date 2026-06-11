@@ -26,8 +26,12 @@ export interface StackInfo {
   path: string;
   /** Detected stack ids, e.g. ['node','docker']. */
   stacks: string[];
-  /** True when the dir is inside a git work tree (gates the worktree toggle). */
+  /** True when the dir is inside a git work tree. */
   gitRepo: boolean;
+  /** True when HEAD resolves (the repo has ≥1 commit). Worktrees need a commit to
+   *  branch off, so a freshly `git init`'d repo (unborn HEAD) is gitRepo but NOT
+   *  gitHasCommits — the worktree toggle gates on THIS, not gitRepo. */
+  gitHasCommits: boolean;
 }
 
 /** One Find-in-Files match. */
@@ -53,6 +57,7 @@ export interface SearchOptions {
 export const STACK_SCRIPT =
   `cd "$1" 2>/dev/null || { echo ${ERR}; exit 1; }; pwd; ` +
   `git rev-parse --is-inside-work-tree >/dev/null 2>&1 && echo __git__; ` +
+  `git rev-parse --verify -q HEAD >/dev/null 2>&1 && echo __git_commits__; ` +
   `[ -f package.json ] && echo node; ` +
   `[ -f deno.json ] || [ -f deno.jsonc ] && echo deno; ` +
   `[ -f Cargo.toml ] && echo rust; ` +
@@ -130,7 +135,14 @@ export class NodeWorkspaceService {
       throw new NodePathError(nodeId, `cannot read "${path}".`);
     }
     const gitRepo = lines.includes('__git__');
-    return { path: abs, stacks: [...new Set(lines.filter((l) => l !== '__git__'))], gitRepo };
+    const gitHasCommits = lines.includes('__git_commits__');
+    const markers = new Set(['__git__', '__git_commits__']);
+    return {
+      path: abs,
+      stacks: [...new Set(lines.filter((l) => !markers.has(l)))],
+      gitRepo,
+      gitHasCommits,
+    };
   }
 
   async listFiles(nodeId: string, path: string, cap = 5000): Promise<string[]> {

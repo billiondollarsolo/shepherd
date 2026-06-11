@@ -38,7 +38,7 @@ const SAMPLE_DIFF = [
 
 describe('DiffTab (US-33)', () => {
   it('fetches the diff for the session and renders it read-only', async () => {
-    const fetchImpl = vi.fn(async (url: string) =>
+    const fetchImpl = vi.fn(async (_url: string) =>
       jsonResponse({
         sessionId: SESSION_ID,
         diff: SAMPLE_DIFF,

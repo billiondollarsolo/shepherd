@@ -15,7 +15,14 @@
  * diff-route.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { GitCommitRequest, GitStageRequest, SessionIdParams } from '@flock/shared';
+import {
+  CreateBranchRequest,
+  CreatePrRequest,
+  GitCommitRequest,
+  GitStageRequest,
+  SessionIdParams,
+  SwitchBranchRequest,
+} from '@flock/shared';
 import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
@@ -131,6 +138,77 @@ export function registerGitRoutes(
       if (!id) return reply;
       try {
         return reply.code(200).send(await deps.service.push(id));
+      } catch (err) {
+        return mapError(reply, err);
+      }
+    },
+  );
+
+  app.get(
+    '/api/sessions/:id/git/branches',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = sessionId(request, reply);
+      if (!id) return reply;
+      try {
+        return reply.code(200).send(await deps.service.branches(id));
+      } catch (err) {
+        return mapError(reply, err);
+      }
+    },
+  );
+
+  app.post(
+    '/api/sessions/:id/git/branch',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = sessionId(request, reply);
+      if (!id) return reply;
+      const body = CreateBranchRequest.safeParse(request.body ?? {});
+      if (!body.success) return badRequest(reply, 'a non-empty branch name is required.');
+      try {
+        return reply.code(200).send(await deps.service.createBranch(id, body.data.name, body.data.from));
+      } catch (err) {
+        return mapError(reply, err);
+      }
+    },
+  );
+
+  app.post(
+    '/api/sessions/:id/git/switch',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = sessionId(request, reply);
+      if (!id) return reply;
+      const body = SwitchBranchRequest.safeParse(request.body ?? {});
+      if (!body.success) return badRequest(reply, 'a non-empty branch name is required.');
+      try {
+        return reply.code(200).send(await deps.service.switchBranch(id, body.data.name));
+      } catch (err) {
+        return mapError(reply, err);
+      }
+    },
+  );
+
+  app.post(
+    '/api/sessions/:id/git/pr',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = sessionId(request, reply);
+      if (!id) return reply;
+      const body = CreatePrRequest.safeParse(request.body ?? {});
+      if (!body.success || body.data.title.trim().length === 0) {
+        return badRequest(reply, 'a non-empty PR title is required.');
+      }
+      try {
+        return reply.code(200).send(
+          await deps.service.createPr(id, {
+            title: body.data.title.trim(),
+            body: body.data.body,
+            base: body.data.base,
+            draft: body.data.draft,
+          }),
+        );
       } catch (err) {
         return mapError(reply, err);
       }

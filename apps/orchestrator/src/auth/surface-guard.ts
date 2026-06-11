@@ -39,6 +39,9 @@ import { readSessionCookie } from './cookie.js';
 /** Prefix of the hook endpoint — the per-session-token exception (spec §8.1). */
 const HOOK_PREFIX = '/api/hooks/';
 
+/** Agent orchestration API — also per-session-token authed (NOT cookie). */
+const ORCHESTRATE_PREFIX = '/api/orchestrate/';
+
 /**
  * Surfaces reachable WITHOUT a session cookie. Deliberately tiny: only the
  * routes a user must reach before they have a session (log in / first-run
@@ -72,6 +75,11 @@ export function isHookPath(url: string): boolean {
   return normalizePath(url).startsWith(HOOK_PREFIX);
 }
 
+/** True when the path is the agent orchestration API (per-session-token authed). */
+export function isOrchestratePath(url: string): boolean {
+  return normalizePath(url).startsWith(ORCHESTRATE_PREFIX);
+}
+
 /** True when the path is on the unauthenticated public allow-list. */
 export function isPublicPath(url: string): boolean {
   return PUBLIC_PATHS.has(normalizePath(url));
@@ -99,6 +107,10 @@ export function makeSurfaceAuthGuard(deps: AuthGuardDeps) {
     // The hook endpoint is the ONE per-session-token exception (spec §8.1):
     // never cookie-gate it. Its route handler performs the token check.
     if (isHookPath(url)) return;
+
+    // The agent orchestration API authenticates with the caller's session token
+    // (its handler verifies it) — never cookie-gate it.
+    if (isOrchestratePath(url)) return;
 
     // Public, pre-session surfaces (login / setup / logout / health).
     if (isPublicPath(url)) return;

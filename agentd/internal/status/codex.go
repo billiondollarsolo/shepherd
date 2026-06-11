@@ -50,7 +50,7 @@ type taggedEvent struct {
 	Type string `json:"type"`
 }
 
-func watchCodex(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update)) {
+func watchCodex(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
 	dir := codexSessionsDir(configDir)
 	path := waitForFile(ctx, func() string { return findCodexRollout(dir, cwd, startedAt, claim) })
 	if path == "" {
@@ -58,10 +58,50 @@ func watchCodex(ctx context.Context, cwd, configDir string, startedAt time.Time,
 	}
 	e := NewEmitter(emit)
 	tailLines(ctx, path, func(b []byte) {
+		if chat != nil {
+			for _, m := range codexLineToChat(b) {
+				chat(m.Role, m.Text)
+			}
+		}
 		if u, ok := codexLineToUpdate(b); ok {
 			e.Push(u)
 		}
 	})
+}
+
+// codexLineToChat pulls a whole assistant/user message out of a codex `event_msg`
+// rollout line (agent_message / user_message). Lenient about the text field name.
+func codexLineToChat(b []byte) []ChatMsg {
+	var rl rolloutLine
+	if json.Unmarshal(b, &rl) != nil || rl.Type != "event_msg" {
+		return nil
+	}
+	var ev struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+		Text    string `json:"text"`
+	}
+	if json.Unmarshal(rl.Payload, &ev) != nil {
+		return nil
+	}
+	text := strings.TrimSpace(firstNonEmpty(ev.Message, ev.Text))
+	if text == "" {
+		return nil
+	}
+	switch ev.Type {
+	case "agent_message":
+		return []ChatMsg{{Role: "assistant", Text: text}}
+	case "user_message":
+		return []ChatMsg{{Role: "user", Text: text}}
+	}
+	return nil
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // findCodexRollout picks THIS session's rollout: among *.jsonl whose session_meta

@@ -1,10 +1,11 @@
 # flock-agentd — node daemon design
 
-Status: DESIGN (greenfield). Supersedes the tmux-based PTY/persistence layer.
-Decision (2026-06-02): tmux is not the long-term answer; build a purpose-built
-node daemon. The existing tmux path stays working as a fallback **only** until
-the daemon reaches parity, then is removed. New terminal/persistence work targets
-the daemon.
+Status: **AS-BUILT (shipped).** This was a design doc; the daemon is now live and
+is the sole PTY/persistence layer — **tmux has been removed entirely** (no
+fallback). The wire contract lives in `apps/orchestrator/src/nodes/agentd/protocol.ts`
+(TS) ⇄ `agentd/internal/proto/proto.go` (Go); the daemon version is single-sourced
+in `agentd/VERSION`. The sections below are kept as the original design rationale;
+where they say "will" / "decision to confirm", read them as decided + implemented.
 
 ---
 

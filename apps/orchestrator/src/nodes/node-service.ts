@@ -179,6 +179,67 @@ export class NodeService {
     return parseCredential(plaintext);
   }
 
+  /**
+   * Encrypt a node's env-var map ({KEY:value,…}) at rest as a `secrets` row and
+   * return the id to store in `nodes.env_ref`. Same envelope shape as credentials.
+   */
+  private async storeEnv(env: Record<string, string>): Promise<string> {
+    const envelope = this.secrets.encrypt(JSON.stringify(env));
+    const [secret] = await this.db
+      .insert(secrets)
+      .values({
+        kind: 'node_env',
+        ciphertext: Buffer.from(envelope.ciphertext),
+        nonce: Buffer.concat([Buffer.from(envelope.nonce), Buffer.from(envelope.authTag)]),
+        keyVersion: envelope.keyVersion,
+      })
+      .returning();
+    if (!secret) throw new Error('Failed to persist node env secret.');
+    return secret.id;
+  }
+
+  /** Decrypt a node env secret to a string→string map; {} if missing/unreadable. */
+  private async loadEnv(secretId: string): Promise<Record<string, string>> {
+    const [secret] = await this.db.select().from(secrets).where(eq(secrets.id, secretId)).limit(1);
+    if (!secret) return {};
+    const nonceBytes = new Uint8Array(secret.nonce);
+    try {
+      const plaintext = await this.secrets.decryptToString(
+        {
+          ciphertext: new Uint8Array(secret.ciphertext),
+          nonce: nonceBytes.slice(0, SECRET_NONCE_BYTES),
+          authTag: nonceBytes.slice(SECRET_NONCE_BYTES),
+          keyVersion: secret.keyVersion,
+        },
+        { secretId: secret.id },
+      );
+      const obj = JSON.parse(plaintext) as Record<string, unknown>;
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(obj)) if (typeof v === 'string') out[k] = v;
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * The decrypted env-var map for a node (for the agent launch env merge), or {}
+   * when the node has none / is unknown. Never throws — a launch must not fail
+   * because env is missing.
+   */
+  async envForNode(nodeId: string): Promise<Record<string, string>> {
+    const [row] = await this.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);
+    if (!row?.envRef) return {};
+    return this.loadEnv(row.envRef);
+  }
+
+  /** The node's env map for the editor (GET /api/nodes/:id/env); null if unknown. */
+  async getEnv(nodeId: string): Promise<Record<string, string> | null> {
+    const [row] = await this.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);
+    if (!row) return null;
+    return row.envRef ? this.loadEnv(row.envRef) : {};
+  }
+
   /** List all nodes as the shared `Node` shape (no secret material). */
   async listNodes(): Promise<SharedNode[]> {
     const rows = await this.db.select().from(nodes);
@@ -206,6 +267,10 @@ export class NodeService {
       sshKeyRef = await this.storeCredential(cred);
     }
 
+    // Per-node env (#3a) + pool (#3c) apply to any node kind.
+    const envRef =
+      input.env && Object.keys(input.env).length > 0 ? await this.storeEnv(input.env) : null;
+
     const [row] = await this.db
       .insert(nodes)
       .values({
@@ -216,6 +281,8 @@ export class NodeService {
         sshUser: input.kind === 'ssh' ? (input.sshUser ?? null) : null,
         sshKeyRef,
         sshAuthMethod,
+        envRef,
+        pool: input.pool ?? null,
         // local nodes are reachable immediately; ssh nodes connect lazily.
         connectionStatus: input.kind === 'local' ? 'connected' : 'disconnected',
         createdBy: ctx.userId,
@@ -268,6 +335,12 @@ export class NodeService {
 
     const patch: Partial<typeof nodes.$inferInsert> = {};
     if (input.name !== undefined) patch.name = input.name;
+    // Per-node env (#3a) + pool (#3c) apply to any node kind. env replaces
+    // wholesale: {} clears it (envRef → null), a non-empty map stores a new secret.
+    if (input.env !== undefined) {
+      patch.envRef = Object.keys(input.env).length > 0 ? await this.storeEnv(input.env) : null;
+    }
+    if (input.pool !== undefined) patch.pool = input.pool;
 
     // SSH connection params + credentials only apply to ssh nodes.
     let connChanged = false;

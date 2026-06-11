@@ -15,19 +15,14 @@
  * ignored so the shortcuts never fight with typing (Appendix A.4 calm density).
  */
 import {
-  Children,
-  cloneElement,
   createContext,
-  isValidElement,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  type ReactElement,
   type ReactNode,
 } from 'react';
-import { AppShell } from './AppShell';
 import { CommandPalette } from './CommandPalette';
 import type { Command } from './commands';
 
@@ -48,6 +43,12 @@ export function useShell(): ShellContextValue {
   const ctx = useContext(ShellContext);
   if (!ctx) throw new Error('useShell must be used within a KeyboardProvider');
   return ctx;
+}
+
+/** Like {@link useShell} but returns null outside a provider (safe for AppShell,
+ *  which may render in tests without a KeyboardProvider). */
+export function useShellOptional(): ShellContextValue | null {
+  return useContext(ShellContext);
 }
 
 export interface KeyboardProviderProps {
@@ -143,18 +144,13 @@ export function KeyboardProvider({
     [paletteOpen, drawerOpen, openPalette, closePalette, toggleDrawer, registerCommands],
   );
 
-  // Inject drawerOpen into a single AppShell child so the drawer region tracks
-  // the toggle. Non-AppShell children pass through untouched.
-  const injected = Children.map(children, (child) => {
-    if (isValidElement(child) && child.type === AppShell) {
-      return cloneElement(child as ReactElement<{ drawerOpen?: boolean }>, { drawerOpen });
-    }
-    return child;
-  });
-
+  // AppShell reads drawerOpen from this context via useShellOptional() — the old
+  // cloneElement prop-injection only reached a DIRECT AppShell child, but AppShell
+  // is nested several levels down (LiveDataProvider/divs), so the drawer toggle was
+  // a silent no-op. Context works regardless of nesting depth.
   return (
     <ShellContext.Provider value={value}>
-      {injected}
+      {children}
       <CommandPalette open={paletteOpen} commands={allCommands} onClose={closePalette} />
     </ShellContext.Provider>
   );

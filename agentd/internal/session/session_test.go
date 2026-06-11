@@ -310,6 +310,28 @@ func TestSubscribeAltScreenReplaysCleanResetNotRing(t *testing.T) {
 	}
 }
 
+// After a program LEAVES the alternate screen (e.g. quit htop), the stale alt
+// frames must be dropped from the scrollback ring so a later NORMAL-screen reattach
+// doesn't replay them as garbage (the "garbled htop on reattach" bug).
+func TestBroadcastDropsStaleAltFramesOnExit(t *testing.T) {
+	s := &Session{ring: newRing(defaultScrollbackBytes), subs: map[int]chan []byte{}}
+	s.broadcast([]byte("\x1b[?1049h"))                    // enter alt screen
+	s.broadcast([]byte("GARBLED HTOP FRAME BYTES"))       // alt-screen redraws
+	s.broadcast([]byte("\x1b[?1049lback at the shell$ ")) // exit alt + normal output
+	if s.inAlt {
+		t.Fatal("expected inAlt=false after alt-exit")
+	}
+	sub := s.Subscribe()
+	defer sub.Close()
+	got := string(sub.Replay)
+	if strings.Contains(got, "GARBLED HTOP") {
+		t.Fatalf("post-alt-exit replay must drop stale alt frames, got %q", got)
+	}
+	if !strings.Contains(got, "back at the shell$") {
+		t.Fatalf("post-alt-exit replay must keep normal output after the exit, got %q", got)
+	}
+}
+
 // In the normal screen, Subscribe replays the scrollback ring unchanged.
 func TestSubscribeNormalScreenReplaysRing(t *testing.T) {
 	s := &Session{ring: newRing(defaultScrollbackBytes), subs: map[int]chan []byte{}}

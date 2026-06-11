@@ -53,7 +53,7 @@ type claudeLine struct {
 	} `json:"message"`
 }
 
-func watchClaude(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update)) {
+func watchClaude(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
 	dir := claudeProjectsDir(configDir)
 	path := waitForFile(ctx, func() string { return findClaudeTranscript(dir, cwd, startedAt, claim) })
 	if path == "" {
@@ -62,6 +62,11 @@ func watchClaude(ctx context.Context, cwd, configDir string, startedAt time.Time
 	e := NewEmitter(emit)
 	total := 0 // Claude reports per-message usage; accumulate to a session total.
 	tailLines(ctx, path, func(b []byte) {
+		if chat != nil {
+			for _, m := range claudeLineToChat(b) {
+				chat(m.Role, m.Text)
+			}
+		}
 		u, ok := claudeLineToUpdate(b)
 		if !ok {
 			return
@@ -72,6 +77,85 @@ func watchClaude(ctx context.Context, cwd, configDir string, startedAt time.Time
 		}
 		e.Push(u)
 	})
+}
+
+// claudeLineToChat extracts the conversation message(s) from one transcript line:
+// an assistant turn's prose (+ a label per tool call), or a user prompt. Returns
+// nil for tool-results, system, and other non-conversational lines.
+func claudeLineToChat(b []byte) []ChatMsg {
+	var cl claudeLine
+	if json.Unmarshal(b, &cl) != nil {
+		return nil
+	}
+	switch cl.Type {
+	case "assistant":
+		var out []ChatMsg
+		if txt := claudeTextFromContent(cl.Message.Content); txt != "" {
+			out = append(out, ChatMsg{Role: "assistant", Text: txt})
+		}
+		if tool := claudeToolFromContent(cl.Message.Content); tool != "" {
+			out = append(out, ChatMsg{Role: "tool", Text: tool})
+		}
+		return out
+	case "user":
+		if txt := claudeUserText(cl.Message.Content); txt != "" {
+			return []ChatMsg{{Role: "user", Text: txt}}
+		}
+	}
+	return nil
+}
+
+// claudeTextFromContent joins the text blocks of an assistant content array.
+func claudeTextFromContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			parts = append(parts, b.Text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, ""))
+}
+
+// claudeUserText returns the user's PROMPT text. User content is either a plain
+// string or an array; a line carrying a tool_result is tool output, not a prompt,
+// so it's skipped (returns "").
+func claudeUserText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return strings.TrimSpace(s)
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	for _, b := range blocks {
+		if b.Type == "tool_result" {
+			return "" // tool output, not a user prompt
+		}
+	}
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			parts = append(parts, b.Text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, ""))
 }
 
 // findClaudeTranscript finds this session's transcript by CONTENT (the `cwd`

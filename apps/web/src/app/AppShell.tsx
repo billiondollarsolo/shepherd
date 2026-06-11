@@ -22,6 +22,7 @@
  * KeyboardProvider; AppShell is presentational and controlled.
  */
 import type { ReactNode } from 'react';
+import { useShellOptional } from './KeyboardProvider';
 
 export interface AppShellProps {
   /** Left region: node → project → session tree (US-32). */
@@ -43,9 +44,13 @@ export function AppShell({
   session,
   activity,
   drawer,
-  drawerOpen = false,
+  drawerOpen: drawerOpenProp = false,
   treeCollapsed = false,
 }: AppShellProps): JSX.Element {
+  // Read the drawer state from the shell CONTEXT (set by ⌘J / the toolbar button).
+  // The prop is a fallback for standalone rendering (tests). The old prop-injection
+  // via cloneElement couldn't reach this nested AppShell → the toggle was a no-op.
+  const drawerOpen = useShellOptional()?.drawerOpen ?? drawerOpenProp;
   // The activity region is optional: when omitted (the Codex-style layout where
   // Browser/Diff/Activity live in the session pane's own right panel), the shell
   // is a 2-column tree | session grid.

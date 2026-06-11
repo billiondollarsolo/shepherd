@@ -1,4 +1,5 @@
 import { Moon, Sun } from 'lucide-react';
+import { forwardRef } from 'react';
 import { useTheme } from './useTheme';
 
 export interface ThemeToggleProps {
@@ -12,7 +13,10 @@ export interface ThemeToggleProps {
  * dual-theme tests (US-31). For an explicit light/dark/system picker, see
  * {@link ThemeSegmented}.
  */
-export function ThemeToggle({ className = '' }: ThemeToggleProps) {
+export const ThemeToggle = forwardRef<HTMLButtonElement, ThemeToggleProps>(function ThemeToggle(
+  { className = '' },
+  ref,
+) {
   const { resolvedTheme, toggleTheme } = useTheme();
   const next = resolvedTheme === 'dark' ? 'light' : 'dark';
 
@@ -27,6 +31,7 @@ export function ThemeToggle({ className = '' }: ThemeToggleProps) {
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={toggleTheme}
       data-testid="theme-toggle"
@@ -42,4 +47,4 @@ export function ThemeToggle({ className = '' }: ThemeToggleProps) {
       )}
     </button>
   );
-}
+});

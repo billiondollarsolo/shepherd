@@ -34,9 +34,12 @@ fi
 # Agent CLIs — same install path as docker/Dockerfile.node.
 npm install -g @openai/codex || echo "WARN: codex install skipped"
 npm install -g @google/gemini-cli || echo "WARN: gemini install skipped"
-curl -fsSL https://claude.ai/install.sh | bash -s -- --bin-dir /usr/local/bin \
-  || npm install -g @anthropic-ai/claude-code \
-  || echo "WARN: claude install skipped"
+# Claude Code via the OFFICIAL installer, run as `flock` so it lands USER-LOCAL
+# (~/.local/bin, flock-owned) and can self-update. A root/npm-global install (/usr)
+# is unwritable by the agent user, so claude's auto-updater fails on every launch
+# ("no write permission to npm prefix"). NO npm fallback — keep it user-owned.
+id flock >/dev/null 2>&1 || useradd -m -s /bin/bash flock
+su - flock -c 'curl -fsSL https://claude.ai/install.sh | bash' || echo "WARN: claude install skipped"
 # opencode via npm (the `opencode-ai` package) — the curl|bash installer drops a
 # per-user binary that didn't reliably land on the `flock` user's PATH, so use the
 # npm global like codex/gemini (system prefix → on PATH for everyone).

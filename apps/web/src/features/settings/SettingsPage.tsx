@@ -60,7 +60,7 @@ export function SettingsPage(): JSX.Element {
             same app (the wordmark was missing here). Back-to-paddock is the arrow. */}
         <header className="flex shrink-0 items-center gap-2 px-3 py-3">
           <FlockMark className="size-7" />
-          <span className="text-lg font-semibold tracking-tight text-flock-ink-primary">Flock</span>
+          <span className="font-display text-xl font-bold tracking-tight text-flock-ink-primary">Flock</span>
           <SimpleTooltip label="Back to the paddock">
             <Button
               size="icon-sm"
@@ -89,7 +89,7 @@ export function SettingsPage(): JSX.Element {
                     data-testid={`settings-nav-${id}`}
                     className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                       selected
-                        ? 'bg-flock-accent/12 font-medium text-flock-ink-primary'
+                        ? 'bg-flock-accent/15 font-medium text-flock-accent ring-1 ring-flock-accent/20'
                         : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
                     }`}
                   >

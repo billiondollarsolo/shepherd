@@ -18,14 +18,14 @@ import type { Server as HttpServer } from 'node:http';
 
 import type { AgentTelemetry, HookTelemetry, Status } from '@flock/shared';
 
-import { eq, sql } from 'drizzle-orm';
+import { eq, isNull, sql } from 'drizzle-orm';
 import { WebSocketServer } from 'ws';
 
 import type { Database } from './db/client.js';
 import { agentSessions } from './db/schema.js';
 import { rowToSession } from './db/mappers.js';
-import { verifyPassword } from './auth/hashing.js';
-import { StatusMap, StatusChannel } from './status/index.js';
+import { verifyHookToken } from './hooks/hook-token.js';
+import { StatusMap, StatusChannel, rehydrateStatus } from './status/index.js';
 import {
   WriteBehindEventQueue,
   createDrizzleEventWriter,
@@ -52,12 +52,20 @@ import type { NodeConnectionManager } from './nodes/node-connection-manager.js';
  * OWN figure (OpenCode reports exact USD) and falls back to our blended estimate.
  */
 function toAgentTelemetry(raw: HookTelemetry): AgentTelemetry {
+  // Prefer the agent's OWN reported context window over the model-info table, so
+  // the limit reflects the actual running model/variant (Opus 200k vs Opus-1M).
+  const limit =
+    raw.contextLimit && raw.contextLimit > 0
+      ? raw.contextLimit
+      : raw.contextTokens != null
+        ? lookupModel(raw.model).contextLimit
+        : undefined;
   return {
     tokens: raw.tokens,
     model: raw.model,
-    contextPct: contextPct(raw.model, raw.contextTokens),
+    contextPct: contextPct(raw.model, raw.contextTokens, raw.contextLimit),
     contextTokens: raw.contextTokens,
-    contextLimit: raw.contextTokens != null ? lookupModel(raw.model).contextLimit : undefined,
+    contextLimit: limit,
     costUsd: raw.costUsd ?? estimateCostUsd(raw.model, raw.tokens),
   };
 }
@@ -124,8 +132,42 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
     writer: createDrizzleEventWriter(db),
     retryBackoffMs: 250,
   });
-  const statusMap = new StatusMap({ writeBehind: events.transitionSink() });
+  // Write-behind: (1) append the transition to the event log, AND (2) mirror the
+  // new status onto agent_sessions.status so the REST API + the F3 boot-rehydrate
+  // reflect reality (previously only the in-memory map + event log moved, leaving
+  // the mirror stuck at the create-time status). Both are OFF the live path.
+  const transitionSink = events.transitionSink();
+  const statusMap = new StatusMap({
+    writeBehind: (sessionId, status, detail) => {
+      transitionSink(sessionId, status, detail);
+      void Promise.resolve(
+        // Mirror BOTH the status AND its timestamp — REST consumers (and the F3
+        // boot-rehydrate) read lastStatusAt; leaving it at the create time made every
+        // session look like it had never transitioned.
+        db
+          .update(agentSessions)
+          .set({ status, lastStatusAt: new Date() })
+          .where(eq(agentSessions.id, sessionId)),
+      ).catch(() => {
+        /* mirror is best-effort; a failed write never affects the live path */
+      });
+    },
+  });
   const statusChannel = new StatusChannel(statusMap);
+
+  // F3: after a restart the map is empty — rehydrate live status from the
+  // write-behind mirror so dots aren't blank until agents re-emit. OFF the hot
+  // path (NFR-PERF1): a slow/down DB must never block startup.
+  void rehydrateStatus(statusMap, async () => {
+    const rows = await db
+      .select({ id: agentSessions.id, status: agentSessions.status })
+      .from(agentSessions)
+      .where(isNull(agentSessions.closedAt));
+    // The column is constrained to STATUS_VALUES; drizzle widens it to string.
+    return rows.map((r) => ({ id: r.id, status: r.status as Status }));
+  }).catch((err) => {
+    console.warn(`[live-channels] status rehydrate failed: ${String(err)}`);
+  });
 
   // --- hook endpoint (per-session token; DB-free hot path) ---------------
   const hookService = new HookEndpointService({
@@ -135,7 +177,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
         return s ? { sessionId: s.id, hookTokenHash: s.hookTokenHash } : undefined;
       },
     },
-    verifyToken: (hash, token) => verifyPassword(hash, token),
+    verifyToken: (hash, token) => Promise.resolve(verifyHookToken(hash, token)),
     onTransition: (t) => {
       // Turn RAW agent telemetry into the COMPUTED shape the paddock consumes:
       // context-% via the model-info table; prefer the agent's OWN reported cost
@@ -168,9 +210,11 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
       src = new OscFallbackStatusSource({
         onSignal: (sig) => {
           if (statusMap.get(sessionId)?.status === 'starting') {
-            // persist:false → drives the live dot but writes NO timeline event.
-            // The OSC reason is a debug heuristic, not a user-facing milestone.
-            statusMap.set(sessionId, sig.status, `osc:${sig.reason}`, false);
+            // persist:true → mirror the transition to the DB so REST (GET /api/sessions)
+            // reflects reality for hook-less / activity-driven agents (codex/grok/
+            // opencode), not just the live WS dot. This fires ONCE (the guard above is
+            // 'starting'-only), so it's the single starting→ready milestone, not spam.
+            statusMap.set(sessionId, sig.status, `osc:${sig.reason}`, true);
           }
         },
       });

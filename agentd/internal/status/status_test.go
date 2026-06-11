@@ -194,7 +194,7 @@ func TestWatchClaudeEmitsStateProgression(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		watchClaude(ctx, cwd, "", start, alwaysClaim, func(u Update) { mu.Lock(); states = append(states, u.State); mu.Unlock() })
+		watchClaude(ctx, cwd, "", start, alwaysClaim, func(u Update) { mu.Lock(); states = append(states, u.State); mu.Unlock() }, nil)
 		close(done)
 	}()
 	time.Sleep(800 * time.Millisecond)
@@ -288,7 +288,7 @@ func TestWatchCodexEmitsStateProgression(t *testing.T) {
 			mu.Lock()
 			states = append(states, u.State)
 			mu.Unlock()
-		})
+		}, nil)
 		close(done)
 	}()
 	// give the watcher time to find + read the file

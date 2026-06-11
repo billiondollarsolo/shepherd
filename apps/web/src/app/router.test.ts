@@ -3,10 +3,9 @@ import { describe, it, expect } from 'vitest';
 import { pathToNav, navToPath, type NavToPathInput } from './router';
 
 describe('pathToNav (URL → store patch)', () => {
-  it('maps / to the home grid (nothing focused)', () => {
+  it('maps / to the Mission Control home (the fleet)', () => {
     expect(pathToNav('/')).toEqual({
-      view: 'paddock',
-      viewMode: 'grid',
+      view: 'overview',
       selectedSessionId: null,
       selectedProjectId: null,
       nodeInfoNodeId: null,

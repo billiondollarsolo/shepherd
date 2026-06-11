@@ -17,6 +17,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Status, StatusUpdateMessage } from '@flock/shared';
+import { reconnectDelay } from '../../lib/utils';
 import {
   encodeStatusSubscribe,
   parseStatusFrame,
@@ -125,7 +126,7 @@ export function useStatusWebSocket({
         ws = null;
         setState('closed');
         if (disposed || !reconnectRef.current) return;
-        const delay = Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS);
+        const delay = reconnectDelay(attempts, BASE_BACKOFF_MS, MAX_BACKOFF_MS);
         attempts += 1;
         retryTimer = setTimeout(connect, delay);
       };

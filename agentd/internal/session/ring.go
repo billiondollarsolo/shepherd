@@ -19,6 +19,12 @@ func (r *ring) write(p []byte) {
 	}
 }
 
+// reset clears the buffer — used when a program leaves the alternate screen and
+// the captured frames become stale scrollback that would replay as garbage.
+func (r *ring) reset() {
+	r.buf = r.buf[:0]
+}
+
 // snapshot returns a copy of the current contents (safe to hand to a caller).
 func (r *ring) snapshot() []byte {
 	out := make([]byte, len(r.buf))

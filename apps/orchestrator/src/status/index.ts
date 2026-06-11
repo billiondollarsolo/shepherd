@@ -14,3 +14,4 @@ export {
   type StatusMapOptions,
 } from './map.js';
 export { StatusChannel, type StatusSocket } from './channel.js';
+export { rehydrateStatus, type OpenStatusRow } from './rehydrate.js';

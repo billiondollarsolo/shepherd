@@ -3,6 +3,7 @@
  * the zustand store's `dialog` state. Rendered once near the shell root.
  */
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { HardDrive, FolderGit2, Bot, FolderOpen, TriangleAlert } from 'lucide-react';
 import type { AgentType, NodeKind, SessionPermissionMode, SshAuthMethod } from '@flock/shared';
 import {
@@ -36,6 +37,8 @@ import {
   useStack,
   useTerminateSession,
 } from '../../data/queries';
+import { applyConfig, exportConfig, getNodeEnv, startRace, type ConfigApplySummary } from '../../data/treeApi';
+import { pickBestNode } from './placement';
 import { PathBrowser } from './PathBrowser';
 
 const AGENT_LABELS: Record<AgentType, string> = {
@@ -44,6 +47,9 @@ const AGENT_LABELS: Record<AgentType, string> = {
   opencode: 'OpenCode',
   gemini: 'Gemini',
   grok: 'Grok',
+  aider: 'Aider',
+  'cursor-agent': 'Cursor Agent',
+  amp: 'Amp',
   generic: 'Generic (OSC/PTY)',
   terminal: 'Terminal (plain shell)',
   dev: 'Dev server (auto-restart)',
@@ -61,6 +67,9 @@ const REQUIRED_BIN: Record<AgentType, string | null> = {
   opencode: 'opencode',
   gemini: 'gemini',
   grok: 'grok',
+  aider: 'aider',
+  'cursor-agent': 'cursor-agent',
+  amp: 'amp',
   generic: null,
   terminal: null,
   dev: null,
@@ -103,6 +112,26 @@ function Field({ label, htmlFor, children, hint }: { label: string; htmlFor: str
   );
 }
 
+/** Parse a `KEY=VALUE` textarea (one per line; blank/`#` lines skipped) into a map. */
+function parseEnvText(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq <= 0) continue;
+    const key = t.slice(0, eq).trim();
+    if (key) out[key] = t.slice(eq + 1).trim();
+  }
+  return out;
+}
+/** Render an env map back to `KEY=VALUE` lines for the textarea. */
+function formatEnvText(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n');
+}
+
 function NodeDialog(): JSX.Element {
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
@@ -121,7 +150,29 @@ function NodeDialog(): JSX.Element {
   const [key, setKey] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [password, setPassword] = useState('');
+  // #3c pool + #3a env (any node kind). Env prefills from the server on edit.
+  const [pool, setPool] = useState(editing?.pool ?? '');
+  const [envText, setEnvText] = useState('');
+  const [origEnvText, setOrigEnvText] = useState('');
   const busy = createNode.isPending || updateNode.isPending;
+
+  useEffect(() => {
+    if (!editing) return;
+    let alive = true;
+    void getNodeEnv(editing.id)
+      .then((r) => {
+        if (!alive) return;
+        const text = formatEnvText(r.env);
+        setEnvText(text);
+        setOrigEnvText(text);
+      })
+      .catch(() => {
+        /* leave blank; saving without touching env won't clear it */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [editing]);
 
   async function onKeyFile(e: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];
@@ -146,6 +197,10 @@ function NodeDialog(): JSX.Element {
         // Diff against the original; only send what changed (+ non-blank creds).
         const patch: Record<string, unknown> = {};
         if (name.trim() !== editing.name) patch.name = name.trim();
+        if (pool.trim() !== (editing.pool ?? '')) patch.pool = pool.trim() || null;
+        // Only touch env if the textarea changed (prevents a not-yet-loaded prefill
+        // from silently clearing it).
+        if (envText !== origEnvText) patch.env = parseEnvText(envText);
         if (editing.kind === 'ssh') {
           if (host.trim() !== (editing.host ?? '')) patch.host = host.trim();
           const portNum = Number(port) || 22;
@@ -160,20 +215,29 @@ function NodeDialog(): JSX.Element {
           }
         }
         await updateNode.mutateAsync({ id: editing.id, input: patch });
-      } else if (kind === 'local') {
-        await createNode.mutateAsync({ name: name.trim(), kind });
       } else {
-        await createNode.mutateAsync({
-          name: name.trim(),
-          kind,
-          host: host.trim(),
-          port: Number(port) || 22,
-          sshUser: sshUser.trim(),
-          sshAuthMethod: authMethod,
-          ...(authMethod === 'key'
-            ? { sshPrivateKey: key, ...(passphrase.trim() ? { sshPassphrase: passphrase } : {}) }
-            : { sshPassword: password }),
-        });
+        // pool + env apply to any kind.
+        const env = parseEnvText(envText);
+        const extra = {
+          ...(pool.trim() ? { pool: pool.trim() } : {}),
+          ...(Object.keys(env).length > 0 ? { env } : {}),
+        };
+        if (kind === 'local') {
+          await createNode.mutateAsync({ name: name.trim(), kind, ...extra });
+        } else {
+          await createNode.mutateAsync({
+            name: name.trim(),
+            kind,
+            host: host.trim(),
+            port: Number(port) || 22,
+            sshUser: sshUser.trim(),
+            sshAuthMethod: authMethod,
+            ...(authMethod === 'key'
+              ? { sshPrivateKey: key, ...(passphrase.trim() ? { sshPassphrase: passphrase } : {}) }
+              : { sshPassword: password }),
+            ...extra,
+          });
+        }
       }
       closeDialog();
     } catch {
@@ -273,6 +337,24 @@ function NodeDialog(): JSX.Element {
         </>
       )}
 
+      <Field label="Pool (optional)" htmlFor="node-pool" hint="A group label to organize the fleet (e.g. gpu, us-east).">
+        <Input id="node-pool" value={pool} onChange={(e) => setPool(e.target.value)} placeholder="ungrouped" />
+      </Field>
+
+      <Field
+        label="Environment (optional)"
+        htmlFor="node-env"
+        hint="KEY=VALUE per line, merged into every agent launched on this node (a session's own vars win). Encrypted at rest."
+      >
+        <Textarea
+          id="node-env"
+          value={envText}
+          onChange={(e) => setEnvText(e.target.value)}
+          placeholder={'HTTPS_PROXY=http://proxy:8080\nNODE_OPTIONS=--max-old-space-size=4096'}
+          className="font-mono text-xs"
+        />
+      </Field>
+
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
         <Button type="submit" disabled={busy || !canSubmit}>
@@ -283,8 +365,12 @@ function NodeDialog(): JSX.Element {
   );
 }
 
+/** Sentinel for the opt-in "Auto (best node)" placement choice (#3b). */
+const AUTO_NODE = '__auto__';
+
 function AddProjectDialog(): JSX.Element {
   const { data: nodes = [] } = useNodes();
+  const { data: sessions = [] } = useSessions();
   const fixedNodeId = usePaddock((s) => s.dialogNodeId);
   const createProject = useCreateProject();
   const closeDialog = usePaddock((s) => s.closeDialog);
@@ -294,7 +380,10 @@ function AddProjectDialog(): JSX.Element {
   const [browseOpen, setBrowseOpen] = useState(false);
   const busy = createProject.isPending;
 
-  const selectedNode = nodes.find((n) => n.id === nodeId);
+  // Auto resolves to the least-busy reachable node (opt-in only). Show which one.
+  const autoTarget = useMemo(() => pickBestNode(nodes, sessions), [nodes, sessions]);
+  const effectiveNodeId = nodeId === AUTO_NODE ? (autoTarget?.id ?? '') : nodeId;
+  const selectedNode = nodes.find((n) => n.id === effectiveNodeId);
   // Browsing runs a command on the node, so it needs a reachable transport: a
   // local node, or an ssh node that is currently connected.
   const canBrowse =
@@ -303,8 +392,10 @@ function AddProjectDialog(): JSX.Element {
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
+    const resolvedNodeId = nodeId === AUTO_NODE ? autoTarget?.id : nodeId;
+    if (!resolvedNodeId) return; // Auto found no reachable node — nothing to do
     try {
-      await createProject.mutateAsync({ nodeId, name: name.trim(), workingDir: workingDir.trim() });
+      await createProject.mutateAsync({ nodeId: resolvedNodeId, name: name.trim(), workingDir: workingDir.trim() });
       closeDialog();
     } catch {
       /* error toast handled by the mutation */
@@ -320,12 +411,26 @@ function AddProjectDialog(): JSX.Element {
         <DialogDescription>A working directory / repo root on a node.</DialogDescription>
       </DialogHeader>
 
-      <Field label="Node" htmlFor="proj-node">
+      <Field
+        label="Node"
+        htmlFor="proj-node"
+        hint={
+          nodeId === AUTO_NODE
+            ? autoTarget
+              ? `Auto → ${autoTarget.name} (least busy${autoTarget.pool ? ` · ${autoTarget.pool}` : ''})`
+              : 'Auto → no reachable node available'
+            : undefined
+        }
+      >
         <Select value={nodeId} onValueChange={setNodeId} disabled={!!fixedNodeId}>
           <SelectTrigger id="proj-node"><SelectValue placeholder="Select a node" /></SelectTrigger>
           <SelectContent>
+            {!fixedNodeId ? <SelectItem value={AUTO_NODE}>✨ Auto (best node)</SelectItem> : null}
             {nodes.map((n) => (
-              <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+              <SelectItem key={n.id} value={n.id}>
+                {n.name}
+                {n.pool ? ` · ${n.pool}` : ''}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -410,8 +515,19 @@ function AddSessionDialog(): JSX.Element {
   const stackQuery = useStack(project?.nodeId ?? '', project?.workingDir ?? '');
   const gitKnown = stackQuery.isSuccess;
   const isGitRepo = stackQuery.data?.gitRepo ?? false;
-  const worktreeBlocked = gitKnown && !isGitRepo;
+  // Worktrees branch off HEAD, so they need ≥1 commit — a freshly `git init`'d
+  // repo (unborn HEAD) is a repo but can't host a worktree (git errors on HEAD).
+  const hasCommits = stackQuery.data?.gitHasCommits ?? false;
+  const worktreeBlocked = gitKnown && (!isGitRepo || !hasCommits);
   const effectiveWorktree = worktree && !worktreeBlocked;
+  // useStack is 5-min-stale (badges rarely change), but the worktree gate must
+  // reflect the dir RIGHT NOW — a fresh `git init` after a prior "not a repo"
+  // check would otherwise stay blocked for minutes. Re-check on open / project
+  // switch so the toggle is accurate without waiting out the cache.
+  const refetchStack = stackQuery.refetch;
+  useEffect(() => {
+    if (project?.nodeId && project?.workingDir) void refetchStack();
+  }, [project?.id, project?.nodeId, project?.workingDir]);
 
   // Grey out agents whose CLI isn't installed on this project's node (flock-agentd
   // detection, NodeInfo.agents) so you can't pick one that would fail at launch
@@ -549,7 +665,9 @@ function AddSessionDialog(): JSX.Element {
           <p className="mt-0.5 text-2xs text-flock-ink-muted/80">
             {worktreeBlocked ? (
               <span className="text-status-awaiting">
-                This project’s directory isn’t a git repository, so worktrees aren’t available.
+                {!isGitRepo
+                  ? 'This project’s directory isn’t a git repository, so worktrees aren’t available.'
+                  : 'This repository has no commits yet — make an initial commit to enable worktrees.'}
               </span>
             ) : (
               <>
@@ -636,6 +754,156 @@ function TerminateSessionDialog(): JSX.Element {
 }
 
 /** Host that renders whichever dialog the store has open. */
+/** flock.yml — paste/edit a workspace config + apply it, or export the current fleet. */
+function ConfigDialog(): JSX.Element {
+  const qc = useQueryClient();
+  const [yaml, setYaml] = useState('');
+  const [summary, setSummary] = useState<ConfigApplySummary | null>(null);
+  const exp = useMutation({
+    mutationFn: exportConfig,
+    onSuccess: (r) => {
+      setYaml(r.yaml);
+      setSummary(null);
+    },
+  });
+  const apply = useMutation({
+    mutationFn: () => applyConfig(yaml),
+    onSuccess: (s) => {
+      setSummary(s);
+      void qc.invalidateQueries();
+    },
+  });
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Config as code (flock.yml)</DialogTitle>
+        <DialogDescription>
+          Define your fleet — projects, working dirs, and agents — then apply it. Re-applying is
+          idempotent: existing projects and running agents are reused.
+        </DialogDescription>
+      </DialogHeader>
+      <Textarea
+        value={yaml}
+        onChange={(e) => setYaml(e.target.value)}
+        spellCheck={false}
+        rows={13}
+        placeholder={
+          'projects:\n  - node: node-vm-1\n    name: my-app\n    path: /home/flock/my-app\n    agents:\n      - type: claude-code\n        mode: plan\n      - type: codex'
+        }
+        className="font-mono text-xs leading-relaxed"
+      />
+      {apply.isError ? <p className="text-xs text-status-error">{(apply.error as Error).message}</p> : null}
+      {summary ? (
+        <div className="rounded-md border border-[var(--flock-border)] bg-flock-surface-2 p-2 text-2xs">
+          <p className="text-flock-ink-primary">
+            Created {summary.projectsCreated.length} project(s) · {summary.sessionsCreated.length} agent(s).
+          </p>
+          {summary.warnings.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4 text-flock-ink-muted">
+              {summary.warnings.slice(0, 8).map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <DialogFooter>
+        <Button variant="secondary" onClick={() => exp.mutate()} disabled={exp.isPending}>
+          {exp.isPending ? 'Loading…' : 'Export current'}
+        </Button>
+        <Button onClick={() => apply.mutate()} disabled={!yaml.trim() || apply.isPending}>
+          {apply.isPending ? 'Applying…' : 'Apply'}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+/** Race a task across N agents (each in its own worktree), then compare + keep the winner. */
+const RACE_AGENTS: AgentType[] = ['claude-code', 'codex', 'gemini', 'grok', 'opencode'];
+function RaceDialog(): JSX.Element {
+  const setRace = usePaddock((s) => s.setRace);
+  const { data: projects = [] } = useProjects();
+  const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? '');
+  const [task, setTask] = useState('');
+  const [picked, setPicked] = useState<Set<AgentType>>(() => new Set<AgentType>(['claude-code', 'codex']));
+  const toggle = (a: AgentType): void =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(a)) next.delete(a);
+      else next.add(a);
+      return next;
+    });
+  const run = useMutation({
+    mutationFn: () => startRace(projectId, task.trim(), [...picked]),
+    onSuccess: (r) => setRace({ task: r.task, sessionIds: r.sessionIds }),
+  });
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Race a task</DialogTitle>
+        <DialogDescription>
+          Run the same task across several agents — each in its own git worktree — then compare their
+          changes side by side and keep the winner.
+        </DialogDescription>
+      </DialogHeader>
+      <Field label="Project" htmlFor="race-project">
+        <Select value={projectId} onValueChange={setProjectId}>
+          <SelectTrigger id="race-project">
+            <SelectValue placeholder="Choose a project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Task" htmlFor="race-task" hint="Sent to every racer as its first instruction.">
+        <Textarea
+          id="race-task"
+          value={task}
+          onChange={(e) => setTask(e.target.value)}
+          rows={4}
+          placeholder="e.g. Add a /healthz endpoint with a test."
+        />
+      </Field>
+      <Field label="Agents" htmlFor="race-agents">
+        <div className="flex flex-wrap gap-2">
+          {RACE_AGENTS.map((a) => {
+            const on = picked.has(a);
+            return (
+              <button
+                key={a}
+                type="button"
+                onClick={() => toggle(a)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  on
+                    ? 'border-flock-accent/40 bg-flock-accent/15 text-flock-accent'
+                    : 'border-[var(--flock-border)] text-flock-ink-muted hover:bg-flock-surface-2'
+                }`}
+              >
+                {AGENT_LABELS[a]}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      {run.isError ? <p className="text-xs text-status-error">{(run.error as Error).message}</p> : null}
+      <DialogFooter>
+        <Button
+          disabled={!projectId || task.trim().length === 0 || picked.size < 2 || run.isPending}
+          onClick={() => run.mutate()}
+        >
+          {run.isPending ? 'Spawning…' : `Race ${picked.size} agents`}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
 export function PaddockDialogs(): JSX.Element {
   const dialog = usePaddock((s) => s.dialog);
   const closeDialog = usePaddock((s) => s.closeDialog);
@@ -643,7 +911,9 @@ export function PaddockDialogs(): JSX.Element {
     dialog === 'node' ||
     dialog === 'project' ||
     dialog === 'session' ||
-    dialog === 'terminate-session';
+    dialog === 'terminate-session' ||
+    dialog === 'config' ||
+    dialog === 'race';
 
   // Reset internal form state by remounting the body each time the kind changes.
   const body = useMemo(() => {
@@ -651,6 +921,8 @@ export function PaddockDialogs(): JSX.Element {
     if (dialog === 'project') return <AddProjectDialog />;
     if (dialog === 'session') return <AddSessionDialog />;
     if (dialog === 'terminate-session') return <TerminateSessionDialog />;
+    if (dialog === 'config') return <ConfigDialog />;
+    if (dialog === 'race') return <RaceDialog />;
     return null;
   }, [dialog]);
 

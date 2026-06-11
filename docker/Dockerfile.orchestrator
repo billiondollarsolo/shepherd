@@ -11,7 +11,7 @@
 # the single-box deploy must ship + run the daemon in this image. Built here from
 # source (arch-matched via BuildKit's TARGETARCH) and stamped from the single
 # VERSION file (T14). Build-stage only — not shipped, so the tag float is low-risk.
-FROM golang:1.22-bookworm AS agentd-build
+FROM golang:1.25-bookworm AS agentd-build
 WORKDIR /agentd
 COPY agentd/ ./
 ARG TARGETARCH
@@ -89,9 +89,8 @@ RUN apt-get update \
 # and a `terminal` (plain shell) local session works regardless. Real multi-node
 # deploys still run agents on SSH nodes; this makes the single-box deploy work too.
 RUN npm install -g @openai/codex || echo "WARN: codex install skipped"
-RUN curl -fsSL https://claude.ai/install.sh | bash -s -- --bin-dir /usr/local/bin \
-      || npm install -g @anthropic-ai/claude-code \
-      || echo "WARN: claude install skipped"
+# Claude Code is installed USER-LOCAL as `node` (below, after USER node) so it can
+# self-update; a root/npm-global copy is unwritable by the agent user.
 RUN curl -fsSL https://opencode.ai/install | bash \
       && (cp /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || true) \
       || echo "WARN: opencode install skipped"
@@ -139,6 +138,10 @@ RUN mkdir -p /home/node/workspace && chown -R node:node /home/node/workspace
 # Docker socket is mounted for dockerode (per-session browser containers),
 # socket group permissions must allow access; see docker-compose.yml.
 USER node
+
+# Claude Code via the official installer, as the `node` agent user → ~/.local/bin
+# (node-owned, self-updating). resolveExecutable prefers ~/.local/bin over /usr.
+RUN curl -fsSL https://claude.ai/install.sh | bash || echo "WARN: claude install skipped"
 
 # Entrypoint (T10): supervises flock-agentd, runs idempotent migrations, then
 # execs the orchestrator. `pnpm` workspace scripts stay the single source of

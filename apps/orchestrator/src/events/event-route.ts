@@ -33,6 +33,32 @@ export function registerEventRoute(
     },
   );
 
+  // The whole fleet's recent activity in one chronological stream (US-1d) — the
+  // cross-agent audit timeline. Top-level path so it never collides with
+  // `/api/sessions/:id/*`. `?limit=` is clamped server-side (1..200).
+  app.get(
+    '/api/activity/fleet',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const raw = (request.query as { limit?: string } | undefined)?.limit;
+      const limit = raw != null && Number.isFinite(Number(raw)) ? Number(raw) : undefined;
+      const events = await deps.service.recentFleetActivity(limit);
+      return reply.code(200).send({ events });
+    },
+  );
+
+  // The whole fleet's latest chat message in one query — powers the Paddock cards
+  // (triage what every agent is saying/asking without opening each). Top-level path
+  // so it never collides with `/api/sessions/:id/*`.
+  app.get(
+    '/api/chats/latest',
+    { preHandler: requireAuth },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const chats = await deps.service.latestChats();
+      return reply.code(200).send({ chats });
+    },
+  );
+
   app.get(
     '/api/sessions/:id/plan',
     { preHandler: requireAuth },

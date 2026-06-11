@@ -48,7 +48,6 @@ services:
       PUBLIC_BASE_URL: http://localhost:48080
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY}
       FLOCK_MASTER_KEY_VERSION: '1'
-      SESSION_SECRET: ${SESSION_SECRET}
       CHROME_BIN: /usr/bin/chromium
       BROWSER_IMAGE: zenika/alpine-chrome:latest
       BROWSER_MAX_CONCURRENT: '4'

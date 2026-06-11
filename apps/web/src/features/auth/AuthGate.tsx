@@ -16,10 +16,12 @@ type Phase =
   | { kind: 'unauthed'; mode: 'signin' | 'setup' }
   | { kind: 'authed'; user: User };
 
-/** The signed-in user + a logout action, available to the whole paddock. */
+/** The signed-in user + actions, available to the whole paddock. */
 export interface AuthValue {
   user: User;
   logout: () => Promise<void>;
+  /** Replace the cached user after a profile change (e.g. display name). */
+  updateUser: (user: User) => void;
 }
 const AuthContext = createContext<AuthValue | null>(null);
 
@@ -97,8 +99,10 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
     }
   };
 
+  const updateUser = (user: User): void => setPhase({ kind: 'authed', user });
+
   return (
-    <AuthContext.Provider value={{ user: phase.user, logout: doLogout }}>
+    <AuthContext.Provider value={{ user: phase.user, logout: doLogout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

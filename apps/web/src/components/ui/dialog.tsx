@@ -36,6 +36,7 @@ export const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
+        'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         'rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-5 shadow-overlay',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
@@ -47,7 +48,7 @@ export const DialogContent = React.forwardRef<
       {children}
       {!hideClose && (
         <DialogPrimitive.Close
-          className="absolute right-3.5 top-3.5 rounded-sm text-flock-ink-muted opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:shadow-focus"
+          className="absolute right-2.5 top-2.5 rounded-md p-2 text-flock-ink-muted opacity-70 transition-colors hover:bg-flock-surface-2 hover:text-flock-ink-primary hover:opacity-100 focus:outline-none focus-visible:shadow-focus"
           aria-label="Close"
         >
           <X className="size-4" />
@@ -65,7 +66,7 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
   return (
     <div
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn('sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-lg border-t border-[var(--flock-border)] bg-flock-surface-1 px-5 py-3.5 sm:flex-row sm:justify-end', className)}
       {...props}
     />
   );
@@ -77,7 +78,7 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-md font-semibold tracking-tight text-flock-ink-primary', className)}
+    className={cn('font-display text-md font-semibold tracking-tight text-flock-ink-primary', className)}
     {...props}
   />
 ));

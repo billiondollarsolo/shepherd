@@ -48,7 +48,7 @@ const CASES: ReadonlyArray<{
   readonly fixture: string;
   readonly expected: Status;
 }> = [
-  { name: 'SessionStart -> starting', fixture: 'session-start', expected: 'starting' },
+  { name: 'SessionStart -> idle (ready)', fixture: 'session-start', expected: 'idle' },
   { name: 'PreToolUse -> running', fixture: 'pre-tool-use', expected: 'running' },
   {
     name: 'PostToolUse (exit 0) -> running',
@@ -96,7 +96,9 @@ describe('Claude Code translator (US-16, spec §7.1) — recorded-fixture contra
     const covered = new Set(CASES.map((c) => c.expected));
     expect([...covered].sort()).toEqual(
       // `done` is session-end only (SessionEnd); turn-complete (Stop) is `idle`.
-      ['awaiting_input', 'done', 'error', 'idle', 'running', 'starting'].sort(),
+      // `starting` is the orchestrator's INITIAL status, not a translator output —
+      // SessionStart now maps to `idle` (booted + ready).
+      ['awaiting_input', 'done', 'error', 'idle', 'running'].sort(),
     );
   });
 

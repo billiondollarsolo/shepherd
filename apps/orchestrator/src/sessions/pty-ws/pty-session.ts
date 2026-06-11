@@ -52,6 +52,20 @@ const ALT_CLEAN_ENTER = Buffer.from('\x1b[?1049h\x1b[H\x1b[2J', 'latin1');
 /** Trailing bytes kept to catch a switch sequence split across two chunks (8-byte seq → 7). */
 const ALT_CARRY_LEN = 7;
 
+/**
+ * Returns the portion of `buf` AFTER its last alt-screen-exit sequence, so the
+ * stale alt frames preceding it aren't retained in the resume ring. Mirrors
+ * agentd's tailAfterAltExit.
+ */
+function tailAfterAltExit(buf: Buffer): Buffer {
+  let end = -1;
+  for (const x of ALT_EXIT_BUFS) {
+    const i = buf.lastIndexOf(x);
+    if (i >= 0 && i + x.length > end) end = i + x.length;
+  }
+  return end < 0 ? buf : buf.subarray(end);
+}
+
 /** Default PTY viewport used when the first subscriber does not specify one. */
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -255,6 +269,21 @@ export class PtySession {
     if (backlog.length > 0) {
       subscriber.onData(backlog);
     }
+    // On the ALTERNATE screen, force the TUI (htop/vim) to fully relayout+repaint NOW
+    // rather than waiting for its next refresh tick: a same-size SIGWINCH only makes a
+    // diff-renderer repaint changed cells (→ scattered garble), so JIGGLE the PTY rows
+    // (−1, then back) for a REAL resize. We jiggle the pty directly (bypassing resize()'s
+    // same-size dedup) and do it on EVERY (re)subscribe — independent of whether the
+    // agentd attach was re-opened — which is what fixes "garbled htop on nav-away-back".
+    if (this.inAlt && this.pty && this.rows > 1) {
+      const pty = this.pty;
+      const cols = this.cols;
+      const rows = this.rows;
+      pty.resize(cols, rows - 1);
+      setTimeout(() => {
+        if (this.pty === pty && !this.closed) pty.resize(cols, rows);
+      }, 80);
+    }
     if (this.exited && subscriber.onExit) {
       const recorded = this.exited;
       queueMicrotask(() => subscriber.onExit?.(recorded));
@@ -336,8 +365,19 @@ export class PtySession {
 
       this.unsubData = handle.onData((chunk) => {
         const buf = Buffer.from(chunk, 'utf8');
+        const wasAlt = this.inAlt;
         this.updateAltState(buf);
-        this.resume.push(buf);
+        if (wasAlt && !this.inAlt) {
+          // Program LEFT the alt screen (quit htop/vim): the stale alt frames in the
+          // resume ring would replay as garbage on a normal-screen reattach. Reset to
+          // a clean screen + keep only this chunk's post-exit tail. Live subscribers
+          // still get the FULL chunk below. Mirrors agentd Session.broadcast.
+          this.resume.clear();
+          this.resume.push(Buffer.from('\x1b[?1049l\x1b[2J\x1b[3J\x1b[H', 'latin1'));
+          this.resume.push(tailAfterAltExit(buf));
+        } else {
+          this.resume.push(buf);
+        }
         // Status-from-activity tap (OSC/PTY fallback, US-20) — best-effort, never
         // let it break the subscriber fan-out.
         try {

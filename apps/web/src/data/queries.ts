@@ -11,6 +11,7 @@
  */
 import {
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type UseQueryResult,
@@ -29,6 +30,8 @@ import type {
 } from '@flock/shared';
 import {
   commitGit,
+  createBranchGit,
+  createPrGit,
   createNode,
   updateNode,
   createProject,
@@ -40,6 +43,9 @@ import {
   listNodes,
   listProjects,
   listSessionEvents,
+  listFleetActivity,
+  getLatestChats,
+  getTeams,
   listSessions,
   pushGit,
   stageGitFiles,
@@ -73,6 +79,7 @@ export const qk = {
   fsFile: (nodeId: string, path: string) => ['fs-file', nodeId, path] as const,
   agentdStatus: ['agentd-status'] as const,
   stack: (nodeId: string, path: string) => ['stack', nodeId, path] as const,
+  fleetActivity: ['fleet-activity'] as const,
 };
 
 function errMessage(e: unknown, fallback: string): string {
@@ -150,6 +157,34 @@ export function useSessionEvents(sessionId: string | null): UseQueryResult<Flock
   });
 }
 
+/** Fleet-wide recent activity (the cross-agent audit timeline; cold path, polled). */
+export function useFleetActivity(enabled = true): UseQueryResult<FlockEvent[]> {
+  return useQuery({
+    queryKey: qk.fleetActivity,
+    enabled,
+    queryFn: async () => (await listFleetActivity(80)).events,
+    refetchInterval: 8_000,
+  });
+}
+
+/** Latest chat message per session for the Paddock fleet cards (one query; polled). */
+export function useLatestChats(): UseQueryResult<Record<string, { role: string; text: string }>> {
+  return useQuery({
+    queryKey: ['chats-latest'],
+    queryFn: async () => (await getLatestChats()).chats,
+    refetchInterval: 5_000,
+  });
+}
+
+/** Live agent-collaboration edges (who spawned whom) for the Paddock teams view. */
+export function useTeams(): UseQueryResult<Array<{ parent: string; child: string }>> {
+  return useQuery({
+    queryKey: ['teams'],
+    queryFn: async () => (await getTeams()).edges,
+    refetchInterval: 5_000,
+  });
+}
+
 /** The agent's latest plan/todo snapshot for the Activity Plan artifact (polled). */
 export function useSessionPlan(sessionId: string | null): UseQueryResult<SessionPlan | null> {
   return useQuery({
@@ -185,8 +220,19 @@ export function useNodeDir(
  * session. Cold path; polled while the panel is open so the list stays current
  * as the agent edits files. `enabled` defers until a session is selected.
  */
+/** Probe a session's git status; a non-repo (422) resolves to `null` (cached). */
+async function gitStatusQueryFn(sessionId: string): Promise<GitStatusResponse | null> {
+  try {
+    return await getGitStatus(sessionId);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 422) return null;
+    throw err;
+  }
+}
+
 export function useGitStatus(
   sessionId: string | null,
+  intervalMs = 5_000,
 ): UseQueryResult<GitStatusResponse | null> {
   return useQuery({
     queryKey: qk.gitStatus(sessionId ?? ''),
@@ -195,20 +241,37 @@ export function useGitStatus(
     // "not a repo" result (`null`) instead of an error, so it's probed ONCE and
     // cached — never refetched on remount/tab-switch (the source of the 422 spam).
     // Real errors still throw and surface.
-    queryFn: async () => {
-      try {
-        return await getGitStatus(sessionId as string);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 422) return null;
-        throw err;
-      }
-    },
+    queryFn: () => gitStatusQueryFn(sessionId as string),
     // Cache the verdict; only POLL when it IS a repo (data != null). For a non-repo
     // the data is `null` and `refetchInterval` returns false → no polling at all.
     staleTime: Infinity,
-    refetchInterval: (query) => (query.state.data == null ? false : 5_000),
+    refetchInterval: (query) => (query.state.data == null ? false : intervalMs),
     retry: false,
   });
+}
+
+/**
+ * Fleet-wide git status: one cache entry PER session (shares `qk.gitStatus(id)`
+ * with the Source Control panel + per-card badges, so nothing double-fetches),
+ * polled gently. Powers the at-a-glance "who has uncommitted work" surfaces
+ * (card badges + the Command Center changes lane). Returns a sessionId → status map.
+ */
+export function useFleetGit(sessionIds: string[]): Map<string, GitStatusResponse> {
+  const results = useQueries({
+    queries: sessionIds.map((id) => ({
+      queryKey: qk.gitStatus(id),
+      queryFn: () => gitStatusQueryFn(id),
+      staleTime: Infinity,
+      refetchInterval: (query: { state: { data: unknown } }) =>
+        query.state.data == null ? false : 15_000,
+      retry: false,
+    })),
+  });
+  const map = new Map<string, GitStatusResponse>();
+  results.forEach((r, i) => {
+    if (r.data) map.set(sessionIds[i]!, r.data);
+  });
+  return map;
 }
 
 /** Live host metrics + detected agents for a node (node-info dialog + bottom bar). */
@@ -413,5 +476,35 @@ export function usePush(sessionId: string) {
       return res;
     },
     onError: (e) => toast.error(errMessage(e, 'Push failed')),
+  });
+}
+
+/** Open (or find an existing) GitHub PR for the session's current branch (P5). */
+export function useCreatePr(sessionId: string) {
+  return useMutation({
+    mutationFn: (input: { title: string; body?: string; base?: string; draft?: boolean }) =>
+      createPrGit(sessionId, input),
+    onSuccess: (res) => {
+      toast.success(res.created ? 'Pull request opened' : 'PR already open', {
+        description: res.url,
+      });
+      return res;
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not open PR')),
+  });
+}
+
+/** Create + switch to a new branch (P5). Refreshes git status. */
+export function useCreateBranch(sessionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; from?: string }) =>
+      createBranchGit(sessionId, input.name, input.from),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: qk.gitStatus(sessionId) });
+      toast.success(res.detail);
+      return res;
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not create branch')),
   });
 }

@@ -59,6 +59,10 @@ const FORWARDED_EVENTS = new Set([
   // (the server extracts it; status is unaffected).
   'message.updated',
   'session.updated',
+  // Chat: text streams as message PARTS (message.updated carries only metadata —
+  // role/model/tokens, no text). The server assembles parts by message id into the
+  // structured Chat tab.
+  'message.part.updated',
   // Legacy/guessed names kept for tolerance across versions (harmless if unused):
   'session.start',
   'permission.request',

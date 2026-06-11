@@ -10,19 +10,25 @@
 import { create } from 'zustand';
 
 /** Top-level surface. Settings is a full PAGE (not a modal) so it can grow. */
-export type PaddockView = 'paddock' | 'settings';
+export type PaddockView = 'paddock' | 'settings' | 'overview';
 
 /**
  * Which dialog is open (null = none). Settings is a view, not a dialog.
  * `terminate-session` is a destructive-action CONFIRM (not a create dialog).
  */
-export type DialogKind = 'node' | 'project' | 'session' | 'terminate-session' | null;
+export type DialogKind = 'node' | 'project' | 'session' | 'terminate-session' | 'config' | 'race' | null;
+
+/** An active compare/race: the shared task + the racer session ids being compared. */
+export interface ActiveRace {
+  task: string;
+  sessionIds: string[];
+}
 
 /** A settings page section (inner-sidebar item). Extend as settings grow. */
 export type SettingsSection = 'appearance' | 'notifications' | 'nodes' | 'account' | 'about';
 
 /** Which view the right-hand session panel shows (Codex-style side panel). */
-export type RightTab = 'activity' | 'browser' | 'diff' | 'files' | 'search';
+export type RightTab = 'chat' | 'activity' | 'browser' | 'diff' | 'files' | 'search';
 
 /** Per-project user-defined session order (ids), persisted in localStorage. */
 export type SessionOrder = Record<string, string[]>;
@@ -42,6 +48,38 @@ function saveSessionOrder(order: SessionOrder): void {
   } catch {
     /* storage unavailable (private mode / quota) — order is just not persisted */
   }
+}
+
+/** User's manual node order (ids) for the sidebar — LOCKED, never auto-changes. */
+const NODE_ORDER_KEY = 'flock.nodeOrder';
+function loadNodeOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(NODE_ORDER_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveNodeOrder(order: string[]): void {
+  try {
+    localStorage.setItem(NODE_ORDER_KEY, JSON.stringify(order));
+  } catch {
+    /* storage unavailable — order is just not persisted */
+  }
+}
+
+/**
+ * Apply the locked node order: saved-order ids first (in their saved position),
+ * then any not-yet-ordered nodes appended in a STABLE, deterministic order (by
+ * name) so the list never jumps around — even before the user drags anything.
+ */
+export function orderNodes<T extends { id: string; name: string }>(nodes: T[], order: string[]): T[] {
+  const idx = new Map(order.map((id, i) => [id, i]));
+  return [...nodes].sort((a, b) => {
+    const ai = idx.has(a.id) ? (idx.get(a.id) as number) : Number.POSITIVE_INFINITY;
+    const bi = idx.has(b.id) ? (idx.get(b.id) as number) : Number.POSITIVE_INFINITY;
+    return ai !== bi ? ai - bi : a.name.localeCompare(b.name);
+  });
 }
 
 /** Left sidebar collapsed-to-rail preference, persisted in localStorage. */
@@ -84,6 +122,74 @@ function saveGridLayout(v: GridLayout): void {
   }
 }
 
+/** How the dev chooses to view/drive the fleet (the overview "lens"), persisted:
+ *  - 'command' — dense Command-Center dashboard (default)
+ *  - 'terminal' — Warp-style command-bar + output blocks
+ *  - 'spatial'  — the orchestration graph as a canvas */
+export type FleetMode = 'command' | 'terminal' | 'spatial';
+const FLEET_MODE_KEY = 'flock.fleetMode';
+function loadFleetMode(): FleetMode {
+  try {
+    const v = localStorage.getItem(FLEET_MODE_KEY);
+    return v === 'terminal' || v === 'spatial' ? v : 'command';
+  } catch {
+    return 'command';
+  }
+}
+function saveFleetMode(v: FleetMode): void {
+  try {
+    localStorage.setItem(FLEET_MODE_KEY, v);
+  } catch {
+    /* storage unavailable — preference just isn't persisted */
+  }
+}
+
+/** Per-session "I've reviewed this agent's work" markers (ids). Closes the
+ *  Ready-to-review → Reviewed loop. Persisted in localStorage (a personal marker). */
+const REVIEWED_KEY = 'flock.reviewedSessions';
+function loadReviewed(): string[] {
+  try {
+    const raw = localStorage.getItem(REVIEWED_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveReviewed(ids: string[]): void {
+  try {
+    localStorage.setItem(REVIEWED_KEY, JSON.stringify(ids));
+  } catch {
+    /* storage unavailable — markers just aren't persisted */
+  }
+}
+
+
+/** A saved grid arrangement ("Backend trio") — the grid layout + the per-project
+ *  session order, recalled in one click. Persisted in localStorage. */
+export interface LayoutPreset {
+  id: string;
+  name: string;
+  projectId: string;
+  gridLayout: GridLayout;
+  order: string[];
+}
+const PRESETS_KEY = 'flock.layoutPresets';
+function loadLayoutPresets(): LayoutPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    return raw ? (JSON.parse(raw) as LayoutPreset[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveLayoutPresets(p: LayoutPreset[]): void {
+  try {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable — presets just aren't persisted */
+  }
+}
+
 export interface PaddockUiState {
   view: PaddockView;
   settingsSection: SettingsSection;
@@ -101,6 +207,9 @@ export interface PaddockUiState {
    * listed (newly created) fall to the end by creation time. Persisted per-browser.
    */
   sessionOrder: SessionOrder;
+  /** User's manual node order (ids) for the sidebar. LOCKED — nodes never reorder
+   *  themselves; only drag-to-reorder changes this. Persisted per-browser. */
+  nodeOrder: string[];
   dialog: DialogKind;
   /** Context for the add-project / add-session / terminate dialogs. */
   dialogNodeId: string | null;
@@ -119,8 +228,24 @@ export interface PaddockUiState {
   /** Left sidebar collapsed to an icon-only rail (hover tooltips). Persisted. */
   sidebarCollapsed: boolean;
 
+  /** Immersive "zen" mode: hide the sidebar + bottom bar + right panel so a single
+   *  agent fills the screen for distraction-free deep work. Transient (not persisted). */
+  zenMode: boolean;
+
   /** How the grid tiles 2+ sessions: full-height 'columns' or 2-wide 'grid'. Persisted. */
   gridLayout: GridLayout;
+
+  /** Saved grid arrangements (name + layout + session order), recalled in one click. */
+  layoutPresets: LayoutPreset[];
+
+  /** Session ids the user has marked reviewed (drops them from "Ready to review"). */
+  reviewedSessions: string[];
+
+  /** The dev's chosen fleet/overview lens (Command Center / Terminal / Spatial). */
+  fleetMode: FleetMode;
+
+  /** The active compare/race (the racers being compared), or null. Transient. */
+  race: ActiveRace | null;
 
   /** Right session panel: which tab + whether it's open (resizable, collapsible). */
   rightTab: RightTab;
@@ -160,12 +285,32 @@ export interface PaddockUiState {
   selectProject: (id: string | null) => void;
   /** Set a project's manual session order (the full ordered id list). */
   setSessionOrder: (projectId: string, orderedIds: string[]) => void;
+  /** Set the sidebar node order (the full ordered id list) — drag-to-reorder. */
+  setNodeOrder: (orderedIds: string[]) => void;
+  /** Save the current grid layout + a project's session order as a named preset. */
+  saveLayoutPreset: (name: string, projectId: string, order: string[]) => void;
+  /** Apply a saved preset: restore its grid layout + the project's session order. */
+  applyLayoutPreset: (id: string) => void;
+  /** Delete a saved layout preset. */
+  deleteLayoutPreset: (id: string) => void;
+  /** Mark / unmark a session as reviewed (toggles it out of "Ready to review"). */
+  setReviewed: (id: string, reviewed: boolean) => void;
+  /** Switch the fleet/overview lens (⌘1/2/3), persisted. */
+  setFleetMode: (m: FleetMode) => void;
+  /** Start comparing a set of racer sessions (opens the compare view). */
+  setRace: (race: ActiveRace) => void;
+  /** Dismiss the compare view (does not kill the racers). */
+  endRace: () => void;
   /** Open the node-info dialog for a node. */
   openNodeInfo: (nodeId: string) => void;
   /** Close the node-info dialog. */
   closeNodeInfo: () => void;
   /** Collapse/expand the left sidebar to an icon rail. */
   toggleSidebar: () => void;
+  /** Toggle immersive zen mode (entering also collapses the right panel). */
+  toggleZen: () => void;
+  /** Set zen mode explicitly (e.g. Escape to exit). */
+  setZen: (v: boolean) => void;
   /** Switch the grid between full-height columns and the 2-wide grid. */
   toggleGridLayout: () => void;
   /** Switch the center between the focus view and the multi-agent grid. */
@@ -182,6 +327,7 @@ export interface PaddockUiState {
   closeFileViewer: () => void;
   /** Register/clear the active terminal's PTY input writer. */
   setTerminalInput: (fn: ((text: string) => void) | null) => void;
+  openOverview: () => void;
   openSettings: (section?: SettingsSection) => void;
   setSettingsSection: (section: SettingsSection) => void;
   closeSettings: () => void;
@@ -205,8 +351,13 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   viewMode: 'grid',
 
   sidebarCollapsed: loadSidebarCollapsed(),
+  zenMode: false,
   gridLayout: loadGridLayout(),
-  rightTab: 'activity',
+  layoutPresets: loadLayoutPresets(),
+  reviewedSessions: loadReviewed(),
+  fleetMode: loadFleetMode(),
+  race: null,
+  rightTab: 'chat',
   rightOpen: true,
   diffSelectedPath: null,
   diffSelectedStaged: null,
@@ -215,6 +366,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
 
   nodeInfoNodeId: null,
   sessionOrder: loadSessionOrder(),
+  nodeOrder: loadNodeOrder(),
 
   // Changing the selected session clears any open file preview AND leaves the
   // node view (selecting a session shows that session in the center).
@@ -238,6 +390,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       viewerFile: null,
       nodeInfoNodeId: null,
       viewMode: 'focus',
+      view: 'paddock',
     }),
   // Scope the grid to a project with nothing focused (back to the side-by-side
   // view of that project). Used by `/p/:id` and project rows in the sidebar.
@@ -257,6 +410,48 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       saveSessionOrder(next);
       return { sessionOrder: next };
     }),
+  setNodeOrder: (orderedIds) =>
+    set(() => {
+      saveNodeOrder(orderedIds);
+      return { nodeOrder: orderedIds };
+    }),
+  saveLayoutPreset: (name, projectId, order) =>
+    set((s) => {
+      const preset: LayoutPreset = { id: crypto.randomUUID(), name, projectId, gridLayout: s.gridLayout, order };
+      // Replace any same-name preset for this project (idempotent re-save).
+      const next = [...s.layoutPresets.filter((p) => !(p.projectId === projectId && p.name === name)), preset];
+      saveLayoutPresets(next);
+      return { layoutPresets: next };
+    }),
+  applyLayoutPreset: (id) =>
+    set((s) => {
+      const p = s.layoutPresets.find((x) => x.id === id);
+      if (!p) return {};
+      saveGridLayout(p.gridLayout);
+      const order = { ...s.sessionOrder, [p.projectId]: p.order };
+      saveSessionOrder(order);
+      return { gridLayout: p.gridLayout, sessionOrder: order };
+    }),
+  deleteLayoutPreset: (id) =>
+    set((s) => {
+      const next = s.layoutPresets.filter((x) => x.id !== id);
+      saveLayoutPresets(next);
+      return { layoutPresets: next };
+    }),
+  setReviewed: (id, reviewed) =>
+    set((s) => {
+      const next = reviewed
+        ? [...new Set([...s.reviewedSessions, id])]
+        : s.reviewedSessions.filter((x) => x !== id);
+      saveReviewed(next);
+      return { reviewedSessions: next };
+    }),
+  setFleetMode: (m) => {
+    saveFleetMode(m);
+    set({ fleetMode: m });
+  },
+  setRace: (race) => set({ race, dialog: null }),
+  endRace: () => set({ race: null }),
   // Node details fill the CENTER pane (sidebar + bottom bar stay); not a takeover.
   openNodeInfo: (nodeId) => set({ nodeInfoNodeId: nodeId, view: 'paddock' }),
   closeNodeInfo: () => set({ nodeInfoNodeId: null }),
@@ -266,6 +461,9 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       saveSidebarCollapsed(v);
       return { sidebarCollapsed: v };
     }),
+  // Entering zen also collapses the right panel for max immersion; exiting leaves it.
+  toggleZen: () => set((s) => (s.zenMode ? { zenMode: false } : { zenMode: true, rightOpen: false })),
+  setZen: (v) => set({ zenMode: v }),
   toggleGridLayout: () =>
     set((s) => {
       const v: GridLayout = s.gridLayout === 'columns' ? 'grid' : 'columns';
@@ -280,6 +478,8 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   openFileInViewer: (path) => set({ viewerFile: path, rightTab: 'files', rightOpen: true }),
   closeFileViewer: () => set({ viewerFile: null }),
   setTerminalInput: (fn) => set({ terminalInput: fn }),
+  openOverview: () =>
+    set({ view: 'overview', selectedSessionId: null, selectedProjectId: null, nodeInfoNodeId: null }),
   openSettings: (section) =>
     set((s) => ({ view: 'settings', settingsSection: section ?? s.settingsSection })),
   setSettingsSection: (section) => set({ settingsSection: section }),

@@ -20,6 +20,7 @@ import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import type { PlanItem, Status } from '@flock/shared';
+import { CreateSessionRequest } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
@@ -37,9 +38,14 @@ import { WorktreeService } from './sessions/worktree-service.js';
 import { renderScopedConfig } from './sessions/config-injection/index.js';
 import { agentSessionKind, agentUsesActivityStatus } from './sessions/agent-launch.js';
 import { contextPct, estimateCostUsd, lookupModel } from './sessions/model-info.js';
-import { hashPassword } from './auth/hashing.js';
+import { hashHookToken, verifyHookToken } from './hooks/hook-token.js';
+import { OrchestrationService } from './orchestrate/orchestrate-service.js';
+import { registerOrchestrateRoute } from './orchestrate/orchestrate-route.js';
+import { ConfigService } from './config/config-service.js';
+import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
 import { makeWsAuthorizer } from './auth/ws-auth.js';
+import { makeRequireAuth } from './auth/middleware.js';
 import { agentSessions } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createLiveChannels } from './live-channels.js';
@@ -93,7 +99,15 @@ function mergeMeta(prev: CachedMeta, next: AgentdStatusMeta): CachedMeta {
   };
 }
 
-const AGENTD_VERSION_FALLBACK = '0.2.8-dev';
+/**
+ * Resolve the expected agentd version (T14): an explicit `FLOCK_AGENTD_VERSION`
+ * override, else the SINGLE SOURCE OF TRUTH — the COPYed `agentd/VERSION` file.
+ * Fails LOUD if neither is available: a wrong/stale version makes the bootstrap
+ * believe every node's daemon is the wrong version and re-ship+relaunch it on
+ * every connect (killing live sessions), so a silent fallback is worse than a
+ * crash. The container COPYs agentd/VERSION to /app/agentd/VERSION; dev runs from
+ * the repo root where ./agentd/VERSION exists.
+ */
 function resolveAgentdVersion(): string {
   const env = process.env.FLOCK_AGENTD_VERSION;
   if (env && env.trim() !== '') return env.trim();
@@ -105,12 +119,10 @@ function resolveAgentdVersion(): string {
       /* try the next candidate path */
     }
   }
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[flock-orchestrator] FLOCK_AGENTD_VERSION unset and agentd/VERSION not found; ` +
-      `falling back to ${AGENTD_VERSION_FALLBACK}. Set FLOCK_AGENTD_VERSION from agentd/VERSION in deploy.`,
+  throw new Error(
+    'Cannot resolve the agentd version: FLOCK_AGENTD_VERSION is unset and agentd/VERSION ' +
+      `was not found from cwd ${process.cwd()}. Set FLOCK_AGENTD_VERSION or ship agentd/VERSION.`,
   );
-  return AGENTD_VERSION_FALLBACK;
 }
 
 /**
@@ -133,6 +145,7 @@ export async function main(): Promise<void> {
   // Shared audit logger + secret store for the CRUD surfaces (FR-A3/FR-A4).
   const auditLogger = new AuditLogger(makeDbAuditSink(db));
   const secrets = new SecretStore({ audit: auditLogger });
+  secrets.assertReady(); // fail loud at boot on a missing/malformed master key
 
   // Node connection manager: owns live transports — a shared LocalTransport for
   // the local node and a supervised ssh2 connection per SSH node (US-8). Adding
@@ -571,14 +584,14 @@ export async function main(): Promise<void> {
 
   const sessions = new SessionRestService({
     db,
-    hashToken: hashPassword,
+    hashToken: (t) => Promise.resolve(hashHookToken(t)),
     audit: auditLogger,
     createWorktree: ({ nodeId, repoDir, branch }) => worktrees.create(nodeId, repoDir, branch),
     // flock-agentd is the transport for ALL nodes (local + ssh). It is MANDATORY:
     // 'launched' on success, 'failed' on any error (the session then shows a
     // disconnected dot instead of a silent shell).
     agentdLaunch: useAgentd
-      ? async ({ session, nodeKind, command, env }) => {
+      ? async ({ session, nodeKind, command, env, mode }) => {
           // agentd is the ONLY transport (local + ssh). On a hard failure mark the
           // session 'error' (red dot + reason) rather than blank — never a silent shell.
           const fail = (reason: string) => {
@@ -589,7 +602,10 @@ export async function main(): Promise<void> {
           if (!client) return fail('flock-agentd unreachable on node');
           // Scoped hook-config (US-19, T1): agentd seeds it on the node so the agent
           // calls back into Flock's hook endpoint (→ awaiting_input, Plan, Web Push).
-          const scoped = await renderScopedConfig(session.agentType).catch(() => null);
+          // ACP (structured) sessions don't use hook-config injection — status
+          // comes from the ACP stream, not hooks.
+          const isAcp = mode === 'acp';
+          const scoped = isAcp ? null : await renderScopedConfig(session.agentType).catch(() => null);
           // T17: an `autonomous` agent (--dangerously-skip-permissions) must be
           // FS-confined. Enable the Landlock sandbox iff the node supports it;
           // otherwise warn loudly (the agent then runs with full write access).
@@ -604,18 +620,28 @@ export async function main(): Promise<void> {
               );
             }
           }
+          // #3a per-node env: merge the node's env UNDER the per-session launch
+          // env (session/hook vars win on a key clash). Best-effort — never fail a
+          // launch because node env can't be read.
+          const nodeEnv = await nodes.envForNode(session.nodeId).catch(() => ({}));
+          const mergedEnv = { ...nodeEnv, ...(env ?? {}) };
           try {
             await client.open({
               id: session.id,
+              mode,
               sandbox,
               // Confine writes to the session's working dir (its worktree when set).
               sandboxAllow: sandbox ? [session.workingDir] : undefined,
+
               // Status source + daemon kind come from the agent capability table.
-              activityStatus: agentUsesActivityStatus(session.agentType),
+              // ACP sessions push their own status, so no PTY-activity heuristic.
+              activityStatus: isAcp ? false : agentUsesActivityStatus(session.agentType),
               kind: agentSessionKind(session.agentType),
               cwd: session.workingDir,
               command,
-              env: env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : undefined,
+              env: Object.keys(mergedEnv).length > 0
+                ? Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`)
+                : undefined,
               configDirEnv: scoped?.configDirEnv,
               configFiles: scoped?.files,
               configBaseSubdir: scoped?.configBaseSubdir,
@@ -688,6 +714,7 @@ export async function main(): Promise<void> {
       const owner = (await sessions.listSessions()).find((s) => s.id === sessionId);
       const result = await terminateSession.terminate(sessionId, ctx);
       liveChannels.untrackSession(sessionId);
+      agentdSessionMeta.delete(sessionId); // free the per-session telemetry cache (was never evicted)
       // Remove the session's isolated worktree + delete its branch if merged
       // (preserved otherwise). Best-effort, off the terminate result.
       if (owner?.worktreeBranch) {
@@ -781,6 +808,148 @@ export async function main(): Promise<void> {
         }
       : undefined,
   });
+
+  // Agent-facing orchestration API (hook-token authed, project-scoped): lets an
+  // agent observe + coordinate with its siblings (list / wait / spawn / send).
+  const orchestration = new OrchestrationService(
+    db,
+    liveChannels.statusMap,
+    (hash, token) => Promise.resolve(verifyHookToken(hash, token)),
+    () => new EventReadService(db).latestChats(),
+    // spawn: launch a sibling in the project (reuses the full create machinery).
+    async (projectId, createdBy, agentType) => {
+      const input = CreateSessionRequest.parse({ projectId, agentType });
+      const r = await sessions.createSession(input, { userId: createdBy ?? '', ip: null });
+      return r.session.id;
+    },
+    // send: deliver input to a sibling's live PTY (it must be running on a node).
+    async (targetId, text) => {
+      const s = await sessionRegistry.getSession(targetId);
+      const client = s ? peekClientForNode(s.nodeId) : null;
+      if (!client) return false;
+      client.write(targetId, Buffer.from(text.endsWith('\r') ? text : `${text}\r`));
+      return true;
+    },
+    // kill: terminate a sibling (full cleanup: worktree, browser, untrack).
+    async (targetId) => {
+      try {
+        await terminateAndCleanup.terminate(targetId, { userId: '', ip: null });
+        return true;
+      } catch {
+        // terminate can throw on a racy / still-opening session even though it DID
+        // close the record — report success if the session is actually gone.
+        const s = await sessionRegistry.getSession(targetId).catch(() => null);
+        return !s || s.closedAt != null;
+      }
+    },
+    // read_output: a sibling's recent chat/assistant messages (oldest→newest).
+    (targetId, limit) => new EventReadService(db).recentChats(targetId, limit),
+  );
+  registerOrchestrateRoute(app, orchestration);
+  // The live collaboration graph (which agent spawned which) for the web — cookie
+  // authed via the global surface guard (not in the orchestrate allowlist).
+  app.get('/api/teams', async (_req, reply) =>
+    reply.code(200).send({ edges: await orchestration.spawnEdges() }),
+  );
+
+  // Provider handoff: spawn a fresh agent (any type) in the SAME project/cwd, seeded
+  // with the source agent's recent context, and record the lineage edge. Lets you
+  // pass a task Claude→Gemini (etc.) without losing the thread. Cookie-authed.
+  {
+    const requireAuth = makeRequireAuth(auth);
+    app.post('/api/sessions/:id/handoff', { preHandler: requireAuth }, async (request, reply) => {
+      const sourceId = (request.params as { id: string }).id;
+      const body = (request.body ?? {}) as { agentType?: string };
+      const source = await sessionRegistry.getSession(sourceId).catch(() => null);
+      if (!source || source.closedAt != null) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'source session not found' } });
+      }
+      const parsed = CreateSessionRequest.safeParse({
+        projectId: source.projectId,
+        agentType: body.agentType,
+        workingDir: source.workingDir,
+      });
+      if (!parsed.success) {
+        return reply.code(400).send({ error: { code: 'bad_request', message: 'valid agentType is required' } });
+      }
+      const actor = request.authUser!;
+      const created = await sessions.createSession(parsed.data, { userId: actor.id, ip: request.ip ?? null });
+      const newId = created.session.id;
+      await orchestration.recordHandoff(sourceId, newId);
+      // Seed the target with the handoff context once its PTY has attached (best-effort;
+      // most agent CLIs buffer stdin until they're ready to read it).
+      const chats = await new EventReadService(db).recentChats(sourceId, 12).catch(() => []);
+      const transcript = chats.map((c) => `${c.role}: ${c.text}`).join('\n').slice(0, 6000);
+      const seed =
+        `[Handoff from a ${source.agentType} agent — continue this work.]` +
+        (transcript ? `\n\nRecent context:\n${transcript}` : '');
+      setTimeout(() => {
+        void (async () => {
+          const s = await sessionRegistry.getSession(newId).catch(() => null);
+          const client = s ? peekClientForNode(s.nodeId) : null;
+          if (client) client.write(newId, Buffer.from(`${seed}\r`));
+        })();
+      }, 4500);
+      return reply.code(201).send(created);
+    });
+
+    // Compare / race: spawn the SAME task across N agents, each in its own git
+    // worktree (so they don't collide), seeded with the task. Returns the racer
+    // session ids; the web compares their diffs and keeps the winner. Cookie-authed.
+    app.post('/api/race', { preHandler: requireAuth }, async (request, reply) => {
+      const body = (request.body ?? {}) as { projectId?: string; task?: string; agentTypes?: unknown };
+      const task = typeof body.task === 'string' ? body.task.trim() : '';
+      const types = Array.isArray(body.agentTypes) ? body.agentTypes.filter((t): t is string => typeof t === 'string') : [];
+      if (!body.projectId || !task || types.length < 2) {
+        return reply.code(400).send({ error: { code: 'bad_request', message: 'projectId, task, and 2+ agentTypes required' } });
+      }
+      const actor = request.authUser!;
+      const ctx = { userId: actor.id, ip: request.ip ?? null };
+      const sessionIds: string[] = [];
+      for (const agentType of types) {
+        // Prefer an isolated git worktree per racer; fall back to the shared project
+        // dir when worktrees aren't possible (e.g. the project isn't a git repo).
+        let id: string | null = null;
+        for (const worktree of [true, false]) {
+          const parsed = CreateSessionRequest.safeParse({ projectId: body.projectId, agentType, worktree });
+          if (!parsed.success) break;
+          try {
+            id = (await sessions.createSession(parsed.data, ctx)).session.id;
+            break;
+          } catch {
+            /* try without a worktree, then give up on this agent */
+          }
+        }
+        if (id) sessionIds.push(id);
+      }
+      // Seed every racer with the task once its PTY attaches (best-effort).
+      const seed = `[Race task — work this independently.]\n\n${task}`;
+      for (const id of sessionIds) {
+        setTimeout(() => {
+          void (async () => {
+            const s = await sessionRegistry.getSession(id).catch(() => null);
+            const client = s ? peekClientForNode(s.nodeId) : null;
+            if (client) client.write(id, Buffer.from(`${seed}\r`));
+          })();
+        }, 4500);
+      }
+      return reply.code(201).send({ task, sessionIds });
+    });
+  }
+
+  // Config-as-code (flock.yml): apply a reproducible workspace + export the fleet.
+  registerConfigRoutes(
+    app,
+    new ConfigService({
+      listNodes: () => nodes.listNodes(),
+      listProjects: (nodeId) => projects.listProjects(nodeId),
+      createProject: (input) => projects.createProject(input),
+      listSessions: () => sessions.listSessions(),
+      createSession: (input, ctx) => sessions.createSession(input, ctx),
+    }),
+    auth,
+  );
+
   const port = Number(process.env.PORT ?? 8080);
   // Bind loopback by DEFAULT: the orchestrator's only callers are the web dev
   // proxy (same host) and the reverse tunnels (forwarded from this process), so it

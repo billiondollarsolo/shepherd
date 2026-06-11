@@ -53,6 +53,15 @@ export type LoginResponse = z.infer<typeof LoginResponse>;
 export const MeResponse = z.object({ user: UserSchema });
 export type MeResponse = z.infer<typeof MeResponse>;
 
+/** PATCH /api/auth/me — update the signed-in user's profile (display name).
+ *  An empty/whitespace name clears it (falls back to the username). */
+export const UpdateProfileRequest = z.object({
+  displayName: z.string().max(80).nullable(),
+});
+export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequest>;
+export const UpdateProfileResponse = z.object({ user: UserSchema });
+export type UpdateProfileResponse = z.infer<typeof UpdateProfileResponse>;
+
 /**
  * GET /api/auth/status — public first-run probe. `setupRequired` is true until
  * the initial admin exists, so the sign-in UI can show "create first admin"
@@ -80,6 +89,10 @@ export type ListUsersResponse = z.infer<typeof ListUsersResponse>;
 // --- nodes -----------------------------------------------------------------
 
 /** POST /api/nodes — register a local or SSH node. */
+/** A node's environment variables: a flat map of name → value. */
+export const NodeEnv = z.record(z.string(), z.string());
+export type NodeEnv = z.infer<typeof NodeEnv>;
+
 export const CreateNodeRequest = z
   .object({
     name: z.string().min(1),
@@ -95,6 +108,11 @@ export const CreateNodeRequest = z
     sshPassphrase: z.string().min(1).optional(),
     /** Plaintext password for password auth; encrypted at rest, never echoed. */
     sshPassword: z.string().min(1).optional(),
+    /** Per-node env vars merged (under) the launch env for every agent here;
+     *  encrypted at rest, never echoed in the Node list. */
+    env: NodeEnv.optional(),
+    /** Optional pool/group label. */
+    pool: z.string().nullable().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.kind !== 'ssh') return;
@@ -132,12 +150,20 @@ export const UpdateNodeRequest = z
     sshPrivateKey: z.string().min(1).optional(),
     sshPassphrase: z.string().min(1).optional(),
     sshPassword: z.string().min(1).optional(),
+    /** Replace the node's env vars wholesale ({} clears them); omitted = keep. */
+    env: NodeEnv.optional(),
+    /** Set/clear the pool label (null clears; omitted = keep). */
+    pool: z.string().nullable().optional(),
   })
   .strict();
 export type UpdateNodeRequest = z.infer<typeof UpdateNodeRequest>;
 
 export const NodeResponse = z.object({ node: NodeSchema });
 export type NodeResponse = z.infer<typeof NodeResponse>;
+
+/** GET /api/nodes/:id/env — the node's decrypted env, for the editor (cookie-authed). */
+export const NodeEnvResponse = z.object({ env: NodeEnv });
+export type NodeEnvResponse = z.infer<typeof NodeEnvResponse>;
 export const ListNodesResponse = z.object({ nodes: z.array(NodeSchema) });
 export type ListNodesResponse = z.infer<typeof ListNodesResponse>;
 
@@ -290,6 +316,9 @@ export const CreateSessionRequest = z.object({
    * Defaults to `default` (interactive prompting) when omitted.
    */
   permissionMode: SessionPermissionModeEnum.optional(),
+  /** Optional system prompt injected at launch (agents with a flag, e.g. claude
+   *  `--append-system-prompt`); ignored by agents without one. */
+  systemPrompt: z.string().min(1).max(8000).optional(),
   /**
    * Run this session in a dedicated git worktree (isolated branch) so multiple
    * agents can work the same repo in parallel without colliding. Requires the
@@ -304,6 +333,13 @@ export const CreateSessionRequest = z.object({
    * `dev`, ignored otherwise. Run via the node's shell (`sh -lc`).
    */
   devCommand: z.string().min(1).max(2000).optional(),
+  /**
+   * Session transport (F6). `acp` runs an ACP-capable agent (gemini/grok) over the
+   * structured Agent Client Protocol instead of a raw PTY — enabling structured
+   * status, telemetry, and approve/deny. Ignored (falls back to PTY) for agents
+   * with no ACP entrypoint. Default: PTY.
+   */
+  transport: z.enum(['pty', 'acp']).optional(),
 }).superRefine((val, ctx) => {
   if (val.agentType === 'dev' && !val.devCommand?.trim()) {
     ctx.addIssue({
@@ -344,9 +380,10 @@ export const UpdateSessionRequest = z
   .object({
     pinned: z.boolean().optional(),
     note: z.string().max(2000).nullable().optional(),
+    reviewed: z.boolean().optional(),
   })
-  .refine((v) => v.pinned !== undefined || v.note !== undefined, {
-    message: 'provide at least one of pinned or note.',
+  .refine((v) => v.pinned !== undefined || v.note !== undefined || v.reviewed !== undefined, {
+    message: 'provide at least one of pinned, note, or reviewed.',
   });
 export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 
@@ -479,6 +516,76 @@ export const GitPushResponse = z.object({
   generatedAt: IsoTimestamp,
 });
 export type GitPushResponse = z.infer<typeof GitPushResponse>;
+
+// --- branches + pull requests (roadmap P5: close the git loop) -------------
+
+/** GET /api/sessions/:id/git/branches — local branches + the current one. */
+export const GitBranchesResponse = z.object({
+  sessionId: Uuid,
+  current: z.string().nullable(),
+  branches: z.array(z.string()),
+  generatedAt: IsoTimestamp,
+});
+export type GitBranchesResponse = z.infer<typeof GitBranchesResponse>;
+
+/** POST /api/sessions/:id/git/branch — create a branch (and switch to it). */
+export const CreateBranchRequest = z.object({
+  name: z.string().min(1),
+  /** Optional start point (ref/branch/sha); defaults to current HEAD. */
+  from: z.string().min(1).optional(),
+});
+export type CreateBranchRequest = z.infer<typeof CreateBranchRequest>;
+
+/** POST /api/sessions/:id/git/switch — switch to an existing branch. */
+export const SwitchBranchRequest = z.object({ name: z.string().min(1) });
+export type SwitchBranchRequest = z.infer<typeof SwitchBranchRequest>;
+
+/** Response for create-branch / switch-branch — the resulting current branch. */
+export const GitBranchResponse = z.object({
+  sessionId: Uuid,
+  branch: z.string(),
+  created: z.boolean(),
+  detail: z.string(),
+  generatedAt: IsoTimestamp,
+});
+export type GitBranchResponse = z.infer<typeof GitBranchResponse>;
+
+/** POST /api/sessions/:id/git/pr — open (or find an existing) GitHub PR. */
+export const CreatePrRequest = z.object({
+  title: z.string().min(1),
+  body: z.string().optional(),
+  /** Base branch; defaults to the repo's default branch (gh decides). */
+  base: z.string().min(1).optional(),
+  draft: z.boolean().optional(),
+});
+export type CreatePrRequest = z.infer<typeof CreatePrRequest>;
+
+/** Result of opening a PR — the URL, whether we created it or found an existing one. */
+export const GitPrResponse = z.object({
+  sessionId: Uuid,
+  url: z.string(),
+  /** True if we opened a new PR; false if an open PR for this branch already existed. */
+  created: z.boolean(),
+  detail: z.string(),
+  generatedAt: IsoTimestamp,
+});
+export type GitPrResponse = z.infer<typeof GitPrResponse>;
+
+// --- API error envelope (roadmap F2) ---------------------------------------
+
+/**
+ * The single error shape every REST route + the global handler return:
+ * `{ error: { code, message, details? } }`. `code` is a stable, machine-readable
+ * discriminator the web client can branch on (vs parsing the message).
+ */
+export const FlockErrorEnvelope = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.unknown().optional(),
+  }),
+});
+export type FlockErrorEnvelope = z.infer<typeof FlockErrorEnvelope>;
 
 // --- agent plan / todo (US-34 Plan artifact) -------------------------------
 

@@ -72,7 +72,10 @@ export function translateClaudeHook(body: unknown): ClaudeTransition | null {
 
   switch (e.hook_event_name) {
     case 'SessionStart':
-      return { status: 'starting', detail: null };
+      // Booted + ready (waiting for you) = idle, NOT starting. A launched agent you
+      // haven't prompted fires ONLY SessionStart, so 'starting' left it stuck
+      // "starting" forever; idle reflects "ready".
+      return { status: 'idle', detail: null };
 
     case 'PreToolUse':
       return { status: 'running', detail: e.tool_name ?? null };

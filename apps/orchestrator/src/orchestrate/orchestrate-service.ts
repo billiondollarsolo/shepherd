@@ -1,0 +1,227 @@
+/**
+ * OrchestrationService — the agent-facing API that lets one agent OBSERVE and
+ * COORDINATE with its siblings (the herdr-style self-orchestration loop, MCP/CLI
+ * surfaced separately). v1 is the SAFE, read/await half:
+ *   - list   the agents in the caller's project (+ live status + latest message)
+ *   - wait   block until a sibling reaches a status (idle/awaiting_input/done/…)
+ *
+ * Auth is the caller's PER-SESSION hook token (the same `FLOCK_HOOK_TOKEN` the
+ * agent already has) — NOT the user cookie — and every call is SCOPED to the
+ * caller's own project (an agent can never see or wait on another project). The
+ * powerful `spawn`/`send` verbs are a deliberate next increment (they need caps +
+ * guardrails); read/await carries no footgun.
+ */
+import { and, count, eq, isNull, isNotNull } from 'drizzle-orm';
+import type { Status } from '@flock/shared';
+
+import type { Database } from '../db/client.js';
+import { agentSessions } from '../db/schema.js';
+import type { StatusMap } from '../status/map.js';
+
+export class OrchestrationError extends Error {
+  constructor(
+    public readonly code: 'unauthorized' | 'not_found' | 'bad_request',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export interface AgentSummary {
+  id: string;
+  agentType: string;
+  status: Status | null;
+  message: string | null;
+}
+
+/** Statuses an agent may wait on (the meaningful coordination points). */
+const WAITABLE: ReadonlySet<string> = new Set(['idle', 'awaiting_input', 'done', 'error', 'running']);
+
+export class OrchestrationService {
+  /** Spawn/handoff edges (parent → child) for the collaboration graph. Backed by
+   *  `agent_sessions.parent_session_id` so the teams graph SURVIVES restarts
+   *  (was an in-memory Map that evaporated on every reboot). */
+  async spawnEdges(): Promise<Array<{ parent: string; child: string }>> {
+    const rows = await this.db
+      .select({ child: agentSessions.id, parent: agentSessions.parentSessionId })
+      .from(agentSessions)
+      .where(isNotNull(agentSessions.parentSessionId));
+    return rows
+      .filter((r): r is { child: string; parent: string } => Boolean(r.parent))
+      .map((r) => ({ parent: r.parent, child: r.child }));
+  }
+
+  /** Record a parent→child edge (agent spawn OR user handoff) so the spatial graph
+   *  shows the lineage. Persisted on the child row. Best-effort. */
+  async recordHandoff(parentId: string, childId: string): Promise<void> {
+    await this.db
+      .update(agentSessions)
+      .set({ parentSessionId: parentId })
+      .where(eq(agentSessions.id, childId));
+  }
+
+  constructor(
+    private readonly db: Database,
+    private readonly statusMap: StatusMap,
+    private readonly verifyToken: (hash: string, token: string) => Promise<boolean>,
+    private readonly latestChats: () => Promise<Record<string, { role: string; text: string }>>,
+    /** Launch a new agent in the project; returns the new session id. */
+    private readonly spawnFn: (projectId: string, createdBy: string | null, agentType: string) => Promise<string>,
+    /** Deliver text (as input) to a session; returns whether it was sent. */
+    private readonly sendFn: (targetId: string, text: string) => Promise<boolean>,
+    /** Terminate a session; returns whether it was terminated. */
+    private readonly killFn: (targetId: string) => Promise<boolean>,
+    /** Recent chat/assistant output for a session (oldest→newest). */
+    private readonly readOutputFn: (targetId: string, limit: number) => Promise<Array<{ role: string; text: string }>>,
+    /** Runaway guard: max OPEN agents per project (spawn rejects beyond this). */
+    private readonly maxPerProject = 12,
+  ) {}
+
+  /** Look up a target that MUST be in the caller's project; returns its row. */
+  private async requireTargetInProject(projectId: string, targetId: string): Promise<{ agentType: string }> {
+    const [tgt] = await this.db
+      .select({ projectId: agentSessions.projectId, agentType: agentSessions.agentType })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, targetId))
+      .limit(1);
+    if (!tgt || tgt.projectId !== projectId) {
+      throw new OrchestrationError('not_found', 'target agent is not in your project');
+    }
+    return { agentType: tgt.agentType };
+  }
+
+  /** Verify the caller's hook token and return its project scope + owner. */
+  private async authCaller(callerId: string, token: string): Promise<{ projectId: string; createdBy: string | null }> {
+    const [row] = await this.db
+      .select({
+        projectId: agentSessions.projectId,
+        hash: agentSessions.hookTokenHash,
+        closedAt: agentSessions.closedAt,
+        createdBy: agentSessions.createdBy,
+      })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, callerId))
+      .limit(1);
+    if (!row || row.closedAt) throw new OrchestrationError('unauthorized', 'unknown or closed caller session');
+    if (!token || !(await this.verifyToken(row.hash, token))) {
+      throw new OrchestrationError('unauthorized', 'invalid session token');
+    }
+    return { projectId: row.projectId, createdBy: row.createdBy };
+  }
+
+  /** The caller's sibling agents (same project): id, type, live status, latest message. */
+  async listAgents(callerId: string, token: string): Promise<AgentSummary[]> {
+    const { projectId } = await this.authCaller(callerId, token);
+    const rows = await this.db
+      .select({ id: agentSessions.id, agentType: agentSessions.agentType })
+      .from(agentSessions)
+      .where(and(eq(agentSessions.projectId, projectId), isNull(agentSessions.closedAt)));
+    const chats = await this.latestChats().catch(() => ({}) as Record<string, { text: string }>);
+    return rows.map((r) => ({
+      id: r.id,
+      agentType: r.agentType,
+      status: (this.statusMap.get(r.id)?.status as Status) ?? null,
+      message: chats[r.id]?.text ?? null,
+    }));
+  }
+
+  /** Block until `targetId` (must be in the caller's project) hits `status`, or timeout. */
+  async wait(
+    callerId: string,
+    token: string,
+    targetId: string,
+    status: string,
+    timeoutMs: number,
+  ): Promise<{ status: Status | null; reached: boolean }> {
+    const { projectId } = await this.authCaller(callerId, token);
+    if (!WAITABLE.has(status)) throw new OrchestrationError('bad_request', `cannot wait on status: ${status}`);
+    const [tgt] = await this.db
+      .select({ projectId: agentSessions.projectId })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, targetId))
+      .limit(1);
+    if (!tgt || tgt.projectId !== projectId) {
+      throw new OrchestrationError('not_found', 'target agent is not in your project');
+    }
+    const deadline = Date.now() + Math.min(Math.max(timeoutMs, 1_000), 120_000);
+    for (;;) {
+      const cur = (this.statusMap.get(targetId)?.status as Status) ?? null;
+      if (cur === status) return { status: cur, reached: true };
+      if (Date.now() >= deadline) return { status: cur, reached: false };
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  /** Launch a sibling agent in the caller's project (capped). Returns its id. The
+   *  caller typically then waits for it to be `idle`, sends it a task, and waits
+   *  again for `idle`/`done`. */
+  async spawn(callerId: string, token: string, agentType: string): Promise<{ id: string }> {
+    const { projectId, createdBy } = await this.authCaller(callerId, token);
+    if (!agentType || typeof agentType !== 'string') {
+      throw new OrchestrationError('bad_request', 'agentType is required');
+    }
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(agentSessions)
+      .where(and(eq(agentSessions.projectId, projectId), isNull(agentSessions.closedAt)));
+    if (Number(row?.n ?? 0) >= this.maxPerProject) {
+      throw new OrchestrationError('bad_request', `project is at the spawn cap (${this.maxPerProject} open agents)`);
+    }
+    try {
+      const id = await this.spawnFn(projectId, createdBy, agentType);
+      await this.recordHandoff(callerId, id); // persist the collaboration edge
+      return { id };
+    } catch (e) {
+      throw new OrchestrationError('bad_request', e instanceof Error ? e.message : 'spawn failed');
+    }
+  }
+
+  /** Deliver text (a task / reply) to a sibling agent in the caller's project. */
+  async send(callerId: string, token: string, targetId: string, text: string): Promise<{ delivered: boolean }> {
+    const { projectId } = await this.authCaller(callerId, token);
+    if (typeof text !== 'string' || text.length === 0) {
+      throw new OrchestrationError('bad_request', 'text is required');
+    }
+    const [tgt] = await this.db
+      .select({ projectId: agentSessions.projectId })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, targetId))
+      .limit(1);
+    if (!tgt || tgt.projectId !== projectId) {
+      throw new OrchestrationError('not_found', 'target agent is not in your project');
+    }
+    return { delivered: await this.sendFn(targetId, text) };
+  }
+
+  /** Read a sibling's recent output (its assistant/chat messages, oldest→newest) so
+   *  the caller can inspect what a worker produced before acting on it. */
+  async readOutput(
+    callerId: string,
+    token: string,
+    targetId: string,
+    limit: number,
+  ): Promise<{ messages: Array<{ role: string; text: string }> }> {
+    const { projectId } = await this.authCaller(callerId, token);
+    await this.requireTargetInProject(projectId, targetId);
+    const lim = Math.min(Math.max(limit || 10, 1), 50);
+    return { messages: await this.readOutputFn(targetId, lim) };
+  }
+
+  /** Terminate a sibling agent in the caller's project (clean up a finished worker). */
+  async kill(callerId: string, token: string, targetId: string): Promise<{ killed: boolean }> {
+    const { projectId } = await this.authCaller(callerId, token);
+    await this.requireTargetInProject(projectId, targetId);
+    return { killed: await this.killFn(targetId) };
+  }
+
+  /** Restart a sibling: terminate it and spawn a fresh agent of the SAME type in the
+   *  caller's project. Returns the new session id (the old one is gone). */
+  async restart(callerId: string, token: string, targetId: string): Promise<{ id: string }> {
+    const { projectId, createdBy } = await this.authCaller(callerId, token);
+    const { agentType } = await this.requireTargetInProject(projectId, targetId);
+    await this.killFn(targetId);
+    const id = await this.spawnFn(projectId, createdBy, agentType);
+    await this.recordHandoff(callerId, id);
+    return { id };
+  }
+}

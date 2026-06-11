@@ -26,6 +26,7 @@ import type { AgentType, HookTelemetry, Status } from '@flock/shared';
 
 import { translateHookEvent } from './translate.js';
 import { extractPlan, planEventFields } from './plan.js';
+import { OpenCodeChatAssembler } from './opencode-chat.js';
 
 // ---------------------------------------------------------------------------
 // Errors (mapped to HTTP status codes by the route layer)
@@ -179,6 +180,8 @@ export class HookEndpointService {
   private readonly verifyToken: HookTokenVerifier;
   private readonly onTransition: HookTransitionSink;
   private readonly enqueueEvent: HookEventEnqueue;
+  /** Assembles OpenCode's streamed message parts into whole Chat messages. */
+  private readonly opencodeChat = new OpenCodeChatAssembler();
 
   constructor(deps: HookEndpointServiceDeps) {
     this.lookup = deps.lookup;
@@ -266,6 +269,28 @@ export class HookEndpointService {
     const planFields = plan ? planEventFields(input.sessionId, plan.items) : null;
     if (planFields) {
       this.safeEnqueue({ sessionId: input.sessionId, source: 'hook', ...planFields });
+    }
+
+    // 6) OpenCode structured Chat: its text streams as message PARTS, so assemble
+    //    whole messages (by message id + role) and, on turn end (`session.idle`),
+    //    enqueue them as `chat` events the web Chat tab reads (agentEventRaw.chat).
+    const ocType = (input.body as { agentType?: string; type?: string } | null) ?? null;
+    if (ocType?.agentType === 'opencode') {
+      this.opencodeChat.observe(input.sessionId, input.body);
+      if (ocType.type === 'session.idle') {
+        for (const msg of this.opencodeChat.flush(input.sessionId)) {
+          this.safeEnqueue({
+            sessionId: input.sessionId,
+            source: 'hook',
+            type: 'chat',
+            mappedStatus: null,
+            agentEventRaw: { chat: msg },
+            detail: null,
+          });
+        }
+      } else if (ocType.type === 'session.error' || ocType.type === 'session.complete') {
+        this.opencodeChat.forget(input.sessionId);
+      }
     }
 
     return { ok: true };

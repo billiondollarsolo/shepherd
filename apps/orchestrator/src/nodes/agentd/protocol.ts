@@ -23,6 +23,8 @@ export interface AgentdControl {
   cwd?: string;
   env?: string[];
   command?: string[];
+  /** Session transport: "" / "pty" (default) or "acp" (structured, F6). */
+  mode?: string;
   cols?: number;
   rows?: number;
   code?: number;
@@ -44,6 +46,9 @@ export interface AgentdControl {
   // T17: Landlock FS sandbox for autonomous sessions on `open` (client→daemon).
   sandbox?: boolean;
   sandboxAllow?: string[];
+  // Permission mode (default|acceptEdits|plan|autonomous) → drives the agent's
+  // approval-gating config seeded on the node (e.g. OpenCode's `permission` block).
+  permissionMode?: string;
   // T61: derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
   activityStatus?: boolean;
   // scoped hook-config injection (US-19) on `open` (client→daemon).

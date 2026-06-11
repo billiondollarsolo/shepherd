@@ -35,3 +35,6 @@ vagrant/.vagrant/
 # the Flock codebase. Re-clone separately if needed; do not embed.
 /codex/
 /orca/
+
+# Reference: synara (external repo, for comparison — do not commit)
+/synara/

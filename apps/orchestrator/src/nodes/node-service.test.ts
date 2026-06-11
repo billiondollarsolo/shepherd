@@ -328,3 +328,52 @@ describe('NodeService.ensureLocalNode (boot seeding idempotency)', () => {
     expect(second.id).toBe(first.id);
   });
 });
+
+describe('NodeService per-node env + pool (#3a/#3c)', () => {
+  it('encrypts env at rest, round-trips it via envForNode, and stores the pool', async () => {
+    const { service, db, store } = makeService();
+    const node = await service.createNode(
+      {
+        name: 'box',
+        kind: 'local',
+        env: { HTTPS_PROXY: 'http://proxy:8080', FOO: 'bar' },
+        pool: 'gpu',
+      } satisfies CreateNodeRequest,
+      { userId: USER_ID, ip: null },
+    );
+    expect(node.pool).toBe('gpu');
+    // The env is encrypted in a secrets row, never plaintext.
+    expect(db.secrets).toHaveLength(1);
+    // The stored ciphertext bytes are NOT the plaintext; decrypting recovers it.
+    expect(Buffer.from(db.secrets[0]!.ciphertext as Buffer).toString('utf8')).not.toContain('proxy:8080');
+    const plaintext = await decryptSecret(store, db.secrets[0]!);
+    expect(JSON.parse(plaintext)).toEqual({ HTTPS_PROXY: 'http://proxy:8080', FOO: 'bar' });
+    // envForNode decrypts it back for the launch merge.
+    expect(await service.envForNode(node.id)).toEqual({ HTTPS_PROXY: 'http://proxy:8080', FOO: 'bar' });
+  });
+
+  it('updateNode clears env wholesale with {} and toggles the pool', async () => {
+    const { service } = makeService();
+    const node = await service.createNode(
+      { name: 'box', kind: 'local', env: { A: '1' }, pool: 'p1' } satisfies CreateNodeRequest,
+      { userId: USER_ID, ip: null },
+    );
+    expect(await service.envForNode(node.id)).toEqual({ A: '1' });
+    const p2 = await service.updateNode(node.id, { pool: 'p2' }, { userId: USER_ID, ip: null });
+    expect(p2?.pool).toBe('p2');
+    // env: {} drops the secret ref → no env (no secret lookup involved).
+    const cleared = await service.updateNode(node.id, { env: {}, pool: null }, { userId: USER_ID, ip: null });
+    expect(cleared?.pool ?? null).toBeNull();
+    expect(await service.envForNode(node.id)).toEqual({});
+  });
+
+  it('envForNode returns {} for a node with no env and an unknown id', async () => {
+    const { service } = makeService();
+    const node = await service.createNode(
+      { name: 'plain', kind: 'local' } satisfies CreateNodeRequest,
+      { userId: USER_ID, ip: null },
+    );
+    expect(await service.envForNode(node.id)).toEqual({});
+    expect(await service.envForNode('00000000-0000-0000-0000-000000000000')).toEqual({});
+  });
+});

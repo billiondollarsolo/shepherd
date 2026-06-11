@@ -42,6 +42,23 @@ export function registerNodeRoutes(
     return reply.code(200).send({ nodes });
   });
 
+  // --- node env (for the editor) ----------------------------------------
+  // Decrypted env vars for ONE node so the edit form can prefill them. Cookie-
+  // authed like every node route; never included in the broad node list.
+  app.get(
+    '/api/nodes/:id/env',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = NodeIdParams.safeParse(request.params);
+      if (!params.success) return badRequest(reply, 'a valid node id is required.');
+      const env = await deps.service.getEnv(params.data.id);
+      if (env === null) {
+        return reply.code(404).send({ error: { code: 'node_not_found', message: 'Node was not found.' } });
+      }
+      return reply.code(200).send({ env });
+    },
+  );
+
   // --- create node -------------------------------------------------------
   app.post(
     '/api/nodes',

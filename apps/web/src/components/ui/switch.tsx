@@ -19,7 +19,10 @@ export const Switch = React.forwardRef<
     <SwitchPrimitive.Thumb
       className={cn(
         'pointer-events-none block size-4 rounded-full bg-white shadow-sm ring-0 transition-transform',
-        'data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0.5',
+        // Track is w-9 (36px) inside a 1px border (= 34px) with a 16px thumb; checked
+        // must travel the full 18px so the thumb sits flush-right (translate-x-4 = 16px
+        // stopped it 2px short → looked like it "didn't slide all the way across").
+        'data-[state=checked]:translate-x-[18px] data-[state=unchecked]:translate-x-0.5',
       )}
     />
   </SwitchPrimitive.Root>

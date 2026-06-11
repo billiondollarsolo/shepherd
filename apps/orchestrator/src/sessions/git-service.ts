@@ -18,7 +18,14 @@
  * Like the diff, this is NOT on the live status path (NFR-PERF1): it runs on
  * demand when the user acts in the Source Control panel.
  */
-import type { GitCommitResponse, GitPushResponse, GitStatusResponse } from '@flock/shared';
+import type {
+  GitBranchesResponse,
+  GitBranchResponse,
+  GitCommitResponse,
+  GitPrResponse,
+  GitPushResponse,
+  GitStatusResponse,
+} from '@flock/shared';
 
 import type { ExecResult, NodeTransport } from '../nodes/transport/transport.js';
 import {
@@ -228,8 +235,79 @@ export function gitCommitArgv(
   ];
 }
 
+/** Local branch names, one per line (current branch comes from status). */
+export function gitListBranchesArgv(workingDir: string): string[] {
+  return ['git', '-C', workingDir, 'branch', '--format=%(refname:short)'];
+}
+
+/** Create + switch to a new branch (optionally from a start point). */
+export function gitCreateBranchArgv(workingDir: string, name: string, from?: string): string[] {
+  const argv = ['git', '-C', workingDir, 'switch', '-c', name];
+  return from ? [...argv, from] : argv;
+}
+
+/** Switch to an existing branch. */
+export function gitSwitchBranchArgv(workingDir: string, name: string): string[] {
+  return ['git', '-C', workingDir, 'switch', name];
+}
+
+/** List open PRs whose head is `head` (gh runs in cwd — no -C). */
+export function ghPrListArgv(head: string): string[] {
+  return ['gh', 'pr', 'list', '--head', head, '--state', 'open', '--limit', '1', '--json', 'url,number,title'];
+}
+
+/** Open a PR for the current branch (gh runs in cwd; pushes the branch if needed). */
+export function ghPrCreateArgv(input: {
+  title: string;
+  body?: string;
+  base?: string;
+  draft?: boolean;
+}): string[] {
+  const argv = ['gh', 'pr', 'create', '--title', input.title, '--body', input.body ?? ''];
+  if (input.base) argv.push('--base', input.base);
+  if (input.draft) argv.push('--draft');
+  return argv;
+}
+
+/** Pull the last URL-bearing line out of `gh pr create` stdout. */
+export function extractPrUrl(stdout: string): string | null {
+  const line = stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.includes('http'))
+    .pop();
+  return line ?? null;
+}
+
+/** First open-PR URL from `gh pr list --json url,...` output, or null. */
+export function firstOpenPrUrl(stdout: string): string | null {
+  try {
+    const arr = JSON.parse(stdout.trim() || '[]') as Array<{ url?: string }>;
+    return arr[0]?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Friendlier message for the common `gh` failure modes (missing / unauthed). */
+export function ghErrorHint(detail: string): string {
+  const lower = detail.toLowerCase();
+  if (
+    lower.includes('command not found') ||
+    lower.includes('not found: gh') ||
+    lower.includes('gh: not found')
+  ) {
+    return 'GitHub CLI (`gh`) is required on the node but was not found on PATH.';
+  }
+  if (lower.includes('gh auth login') || (lower.includes('auth') && lower.includes('gh'))) {
+    return 'GitHub CLI is not authenticated on the node. Run `gh auth login` there and retry.';
+  }
+  return detail;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const PUSH_TIMEOUT_MS = 60_000;
+const PR_TIMEOUT_MS = 60_000;
 
 export class GitService {
   private readonly sessions: DiffSessionLookup;
@@ -394,5 +472,99 @@ export class GitService {
       throw new GitOperationError(detail);
     }
     return { sessionId, pushed: true, detail, generatedAt: new Date().toISOString() };
+  }
+
+  /** Local branches + the current branch (for the branch picker). */
+  async branches(sessionId: string): Promise<GitBranchesResponse> {
+    const { workingDir, transport } = await this.resolve(sessionId);
+    const r = await this.run(transport, workingDir, gitListBranchesArgv(workingDir));
+    if (r.exitCode !== 0) throw new GitOperationError(summarizeGitError(r.stderr, r.exitCode));
+    const branches = r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    const status = await this.status(sessionId);
+    return {
+      sessionId,
+      current: status.branch,
+      branches,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /** Create + switch to a new branch (optionally from a start point). */
+  async createBranch(sessionId: string, name: string, from?: string): Promise<GitBranchResponse> {
+    const { workingDir, transport } = await this.resolve(sessionId);
+    const r = await this.run(transport, workingDir, gitCreateBranchArgv(workingDir, name, from));
+    if (r.exitCode !== 0) throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
+    return {
+      sessionId,
+      branch: name,
+      created: true,
+      detail: `Created and switched to ${name}.`,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /** Switch to an existing branch. */
+  async switchBranch(sessionId: string, name: string): Promise<GitBranchResponse> {
+    const { workingDir, transport } = await this.resolve(sessionId);
+    const r = await this.run(transport, workingDir, gitSwitchBranchArgv(workingDir, name));
+    if (r.exitCode !== 0) throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
+    return {
+      sessionId,
+      branch: name,
+      created: false,
+      detail: `Switched to ${name}.`,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Open a GitHub PR for the current branch via the node's `gh` CLI. Idempotent:
+   * if an open PR for this branch already exists, returns it instead of erroring
+   * (mirrors Synara's duplicate-PR handling). Assumes the branch is pushed (the
+   * UI flow is commit → push → PR); `gh` will also push if it must.
+   */
+  async createPr(
+    sessionId: string,
+    input: { title: string; body?: string; base?: string; draft?: boolean },
+  ): Promise<GitPrResponse> {
+    const { workingDir, transport } = await this.resolve(sessionId);
+    const status = await this.status(sessionId);
+    if (!status.branch) {
+      throw new GitOperationError('Not on a branch (detached HEAD) — cannot open a PR.');
+    }
+
+    // Duplicate-PR pre-check: reuse an existing open PR for this head branch.
+    const list = await this.run(transport, workingDir, ghPrListArgv(status.branch), PR_TIMEOUT_MS);
+    if (list.exitCode === 0) {
+      const existing = firstOpenPrUrl(list.stdout);
+      if (existing) {
+        return {
+          sessionId,
+          url: existing,
+          created: false,
+          detail: `An open PR for ${status.branch} already exists.`,
+          generatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    const r = await this.run(transport, workingDir, ghPrCreateArgv(input), PR_TIMEOUT_MS);
+    if (r.exitCode !== 0) {
+      throw new GitOperationError(ghErrorHint([r.stdout.trim(), r.stderr.trim()].filter(Boolean).join('\n')));
+    }
+    const url = extractPrUrl(r.stdout);
+    if (!url) {
+      throw new GitOperationError('PR created but no URL was returned by `gh`.');
+    }
+    return {
+      sessionId,
+      url,
+      created: true,
+      detail: 'Pull request opened.',
+      generatedAt: new Date().toISOString(),
+    };
   }
 }

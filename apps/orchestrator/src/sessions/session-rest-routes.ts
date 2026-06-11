@@ -99,8 +99,10 @@ export function registerSessionRestRoutes(
       const params = SessionIdParams.safeParse(request.params);
       if (!params.success) return badRequest(reply, 'a valid session id is required.');
       const body = UpdateSessionRequest.safeParse(request.body);
-      if (!body.success) return badRequest(reply, 'provide pinned and/or note to update.');
-      const session = await deps.service.updateSession(params.data.id, body.data);
+      if (!body.success) return badRequest(reply, 'provide pinned, note, and/or reviewed to update.');
+      const session = await deps.service.updateSession(params.data.id, body.data, {
+        userId: request.authUser?.id ?? null,
+      });
       if (!session) {
         return reply
           .code(404)

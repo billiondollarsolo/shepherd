@@ -15,14 +15,15 @@
  */
 
 :root {
-  /* --- deliberate type scale (bumped +2px from the original for legibility) --- */
-  --flock-text-3xs: 10px;
-  --flock-text-2xs: 11px;
-  --flock-text-xs: 12px;
-  --flock-text-sm: 13px;
-  --flock-text-md: 14px;
-  --flock-text-lg: 16px;
-  --flock-text-xl: 19px;
+  /* --- deliberate type scale (bumped again +1px 2026-06-08 for readability — a
+     supervision tool you stare at all day should be easy to read) --- */
+  --flock-text-3xs: 11px;
+  --flock-text-2xs: 12px;
+  --flock-text-xs: 13px;
+  --flock-text-sm: 14px;
+  --flock-text-md: 15px;
+  --flock-text-lg: 17px;
+  --flock-text-xl: 20px;
   --flock-text-2xl: 24px;
 
   --flock-leading-3xs: 14px;

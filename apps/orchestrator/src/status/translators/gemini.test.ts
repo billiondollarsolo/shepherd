@@ -14,7 +14,7 @@ describe('Gemini CLI translator (spec §7.1)', () => {
   });
 
   const cases: ReadonlyArray<[string, unknown, string | null]> = [
-    ['SessionStart -> starting', { hook_event_name: 'SessionStart' }, 'starting'],
+    ['SessionStart -> idle (ready)', { hook_event_name: 'SessionStart' }, 'idle'],
     ['BeforeAgent -> running', { hook_event_name: 'BeforeAgent' }, 'running'],
     ['BeforeTool -> running', { hook_event_name: 'BeforeTool', tool_name: 'run_shell_command' }, 'running'],
     ['AfterTool -> running', { hook_event_name: 'AfterTool', tool_name: 'run_shell_command' }, 'running'],
@@ -22,7 +22,7 @@ describe('Gemini CLI translator (spec §7.1)', () => {
     ['AfterAgent -> idle (turn complete)', { hook_event_name: 'AfterAgent' }, 'idle'],
     ['SessionEnd -> done', { hook_event_name: 'SessionEnd' }, 'done'],
     // camelCase field tolerated:
-    ['hookEventName camelCase tolerated', { hookEventName: 'SessionStart' }, 'starting'],
+    ['hookEventName camelCase tolerated', { hookEventName: 'SessionStart' }, 'idle'],
     // no-transition events:
     ['PreCompress -> null', { hook_event_name: 'PreCompress' }, null],
   ];

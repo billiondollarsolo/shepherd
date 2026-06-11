@@ -11,7 +11,7 @@ import (
 
 // agents whose per-agent install dirs (~/.<agent>/bin, /opt/<agent>/bin) are also
 // searched, beyond the generic npm / version-manager locations below.
-var agents = []string{"opencode", "claude", "codex", "gemini", "grok"}
+var agents = []string{"opencode", "claude", "codex", "gemini", "grok", "aider", "cursor-agent", "amp"}
 
 // BinDirs returns the EXISTING bin directories where agent CLIs commonly install
 // under home: npm-global, Node version managers (nvm/fnm/n), volta/bun/deno/asdf/

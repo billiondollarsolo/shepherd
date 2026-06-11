@@ -18,6 +18,8 @@ import {
   NodeKindEnum,
   RoleEnum,
   SecretKindEnum,
+  SessionPermissionModeEnum,
+  SshAuthMethodEnum,
   SessionSchema,
   STATUS_VALUES,
   type Session,
@@ -87,9 +89,14 @@ describe('enum columns are the single source of truth from @flock/shared', () =>
     expect(users.role.enumValues).toEqual([...RoleEnum.options]);
   });
 
-  it('nodes.kind / nodes.connection_status match the shared enums', () => {
+  it('nodes.kind / nodes.connection_status / nodes.ssh_auth_method match the shared enums', () => {
     expect(nodes.kind.enumValues).toEqual([...NodeKindEnum.options]);
     expect(nodes.connectionStatus.enumValues).toEqual([...ConnectionStatusEnum.options]);
+    expect(nodes.sshAuthMethod.enumValues).toEqual([...SshAuthMethodEnum.options]);
+  });
+
+  it('agent_sessions.permission_mode matches the shared SessionPermissionModeEnum', () => {
+    expect(agentSessions.permissionMode.enumValues).toEqual([...SessionPermissionModeEnum.options]);
   });
 
   it('agent_sessions.agent_type matches the shared AgentTypeEnum', () => {

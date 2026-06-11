@@ -20,6 +20,7 @@ import {
   registerBrowserControlRoutes,
   type BrowserControlService,
 } from './browser/browser-control-route.js';
+import { errorEnvelope } from './http/reply.js';
 import { registerEventRoute, type EventReadService } from './events/index.js';
 import { registerPushRoutes, type PushRouteDeps } from './push/index.js';
 import { registerHookRoute, type HookRouteService } from './hooks/index.js';
@@ -183,9 +184,37 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // logs method/path/status/latency/reqId as JSON for aggregation. Silenced under
   // test (vitest/NODE_ENV=test) to keep suite output clean; level is env-tunable.
   const underTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  // Behind a reverse proxy (Caddy, single-box deploy) Fastify must trust the
+  // forwarding hop so `request.ip` is the REAL client, not the proxy — otherwise
+  // the login throttle keys on one IP for everyone and audit rows log the wrong
+  // actor. FLOCK_TRUST_PROXY: "1" (hop count), a CIDR/IP, or "true"; unset = off
+  // (dev, no proxy). Defaults conservative.
+  const tpEnv = process.env.FLOCK_TRUST_PROXY?.trim();
+  const trustProxy: boolean | number | string =
+    !tpEnv ? false : tpEnv === 'true' ? true : /^\d+$/.test(tpEnv) ? Number(tpEnv) : tpEnv;
   const app = Fastify({
     logger: underTest ? false : { level: process.env.LOG_LEVEL ?? 'info' },
+    trustProxy,
   });
+
+  // F2: every error leaves as the shared envelope `{ error: { code, message } }`,
+  // including uncaught ones (Fastify's default JSON otherwise leaks a different
+  // shape). 5xx messages are NOT echoed to the client (no internal leakage) — the
+  // detail is logged instead. Schema-validation failures map to `bad_request`.
+  app.setErrorHandler((err, req, reply) => {
+    const e = err as { validation?: unknown; statusCode?: number; message?: string };
+    const status =
+      e.validation ? 400 : typeof e.statusCode === 'number' && e.statusCode >= 400 ? e.statusCode : 500;
+    if (status >= 500) {
+      req.log?.error?.({ err }, 'unhandled request error');
+      return reply.code(500).send(errorEnvelope('internal', 'Internal server error'));
+    }
+    const code = status === 400 ? 'bad_request' : status === 401 ? 'unauthorized' : status === 404 ? 'not_found' : 'error';
+    return reply.code(status).send(errorEnvelope(code, e.message ?? 'Request failed'));
+  });
+  app.setNotFoundHandler((req, reply) =>
+    reply.code(404).send(errorEnvelope('not_found', `No route for ${req.method} ${req.url}`)),
+  );
 
   // US-39: install the global default-DENY surface guard FIRST so it runs on
   // every request (NFR-SEC6). It allow-lists the public auth + health routes

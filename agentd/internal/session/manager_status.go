@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"flock-agentd/internal/status"
@@ -82,9 +83,6 @@ func (m *Manager) emitStatus(ev StatusEvent) {
 // neither source. Stopped via stopStatusWatcher (statusStops[id]).
 func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	agent := status.DetectAgent(spec.Command)
-	if agent == "" && !spec.ActivityStatus {
-		return
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.statusMu.Lock()
 	if old := m.statusStops[spec.ID]; old != nil {
@@ -95,18 +93,30 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 
 	id := spec.ID
 	if agent == "" {
-		// Activity-based status (T61): no transcript to tail.
-		go m.watchActivity(ctx, id, s)
+		// No transcript to tail. Either PTY-activity status (gemini, via
+		// spec.ActivityStatus) or — for a plain shell/terminal — the live foreground
+		// process so the UI can show "htop" etc. instead of a bare "terminal".
+		if spec.ActivityStatus {
+			go m.watchActivity(ctx, id, s)
+		} else {
+			go m.watchForeground(ctx, id, s)
+		}
 		return
 	}
 
 	startedAt := time.Now()
 	claim := func(path string) bool { return m.claimFile(path, id) }
+	// Chat sink: forward whole transcript messages to Flock's hook endpoint so the
+	// web Chat tab fills in for NATIVE (PTY) sessions — no ACP needed. Uses the
+	// session's own hook env (same vars the agent gets); "" → no-op.
+	hookURL, hookToken := hookEndpointFromEnv(spec.Env)
 	// Pass the session's scoped agent-config dir so the transcript tailer follows
 	// claude/codex's transcript into the Flock-seeded CLAUDE_CONFIG_DIR / CODEX_HOME
 	// (where they actually write it) instead of the default ~/.claude · ~/.codex.
 	go status.Watch(ctx, agent, spec.Cwd, s.configDir, startedAt, claim, func(u status.Update) {
 		m.emitStatus(StatusEvent{ID: id, Update: u})
+	}, func(role, text string) {
+		postChatEvent(hookURL, hookToken, role, text)
 	})
 }
 
@@ -142,6 +152,36 @@ func (m *Manager) watchActivity(ctx context.Context, id string, s *Session) {
 			e.Push(status.Update{State: status.StateRunning})
 		} else {
 			e.Push(status.Update{State: status.StateIdle})
+		}
+	}
+}
+
+// watchForeground reports the live FOREGROUND process of a plain shell/terminal
+// (T??) so the UI can show "htop" instead of a bare "terminal". Polls the PTY's
+// foreground process group; at the prompt the foreground is the shell itself →
+// idle (and the UI hides the shell name); a real program → running + its name as
+// the Tool. Tool is ALWAYS the current foreground (never blank), so it overwrites
+// cleanly through the merge pipeline — no "stale htop" after the program exits.
+func (m *Manager) watchForeground(ctx context.Context, id string, s *Session) {
+	const poll = 1500 * time.Millisecond
+	// Reuse the dedup Emitter: only a real change (state or foreground) is forwarded.
+	e := status.NewEmitter(func(u status.Update) { m.emitStatus(StatusEvent{ID: id, Update: u}) })
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(poll):
+		}
+		comm := s.ForegroundComm()
+		if comm == "" {
+			continue // no pty / transient → leave the current state
+		}
+		if isForegroundShell(comm) {
+			// At the prompt: idle, report the (stripped) shell name; the UI shows the
+			// normal status for shells and the command only for everything else.
+			e.Push(status.Update{State: status.StateIdle, Tool: strings.TrimPrefix(comm, "-")})
+		} else {
+			e.Push(status.Update{State: status.StateRunning, Tool: comm})
 		}
 	}
 }

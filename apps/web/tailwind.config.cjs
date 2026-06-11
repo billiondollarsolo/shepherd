@@ -15,13 +15,16 @@ module.exports = {
         'flock-muted': 'var(--flock-muted)',
         'flock-attention': 'var(--flock-attention)',
         'flock-error': 'var(--flock-error)',
-        // First-class flock-theme tokens.
-        'flock-accent': 'var(--flock-accent)',
+        // First-class flock-theme tokens. accent/ink use raw-channel vars so the
+        // Tailwind /opacity modifier works (rgb(var(--x-rgb) / <alpha-value>)); the
+        // hex --flock-* vars still exist for direct var()/color-mix in inline styles.
+        'flock-accent': 'rgb(var(--flock-accent-rgb) / <alpha-value>)',
         'flock-surface-0': 'var(--flock-surface-0)',
         'flock-surface-1': 'var(--flock-surface-1)',
         'flock-surface-2': 'var(--flock-surface-2)',
-        'flock-ink-primary': 'var(--flock-ink-primary)',
-        'flock-ink-muted': 'var(--flock-ink-muted)',
+        'flock-surface-3': 'var(--flock-surface-3)',
+        'flock-ink-primary': 'rgb(var(--flock-ink-primary-rgb) / <alpha-value>)',
+        'flock-ink-muted': 'rgb(var(--flock-ink-muted-rgb) / <alpha-value>)',
         // Diff line tints.
         'flock-diff-add': 'var(--flock-diff-add)',
         'flock-diff-remove': 'var(--flock-diff-remove)',

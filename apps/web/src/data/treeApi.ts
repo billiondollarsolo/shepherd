@@ -14,6 +14,9 @@ import type {
   GitCommitResponse,
   GitPushResponse,
   GitStatusResponse,
+  GitBranchesResponse,
+  GitBranchResponse,
+  GitPrResponse,
   ListNodeDirResponse,
   ListNodesResponse,
   ListProjectsResponse,
@@ -27,6 +30,7 @@ import type {
   Project,
   ProjectResponse,
   NodeResponse,
+  NodeEnvResponse,
   SessionResponse,
   UpdateSessionRequest,
   UpdateNodeRequest,
@@ -63,8 +67,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface NodeStack {
   path: string;
   stacks: string[];
-  /** True when the dir is a git work tree (gates the isolated-worktree toggle). */
+  /** True when the dir is a git work tree. */
   gitRepo: boolean;
+  /** True when HEAD resolves (≥1 commit). The worktree toggle gates on THIS — a
+   *  freshly `git init`'d repo with no commits can't create a worktree. */
+  gitHasCommits: boolean;
 }
 export interface SearchMatch {
   file: string;
@@ -142,6 +149,9 @@ export function createNode(input: CreateNodeRequest): Promise<NodeResponse> {
 export function updateNode(id: string, input: UpdateNodeRequest): Promise<NodeResponse> {
   return request(`/api/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
+export function getNodeEnv(id: string): Promise<NodeEnvResponse> {
+  return request(`/api/nodes/${id}/env`);
+}
 export function deleteNode(id: string): Promise<void> {
   return request(`/api/nodes/${id}`, { method: 'DELETE' });
 }
@@ -212,6 +222,45 @@ export function terminatePtyPane(ptyId: string): Promise<void> {
 export function listSessionEvents(id: string): Promise<{ events: Event[] }> {
   return request(`/api/sessions/${id}/events`);
 }
+/** Fleet-wide recent activity (cross-agent audit timeline). */
+export function listFleetActivity(limit = 60): Promise<{ events: Event[] }> {
+  return request(`/api/activity/fleet?limit=${limit}`);
+}
+export function getLatestChats(): Promise<{ chats: Record<string, { role: string; text: string }> }> {
+  return request('/api/chats/latest');
+}
+export function getTeams(): Promise<{ edges: Array<{ parent: string; child: string }> }> {
+  return request('/api/teams');
+}
+
+// --- config-as-code (flock.yml) ---
+export interface ConfigApplySummary {
+  projectsCreated: string[];
+  sessionsCreated: string[];
+  warnings: string[];
+}
+export function applyConfig(yaml: string): Promise<ConfigApplySummary> {
+  return request('/api/config/apply', { method: 'POST', body: JSON.stringify({ yaml }) });
+}
+export function exportConfig(): Promise<{ yaml: string }> {
+  return request('/api/config/export');
+}
+/** Hand a session's task + recent context to a fresh agent (any type) in the same
+ *  project/cwd. Returns the new session. */
+export function handoffSession(id: string, agentType: string): Promise<{ session: { id: string } }> {
+  return request(`/api/sessions/${id}/handoff`, { method: 'POST', body: JSON.stringify({ agentType }) });
+}
+
+// --- compare / race ---
+/** Spawn the same task across N agents (each in its own worktree), seeded with the
+ *  task. Returns the racer session ids to compare. */
+export function startRace(
+  projectId: string,
+  task: string,
+  agentTypes: string[],
+): Promise<{ task: string; sessionIds: string[] }> {
+  return request('/api/race', { method: 'POST', body: JSON.stringify({ projectId, task, agentTypes }) });
+}
 export function getSessionPlan(id: string): Promise<SessionPlanResponse> {
   return request(`/api/sessions/${id}/plan`);
 }
@@ -238,6 +287,24 @@ export function commitGit(id: string, message: string): Promise<GitCommitRespons
 export function pushGit(id: string): Promise<GitPushResponse> {
   // No body: a JSON content-type with an empty body would 400 in Fastify.
   return request(`/api/sessions/${id}/git/push`, { method: 'POST' });
+}
+export function branchesGit(id: string): Promise<GitBranchesResponse> {
+  return request(`/api/sessions/${id}/git/branches`);
+}
+export function createBranchGit(id: string, name: string, from?: string): Promise<GitBranchResponse> {
+  return request(`/api/sessions/${id}/git/branch`, {
+    method: 'POST',
+    body: JSON.stringify({ name, from }),
+  });
+}
+export function createPrGit(
+  id: string,
+  input: { title: string; body?: string; base?: string; draft?: boolean },
+): Promise<GitPrResponse> {
+  return request(`/api/sessions/${id}/git/pr`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export type { FlockNode, Project };

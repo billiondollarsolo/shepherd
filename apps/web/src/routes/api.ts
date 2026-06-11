@@ -80,6 +80,11 @@ export function logout(): Promise<void> {
   return request('/api/auth/logout', { method: 'POST' });
 }
 
+/** PATCH /api/auth/me — update own profile (display name). Returns the new user. */
+export function updateProfile(input: { displayName: string | null }): Promise<{ user: User }> {
+  return request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 /** POST /api/auth/change-password — change own password (verifies the current one). */
 export function changePassword(input: {
   currentPassword: string;

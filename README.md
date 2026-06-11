@@ -1,128 +1,229 @@
-# Flock
+<div align="center">
 
-A self-hosted **web cockpit for supervising a flock of CLI coding agents**
-(Claude Code, Codex, OpenCode) across one or more machines over SSH. Runs as a
-Docker deployment on an always-on VPS; you interact entirely through a browser
-(PWA).
+# 🐑 Flock
 
-See [`PRD.md`](./PRD.md) for product intent and
-[`docs/specs/`](./docs/specs/) for the implementation spec.
+**A self-hosted web platform for running and supervising a flock of CLI coding agents — across as many machines as you have, all from your browser.**
+
+Claude Code · Codex · OpenCode · Gemini · Grok
+
+</div>
 
 ---
 
-## Production deploy (Docker Compose) — US-38
+## What is Flock?
 
-The host needs **only Docker** (with the Compose plugin). All building and
-running happens inside containers; nothing — Node, pnpm, Postgres, tmux — needs
-to be installed on the host.
+You probably run coding agents in a terminal today — one at a time, on one machine,
+and the work dies the moment you close the lid. Flock turns that into a **fleet**.
+
+Point Flock at one or more machines ("**nodes**") over SSH. On each node it runs a
+tiny daemon that owns your agents' terminals. From any browser you get a live
+dashboard of every agent across every machine — what each one is doing right now,
+which one is **blocked waiting for you**, what it's spending, and a real terminal you
+can type into. Walk away, close your laptop, come back on your phone: the agents kept
+working and the session is exactly where you left it.
+
+### Why it's different
+
+| | |
+|---|---|
+| 🔌 **Sessions never die when you leave** | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues. |
+| 🔔 **You always know which agent needs you** | A unified status model (fed by each agent's own hooks + transcript) drives live indicators and away-from-keyboard **web push**. The state that matters: *"this agent is blocked waiting for you."* |
+| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI. |
+| 🤖 **Works with any agent** | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else. |
+
+---
+
+## Supported agents
+
+Flock leverages **what each agent already produces on the node** — its lifecycle hooks
+and/or its transcript files — and normalizes everything into one status + telemetry model.
+
+| Agent | Status | `awaiting_input` | Tokens / Model / Context % | Plan |
+|---|:---:|:---:|:---:|:---:|
+| **Claude Code** | ✅ hooks + transcript | ✅ | ✅ | ✅ |
+| **Codex** | ✅ transcript | ⚠️¹ | ✅ (exact ctx window) | ✅ |
+| **OpenCode** | ✅ plugin | ✅ | ✅ (exact USD cost) | ✅ |
+| **Gemini** | ✅ hooks (v0.26+) | ✅ | ⚠️² | — |
+| **Grok** | ✅ hooks | — | — | — |
+
+<sub>¹ Codex hooks (incl. the approval signal) are wired and ready; seeding is enabled once validated on a live node. ² Gemini tokens/model need a transcript tailer (planned). Full detail: [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md).</sub>
+
+---
+
+## How it fits together
 
 ```
-                       host ports 80 / 443
-                              │
-                ┌─────────────▼─────────────┐
-                │   caddy (TLS terminator)  │  US-39 — ships with the stack;
-                │  HTTPS → /  /api  /ws      │  certs persist in caddy_data.
-                └──────┬──────────────┬──────┘
-                  /    │              │ /api  /ws
-                       ▼              ▼
-        ┌──────────────┐      ┌─────────────────┐
-        │   web (nginx)│      │  orchestrator   │──┐ dockerode
-        │  static PWA  │      │  Node 22 + TS   │  │ (Docker socket)
-        └──────────────┘      └────────┬────────┘  ▼
-                                       │     per-session Chrome
-                              ┌────────▼──────┐    containers
-                              │   postgres    │   (launched at
-                              │  (registry)   │    runtime, NOT a
-                              └───────────────┘    compose service)
+   Your browser (PWA — phone / laptop / desktop)
+            │  HTTPS + WebSocket
+            ▼
+   ┌─────────────────────────────────────────────┐
+   │  orchestrator  (Node · Fastify · Postgres)   │   the brain:
+   │  auth · status model · hook endpoint · web    │   management state,
+   │  push · per-session browsers · agentd client  │   never in the hot path
+   └───────┬──────────────────────────┬───────────┘
+           │ SSH (direct-tcpip)        │ unix socket
+           ▼                           ▼
+   ┌───────────────┐           ┌───────────────┐
+   │  remote node  │   …N…     │  local node   │     each node runs:
+   │  flock-agentd │           │  flock-agentd │
+   │  ── raw PTYs  │           │  ── raw PTYs  │   • your agents' terminals
+   │  ── status    │           │  ── status    │   • transcript/hook tailing
+   │  ── metrics   │           │  ── metrics   │   • CPU/mem per session
+   └───────────────┘           └───────────────┘
 ```
 
-### What Compose brings up
+Three components, one monorepo:
 
-`docker compose up` starts four services (NFR-DEP1):
+- **`flock-agentd`** (Go) — the node daemon. Owns raw PTYs, speaks a framed binary
+  protocol over an SSH loopback channel, tails agent transcripts/hooks for live status
+  + telemetry, and reports node + per-session resource metrics. This is what makes
+  sessions survive disconnects. See [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md).
+- **`apps/orchestrator`** (TypeScript · Fastify · Drizzle/Postgres) — the always-on
+  brain. Authentication, the unified status model, the agent hook endpoint, SSH/agentd
+  transport, per-session browser lifecycle, web push, and the REST + WebSocket API.
+  Postgres is the durable record — **never** on the live status path.
+- **`apps/web`** (React · Vite · xterm.js · TanStack · Zustand) — the dashboard. A
+  `node → project → session` tree, live terminals (focus + grid/“hive” views), status
+  dots, telemetry bars, a git diff / source-control panel, the per-session browser
+  screencast, and the plan/activity sidebar.
 
-| Service        | Image                              | Role |
-|----------------|------------------------------------|------|
-| `caddy`        | `caddy:2-alpine` (digest-pinned)   | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api`+`/ws` → `orchestrator`. Certs/ACME keys persist in `caddy_data` (NFR-DEP2). |
-| `postgres`     | `postgres:16-bookworm` (digest-pinned) | Durable system of record. **Never** on the live status path (PRD §6.6). |
-| `orchestrator` | built from `docker/Dockerfile.orchestrator` | The brain: status model, hooks, SSH, browser lifecycle, auth. Also runs the bundled **flock-agentd** (local-node PTY transport). |
-| `web`          | built from `docker/Dockerfile.web` | Static React/Vite PWA bundle served by nginx. |
+---
 
-**Per-session browser containers are not Compose services.** One isolated Chrome
-container is launched **per session at runtime** by the orchestrator via
-`dockerode` against the mounted Docker socket, and destroyed on session
-teardown (PRD §6.5 Layer A, US-25, NFR-DEP1/SEC5). This keeps isolation at the
-container boundary while keeping the static topology minimal.
+## Quick start
 
-### Quick start
+> **Prerequisites:** [Node ≥ 22](https://nodejs.org), [pnpm ≥ 9](https://pnpm.io)
+> (`npm i -g pnpm`), [Go ≥ 1.25](https://go.dev) (for the daemon), and **Docker** (the
+> dev database + per-session browsers run in containers). The agent CLIs themselves
+> (`claude`, `codex`, …) are installed on the **nodes**, not here.
+
+### Option A — Run it locally (fastest way to see it)
+
+Everything runs natively on your host with hot reload; only Postgres stays in Docker.
 
 ```bash
-# 1. Configure runtime secrets/config (nothing is baked into images — NFR-DEP2)
-cp .env.example .env
-$EDITOR .env
+git clone git@github.com:billiondollarsolo/flock.git
+cd flock
+pnpm install
 
-# 2. (Recommended in prod) populate Docker secret files
-mkdir -p secrets
-openssl rand -base64 32 > secrets/flock_master_key      # secret-store master key
+# Create your dev env from the template, then generate the throwaway secrets it needs:
+cp .env.dev.example .env.dev.local
+# (the template explains each value and the one-liners to generate the keys)
+
+./run-dev.sh            # starts Postgres + flock-agentd + orchestrator + web
+#   └─ add --reset-db on the first run for a clean database + fresh admin setup
+```
+
+Open **http://localhost:5173**, complete first-run admin setup, and you're in. The web
+app proxies the API/WebSocket, so it's a single origin. (Direct API: `http://localhost:8080`.)
+
+Add a node from the UI (an SSH host you control, or just the bundled **local** node),
+create a project, and launch your first agent session.
+
+### Option B — Deploy it (Docker Compose)
+
+The host needs **only Docker** (with the Compose plugin) — nothing else is installed on
+it. See [`docs/deployment.md`](docs/deployment.md) for the full guide; the short version:
+
+```bash
+cp .env.example .env && $EDITOR .env          # configure runtime secrets/config
+
+mkdir -p secrets                              # (recommended) Docker secret files
+openssl rand -base64 32 > secrets/flock_master_key
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
-# 3. Bring it up
-docker compose up -d
-
-# 4. Tail logs / check health
+docker compose up -d                          # caddy + web + orchestrator + postgres
 docker compose logs -f orchestrator
-docker compose ps
 ```
 
-The orchestrator container runs **idempotent Drizzle migrations** on boot before
-starting the server, so a fresh database is provisioned automatically.
+Caddy terminates TLS on `443` (`80` redirects), migrations run automatically on boot,
+and per-session browser containers are launched on demand. Open `https://<host>` and
+complete admin setup.
 
-Open the web app at `https://<host>` (Caddy serves it on `443`; `80` redirects to
-HTTPS). Override the host ports with `HTTP_HOST_PORT` / `HTTPS_HOST_PORT` if needed.
-Complete first-run admin setup, then log in.
+---
 
-### Secrets — runtime only, never in images (NFR-DEP2)
+## Repository layout
 
-No secret value is ever copied into an image layer. Secrets reach the running
-containers two ways, in order of preference:
+```
+flock/
+├── agentd/              # flock-agentd — the Go node daemon (raw PTYs, status, metrics)
+├── apps/
+│   ├── orchestrator/    # the brain — Fastify API/WS, status model, SSH/agentd, auth, push
+│   └── web/             # the dashboard — React + Vite + xterm.js PWA
+├── packages/
+│   └── shared/          # shared TypeScript contracts (Zod schemas, the Status enum, …)
+├── docker/              # Dockerfiles + Caddyfile for the production stack
+├── docs/                # architecture, agent integrations, deployment, decisions  ← start at docs/README.md
+├── vagrant/             # libvirt VMs that simulate real remote SSH nodes (for testing)
+├── run-dev.sh           # native dev runner (Postgres in Docker; everything else hot-reloaded)
+└── docker-compose*.yml  # prod / dev / multi-node-sim stacks
+```
 
-1. **Docker secret files** (`./secrets/*`, mounted at `/run/secrets/<name>`):
-   - `flock_master_key` → secret-store master key for encryption at rest
-     (PRD §6, NFR-SEC2).
-   - `postgres_password` → Postgres superuser password.
-2. **Environment** via `.env` (read automatically by Compose) for everything
-   else (`DATABASE_URL`, VAPID keys, browser config, `FLOCK_AGENTD_VERSION`, …).
+---
 
-`.env` and `./secrets/` are gitignored. See [`.env.example`](./.env.example) for
-the full, documented list of variables.
-
-### TLS / auth
-
-The bundled **caddy** service terminates TLS on `443` and proxies `/` → `web`,
-`/api` + `/ws` → `orchestrator` (which speak plain HTTP/WS on the internal
-network). Point Caddy at your domain in `docker/Caddyfile` and it provisions
-certificates automatically; to use your own external proxy instead, drop the
-`caddy` service and route the same paths. All UI/API/WS require auth; the
-per-session hook endpoint is the sole exception (per-session token only) — see
-US-39.
-
-### Dev vs prod
-
-- **Production:** `docker-compose.yml` + `docker/Dockerfile.orchestrator` +
-  `docker/Dockerfile.web` (multi-stage, pruned, non-root).
-- **Local iteration:** `docker-compose.dev.yml` + `docker/Dockerfile.dev`
-  (source-mounted, hot reload). Use:
-  `docker compose -f docker-compose.dev.yml up`.
-
-### Verifying the deploy
-
-A TDD acceptance test asserts the deploy artifacts against the US-38 criteria
-(orchestrator + Postgres come up, no static browser service, Docker socket
-mounted, secrets external, multi-stage builds). It also runs
-`docker compose config` as a smoke when the Docker CLI is available:
+## Development
 
 ```bash
-pnpm --filter @flock/orchestrator test:int   # includes deploy.int.test.ts
-# or, with Docker present, a direct smoke:
-docker compose config >/dev/null && echo "compose OK"
+pnpm dev              # orchestrator + web (or use ./run-dev.sh for the full stack incl. agentd)
+pnpm build            # build every workspace
+pnpm typecheck        # tsc across the monorepo
+pnpm lint             # eslint
+pnpm format           # prettier --write
+
+# Tests
+pnpm test:unit        # vitest unit suites (shared + orchestrator + web)
+pnpm test:int         # integration suites (spins up Postgres + sshd in Docker)
+pnpm test:e2e         # Playwright end-to-end
+cd agentd && go test -race ./...   # the daemon
 ```
+
+The orchestrator runs idempotent Drizzle migrations on boot, so a fresh database
+provisions itself. To exercise **real remote nodes**, the `vagrant/` profile brings up
+libvirt VMs you can add as SSH nodes.
+
+---
+
+## Configuration
+
+Nothing sensitive is baked into any image — config and secrets are supplied at runtime.
+
+- **Local dev:** [`.env.dev.example`](.env.dev.example) → copy to `.env.dev.local`.
+- **Production:** [`.env.example`](.env.example) → copy to `.env`; prefer the
+  `./secrets/*` Docker secret files for the master key + DB password.
+
+Both templates document every variable inline. `.env*` (except the examples) and
+`secrets/` are gitignored — **never commit real secrets or SSH keys.**
+
+---
+
+## Documentation
+
+Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
+
+| Doc | What it covers |
+|---|---|
+| [`docs/roadmap.md`](docs/roadmap.md) | **The forward plan** — phased vision + tasks (success criteria + tests baked in) to the elite web platform |
+| [`docs/architecture.md`](docs/architecture.md) | How the three components fit together, end to end |
+| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Flock captures from each agent, and how |
+| [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md) | The node daemon — why it exists and how it works |
+| [`docs/deployment.md`](docs/deployment.md) | The production Docker Compose stack, in depth |
+| [`PRD.md`](PRD.md) | Product intent and the original requirements |
+
+---
+
+## Security model (at a glance)
+
+- All UI / API / WebSocket traffic requires authentication. The only unauthenticated
+  endpoint is the per-session hook callback — gated by a per-session bearer token.
+- Node transport is SSH; the agentd control channel adds a shared secret on top, stored
+  in a `0600` file and stripped from spawned agents' environments.
+- Secrets and SSH keys live outside the repo and outside image layers (runtime only).
+
+---
+
+## Status
+
+Active development. The full suite is green (build · ~1,000 unit · integration · `go -race`)
+and the platform runs live across simulated multi-node SSH deployments.
+
+🤖 Built with [Claude Code](https://claude.com/claude-code).

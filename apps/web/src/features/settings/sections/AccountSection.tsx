@@ -2,9 +2,71 @@ import { useState, type FormEvent } from 'react';
 import { LogOut } from 'lucide-react';
 import { Button, Input, Label, toast } from '../../../components/ui';
 import { ApiError } from '../../../routes/api';
-import { changePassword } from '../../../routes/api';
+import { changePassword, updateProfile } from '../../../routes/api';
 import { useAuth } from '../../auth/AuthGate';
 import { SectionHeader, SettingCard, SettingRow } from '../SettingsSection';
+
+/** Two-letter avatar initials from a display name (or username fallback). */
+function initialsOf(s: string): string {
+  const base = (s.split('@')[0] || s).trim();
+  const parts = base.split(/[.\-_+\s]+/).filter(Boolean);
+  return (parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : base.slice(0, 2)).toUpperCase() || '?';
+}
+
+function DisplayNameForm(): JSX.Element {
+  const { user, updateUser } = useAuth();
+  const [name, setName] = useState(user.displayName ?? '');
+  const [busy, setBusy] = useState(false);
+  const preview = name.trim() || user.username;
+
+  async function onSubmit(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { user: updated } = await updateProfile({ displayName: name.trim() || null });
+      updateUser(updated);
+      toast.success('Name updated.');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not update name.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const dirty = (name.trim() || null) !== (user.displayName ?? null);
+
+  return (
+    <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-3 p-4">
+      <p className="text-sm font-medium text-flock-ink-primary">Display name</p>
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-flock-accent text-sm font-semibold text-white">
+          {initialsOf(preview)}
+        </span>
+        <div className="grid flex-1 gap-1.5">
+          <Label htmlFor="display-name" className="sr-only">
+            Display name
+          </Label>
+          <Input
+            id="display-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Mike Johnson"
+            maxLength={80}
+            autoComplete="name"
+          />
+        </div>
+      </div>
+      <p className="text-2xs text-flock-ink-muted">
+        Shown as your avatar initials in the top bar. Leave blank to use your username.
+      </p>
+      <div>
+        <Button type="submit" size="sm" disabled={busy || !dirty}>
+          {busy ? 'Saving…' : 'Save name'}
+        </Button>
+      </div>
+    </form>
+  );
+}
 
 function ChangePasswordForm(): JSX.Element {
   const [current, setCurrent] = useState('');
@@ -92,6 +154,7 @@ export function AccountSection(): JSX.Element {
         <SettingRow title="Signed in as" desc={`Role: ${user.role}`}>
           <span className="text-sm text-flock-ink-primary">{user.username}</span>
         </SettingRow>
+        <DisplayNameForm />
         <ChangePasswordForm />
         <SettingRow title="Sign out" desc="End this browser session and return to the login screen.">
           <Button size="sm" variant="outline" onClick={() => void logout()}>

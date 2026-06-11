@@ -225,6 +225,10 @@ export const HookTelemetry = z.object({
   model: z.string().optional(),
   tokens: z.number().optional(),
   contextTokens: z.number().optional(),
+  /** The model's exact context-window size, when the agent reports it. Preferred
+   *  over the model-info table so the context-% reflects the ACTUAL running model
+   *  (e.g. Opus 200k vs Opus-1M) rather than an inferred default. */
+  contextLimit: z.number().optional(),
   costUsd: z.number().optional(),
 });
 export type HookTelemetry = z.infer<typeof HookTelemetry>;

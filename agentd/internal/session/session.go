@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"flock-agentd/internal/agentpath"
+	"flock-agentd/internal/status"
 
 	"github.com/creack/pty"
 )
@@ -38,6 +39,10 @@ type Spec struct {
 	Cwd     string
 	Env     []string // full environment; nil → inherit
 	Command []string // argv; empty → the user's default shell as a login shell
+	// Mode selects the transport: "" / "pty" = raw PTY (default, universal); "acp"
+	// = structured Agent Client Protocol over stdio (F6). For "acp", Command is the
+	// ACP launch argv (e.g. gemini --experimental-acp).
+	Mode string
 	Cols    uint16
 	Rows    uint16
 
@@ -90,6 +95,12 @@ type Session struct {
 	ring    *ring
 	subs    map[int]chan []byte
 	nextSub int
+
+	// ACP (structured) mode: non-nil for Mode=="acp" sessions. statusPush sends
+	// derived status to the manager (PTY sessions use the manager's status watcher
+	// instead). See acp_session.go.
+	acp        *acpState
+	statusPush func(status.Update)
 
 	// inAlt tracks whether the foreground program is on the ALTERNATE screen (vim,
 	// htop, less, a TUI agent). Updated by scanning output for the DEC private-mode
@@ -367,8 +378,20 @@ func (s *Session) broadcast(chunk []byte) {
 	}
 	// T61: record output time for the activity-status watcher (lock-free read).
 	s.lastActivityNanos.Store(time.Now().UnixNano())
+	wasAlt := s.inAlt
 	s.updateAltState(chunk)
-	s.ring.write(chunk)
+	ringChunk := chunk
+	if wasAlt && !s.inAlt {
+		// Program LEFT the alternate screen (e.g. quit htop/vim): the alt frames now
+		// in the ring are stale — the real terminal restored the pre-alt screen — so a
+		// later reattach (which takes the normal-screen replay path) would paint them
+		// as garbage. Reset scrollback to a clean normal screen and keep only THIS
+		// chunk's post-exit tail. Live subscribers still get the FULL chunk below.
+		s.ring.reset()
+		s.ring.write([]byte("\x1b[?1049l\x1b[2J\x1b[3J\x1b[H"))
+		ringChunk = tailAfterAltExit(chunk)
+	}
+	s.ring.write(ringChunk)
 	for _, ch := range s.subs {
 		select {
 		case ch <- chunk:
@@ -376,6 +399,21 @@ func (s *Session) broadcast(chunk []byte) {
 			// subscriber buffer full → drop this chunk for it (see doc above).
 		}
 	}
+}
+
+// tailAfterAltExit returns the portion of chunk AFTER its last alt-screen-exit
+// sequence, so the stale alt frames preceding it aren't retained in scrollback.
+func tailAfterAltExit(chunk []byte) []byte {
+	end := -1
+	for _, x := range altExits {
+		if i := bytes.LastIndex(chunk, x); i >= 0 && i+len(x) > end {
+			end = i + len(x)
+		}
+	}
+	if end < 0 {
+		return chunk
+	}
+	return chunk[end:]
 }
 
 // supervise waits for the current process and, for a "dev" session, respawns it
@@ -461,9 +499,15 @@ func (s *Session) finalize() {
 // dev restart's brief gap the PTY may be unavailable; the write is then dropped.
 func (s *Session) Write(p []byte) error {
 	s.mu.Lock()
+	acpState := s.acp
 	ptmx := s.ptmx
 	exited := s.exited
 	s.mu.Unlock()
+	// ACP sessions have no PTY — input is line-edited then sent as a prompt (or a
+	// permission answer). See acp_session.go.
+	if acpState != nil {
+		return s.acpInput(p)
+	}
 	if ptmx == nil || exited {
 		return nil
 	}
@@ -533,14 +577,26 @@ func (s *Session) Subscribe() *Subscription {
 	id := s.nextSub
 	s.nextSub++
 	s.subs[id] = ch
-	// For a full-screen app, force ONE SIGWINCH so it redraws for the freshly
-	// attached client even when the size is unchanged. The kernel only auto-delivers
-	// SIGWINCH on an actual size change, so a same-size reattach (e.g. a browser
-	// reload at the same window size) would otherwise leave the screen blank/garbled.
-	// We deliberately do NOT do this for a normal-screen shell — a same-size SIGWINCH
-	// there makes bash/zsh reprint their prompt (the double-prompt smear).
+	// For a full-screen app, force a FULL repaint for the freshly attached client
+	// (we cleared its buffer above). A SAME-size SIGWINCH is NOT enough: a diff-
+	// rendering TUI (htop) only repaints the cells IT thinks changed against its own
+	// (now stale) buffer → scattered rows with gaps. So we JIGGLE the size — one row
+	// shorter, then back — so the app sees a REAL resize and relayouts+repaints the
+	// whole screen. Async (off s.mu) with a tiny gap so the two SIGWINCHes aren't
+	// coalesced. NOT done for a normal-screen shell — a same-size SIGWINCH there makes
+	// bash/zsh reprint their prompt (the double-prompt smear).
 	if s.inAlt && s.ptmx != nil {
-		_ = pty.Setsize(s.ptmx, &pty.Winsize{Rows: orDefault(s.spec.Rows, 24), Cols: orDefault(s.spec.Cols, 80)})
+		ptmx := s.ptmx
+		rows, cols := orDefault(s.spec.Rows, 24), orDefault(s.spec.Cols, 80)
+		jiggle := rows - 1
+		if jiggle < 1 {
+			jiggle = rows + 1
+		}
+		go func() {
+			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: jiggle, Cols: cols})
+			time.Sleep(60 * time.Millisecond)
+			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})
+		}()
 	}
 	return &Subscription{
 		Replay: replay,
@@ -870,15 +926,20 @@ func resolveExecutable(name string) string {
 	if name == "" || strings.ContainsRune(name, os.PathSeparator) {
 		return name
 	}
-	if p, err := exec.LookPath(name); err == nil {
-		return p // on the daemon's own PATH (e.g. /usr/bin)
-	}
+	// Prefer the agent bin dirs in BinDirs order (USER-LOCAL first: ~/.local/bin
+	// before /usr/bin) — the same order as the spawn PATH — so a user-owned install
+	// (e.g. claude via the official installer in ~/.local/bin) wins over a root-owned
+	// /usr/bin copy that the agent user can't self-update. Fall back to the daemon's
+	// own PATH (LookPath) for anything outside these dirs.
 	home, _ := os.UserHomeDir()
 	for _, dir := range agentpath.BinDirs(home) {
 		cand := filepath.Join(dir, name)
 		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
 			return cand
 		}
+	}
+	if p, err := exec.LookPath(name); err == nil {
+		return p // outside the known bin dirs but on the daemon's $PATH
 	}
 	return name
 }

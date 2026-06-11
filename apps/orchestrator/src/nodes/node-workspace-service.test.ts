@@ -47,6 +47,14 @@ describe('detectStack', () => {
   it('reports gitRepo true on the __git__ marker and strips it from stacks', async () => {
     const r = await svc('/home/flock/repo\n__git__\nnode\n').detectStack('n', '/home/flock/repo');
     expect(r.gitRepo).toBe(true);
+    expect(r.gitHasCommits).toBe(false); // no __git_commits__ → unborn HEAD
+    expect(r.stacks).toEqual(['node']);
+  });
+
+  it('reports gitHasCommits true on __git_commits__ (repo with a commit) and strips both markers', async () => {
+    const r = await svc('/home/flock/repo\n__git__\n__git_commits__\nnode\n').detectStack('n', '/home/flock/repo');
+    expect(r.gitRepo).toBe(true);
+    expect(r.gitHasCommits).toBe(true);
     expect(r.stacks).toEqual(['node']);
   });
 });

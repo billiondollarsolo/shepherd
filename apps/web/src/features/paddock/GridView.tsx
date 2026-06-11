@@ -13,7 +13,7 @@
  * can't scroll. The kanban floor + scroll replaces hand-resizing.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Columns3, LayoutGrid, Plus, Rows3, SquareArrowOutUpRight, X } from 'lucide-react';
+import { Bookmark, ChevronDown, Columns3, LayoutGrid, Plus, Rows3, SquareArrowOutUpRight, X } from 'lucide-react';
 import { StatusDot } from '../../components/StatusDot';
 import { statusLabel, type Session, type Status } from '@flock/shared';
 
@@ -31,6 +31,7 @@ import {
 import { usePaddock, type GridLayout } from '../../store/paddock';
 import { useProjects, useSessions } from '../../data/queries';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
+import { ContextMeter } from './ContextMeter';
 import { moveBefore, orderSessions, SESSION_DND } from './sessionOrder';
 import { formatCostUsd, formatTokens } from '../../lib/utils';
 
@@ -113,16 +114,15 @@ function GridCellInner({
   const footerParts: string[] = [];
   if (usage?.model) footerParts.push(usage.model);
   if (usage?.tool) footerParts.push(usage.tool);
-  if (usage?.contextPct != null) footerParts.push(`${usage.contextPct}% ctx`);
   if (usage?.tokens) footerParts.push(`${formatTokens(usage.tokens)} tok`);
   if (usage?.costUsd != null) footerParts.push(formatCostUsd(usage.costUsd));
 
   return (
     <div
-      className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-md border bg-flock-bg ${
+      className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-flock-bg shadow-[0_8px_26px_-16px_rgba(0,0,0,0.7)] ${
         attention
           ? 'border-status-awaiting ring-1 ring-status-awaiting'
-          : 'border-[var(--flock-border)]'
+          : 'border-[var(--flock-border)] ring-1 ring-white/[0.03]'
       }`}
       data-testid={`grid-cell-${session.id}`}
       data-status={status}
@@ -130,7 +130,7 @@ function GridCellInner({
     >
       {focused ? null : (
       <div
-        className="flex h-7 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] bg-flock-surface-1 px-2 text-xs"
+        className="group/cell flex h-7 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] bg-flock-surface-1 px-2 text-xs"
         onDoubleClick={focus}
         title="Double-click to maximize"
       >
@@ -143,13 +143,21 @@ function GridCellInner({
         >
           {sessionLabel(session)}
         </button>
+        {usage?.contextPct != null ? (
+          <ContextMeter
+            pct={usage.contextPct}
+            tokens={usage.contextTokens}
+            limit={usage.contextLimit}
+            className="shrink-0"
+          />
+        ) : null}
         <span className="shrink-0 text-2xs text-flock-ink-muted">{statusLabel(status)}</span>
         <SimpleTooltip label="Maximize session">
           <button
             type="button"
             onClick={focus}
             aria-label="Focus session"
-            className="shrink-0 rounded p-0.5 text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+            className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:opacity-100 group-hover/cell:opacity-100"
           >
             <SquareArrowOutUpRight className="size-3" />
           </button>
@@ -159,7 +167,7 @@ function GridCellInner({
             type="button"
             onClick={() => openDialog('terminate-session', { sessionId: session.id })}
             aria-label="Terminate session"
-            className="shrink-0 rounded p-0.5 text-flock-ink-muted hover:bg-flock-surface-2 hover:text-status-error"
+            className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-status-error focus-visible:opacity-100 group-hover/cell:opacity-100"
           >
             <X className="size-3" />
           </button>
@@ -211,6 +219,72 @@ const GridCell = memo(
     a.usage?.costUsd === b.usage?.costUsd,
 );
 
+/** Saved-layouts menu: recall a named grid arrangement (layout + session order) in
+ *  one click, or save the current one ("Backend trio", "Review pair"). */
+function LayoutPresetsMenu({ projectId, order }: { projectId: string | null; order: string[] }): JSX.Element {
+  const presets = usePaddock((s) => s.layoutPresets);
+  const saveLayoutPreset = usePaddock((s) => s.saveLayoutPreset);
+  const applyLayoutPreset = usePaddock((s) => s.applyLayoutPreset);
+  const deleteLayoutPreset = usePaddock((s) => s.deleteLayoutPreset);
+  const mine = projectId ? presets.filter((p) => p.projectId === projectId) : [];
+  return (
+    <DropdownMenu>
+      <SimpleTooltip label="Saved layouts">
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label="Saved layouts">
+            <Bookmark className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+      </SimpleTooltip>
+      <DropdownMenuContent align="end" className="max-h-80 w-56 overflow-y-auto">
+        <DropdownMenuLabel>Layouts</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {mine.length === 0 ? (
+          <DropdownMenuItem disabled>No saved layouts</DropdownMenuItem>
+        ) : (
+          mine.map((p) => (
+            <DropdownMenuItem
+              key={p.id}
+              onSelect={(e) => e.preventDefault()}
+              className="group/lp gap-2 p-0"
+            >
+              <button
+                type="button"
+                onClick={() => applyLayoutPreset(p.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+              >
+                <Bookmark className="size-3.5 shrink-0 text-flock-ink-muted" />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="shrink-0 text-2xs text-flock-ink-muted">
+                  {p.gridLayout === 'grid' ? '2-wide' : 'columns'}
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label="Delete layout"
+                onClick={() => deleteLayoutPreset(p.id)}
+                className="shrink-0 px-2 py-1.5 opacity-0 transition-opacity hover:text-status-error group-hover/lp:opacity-100"
+              >
+                <X className="size-3" />
+              </button>
+            </DropdownMenuItem>
+          ))
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!projectId || order.length === 0}
+          onSelect={() => {
+            const name = window.prompt('Name this layout (e.g. "Backend trio")')?.trim();
+            if (name && projectId) saveLayoutPreset(name, projectId, order);
+          }}
+        >
+          <Plus className="size-3.5" /> Save current layout…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** The VS Code-style tab strip: a minimap over the scrollable pane row. */
 function GridTabBar({
   cells,
@@ -245,8 +319,8 @@ function GridTabBar({
       data-testid="grid-tabbar"
     >
       <LayoutGrid className="size-4 shrink-0 text-flock-accent" />
-      <span className="shrink-0 truncate text-xs font-medium text-flock-ink-primary">{projectName}</span>
-      <span className="shrink-0 text-2xs text-flock-ink-muted">{cells.length}</span>
+      <span className="font-display shrink-0 truncate text-sm font-semibold text-flock-ink-primary">{projectName}</span>
+      <span className="shrink-0 rounded-full bg-flock-surface-2 px-1.5 text-2xs tabular-nums text-flock-ink-muted">{cells.length}</span>
 
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="grid-tabs">
         {cells.map((s) => {
@@ -277,7 +351,7 @@ function GridTabBar({
               }}
               className={`group/tab flex h-7 shrink-0 cursor-grab items-center gap-1.5 rounded-md px-2 text-xs active:cursor-grabbing ${
                 onScreen
-                  ? 'bg-flock-surface-2 text-flock-ink-primary'
+                  ? 'bg-flock-accent/15 text-flock-ink-primary ring-1 ring-flock-accent/25'
                   : 'text-flock-ink-muted hover:bg-flock-surface-2/60 hover:text-flock-ink-primary'
               }`}
             >
@@ -340,6 +414,7 @@ function GridTabBar({
           </DropdownMenu>
           </>
         )}
+        <LayoutPresetsMenu projectId={cells[0]?.projectId ?? null} order={cells.map((c) => c.id)} />
         <SimpleTooltip label="New session in this project">
           <Button size="icon-sm" variant="ghost" aria-label="New session" disabled={!canAdd} onClick={onNew}>
             <Plus className="size-4" />

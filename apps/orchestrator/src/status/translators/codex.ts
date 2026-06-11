@@ -62,7 +62,8 @@ export function translateCodexHook(body: unknown): CodexTransition | null {
 
   switch (name) {
     case 'SessionStart':
-      return { status: 'starting', detail: null };
+      // Booted + ready = idle, not starting (else a launched-idle agent sticks).
+      return { status: 'idle', detail: null };
 
     case 'UserPromptSubmit':
       return { status: 'running', detail: null };

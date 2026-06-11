@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"flock-agentd/internal/metrics"
+	"flock-agentd/internal/status"
 )
 
 // Manager is the registry of live sessions on this node. Sessions persist here
@@ -69,7 +70,22 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		m.creating[spec.ID] = ch
 		m.mu.Unlock()
 
-		s, err := Open(spec)
+		// Pre-accept the agent's folder-trust gate for this cwd so the session starts
+		// READY — not blocked on an onboarding/trust prompt (which also eats the first
+		// piped input). Best-effort + non-destructive.
+		ensureFolderTrust(detectSetupAgent(spec.Command), spec.Cwd)
+
+		var s *Session
+		var err error
+		if spec.Mode == "acp" {
+			// Structured transport (F6): the ACP session pushes its own derived
+			// status straight to the manager (no transcript/PTY watcher needed).
+			s, err = OpenACP(spec, func(u status.Update) {
+				m.emitStatus(StatusEvent{ID: spec.ID, Update: u})
+			})
+		} else {
+			s, err = Open(spec)
+		}
 		m.mu.Lock()
 		delete(m.creating, spec.ID)
 		if err == nil {
@@ -82,8 +98,11 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		}
 
 		// Start deriving live status — transcript tail (claude/codex) or PTY-activity
-		// (gemini via spec.ActivityStatus); no-op for plain shells.
-		m.startStatusWatcher(spec, s)
+		// (gemini via spec.ActivityStatus); no-op for plain shells. ACP sessions push
+		// their own status (above), so they skip the watcher.
+		if spec.Mode != "acp" {
+			m.startStatusWatcher(spec, s)
+		}
 
 		// Auto-remove from the registry when the process exits.
 		go func() {

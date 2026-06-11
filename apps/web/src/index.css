@@ -55,3 +55,11 @@ samp,
 .flock-mono {
   font-variant-numeric: tabular-nums;
 }
+
+/* Display face for headings + branding (Space Grotesk) — gives Flock a distinct,
+   technical wordmark vs the Inter body. Tight tracking for a confident headline. */
+.font-display {
+  font-family: var(--flock-font-display);
+  letter-spacing: -0.02em;
+  font-feature-settings: 'ss01' 1;
+}

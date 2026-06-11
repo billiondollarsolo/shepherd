@@ -36,15 +36,17 @@ RUN curl -fsSL https://x.ai/cli/install.sh | bash \
       && (cp /root/.grok/bin/grok /usr/local/bin/grok 2>/dev/null \
           || cp /root/.local/bin/grok /usr/local/bin/grok 2>/dev/null || true) \
       || echo "WARN: grok install skipped"
-RUN curl -fsSL https://claude.ai/install.sh | bash -s -- --bin-dir /usr/local/bin \
-      || npm install -g @anthropic-ai/claude-code \
-      || echo "WARN: claude install skipped"
+# Claude Code is installed USER-LOCAL as `flock` (below, after useradd) so it can
+# self-update; a root/npm-global copy is unwritable by the agent user.
 RUN curl -fsSL https://opencode.ai/install | bash \
       && (cp /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || true) \
       || echo "WARN: opencode install skipped"
 
 # --- the unprivileged user the orchestrator logs in as -----------------------
 RUN useradd -m -s /bin/bash flock
+# Claude Code via the official installer, run AS flock → ~/.local/bin (flock-owned,
+# self-updating). resolveExecutable prefers ~/.local/bin over /usr.
+RUN su - flock -c 'curl -fsSL https://claude.ai/install.sh | bash' || echo "WARN: claude install skipped"
 
 # --- boot: install the injected pubkey, then run sshd in the foreground -------
 COPY docker/node-entrypoint.sh /usr/local/bin/node-entrypoint.sh

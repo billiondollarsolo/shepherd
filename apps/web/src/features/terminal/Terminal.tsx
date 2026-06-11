@@ -274,6 +274,17 @@ export default function Terminal({
     let fitTimer: ReturnType<typeof setTimeout> | undefined;
     const fitAndSync = (): void => {
       if (disposed) return;
+      // NEVER fit a zero-size container: FitAddon clamps to its ~10×4 / 84px minimum,
+      // which leaves the PTY tiny AND seeds the resize dedupe wrong — so a backgrounded
+      // (display:none) pane or a not-yet-laid-out one (nav-away-and-back) renders
+      // htop/vim/agent TUIs into a few rows. Skip + retry so a late layout or a
+      // becoming-visible pane self-heals (ResizeObserver also re-fits on real changes).
+      const elNow = containerRef.current;
+      if (!elNow || elNow.clientWidth <= 0 || elNow.clientHeight <= 0) {
+        if (fitTimer) clearTimeout(fitTimer);
+        fitTimer = setTimeout(fitAndSync, 150);
+        return;
+      }
       try {
         fit.fit();
       } catch {
@@ -299,14 +310,19 @@ export default function Terminal({
     // prompt (and that redraw accumulates in the daemon scrollback, replayed on
     // every attach → the "prompt many times" artifact). A genuine later resize
     // (splitter drag) still differs from the seed and IS sent.
-    try {
-      fit.fit();
-    } catch {
-      /* container not laid out yet */
-    }
-    if (term.cols > 0 && term.rows > 0) {
-      lastCols = term.cols;
-      lastRows = term.rows;
+    // Only fit + seed when the container is actually laid out — otherwise xterm
+    // clamps to ~10×4 and we'd seed the dedupe with a tiny size (the truncation bug).
+    // When unsized, doFit()'s self-retry below fits once layout settles / it shows.
+    if (el.clientWidth > 0 && el.clientHeight > 0) {
+      try {
+        fit.fit();
+      } catch {
+        /* container not laid out yet */
+      }
+      if (term.cols > 0 && term.rows > 0) {
+        lastCols = term.cols;
+        lastRows = term.rows;
+      }
     }
     doFit();
     // Auto-focus on mount so opening / switching to a session lets you type

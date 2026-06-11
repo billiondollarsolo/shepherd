@@ -91,6 +91,9 @@ interface AgentCaps {
   readonly command?: readonly string[];
   /** Permission-mode → extra CLI flags appended to `command`. */
   readonly permissionFlags?: (mode: SessionPermissionMode) => string[];
+  /** CLI flag that injects a system prompt (e.g. claude `--append-system-prompt`),
+   *  if the agent supports one. Followed by the prompt string as a separate argv. */
+  readonly systemPromptFlag?: string;
   /** Daemon session kind. */
   readonly kind: SessionKind;
   /** Status before any source (hook/transcript/activity) reports. */
@@ -114,7 +117,7 @@ interface AgentCaps {
 }
 
 const AGENT_CAPS: Record<AgentType, AgentCaps> = {
-  'claude-code': { command: ['claude'], permissionFlags: claudePermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
+  'claude-code': { command: ['claude'], permissionFlags: claudePermissionFlags, systemPromptFlag: '--append-system-prompt', kind: 'agent', initialStatus: 'starting', activityStatus: false },
   codex: { command: ['codex'], permissionFlags: codexPermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
   // OpenCode has its own in-app permission config, so it takes no launch flag.
   opencode: { command: ['opencode'], kind: 'agent', initialStatus: 'starting', activityStatus: false },
@@ -140,6 +143,11 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     authProbe: '[ -f "$HOME/.grok/auth.json" ] || [ -n "$XAI_API_KEY" ]',
     authBootstrap: 'grok login --device-auth',
   },
+  // Additional CLI agents — launchable if installed on the node; status via PTY
+  // activity (no transcript/hook integration yet, like gemini/grok historically).
+  aider: { command: ['aider'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
+  'cursor-agent': { command: ['cursor-agent'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
+  amp: { command: ['amp'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
   // generic: bare shell, status via PTY activity (no transcript/hook).
   generic: { kind: 'agent', initialStatus: 'starting', activityStatus: true },
   // terminal: a plain shell; dev: devCommand (sh -lc) assembled by the session service.
@@ -160,10 +168,18 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
 export function agentLaunchCommand(
   agentType: AgentType,
   permissionMode: SessionPermissionMode = 'default',
+  systemPrompt?: string,
 ): string[] | undefined {
   const caps = AGENT_CAPS[agentType];
   if (!caps.command) return undefined;
   const argv = [...caps.command, ...(caps.permissionFlags?.(permissionMode) ?? [])];
+  // Inject a system prompt for agents that support a flag for it (claude). The argv
+  // is exec'd as an ARRAY (no shell), so a multi-word prompt needs no quoting. We
+  // skip it on the auth-wrapper path below (join-into-exec can't carry spaces, and
+  // no wrapper-using agent has a systemPromptFlag).
+  if (systemPrompt && caps.systemPromptFlag && !(caps.authProbe && caps.authBootstrap)) {
+    argv.push(caps.systemPromptFlag, systemPrompt);
+  }
   if (caps.authProbe && caps.authBootstrap) {
     // argv tokens here are simple (no spaces/quoting needed) for the agents that
     // use this; join into the `exec` target of the auth-then-run wrapper.
@@ -185,6 +201,37 @@ export function initialSessionStatus(agentType: AgentType): Status {
 /** The daemon session kind for an agent type (agent | shell | dev). */
 export function agentSessionKind(agentType: AgentType): SessionKind {
   return AGENT_CAPS[agentType].kind;
+}
+
+/**
+ * The ACP (structured transport, F6) launch argv for agents that speak the Agent
+ * Client Protocol, or null when the agent has no ACP entrypoint (→ use the PTY
+ * path).
+ *
+ * VERIFIED LIVE (2026-06-08): only **gemini** (`--experimental-acp`) answers the
+ * ACP `initialize` handshake. **grok** does NOT — `grok agent stdio` is a JSON
+ * line protocol but ignores ACP's `initialize` (no response), so it must run as a
+ * native PTY (status via its Claude-compatible hooks), not ACP. Re-add an agent
+ * here only after confirming it responds to `initialize` over stdio.
+ */
+export function acpLaunchCommand(
+  agentType: AgentType,
+  permissionMode: SessionPermissionMode = 'default',
+): string[] | null {
+  switch (agentType) {
+    case 'gemini':
+      // Carry the autonomy flags into the ACP launch too — otherwise an
+      // `autonomous`/`plan` Gemini silently runs at the default permission level
+      // (e.g. an autonomous agent without `--yolo`).
+      return ['gemini', '--experimental-acp', ...geminiPermissionFlags(permissionMode)];
+    default:
+      return null;
+  }
+}
+
+/** Whether an agent type can run over the structured ACP transport. */
+export function agentSupportsAcp(agentType: AgentType): boolean {
+  return acpLaunchCommand(agentType) !== null;
 }
 
 /** Whether the daemon should derive this agent's status from PTY activity (T61). */

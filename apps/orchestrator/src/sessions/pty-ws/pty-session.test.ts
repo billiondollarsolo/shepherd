@@ -301,6 +301,22 @@ describe('PtySession — alternate-screen reattach (htop/vim garble fix)', () =>
     expect(session.isAltScreen).toBe(false);
   });
 
+  it('drops stale alt frames from the resume ring on alt-exit (quit htop), keeping post-exit output', async () => {
+    const transport = new FakeTransport();
+    const session = makeSession(transport);
+    await session.subscribe(collector().sub);
+    transport.ptys[0]!.emit('\x1b[?1049h'); // enter alt (htop)
+    transport.ptys[0]!.emit('GARBLED_HTOP_FRAME_padding'); // alt redraws
+    transport.ptys[0]!.emit('\x1b[?1049lback at the shell$ '); // quit htop + normal output
+    expect(session.isAltScreen).toBe(false);
+
+    const late = collector();
+    await session.subscribe(late.sub);
+    const replay = late.text();
+    expect(replay).not.toContain('GARBLED_HTOP_FRAME'); // stale alt frames dropped
+    expect(replay).toContain('back at the shell$'); // post-exit output kept
+  });
+
   it('detects an alt-enter split across two chunks', async () => {
     const transport = new FakeTransport();
     const session = makeSession(transport);

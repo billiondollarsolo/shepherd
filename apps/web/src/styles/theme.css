@@ -26,9 +26,15 @@
   --flock-surface-0: #ffffff;
   --flock-surface-1: #f5f6f8;
   --flock-surface-2: #eaecf0;
+  --flock-surface-3: #e0e3e9;
   --flock-accent: #2563eb;
   --flock-ink-primary: #1c2024;
   --flock-ink-muted: #5b6470;
+  /* Raw RGB channels mirroring the hex above — Tailwind needs these to inject the
+     /opacity modifier (rgb(var(--x) / <alpha>)); a hex value can't be alpha-composited. */
+  --flock-accent-rgb: 37 99 235;
+  --flock-ink-primary-rgb: 28 32 36;
+  --flock-ink-muted-rgb: 91 100 112;
   --flock-status-starting: #64748b;
   --flock-status-running: #2563eb;
   --flock-status-awaiting: #d97706;
@@ -41,6 +47,9 @@
   --flock-diff-context: #f5f6f8;
   --flock-font-ui: 'Inter Variable', 'Inter', 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
+  /* Display face for headings/branding. Linear-clean: the same Inter family as the
+     body (tight tracking via the .font-display utility), not a separate display font. */
+  --flock-font-display: var(--flock-font-ui);
   --flock-font-code: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
     'Liberation Mono', ui-monospace, monospace;
 
@@ -53,9 +62,13 @@
     --flock-surface-0: #0a0b0d;
     --flock-surface-1: #101216;
     --flock-surface-2: #181b20;
-    --flock-accent: #4f7cc4;
+    --flock-surface-3: #202329;
+    --flock-accent: #5b8cff;
     --flock-ink-primary: #e7e9ec;
     --flock-ink-muted: #888f9a;
+    --flock-accent-rgb: 91 140 255;
+    --flock-ink-primary-rgb: 231 233 236;
+    --flock-ink-muted-rgb: 136 143 154;
     --flock-status-starting: #8a93a3;
     --flock-status-running: #4f7cc4;
     --flock-status-awaiting: #f59e0b;
@@ -77,9 +90,12 @@
   --flock-surface-0: #0a0b0d;
   --flock-surface-1: #101216;
   --flock-surface-2: #181b20;
-  --flock-accent: #4f7cc4;
+  --flock-accent: #5b8cff;
   --flock-ink-primary: #e7e9ec;
   --flock-ink-muted: #888f9a;
+  --flock-accent-rgb: 91 140 255;
+  --flock-ink-primary-rgb: 231 233 236;
+  --flock-ink-muted-rgb: 136 143 154;
   --flock-status-starting: #8a93a3;
   --flock-status-running: #4f7cc4;
   --flock-status-awaiting: #f59e0b;

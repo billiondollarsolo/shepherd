@@ -78,6 +78,19 @@ export class WorktreeService {
       );
     }
     const repoTop = top.stdout.trim();
+
+    // 1b) the repo must have a commit: `worktree add … HEAD` needs a base, so a
+    //     freshly `git init`'d repo (unborn HEAD) fails with a cryptic git error.
+    //     Surface a clear, actionable message instead.
+    const head = await this.exec(transport, repoTop, [
+      'git', '-C', repoTop, 'rev-parse', '--verify', '-q', 'HEAD',
+    ]);
+    if (head.exitCode !== 0) {
+      throw new WorktreeError(
+        'Repository has no commits yet — make an initial commit before creating a worktree.',
+      );
+    }
+
     const repoName = baseName(repoTop);
     const parent = dirName(repoTop);
     // Sibling root so worktrees never nest inside the repo's own tree.
