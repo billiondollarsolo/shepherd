@@ -129,6 +129,13 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     hookTokenHash: 'argon2id$hash$abc',
     status: 'running',
     statusDetail: null,
+    worktreeBranch: null,
+    pinned: false,
+    note: null,
+    parentSessionId: null,
+    reviewedAt: null,
+    reviewedBy: null,
+    permissionMode: 'default',
     createdAt: now,
     lastStatusAt: now,
     createdBy: '44444444-4444-4444-8444-444444444444',
@@ -141,6 +148,14 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     expect(() => SessionSchema.parse(session)).not.toThrow();
     expect(session.id).toBe(baseRow.id);
     expect(session.createdAt).toBe(now.toISOString());
+    expect(session.permissionMode).toBe('default');
+    expect(session.reviewedAt).toBeNull();
+  });
+
+  it('maps reviewed metadata (reviewed_at) to ISO on the Session', () => {
+    const reviewedAt = new Date('2026-05-30T08:00:00.000Z');
+    const session = rowToSession({ ...baseRow, reviewedAt, reviewedBy: baseRow.createdBy });
+    expect(session.reviewedAt).toBe(reviewedAt.toISOString());
   });
 
   it('round-trips row -> shared -> row without losing identity', () => {

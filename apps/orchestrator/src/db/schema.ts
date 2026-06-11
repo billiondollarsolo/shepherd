@@ -277,6 +277,8 @@ export const agentSessions = pgTable(
     byNode: index('agent_sessions_node_id_idx').on(t.nodeId),
     byProject: index('agent_sessions_project_id_idx').on(t.projectId),
     byStatus: index('agent_sessions_status_idx').on(t.status),
+    // Teams graph: spawnEdges() scans rows WHERE parent_session_id IS NOT NULL.
+    byParent: index('agent_sessions_parent_session_id_idx').on(t.parentSessionId),
   }),
 );
 

@@ -64,6 +64,13 @@
       "when": 1781118986155,
       "tag": "0008_previous_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781149114157,
+      "tag": "0009_faulty_alice",
+      "breakpoints": true
     }
   ]
 }

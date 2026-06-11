@@ -171,9 +171,14 @@ export class OrchestrationService {
       throw new OrchestrationError('not_found', 'target agent is not in your project');
     }
     const deadline = Date.now() + Math.min(Math.max(timeoutMs, 1_000), 120_000);
+    let everSeen = false;
     for (;;) {
       const cur = (this.statusMap.get(targetId)?.status as Status) ?? null;
+      if (cur !== null) everSeen = true;
       if (cur === status) return { status: cur, reached: true };
+      // The agent finished and was dropped from the live map. Don't spin to the
+      // full timeout: closure satisfies a `done` wait; any other target wasn't met.
+      if (cur === null && everSeen) return { status: null, reached: status === 'done' };
       if (Date.now() >= deadline) return { status: cur, reached: false };
       await new Promise((resolve) => setTimeout(resolve, 500));
     }

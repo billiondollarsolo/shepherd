@@ -1,0 +1,1 @@
+CREATE INDEX "agent_sessions_parent_session_id_idx" ON "agent_sessions" USING btree ("parent_session_id");
