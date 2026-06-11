@@ -19,6 +19,7 @@ import {
   encodeResize,
   ptyWebSocketUrl,
 } from './ptyProtocol';
+import { reconnectDelay } from '../../lib/utils';
 
 /** Minimal browser-WebSocket surface the hook depends on (eases faking in tests). */
 export interface WsLike {
@@ -173,13 +174,10 @@ export function usePtyWebSocket(
         // small random spread still avoids a lockstep stampede when a whole grid
         // reconnects at once (e.g. orchestrator restart). Repeated failures fall
         // back to capped exponential backoff with ±20% jitter (T22).
-        let delay: number;
-        if (attempts === 0) {
-          delay = Math.round(Math.random() * 150);
-        } else {
-          const base = Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS);
-          delay = Math.round(base * (0.8 + Math.random() * 0.4));
-        }
+        const delay =
+          attempts === 0
+            ? Math.round(Math.random() * 150)
+            : reconnectDelay(attempts, BASE_BACKOFF_MS, MAX_BACKOFF_MS);
         attempts += 1;
         retryTimer = setTimeout(connect, delay);
       };

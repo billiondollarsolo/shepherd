@@ -137,10 +137,11 @@ Framed, multiplexed, one channel. Frame = `uint32 length | uint8 type | payload`
   `ptyInput{sessionId, bytes}`. Per-session credit-based backpressure (absorbs
   the old `BandwidthController` concern).
 
-The **contract is the single source of truth** in `@flock/shared`
-(`packages/shared/src/agentd.ts`): zod schemas for control messages + a documented
-binary framing. The Go side mirrors these (hand-written structs for v1; codegen
-later). This is the one artifact that is *never* throwaway.
+The **contract is the single source of truth**: the TS side is
+`apps/orchestrator/src/nodes/agentd/protocol.ts` and the Go side mirrors it in
+`agentd/internal/proto/proto.go` (hand-written structs). This is the one artifact
+that is *never* throwaway. (The original design proposed a `@flock/shared` module;
+as-built it lives in the orchestrator's agentd client package.)
 
 ## 7. Session + scrollback + resize
 

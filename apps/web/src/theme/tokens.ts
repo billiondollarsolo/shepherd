@@ -42,6 +42,7 @@ export interface ThemeTokens {
     0: string;
     1: string;
     2: string;
+    3: string;
   };
   /** Primary brand/interaction accent. */
   accent: string;
@@ -119,6 +120,7 @@ export const lightTheme: ThemeTokens = {
     0: '#ffffff',
     1: '#f5f6f8',
     2: '#eaecf0',
+    3: '#e0e3e9',
   },
   accent: '#2563eb',
   ink: {
@@ -151,6 +153,7 @@ export const darkTheme: ThemeTokens = {
     0: '#0a0b0d', // app background — neutral graphite (de-blued)
     1: '#101216', // panels / cards
     2: '#181b20', // raised / hover
+    3: '#202329', // highest — chips / nested raised
   },
   accent: '#5b8cff', // vivid signature blue (energetic, premium)
   ink: {
@@ -196,6 +199,7 @@ export function tokensToCssVars(t: ThemeTokens): Record<string, string> {
     '--flock-surface-0': t.surface[0],
     '--flock-surface-1': t.surface[1],
     '--flock-surface-2': t.surface[2],
+    '--flock-surface-3': t.surface[3],
     '--flock-accent': t.accent,
     '--flock-ink-primary': t.ink.primary,
     '--flock-ink-muted': t.ink.muted,

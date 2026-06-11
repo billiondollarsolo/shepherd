@@ -630,6 +630,7 @@ func (s *Session) Close() error {
 	s.mu.Lock()
 	if s.closed {
 		ptmx := s.ptmx
+		s.ptmx = nil
 		s.mu.Unlock()
 		if ptmx != nil {
 			_ = ptmx.Close()
@@ -640,6 +641,11 @@ func (s *Session) Close() error {
 	close(s.closeCh)
 	cmd := s.cmd
 	ptmx := s.ptmx
+	// Null the PTY UNDER the lock BEFORE closing its fd. Every other reader
+	// (ForegroundComm's TIOCGPGRP ioctl, Write, Resize) reads s.ptmx under s.mu
+	// and nil-checks, so once it's nil they can never touch a closed/reused fd —
+	// this closes the fd use-after-close window on terminal teardown.
+	s.ptmx = nil
 	s.mu.Unlock()
 
 	if cmd != nil && cmd.Process != nil {

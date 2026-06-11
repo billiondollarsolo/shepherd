@@ -28,6 +28,7 @@ function sampleSession(overrides: Partial<Session> = {}): Session {
     worktreeBranch: null,
     pinned: false,
     note: null,
+    reviewedAt: null,
     permissionMode: 'default',
     createdAt: '2026-05-29T00:00:00.000Z',
     lastStatusAt: '2026-05-29T00:00:00.000Z',

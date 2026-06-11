@@ -38,10 +38,6 @@ export interface AgentdSessionSpec {
   // T17: Landlock FS sandbox for autonomous sessions (the daemon confines writes).
   sandbox?: boolean;
   sandboxAllow?: string[];
-  // Permission mode → the agent's approval-gating config seeded on the node
-  // (e.g. OpenCode's `permission` block: default/plan→ask, acceptEdits→edits
-  // auto, autonomous→allow).
-  permissionMode?: string;
   // T61: derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
   activityStatus?: boolean;
 }

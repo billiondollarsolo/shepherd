@@ -137,11 +137,12 @@ delivers the subtype as the hook matcher, not always a body field).
 - **Hooks**: the seeded `hooks.toml` is best-effort/unverified (current Codex has
   `notify`, not per-tool hooks) — NOT a working awaiting_input source.
 
-### Gemini — launch + activity heuristic (shallowest)
-- No Flock-style hooks and no Flock-verified transcript format → **PTY-activity
-  heuristic** (`Spec.ActivityStatus`, `manager_status.go watchActivity`): recent
-  PTY output → running, a quiet gap → idle. A live dot only; no awaiting_input,
-  tokens, model, or plan.
+### Gemini — hooks (v0.26+) for status, ACP for chat
+- **Status via Gemini CLI v0.26+ lifecycle hooks** (Claude-Code-style, seeded into
+  the scoped `~/.gemini/settings.json`; `AGENT_CAPS.gemini.activityStatus:false`) →
+  running / awaiting_input / idle / done. **Chat rides ACP** (`--experimental-acp`,
+  structured messages). The hooks carry STATUS ONLY — no tokens, model, or plan
+  (that would need a transcript tailer). Supersedes the old PTY-activity heuristic.
 
 ### OpenCode — hooks (per-session)
 - **Plugin** (`$XDG_CONFIG_HOME/opencode/plugin/flock.js`, Flock-seeded): forwards

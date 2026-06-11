@@ -4,10 +4,10 @@
  * state); sends your decision/reply straight to the agent via the focused
  * terminal's input seam (`terminalInput`).
  *
- * Approve/Deny are the prominent one-click path (they send the agent's accept /
- * reject keystroke); a free-text reply + a couple of quick keys cover everything
- * else. Works for every agent: PTY agents read the keystrokes as stdin; ACP
- * (gemini/grok) sessions resolve their pending permission from the same y/n.
+ * "Send y" / "Send n" are the prominent one-click path — they TYPE the agent's
+ * accept/reject keystroke into the PTY (the agent reads it as stdin); a free-text
+ * reply + a couple of quick keys cover everything else. This is a keystroke relay,
+ * not a structured gate.
  */
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';

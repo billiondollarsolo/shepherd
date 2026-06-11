@@ -19,8 +19,9 @@
  *      (NFR-PERF1).
  *
  * Auth is the per-session token in the `Authorization` header, NEVER a cookie
- * (spec §8.1 line 187). Token verification (argon2id by default) is injected so
- * the unit tests stay fast and the hot-path cost is explicit.
+ * (spec §8.1 line 187). Token verification (SHA-256 + constant-time compare — the
+ * token is 256-bit CSPRNG so it needs no salt/memory-hardness) is injected so the
+ * unit tests stay fast and the hot-path cost is explicit.
  */
 import type { AgentType, HookTelemetry, Status } from '@flock/shared';
 
@@ -70,8 +71,8 @@ export interface HookSessionLookup {
 
 /**
  * Verifies a presented plaintext token against the stored hash. Returns a
- * boolean; never throws on a malformed hash (returns false). Defaults to
- * argon2id verification; injected so tests run without the memory-hard cost.
+ * boolean; never throws on a malformed hash (returns false). Production uses
+ * SHA-256 + constant-time compare (see hooks/hook-token.ts); injected for tests.
  */
 export type HookTokenVerifier = (hash: string, token: string) => Promise<boolean>;
 
@@ -119,7 +120,7 @@ export type HookEventEnqueue = (e: HookEventRecord) => Promise<void> | void;
 export interface HookEndpointServiceDeps {
   /** In-memory live binding (DB-free). */
   lookup: HookSessionLookup;
-  /** Per-session token verifier (argon2id in production). */
+  /** Per-session token verifier (SHA-256 + constant-time compare in production). */
   verifyToken: HookTokenVerifier;
   /** Apply a live status transition (in-memory map + WS fan-out). */
   onTransition: HookTransitionSink;
