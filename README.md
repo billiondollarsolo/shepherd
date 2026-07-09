@@ -51,10 +51,10 @@ and/or its transcript files — and normalizes everything into one status + tele
 | **Claude Code** | ✅ hooks + transcript | ✅ | ✅ | ✅ |
 | **Codex** | ✅ transcript | ⚠️¹ | ✅ (exact ctx window) | ✅ |
 | **OpenCode** | ✅ plugin | ✅ | ✅ (exact USD cost) | ✅ |
-| **Gemini** | ✅ hooks (v0.26+) | ✅ | ⚠️² | — |
+| **Gemini** | ✅ hooks (v0.26+) | ✅ | ❌² | — |
 | **Grok** | ✅ hooks | — | — | — |
 
-<sub>¹ Codex hooks (incl. the approval signal) are wired and ready; seeding is enabled once validated on a live node. ² Gemini tokens/model need a transcript tailer (planned). Full detail: [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md).</sub>
+<sub>¹ Codex hooks (incl. the approval signal) are wired and ready; seeding is deferred until validated on a live node (transcript still drives status/tokens/plan). ² Gemini hooks carry status only — tokens/model/context % need a transcript tailer (not built yet). Full detail: [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md).</sub>
 
 ---
 
