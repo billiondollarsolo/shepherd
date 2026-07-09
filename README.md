@@ -6,7 +6,11 @@
 
 **A self-hosted web platform for running and supervising a flock of CLI coding agents — across as many machines as you have, all from your browser.**
 
-Claude Code · Codex · OpenCode · Gemini · Grok
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) ·
+[Codex](https://openai.com/codex/) ·
+[OpenCode](https://opencode.ai/) ·
+[Gemini](https://geminicli.com/) ·
+[Grok](https://x.ai/cli)
 
 </div>
 
