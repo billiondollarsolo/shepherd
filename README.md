@@ -17,17 +17,19 @@ and the work dies the moment you close the lid. Flock turns that into a **fleet*
 
 Point Flock at one or more machines ("**nodes**") over SSH. On each node it runs a
 tiny daemon that owns your agents' terminals. From any browser you get a live
-dashboard of every agent across every machine — what each one is doing right now,
-which one is **blocked waiting for you**, what it's spending, and a real terminal you
-can type into. Walk away, close your laptop, come back on your phone: the agents kept
-working and the session is exactly where you left it.
+dashboard of every agent across every machine — what each one is doing right now
+(**Idle** / **Working** / **Needs you**), what it's spending, and a real terminal you
+can type into. Run several agents side-by-side on one project stage (or focus one).
+Walk away, close your laptop, come back on your phone: the agents kept working and
+the session is exactly where you left it.
 
 ### Why it's different
 
 | | |
 |---|---|
 | 🔌 **Sessions never die when you leave** | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues. |
-| 🔔 **You always know which agent needs you** | A unified status model (fed by each agent's own hooks + transcript) drives live indicators and away-from-keyboard **web push**. The state that matters: *"this agent is blocked waiting for you."* |
+| 🔔 **Status you can trust at a glance** | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked. |
+| 📐 **One paddock, many agents** | Project stage with side-by-side, stacked, or **2×2** arrange; drag pane sizes; layout persists per project. Focus one agent full-stage, or **All agents** on one screen. |
 | 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI. |
 | 🤖 **Works with any agent** | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else. |
 

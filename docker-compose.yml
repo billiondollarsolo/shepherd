@@ -108,7 +108,9 @@ services:
       # still gated by the compose `ports:`/reverse proxy, not this bind.
       HOST: ${HOST:-0.0.0.0}
       DATABASE_URL: ${DATABASE_URL:-postgres://flock:flock@postgres:5432/flock}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      # Public URL users open in the browser (Caddy HTTPS), NOT the internal
+      # orchestrator:8080 address. Used for hook callbacks, cookies, and push.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
       # Secret-store master key (encryption at rest, NFR-SEC2). Prefer the file.
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY:-}
       FLOCK_MASTER_KEY_FILE: /run/secrets/flock_master_key
