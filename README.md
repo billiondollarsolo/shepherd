@@ -85,9 +85,9 @@ Three components, one monorepo:
   transport, per-session browser lifecycle, web push, and the REST + WebSocket API.
   Postgres is the durable record — **never** on the live status path.
 - **`apps/web`** (React · Vite · xterm.js · TanStack · Zustand) — the dashboard. A
-  `node → project → session` tree, live terminals (focus + grid/“hive” views), status
-  dots, telemetry bars, a git diff / source-control panel, the per-session browser
-  screencast, and the plan/activity sidebar.
+  `node → project → session` tree, multi-agent project stage (focus / All agents /
+  row · col · 2×2), status dots + **Idle / Working / Needs you**, telemetry,
+  source control, per-session browser screencast, and plan/activity.
 
 ---
 
@@ -118,8 +118,9 @@ cp .env.dev.example .env.dev.local
 Open **http://localhost:5173**, complete first-run admin setup, and you're in. The web
 app proxies the API/WebSocket, so it's a single origin. (Direct API: `http://localhost:8080`.)
 
-Add a node from the UI (an SSH host you control, or just the bundled **local** node),
-create a project, and launch your first agent session.
+**Then:** use the bundled **local** node (or add an SSH node) → create a **project** →
+**launch an agent**. To supervise several at once: open **All agents**, pick row / col /
+**2×2**, drag pane sizes — the layout is saved per project and survives refresh.
 
 ### Option B — Deploy it (Docker Compose)
 
@@ -127,20 +128,29 @@ The host needs **only Docker** (with the Compose plugin) — nothing else is ins
 it. See [`docs/deployment.md`](docs/deployment.md) for the full guide; the short version:
 
 ```bash
-cp .env.example .env && $EDITOR .env          # configure runtime secrets/config
+cp .env.example .env && $EDITOR .env          # set PUBLIC_BASE_URL + FLOCK_DOMAIN
 
-mkdir -p secrets                              # (recommended) Docker secret files
+# Required: Compose mounts these as Docker secrets (up fails if they are missing)
+mkdir -p secrets
 openssl rand -base64 32 > secrets/flock_master_key
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
+
+# Optional but required for the in-app Browser pane (agents still work without it)
+docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
 
 docker compose up -d                          # caddy + web + orchestrator + postgres
 docker compose logs -f orchestrator
 ```
 
 Caddy terminates TLS on `443` (`80` redirects), migrations run automatically on boot,
-and per-session browser containers are launched on demand. Open `https://<host>` and
+and per-session browser containers are launched on demand (when
+`flock/session-chrome` is present). Open `https://<host>` (or `https://localhost`) and
 complete admin setup.
+
+> **Must set in `.env`:** `PUBLIC_BASE_URL` to the URL users open in the browser
+> (e.g. `https://flock.example.com`) — used for hooks, cookies, and push. Match
+> `FLOCK_DOMAIN` to that hostname so Caddy’s TLS cert is correct.
 
 ---
 
@@ -228,4 +238,5 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 Active development. The full suite is green (build · ~1,000 unit · integration · `go -race`)
 and the platform runs live across simulated multi-node SSH deployments.
 
+Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).  
 🤖 Built with [Claude Code](https://claude.com/claude-code).
