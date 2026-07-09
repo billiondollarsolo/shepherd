@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🐑 Flock
+<img src="apps/web/public/icons/icon.svg" alt="Flock" width="96" height="96" />
+
+# Flock
 
 **A self-hosted web platform for running and supervising a flock of CLI coding agents — across as many machines as you have, all from your browser.**
 
