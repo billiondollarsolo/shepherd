@@ -49,6 +49,7 @@ describe('StatusChannel — `status` WS fan-out (US-14)', () => {
         status: 'awaiting_input',
         detail: 'permission_prompt',
         ts: TS,
+        lastStatusTransitionAt: TS,
       },
     ]);
   });

@@ -1,7 +1,5 @@
 /**
- * TopBar — a clean, full-width application bar across the top of the paddock.
- * Holds the brand (left) and the global account/theme/settings controls (right),
- * lifted out of the sidebar footer so the sidebar is purely the fleet tree.
+ * TopBar — brand, host chips, lens tabs, account controls.
  */
 import { LogOut, Settings, User } from 'lucide-react';
 import { FlockMark } from '../../components/SheepIcon';
@@ -10,6 +8,7 @@ import { usePaddock } from '../../store/paddock';
 import { useAuthOptional } from '../auth/AuthGate';
 import { AttentionInbox } from './AttentionInbox';
 import { ActivityFeed } from './ActivityFeed';
+import { HostChips } from '../shell/HostChips';
 import {
   Button,
   DropdownMenu,
@@ -52,7 +51,9 @@ function AccountMenu(): JSX.Element | null {
         <DropdownMenuLabel className="truncate" title={user.username}>
           <span className="block truncate">{display}</span>
           {user.displayName ? (
-            <span className="block truncate text-2xs font-normal text-flock-ink-muted">{user.username}</span>
+            <span className="block truncate text-2xs font-normal text-flock-ink-muted">
+              {user.username}
+            </span>
           ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -67,14 +68,48 @@ function AccountMenu(): JSX.Element | null {
   );
 }
 
+function LensTabs(): JSX.Element {
+  const lens = usePaddock((s) => s.lens);
+  const openMission = usePaddock((s) => s.openMission);
+  const setLens = usePaddock((s) => s.setLens);
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-[var(--flock-border)] bg-flock-surface-2 p-0.5" data-testid="lens-tabs">
+      <button
+        type="button"
+        data-active={lens === 'mission' ? '1' : '0'}
+        onClick={() => openMission()}
+        className={`rounded-md px-2.5 py-1 text-2xs font-medium ${
+          lens === 'mission'
+            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
+            : 'text-flock-ink-muted hover:text-flock-ink-primary'
+        }`}
+      >
+        Mission Control
+      </button>
+      <button
+        type="button"
+        data-active={lens === 'agents' ? '1' : '0'}
+        onClick={() => setLens('agents')}
+        className={`rounded-md px-2.5 py-1 text-2xs font-medium ${
+          lens === 'agents'
+            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
+            : 'text-flock-ink-muted hover:text-flock-ink-primary'
+        }`}
+      >
+        Agents
+      </button>
+    </div>
+  );
+}
+
 export function TopBar(): JSX.Element {
-  const openOverview = usePaddock((s) => s.openOverview);
+  const openMission = usePaddock((s) => s.openMission);
   const openSettings = usePaddock((s) => s.openSettings);
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
       <button
         type="button"
-        onClick={() => openOverview()}
+        onClick={() => openMission()}
         className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-flock-surface-2"
         aria-label="Flock home"
       >
@@ -82,7 +117,12 @@ export function TopBar(): JSX.Element {
         <span className="text-sm font-semibold tracking-tight text-flock-ink-primary">Flock</span>
       </button>
 
-      <div className="ml-auto flex items-center gap-1">
+      <LensTabs />
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <HostChips />
+      </div>
+
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         <ActivityFeed />
         <AttentionInbox />
         <div className="mx-1 h-5 w-px bg-[var(--flock-border)]" />

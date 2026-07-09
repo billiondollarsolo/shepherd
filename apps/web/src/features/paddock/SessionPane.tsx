@@ -4,12 +4,12 @@
  * group. Shows a calm empty state when nothing is selected.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRightLeft, Command, GitBranch, LayoutGrid, Maximize2, Minimize2, PanelBottom, PanelRight, SquareTerminal, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, Command, GitBranch, LayoutGrid, PanelBottom, PanelRight, SquareTerminal, XCircle } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { statusLabel, type AgentType, type Session } from '@flock/shared';
-import { RightPanel, RightRail } from './RightPanel';
+import { RightPanel } from './RightPanel';
 import { RespondBar } from './RespondBar';
-import { GridView } from './GridView';
+import { StageLayout } from '../shell/StageLayout';
 import { handoffSession } from '../../data/treeApi';
 import {
   Badge,
@@ -80,15 +80,17 @@ function Header({ session }: { session: Session }): JSX.Element {
   // Terminate is destructive → go through the confirm dialog (same as the grid),
   // never a direct mutate.
   const openDialog = usePaddock((s) => s.openDialog);
-  const openOverview = usePaddock((s) => s.openOverview);
-  const zenMode = usePaddock((s) => s.zenMode);
-  const toggleZen = usePaddock((s) => s.toggleZen);
+  const openMission = usePaddock((s) => s.openMission);
+  const chrome = usePaddock((s) => s.chrome);
+  const openTools = usePaddock((s) => s.openTools);
+  const closeTools = usePaddock((s) => s.closeTools);
+  const selectProject = usePaddock((s) => s.selectProject);
   const qc = useQueryClient();
   const handoff = useMutation({
     mutationFn: (t: AgentType) => handoffSession(session.id, t),
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: ['sessions'] });
-      usePaddock.getState().focusSession(r.session.id);
+      usePaddock.getState().openAgent(r.session.id);
     },
   });
   const { toggleDrawer, openPalette } = useShell();
@@ -113,17 +115,18 @@ function Header({ session }: { session: Session }): JSX.Element {
       className="flex h-topbar shrink-0 items-center gap-3 border-b-2 bg-flock-surface-1 px-4"
       style={{ borderBottomColor: accentVar }}
     >
-      {/* Focus mode = zoomed into one session; this is the way back to the grid. */}
+      {/* Leave single-agent zoom → show every open agent in this project. */}
       <Button
         size="sm"
         variant="secondary"
         className="shrink-0 gap-1.5"
-        onClick={() => usePaddock.getState().setViewMode('grid')}
-        title="Back to the side-by-side grid"
+        onClick={() => selectProject(session.projectId)}
+        title="Show all agents in this project side-by-side"
+        data-testid="all-agents-btn"
       >
         <ArrowLeft className="size-3.5" />
         <LayoutGrid className="size-3.5" />
-        Grid
+        All agents
       </Button>
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
         <span className="truncate text-flock-ink-muted">{node?.name ?? 'node'}</span>
@@ -147,7 +150,7 @@ function Header({ session }: { session: Session }): JSX.Element {
       {needsYou > 0 ? (
         <button
           type="button"
-          onClick={() => openOverview()}
+          onClick={() => openMission()}
           data-testid="needs-you-strip"
           title="Other agents are waiting on you — open Paddock"
           className="ml-2 flex shrink-0 items-center gap-1.5 rounded-full bg-status-awaiting/15 px-2.5 py-1 text-2xs font-semibold text-status-awaiting animate-flock-pulse"
@@ -168,16 +171,6 @@ function Header({ session }: { session: Session }): JSX.Element {
             <PanelBottom className="size-4" />
           </Button>
         </SimpleTooltip>
-        <SimpleTooltip label="Toggle side panel">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Toggle side panel"
-            onClick={usePaddock.getState().toggleRight}
-          >
-            <PanelRight className="size-4" />
-          </Button>
-        </SimpleTooltip>
         <DropdownMenu>
           <SimpleTooltip label="Hand off task to another agent">
             <DropdownMenuTrigger asChild>
@@ -196,14 +189,16 @@ function Header({ session }: { session: Session }): JSX.Element {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <SimpleTooltip label={zenMode ? 'Exit focus mode' : 'Focus mode — fill the screen with this agent'}>
+        {/* Single tools control (terminal-first: no dual panel/maximize toggles). */}
+        <SimpleTooltip label={chrome === 'tools' ? 'Hide tools' : 'Open tools'}>
           <Button
             size="icon-sm"
-            variant={zenMode ? 'secondary' : 'ghost'}
-            aria-label={zenMode ? 'Exit focus mode' : 'Enter focus mode'}
-            onClick={toggleZen}
+            variant={chrome === 'tools' ? 'secondary' : 'ghost'}
+            aria-label={chrome === 'tools' ? 'Hide tools' : 'Open tools'}
+            data-testid="stage-tools-toggle"
+            onClick={() => (chrome === 'tools' ? closeTools() : openTools())}
           >
-            {zenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            <PanelRight className="size-4" />
           </Button>
         </SimpleTooltip>
         <SimpleTooltip label="Terminate session">
@@ -251,14 +246,13 @@ export function SessionPane(): JSX.Element {
   const session = selectedId ? (sessions.find((x) => x.id === selectedId) ?? null) : null;
 
   const rightOpen = usePaddock((s) => s.rightOpen);
-  const viewMode = usePaddock((s) => s.viewMode);
-  const zenMode = usePaddock((s) => s.zenMode);
-  const setZen = usePaddock((s) => s.setZen);
-  // Never strand the user in zen with no session (e.g. the focused agent was
-  // terminated) — there'd be no header to exit from. Drop back to the normal shell.
+  const chrome = usePaddock((s) => s.chrome);
+  const assistivePanels = usePaddock((s) => s.assistivePanels);
+  const closeTools = usePaddock((s) => s.closeTools);
+  // If the selected agent vanishes, leave tools chrome so we don't strand UI.
   useEffect(() => {
-    if (zenMode && !session) setZen(false);
-  }, [zenMode, session, setZen]);
+    if (!session && chrome === 'tools') closeTools();
+  }, [session, chrome, closeTools]);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [panelWidth, setPanelWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
@@ -291,84 +285,73 @@ export function SessionPane(): JSX.Element {
     document.body.style.userSelect = 'none';
   }, []);
 
-  // GridView is the ONE, always-mounted terminal surface for BOTH grid and focus
-  // modes — focus just maximizes one of its cells via CSS (the others stay mounted,
-  // merely hidden). Rendering it at a SINGLE stable position means switching
-  // grid↔focus, switching the focused session, or adding a session never unmounts a
-  // terminal → no PTY reconnect, instant switch. The focus chrome (header + side
-  // panel) layers AROUND that surface; in grid mode GridView shows its own tab
-  // strip and `focusSession` is null so no chrome is added.
-  // Adaptive surfacing: when the focused agent flips to awaiting_input, bring Talk
-  // (the conversation) forward so the question + Approve/Deny are right there — the
-  // layout follows the agent. Only fires on the transition; never fights a manual
-  // switch otherwise.
+  // GridView is the ONE always-mounted terminal surface. Stage header when a
+  // session is selected; adaptive panels only when assistivePanels is on (D5).
   const liveStatuses = useLiveStatuses();
-  const focusSession = viewMode === 'focus' ? session : null;
-  const focusStatus = focusSession ? (liveStatuses.get(focusSession.id) ?? focusSession.status) : null;
+  const stageSession = session;
+  const focusStatus = stageSession
+    ? (liveStatuses.get(stageSession.id) ?? stageSession.status)
+    : null;
   useEffect(() => {
+    if (!assistivePanels) return;
     if (focusStatus !== 'awaiting_input') return;
     const st = usePaddock.getState();
     if (!st.rightOpen || st.rightTab !== 'chat') st.openRight('chat');
-  }, [focusStatus, focusSession?.id]);
+  }, [focusStatus, stageSession?.id, assistivePanels]);
 
-  // Adaptive surfacing #2: follow the agent's latest TOOL — when it edits files,
-  // bring Code (diff) forward; when it browses the web, bring Web forward. Keyed on
-  // the latest tool event id so it fires once per new tool, not on every render.
-  const { data: focusEvents = [] } = useSessionEvents(focusSession?.id ?? null);
+  const { data: focusEvents = [] } = useSessionEvents(
+    assistivePanels ? (stageSession?.id ?? null) : null,
+  );
   const lastTool = useMemo(() => {
+    if (!assistivePanels) return null;
     for (let i = focusEvents.length - 1; i >= 0; i--) {
       const raw = focusEvents[i]!.agentEventRaw as { chat?: { role?: string; text?: string } } | null;
       if (raw?.chat?.role === 'tool') return { id: focusEvents[i]!.id, text: (raw.chat.text ?? '').toLowerCase() };
     }
     return null;
-  }, [focusEvents]);
+  }, [focusEvents, assistivePanels]);
   useEffect(() => {
-    if (!lastTool) return;
+    if (!assistivePanels || !lastTool) return;
     const st = usePaddock.getState();
     if (/edit|write|patch|apply|create|str_replace|multiedit/.test(lastTool.text)) {
       if (st.rightTab !== 'diff') st.openRight('diff');
     } else if (/web|browser|fetch|url|navigate|screenshot/.test(lastTool.text)) {
       if (st.rightTab !== 'browser') st.openRight('browser');
     }
-  }, [lastTool?.id]);
+  }, [lastTool?.id, assistivePanels]);
 
   const open = sessions.filter((s) => s.closedAt === null);
   if (open.length === 0) return <EmptyState />;
-  // The right panel (Activity/Diff/Browser) targets ONE session. In focus mode
-  // that's the focused session; in GRID mode we still show it for the selected
-  // session (or the first open one) so the side panel is available in multiview.
-  const panelSession = focusSession ?? session ?? open[0] ?? null;
+  // Tools only attach to the staged session — never an arbitrary open[0].
+  const panelSession = stageSession;
+  const toolsOpen = chrome === 'tools' && rightOpen && panelSession != null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {focusSession ? (
+    <div className="flex h-full min-h-0 flex-col" data-chrome={chrome}>
+      {stageSession ? (
         <>
-          <Header session={focusSession} />
-          <RespondBar session={focusSession} />
+          <Header session={stageSession} />
+          <RespondBar session={stageSession} />
         </>
       ) : null}
       <div ref={splitRef} className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
-          <GridView />
+          <StageLayout />
         </div>
-        {panelSession ? (
-          rightOpen ? (
-            <>
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize panel"
-                onMouseDown={onDragStart}
-                className="w-1 shrink-0 cursor-col-resize bg-[var(--flock-border)] hover:bg-flock-accent/50"
-              />
-              <div className="min-w-0 shrink-0" style={{ width: panelWidth }}>
-                <RightPanel session={panelSession} />
-              </div>
-            </>
-          ) : (
-            // Collapsed → a thin icon rail; clicking an icon expands to that tab.
-            <RightRail />
-          )
+        {/* Terminal-first: no right icon-rail until tools are explicitly opened. */}
+        {toolsOpen && panelSession ? (
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize panel"
+              onMouseDown={onDragStart}
+              className="w-1 shrink-0 cursor-col-resize bg-[var(--flock-border)] hover:bg-flock-accent/50"
+            />
+            <div className="min-w-0 shrink-0" style={{ width: panelWidth }}>
+              <RightPanel session={panelSession} />
+            </div>
+          </>
         ) : null}
       </div>
     </div>

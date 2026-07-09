@@ -1,13 +1,9 @@
 /**
- * Paddock — the assembled Codex-style shell, now wired to real data.
+ * Paddock — herdr-aligned shell assembly.
  *
- * KeyboardProvider owns ⌘K (palette) + ⌘J (drawer) and injects `drawerOpen`
- * into its direct AppShell child. We fill the three regions with the live
- * sidebar tree, the session pane (Terminal | Browser | Diff), and the activity
- * sidebar; the bottom drawer hosts a second shell for the selected session.
- * Create dialogs, the settings dialog, and toasts mount alongside.
+ * One shell always: host/lens chrome via TopBar + Sidebar, stage or Mission
+ * Control in center. No zen rebuild of the tree. Tools are opt-in (chrome).
  */
-import { useEffect } from 'react';
 import { AppShell } from './AppShell';
 import { KeyboardProvider } from './KeyboardProvider';
 import { PaddockCommands } from './usePaddockCommands';
@@ -26,6 +22,7 @@ import { SettingsPage } from '../features/settings/SettingsPage';
 import { ShellDrawer } from '../features/shell-drawer/ShellDrawer';
 import { useSessions } from '../data/queries';
 import { usePaddock } from '../store/paddock';
+import { FleetSelectionSync } from '../features/shell/FleetSelectionSync';
 
 /** The currently-selected session record (from the Query cache), or null. */
 function useSelectedSession() {
@@ -34,32 +31,25 @@ function useSelectedSession() {
   return selectedId ? (sessions.find((x) => x.id === selectedId) ?? null) : null;
 }
 
-/**
- * When you land with exactly one open session and nothing chosen, focus it: a
- * grid (or empty grid) of one is pointless. Guarded to a "blank" selection so it
- * NEVER overrides an explicit choice (a picked session/project/node, or an
- * explicit Grid). Closing back down to one session re-focuses it too.
- */
-function useAutoFocusSingleSession(): void {
-  const { data: sessions = [] } = useSessions();
-  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
-  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
-  const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
-  const view = usePaddock((s) => s.view);
-  const focusSession = usePaddock((s) => s.focusSession);
-  const onlyId = sessions.filter((s) => s.closedAt === null).map((s) => s.id);
-  const single = onlyId.length === 1 ? onlyId[0]! : null;
-  useEffect(() => {
-    if (view === 'paddock' && single && !selectedSessionId && !selectedProjectId && !nodeInfoNodeId) {
-      focusSession(single);
-    }
-  }, [view, single, selectedSessionId, selectedProjectId, nodeInfoNodeId, focusSession]);
-}
-
-/** The center region: a node's details when one is open, else the session pane. */
+/** The center region: node details, stage, or mission board. */
 function CenterPane(): JSX.Element {
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
-  return nodeInfoNodeId ? <NodePage /> : <SessionPane />;
+  const view = usePaddock((s) => s.view);
+  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
+  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
+  const lens = usePaddock((s) => s.lens);
+
+  if (nodeInfoNodeId) return <NodePage />;
+
+  // Mission Control board when lens is mission and nothing is on stage
+  // (D1 home). Opening an agent switches lens to agents and shows stage (D2).
+  const showMission =
+    (view === 'overview' || lens === 'mission') &&
+    !selectedSessionId &&
+    !selectedProjectId;
+
+  if (showMission) return <FleetView />;
+  return <SessionPane />;
 }
 
 function DrawerContent(): JSX.Element {
@@ -77,8 +67,7 @@ function DrawerContent(): JSX.Element {
 export function Paddock(): JSX.Element {
   const view = usePaddock((s) => s.view);
   const sidebarCollapsed = usePaddock((s) => s.sidebarCollapsed);
-  const zenMode = usePaddock((s) => s.zenMode);
-  useAutoFocusSingleSession();
+  const chrome = usePaddock((s) => s.chrome);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -86,35 +75,27 @@ export function Paddock(): JSX.Element {
         {view === 'settings' ? (
           <SettingsPage />
         ) : (
-          // ONE status WS + agentd-health query shared by sidebar, tabs, and grid.
           <LiveDataProvider>
-            {zenMode ? (
-              // Immersive focus: just the agent, full-bleed — no sidebar/bottom bar.
-              <div className="h-screen w-screen overflow-hidden bg-flock-bg">
-                <CenterPane />
+            <FleetSelectionSync />
+            {/* One shell always — no zen tree rebuild (plan Phase 0). */}
+            <div className="flex h-screen w-screen flex-col overflow-hidden" data-chrome={chrome}>
+              <TopBar />
+              <ConnectivityBanner />
+              <div className="min-h-0 flex-1">
+                <AppShell
+                  tree={<Sidebar />}
+                  session={<CenterPane />}
+                  drawer={<DrawerContent />}
+                  treeCollapsed={sidebarCollapsed}
+                />
               </div>
-            ) : (
-              <div className="flex h-screen w-screen flex-col overflow-hidden">
-                <TopBar />
-                <ConnectivityBanner />
-                <div className="min-h-0 flex-1">
-                  <AppShell
-                    tree={<Sidebar />}
-                    session={view === 'overview' ? <FleetView /> : <CenterPane />}
-                    drawer={<DrawerContent />}
-                    treeCollapsed={sidebarCollapsed}
-                  />
-                </div>
-                <BottomBar />
-              </div>
-            )}
-            {/* Compare/race overlay — self-hides unless a race is active. */}
+              {/* Bottom telemetry only when tools chrome is open (D5 terminal-first). */}
+              {chrome === 'tools' ? <BottomBar /> : null}
+            </div>
             <CompareView />
           </LiveDataProvider>
         )}
-        {/* Register the palette command set (navigation + actions, roadmap P9). */}
         <PaddockCommands />
-        {/* Create dialogs stay mounted so "Add node" works from Settings too. */}
         <PaddockDialogs />
       </KeyboardProvider>
       <Toaster />

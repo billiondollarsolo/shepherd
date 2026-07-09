@@ -4,15 +4,21 @@
  * session. It then asks `GET /api/auth/status` whether the initial admin still
  * needs creating, so a fresh instance lands on "Create first admin" and an
  * existing one lands on "Sign in" — no destructive probe, no wrong-screen 401s.
+ *
+ * Transient API downtime (orchestrator `tsx watch` restart, vite proxy
+ * ECONNREFUSED) is NOT treated as logout: we retry `/me` and only flip to the
+ * sign-in screen on a real 401. That avoids "logged out" spam during dev
+ * reloads while the Postgres session cookie is still valid.
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@flock/shared';
 import { Sheep } from '../../components/SheepIcon';
-import { authStatus, logout as apiLogout, me } from '../../routes/api';
+import { ApiError, authStatus, logout as apiLogout, me } from '../../routes/api';
 import { AuthScreen } from './AuthScreen';
 
 type Phase =
   | { kind: 'loading' }
+  | { kind: 'unreachable' }
   | { kind: 'unauthed'; mode: 'signin' | 'setup' }
   | { kind: 'authed'; user: User };
 
@@ -41,19 +47,59 @@ export function useAuthOptional(): AuthValue | null {
   return useContext(AuthContext);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Probe session with retries. Only a 401 means "logged out"; network/5xx keeps
+ * retrying so a brief orchestrator bounce does not wipe the UI session.
+ */
+export async function resolveAuthSession(opts?: {
+  attempts?: number;
+  meFn?: typeof me;
+}): Promise<{ kind: 'authed'; user: User } | { kind: 'unauthed' } | { kind: 'unreachable' }> {
+  const attempts = opts?.attempts ?? 10;
+  const meFn = opts?.meFn ?? me;
+  let sawTransient = false;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const { user } = await meFn();
+      return { kind: 'authed', user };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        return { kind: 'unauthed' };
+      }
+      // 502/503/ECONNREFUSED (often a non-JSON proxy error → non-ApiError) etc.
+      sawTransient = true;
+      await sleep(Math.min(1_500, 200 * (i + 1)));
+    }
+  }
+  return sawTransient ? { kind: 'unreachable' } : { kind: 'unauthed' };
+}
+
 export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const { user } = await me();
-        if (alive) setPhase({ kind: 'authed', user });
+      const result = await resolveAuthSession();
+      if (!alive) return;
+
+      if (result.kind === 'authed') {
+        setPhase({ kind: 'authed', user: result.user });
         return;
-      } catch {
-        /* not signed in — fall through to decide setup vs signin */
       }
+
+      if (result.kind === 'unreachable') {
+        // Cookie may still be fine — do not force sign-in.
+        setPhase({ kind: 'unreachable' });
+        return;
+      }
+
       let mode: 'signin' | 'setup' = 'signin';
       try {
         const { setupRequired } = await authStatus();
@@ -66,12 +112,37 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [retryToken]);
 
   if (phase.kind === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-flock-surface-0 text-flock-accent">
         <Sheep className="size-7 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (phase.kind === 'unreachable') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-flock-surface-0 px-4 text-center text-flock-ink-primary">
+        <Sheep className="size-8 text-flock-accent" />
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">API is restarting</h1>
+          <p className="mt-1 max-w-sm text-sm text-flock-ink-muted">
+            The orchestrator was briefly unreachable (common during dev reloads). Your login cookie
+            is still valid — we did not sign you out.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="rounded-md bg-flock-accent px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+          onClick={() => {
+            setPhase({ kind: 'loading' });
+            setRetryToken((n) => n + 1);
+          }}
+        >
+          Retry
+        </button>
       </div>
     );
   }

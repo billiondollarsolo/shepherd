@@ -59,6 +59,8 @@ export interface UseStatusWebSocket {
   state: StatusConnectionState;
   /** Live per-session status, keyed by the authoritative session id (spec §4.2). */
   statuses: ReadonlyMap<string, Status>;
+  /** ms epoch of last semantic status change (from frame lastStatusTransitionAt / ts). */
+  lastStatusTransitionAt: ReadonlyMap<string, number>;
 }
 
 const WS_OPEN = 1;
@@ -80,6 +82,9 @@ export function useStatusWebSocket({
 }: UseStatusWebSocketOptions = {}): UseStatusWebSocket {
   const [state, setState] = useState<StatusConnectionState>('connecting');
   const [statuses, setStatuses] = useState<ReadonlyMap<string, Status>>(() => new Map());
+  const [lastStatusTransitionAt, setLastStatusTransitionAt] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
 
   // Keep latest values without re-running the connect effect.
   const factoryRef = useRef(wsFactory);
@@ -115,6 +120,15 @@ export function useStatusWebSocket({
           next.set(msg.sessionId, msg.status);
           return next;
         });
+        const iso = msg.lastStatusTransitionAt ?? msg.ts;
+        const ms = Date.parse(iso);
+        if (!Number.isNaN(ms)) {
+          setLastStatusTransitionAt((prev) => {
+            const next = new Map(prev);
+            next.set(msg.sessionId, ms);
+            return next;
+          });
+        }
         // Hand the full frame (incl. live `meta` telemetry) to the consumer so it
         // can feed the query cache — the polling→WS path.
         onUpdateRef.current?.(msg);
@@ -153,5 +167,5 @@ export function useStatusWebSocket({
     };
   }, []);
 
-  return { state, statuses };
+  return { state, statuses, lastStatusTransitionAt };
 }

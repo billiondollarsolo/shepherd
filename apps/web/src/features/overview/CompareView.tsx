@@ -18,7 +18,7 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
   const live = useLiveStatuses();
   const status: Status = live.get(session.id) ?? session.status;
   const { data: git } = useGitStatus(session.id);
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
   const endRace = usePaddock((s) => s.endRace);
   const qc = useQueryClient();
   const pick = useMutation({
@@ -28,7 +28,7 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sessions'] });
       endRace();
-      focusSession(session.id);
+      openAgent(session.id);
     },
   });
   const files = git?.files ?? [];
@@ -75,7 +75,7 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
         </ul>
       </ScrollArea>
       <footer className="flex items-center gap-2 border-t border-[var(--flock-border)] p-2">
-        <Button size="sm" variant="ghost" className="flex-1" onClick={() => focusSession(session.id)}>
+        <Button size="sm" variant="ghost" className="flex-1" onClick={() => openAgent(session.id)}>
           <ExternalLink className="size-3.5" /> Open
         </Button>
         <Button

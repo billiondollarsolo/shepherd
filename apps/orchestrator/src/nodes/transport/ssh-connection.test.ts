@@ -244,6 +244,41 @@ describe('SupervisedSshConnection — supervision state machine (US-8)', () => {
     await conn.dispose();
   });
 
+  it('initial connect failure still schedules reconnect so a node can come online later', async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const connector: SshConnector = async () => {
+        attempts += 1;
+        // Offline at boot: first two dials fail; third succeeds (VM powered on).
+        if (attempts < 3) throw new Error('ENETUNREACH');
+        return new FakeManagedClient();
+      };
+      const conn = new SupervisedSshConnection(cfg, connector, {
+        initialDelayMs: 100,
+        maxDelayMs: 1000,
+        factor: 2,
+      });
+      await expect(conn.connect()).rejects.toThrow('ENETUNREACH');
+      expect(conn.status).toBe('error');
+      expect(attempts).toBe(1);
+
+      // First scheduled retry after 100ms → still fails.
+      await vi.advanceTimersByTimeAsync(100);
+      expect(attempts).toBe(2);
+      expect(conn.status).toBe('disconnected');
+
+      // Second retry after 200ms backoff → online.
+      await vi.advanceTimersByTimeAsync(200);
+      expect(attempts).toBe(3);
+      expect(conn.status).toBe('connected');
+
+      await conn.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('dispose() is intentional shutdown: status disconnected, no reconnect', async () => {
     vi.useFakeTimers();
     try {

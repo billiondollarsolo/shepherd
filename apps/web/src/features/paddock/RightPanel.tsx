@@ -41,6 +41,7 @@ const CONTEXTS: ReadonlyArray<Context> = [
     tabs: [
       { id: 'chat', label: 'Chat', icon: MessageSquare },
       { id: 'activity', label: 'Activity', icon: Activity },
+      { id: 'notes', label: 'Notes', icon: Activity },
     ],
   },
   {
@@ -178,6 +179,24 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
             plan={plan ?? null}
             onSaveNote={(note) => updateSession.mutate({ id: session.id, patch: { note } })}
           />
+        ) : null}
+        {tab === 'notes' ? (
+          <div className="flex h-full flex-col gap-2 p-3" data-testid="session-notes">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-flock-ink-muted">
+              Notes (markdown)
+            </p>
+            <textarea
+              className="min-h-0 flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-bg p-2 font-mono text-xs text-flock-ink-primary"
+              defaultValue={session.note ?? ''}
+              placeholder="Supervisor notes for this agent…"
+              onBlur={(e) => {
+                const next = e.target.value;
+                if (next !== (session.note ?? '')) {
+                  updateSession.mutate({ id: session.id, patch: { note: next || null } });
+                }
+              }}
+            />
+          </div>
         ) : null}
         {tab === 'files' ? <FilesPanel key={session.id} session={session} /> : null}
         {tab === 'search' ? <SearchPanel key={session.id} session={session} /> : null}

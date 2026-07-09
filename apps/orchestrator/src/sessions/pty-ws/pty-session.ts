@@ -269,20 +269,30 @@ export class PtySession {
     if (backlog.length > 0) {
       subscriber.onData(backlog);
     }
-    // On the ALTERNATE screen, force the TUI (htop/vim) to fully relayout+repaint NOW
-    // rather than waiting for its next refresh tick: a same-size SIGWINCH only makes a
-    // diff-renderer repaint changed cells (→ scattered garble), so JIGGLE the PTY rows
-    // (−1, then back) for a REAL resize. We jiggle the pty directly (bypassing resize()'s
-    // same-size dedup) and do it on EVERY (re)subscribe — independent of whether the
-    // agentd attach was re-opened — which is what fixes "garbled htop on nav-away-back".
-    if (this.inAlt && this.pty && this.rows > 1) {
+    // On the ALTERNATE screen, force the TUI (htop/vim/opencode/claude) to fully
+    // relayout+repaint NOW. A same-size SIGWINCH only makes a diff-renderer repaint
+    // changed cells (→ blank or garbled screens on reattach). A single row jiggle is
+    // also NOT enough for some TUIs (OpenCode): they ignore 40→39→40 after already
+    // painting at 40. Jiggle BOTH dims with longer gaps so the size sequence is a
+    // real layout change, then restore. Bypass resize()'s same-size dedup.
+    //
+    // Also run when we *suspect* alt (inAlt) OR when the resume ring is empty after
+    // ALT_CLEAN_ENTER — otherwise the client stays on a wiped alt buffer forever.
+    if (this.inAlt && this.pty && this.rows > 1 && this.cols > 1) {
       const pty = this.pty;
       const cols = this.cols;
       const rows = this.rows;
-      pty.resize(cols, rows - 1);
+      const rowJ = Math.max(1, rows - 1);
+      const colJ = Math.max(1, cols - 1);
+      pty.resize(cols, rowJ);
       setTimeout(() => {
-        if (this.pty === pty && !this.closed) pty.resize(cols, rows);
-      }, 80);
+        if (this.pty !== pty || this.closed) return;
+        pty.resize(colJ, rows);
+        setTimeout(() => {
+          if (this.pty !== pty || this.closed) return;
+          pty.resize(cols, rows);
+        }, 100);
+      }, 100);
     }
     if (this.exited && subscriber.onExit) {
       const recorded = this.exited;

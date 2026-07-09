@@ -131,6 +131,29 @@ export function buildDiffArgv(workingDir: string, base: string, opts: DiffOption
 }
 
 /**
+ * Untracked files produce an empty `git diff` (they aren't in the index). For a
+ * single-file preview, diff the path against `/dev/null` with `--no-index` so the
+ * Source Control panel can still show the full file as an add.
+ *
+ * NOTE: `git diff --no-index` exits 1 when the files differ (same as GNU diff);
+ * callers must treat exit 0/1 as success.
+ */
+export function gitUntrackedDiffArgv(workingDir: string, path: string): string[] {
+  return [
+    'git',
+    '-C',
+    workingDir,
+    '--no-pager',
+    'diff',
+    '--no-color',
+    '--no-index',
+    '--',
+    '/dev/null',
+    path,
+  ];
+}
+
+/**
  * `git rev-parse --verify -q HEAD` — exits 0 iff HEAD resolves (the repo has at
  * least one commit). A freshly `git init`'d repo has NO commits, so `diff HEAD`
  * would fatal ("ambiguous argument 'HEAD'"); we detect that and diff against the
@@ -237,6 +260,30 @@ export class DiffService {
     // whole usage text on failure; never forward that wall to the UI).
     if (result.exitCode !== 0) {
       throw new DiffUnavailableError(sessionId, summarizeGitError(result.stderr, result.exitCode));
+    }
+
+    // Untracked single-file previews: `git diff -- path` is empty because the
+    // path isn't in the index. Fall back to --no-index against /dev/null so the
+    // Source Control panel can still render the content.
+    if (
+      opts.path &&
+      opts.staged !== true &&
+      result.stdout.trim().length === 0
+    ) {
+      try {
+        const untracked = await transport.exec(
+          gitUntrackedDiffArgv(session.workingDir, opts.path),
+          { cwd: session.workingDir, timeoutMs: this.timeoutMs },
+        );
+        if (!untracked.timedOut && (untracked.exitCode === 0 || untracked.exitCode === 1)) {
+          // exit 1 = "files differ" which is the normal success for --no-index.
+          if (untracked.stdout.trim().length > 0) {
+            result = untracked;
+          }
+        }
+      } catch {
+        /* keep the empty tracked diff */
+      }
     }
 
     return {

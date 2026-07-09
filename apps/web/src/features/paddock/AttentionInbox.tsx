@@ -62,7 +62,7 @@ export function AttentionInbox(): JSX.Element {
   const { data: nodes = [] } = useNodes();
   const { data: projects = [] } = useProjects();
   const live = useLiveStatuses();
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
 
   const statusOf = (s: Session): Status => live.get(s.id) ?? s.status;
   const nodeName = (id: string): string => nodes.find((n) => n.id === id)?.name ?? '—';
@@ -111,7 +111,7 @@ export function AttentionInbox(): JSX.Element {
                   key={s.id}
                   type="button"
                   data-testid={`attention-item-${s.id}`}
-                  onClick={() => focusSession(s.id)}
+                  onClick={() => openAgent(s.id)}
                   className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-flock-surface-2"
                 >
                   <Icon className="size-4 shrink-0" style={{ color: meta.color }} />

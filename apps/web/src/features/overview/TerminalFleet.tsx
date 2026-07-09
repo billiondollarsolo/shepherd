@@ -67,7 +67,7 @@ export function TerminalFleet(): JSX.Element {
   const { data: projects = [] } = useProjects();
   const { data: chats = {} } = useLatestChats();
   const live = useLiveStatuses();
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
   const openDialog = usePaddock((s) => s.openDialog);
   const [filter, setFilter] = useState('');
 
@@ -130,7 +130,7 @@ export function TerminalFleet(): JSX.Element {
                 nodeName={nodeName(s.nodeId)}
                 projectName={projectName(s.projectId)}
                 output={chats[s.id]?.text}
-                onFocus={() => focusSession(s.id)}
+                onFocus={() => openAgent(s.id)}
               />
             ))
           )}

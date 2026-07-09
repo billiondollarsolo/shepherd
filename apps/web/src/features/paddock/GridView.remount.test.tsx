@@ -81,7 +81,7 @@ describe('GridView — adding a pane must not remount existing terminals', () =>
 
   it('keeps existing terminals mounted (no reconnect) when a session is added', async () => {
     h.sessions = [mk('a', '2026-01-01T00:00:00Z'), mk('b', '2026-01-01T00:00:01Z')];
-    usePaddock.setState({ viewMode: 'grid', selectedSessionId: 'a', dialog: null });
+    usePaddock.setState({ selectedSessionId: null, selectedProjectId: 'P', dialog: null });
 
     const { rerender } = render2(<GridView />);
     await screen.findByTestId('term-a');
@@ -111,7 +111,7 @@ describe('GridView — adding a pane must not remount existing terminals', () =>
 
   it('keeps existing panes mounted across the create GAP (new id selected before it is in the cache)', async () => {
     h.sessions = [mk('a', '2026-01-01T00:00:00Z'), mk('b', '2026-01-01T00:00:01Z')];
-    usePaddock.setState({ viewMode: 'grid', selectedSessionId: 'a', dialog: null });
+    usePaddock.setState({ selectedSessionId: null, selectedProjectId: 'P', dialog: null });
 
     const { rerender } = render2(<GridView />);
     await screen.findByTestId('term-a');
@@ -150,7 +150,7 @@ describe('GridView — adding a pane must not remount existing terminals', () =>
 
   it('does not remount when a new session is inserted out of order (newest first)', async () => {
     h.sessions = [mk('a', '2026-01-01T00:00:00Z'), mk('b', '2026-01-01T00:00:01Z')];
-    usePaddock.setState({ viewMode: 'grid', selectedSessionId: 'a', dialog: null });
+    usePaddock.setState({ selectedSessionId: null, selectedProjectId: 'P', dialog: null });
 
     const { rerender } = render2(<GridView />);
     await screen.findByTestId('term-a');

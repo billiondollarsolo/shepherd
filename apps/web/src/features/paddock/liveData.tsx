@@ -21,6 +21,8 @@ import { useStatusWebSocket } from '../tree/useStatusWebSocket';
 
 /** Live work-status per session id (from `/ws/status`); empty before first event. */
 export const LiveStatusContext = createContext<ReadonlyMap<string, Status>>(new Map());
+/** Last semantic status-change ms epoch per session (Agents "last change" sort). */
+export const LiveStatusTransitionContext = createContext<ReadonlyMap<string, number>>(new Map());
 /** flock-agentd health (per-node link + per-session tokens/tool/live), or null. */
 export const AgentdHealthContext = createContext<AgentdHealth | null>(null);
 
@@ -68,11 +70,13 @@ export function LiveDataProvider({ children }: { children: ReactNode }): JSX.Ele
     },
     [qc],
   );
-  const { statuses } = useStatusWebSocket({ onUpdate });
+  const { statuses, lastStatusTransitionAt } = useStatusWebSocket({ onUpdate });
   const { data: agentdHealth = null } = useAgentdStatus();
   return (
     <LiveStatusContext.Provider value={statuses}>
-      <AgentdHealthContext.Provider value={agentdHealth}>{children}</AgentdHealthContext.Provider>
+      <LiveStatusTransitionContext.Provider value={lastStatusTransitionAt}>
+        <AgentdHealthContext.Provider value={agentdHealth}>{children}</AgentdHealthContext.Provider>
+      </LiveStatusTransitionContext.Provider>
     </LiveStatusContext.Provider>
   );
 }
@@ -80,6 +84,10 @@ export function LiveDataProvider({ children }: { children: ReactNode }): JSX.Ele
 /** The live status map. */
 export function useLiveStatuses(): ReadonlyMap<string, Status> {
   return useContext(LiveStatusContext);
+}
+/** Last status-change timestamps (ms) from the live status WS. */
+export function useLiveStatusTransitions(): ReadonlyMap<string, number> {
+  return useContext(LiveStatusTransitionContext);
 }
 /** The agentd health snapshot (or null). */
 export function useAgentdHealth(): AgentdHealth | null {

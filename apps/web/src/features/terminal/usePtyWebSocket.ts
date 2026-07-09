@@ -69,6 +69,11 @@ export interface UsePtyWebSocket {
   sendInput: (input: string) => void;
   /** Send a resize control message (JSON envelope). */
   sendResize: (cols: number, rows: number) => void;
+  /**
+   * Force-close and reopen the PTY socket (blank-pane recovery). No-ops when
+   * the process has already exited. Resets reconnect backoff.
+   */
+  reconnectNow: () => void;
 }
 
 const WS_OPEN = 1;
@@ -102,15 +107,32 @@ export function usePtyWebSocket(
   const onReconnectRef = useRef(onReconnect);
   onReconnectRef.current = onReconnect;
 
+  // Imperative reconnect: Terminal blank-pane recovery calls this.
+  const reconnectNowRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     let disposed = false;
     let exited = false; // PTY process ended (terminal) — never reconnect
     let attempts = 0;
     let hasOpened = false; // distinguishes the first open from a reconnect
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let manualReconnect = false;
+
+    const hardClose = (): void => {
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (!ws) return;
+      ws.onclose = ws.onerror = ws.onmessage = ws.onopen = null;
+      try {
+        ws.close();
+      } catch {
+        /* already closed */
+      }
+    };
 
     const connect = (): void => {
-      if (disposed) return;
+      if (disposed || exited) return;
+      hardClose();
       setState('connecting');
       const size = initialSizeRef.current?.() ?? undefined;
       const ws = factoryRef.current(ptyWebSocketUrl(sessionId, undefined, undefined, size));
@@ -122,13 +144,14 @@ export function usePtyWebSocket(
         // RECONNECT (not the first open): the terminal still shows the pre-drop
         // screen, so reset it before the server's resume replay arrives — else the
         // replay is appended (duplicate prompts / agent welcome boxes).
-        if (hasOpened) {
+        if (hasOpened || manualReconnect) {
           if (import.meta.env.DEV) console.debug(`[pty] RECONNECT ${sessionId}`);
           onReconnectRef.current?.();
         } else if (import.meta.env.DEV) {
           console.debug(`[pty] open ${sessionId}`);
         }
         hasOpened = true;
+        manualReconnect = false;
         setState('open');
       };
       ws.onmessage = (ev): void => {
@@ -161,7 +184,7 @@ export function usePtyWebSocket(
             `[pty] CLOSE ${sessionId} code=${c?.code} reason=${c?.reason || '∅'} clean=${c?.wasClean}`,
           );
         }
-        wsRef.current = null;
+        if (wsRef.current === ws) wsRef.current = null;
         if (exited) {
           setState('exited'); // terminal — leave it, do not reconnect
           return;
@@ -183,26 +206,21 @@ export function usePtyWebSocket(
       };
     };
 
+    reconnectNowRef.current = (): void => {
+      if (disposed || exited) return;
+      if (retryTimer) clearTimeout(retryTimer);
+      attempts = 0;
+      manualReconnect = true;
+      connect();
+    };
+
     connect();
 
     return () => {
       disposed = true;
+      reconnectNowRef.current = () => {};
       if (retryTimer) clearTimeout(retryTimer);
-      const ws = wsRef.current;
-      wsRef.current = null;
-      if (!ws) return;
-      ws.onclose = ws.onerror = ws.onmessage = null;
-      // Closing a socket that's still CONNECTING logs a noisy browser warning
-      // ("WebSocket is closed before the connection is established") — common
-      // under React StrictMode's mount→unmount→remount. If it hasn't opened yet,
-      // defer the close to its open handler so it tears down cleanly.
-      const CONNECTING = 0;
-      if (ws.readyState === CONNECTING) {
-        ws.onopen = (): void => ws.close();
-      } else {
-        ws.onopen = null;
-        ws.close();
-      }
+      hardClose();
     };
   }, [sessionId]);
 
@@ -223,5 +241,9 @@ export function usePtyWebSocket(
     [sessionId],
   );
 
-  return { state, sendInput, sendResize };
+  const reconnectNow = useCallback((): void => {
+    reconnectNowRef.current();
+  }, []);
+
+  return { state, sendInput, sendResize, reconnectNow };
 }

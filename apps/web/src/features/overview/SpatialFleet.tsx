@@ -86,7 +86,7 @@ export function SpatialFleet(): JSX.Element {
   const { data: projects = [] } = useProjects();
   const live = useLiveStatuses();
   const health = useAgentdHealth();
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
   const openDialog = usePaddock((s) => s.openDialog);
   const spendOf = (id: string): NodeSpend | undefined => health?.sessions[id];
 
@@ -199,7 +199,7 @@ export function SpatialFleet(): JSX.Element {
                               spend={spendOf(s.id)}
                               git={fleetGit.get(s.id)}
                               lead={leadIds.has(s.id)}
-                              onFocus={() => focusSession(s.id)}
+                              onFocus={() => openAgent(s.id)}
                             />
                           ))}
                         </div>

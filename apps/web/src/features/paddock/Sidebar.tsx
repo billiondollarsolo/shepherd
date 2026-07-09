@@ -42,12 +42,14 @@ import {
   ScrollArea,
   SimpleTooltip,
 } from '../../components/ui';
+import { BuiltBy } from '../../components/BuiltBy';
 import { FlockMark } from '../../components/SheepIcon';
 import { StatusDot as Dot } from '../../components/StatusDot';
 import { usePaddock, orderNodes } from '../../store/paddock';
 import { useNodes, useProjects, useSessions, useStack } from '../../data/queries';
 import { LiveStatusContext, AgentdHealthContext, useLiveStatuses } from './liveData';
 import { isShellProcess } from '../../lib/utils';
+import { AgentsSwitcher } from '../shell/AgentsSwitcher';
 
 /** A session's live status if the status WS has reported one, else its REST value. */
 function useLiveStatus(session: Session): Status {
@@ -172,7 +174,7 @@ function statusTextClass(status: string): string {
 function SessionRow({ session }: { session: Session }): JSX.Element {
   const selected = usePaddock((s) => s.selectedSessionId === session.id);
   // Opening a session from the sidebar MAXIMIZES it (focus view) — not a 1-cell grid.
-  const select = usePaddock((s) => s.focusSession);
+  const select = usePaddock((s) => s.openAgent);
   const openDialog = usePaddock((s) => s.openDialog);
   // Terminate is destructive (kills the agent) — confirm first.
   const confirmTerminate = (id: string) => openDialog('terminate-session', { sessionId: id });
@@ -195,7 +197,7 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
       ) : null}
       <button
         type="button"
-        onClick={() => select(session.id)}
+        onClick={() => select(session.id, session.projectId)}
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         data-testid={`session-${session.id}`}
       >
@@ -503,7 +505,7 @@ function NodeRailItem({
   node: FlockNode;
   sessions: Session[];
   statuses: ReadonlyMap<string, Status>;
-  onFocus: (id: string) => void;
+  onFocus: (id: string, projectId?: string | null) => void;
   onOpenNode: (id: string) => void;
   open: boolean;
   pinned: boolean;
@@ -572,7 +574,7 @@ function NodeRailItem({
                 <button
                   type="button"
                   onClick={() => {
-                    onFocus(s.id);
+                    onFocus(s.id, s.projectId);
                     onDismiss();
                   }}
                   className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-sm text-flock-ink-primary hover:bg-flock-surface-2"
@@ -621,10 +623,11 @@ export function Sidebar(): JSX.Element {
   };
   const openDialog = usePaddock((s) => s.openDialog);
   const openSettings = usePaddock((s) => s.openSettings);
-  const openOverview = usePaddock((s) => s.openOverview);
+  const openMission = usePaddock((s) => s.openMission);
   const view = usePaddock((s) => s.view);
-  // "Needs you" / session clicks MAXIMIZE the session (focus view), not a 1-cell grid.
-  const select = usePaddock((s) => s.focusSession);
+  const lens = usePaddock((s) => s.lens);
+  // Open agent on stage (agents lens + terminal-first chrome).
+  const select = usePaddock((s) => s.openAgent);
   const collapsed = usePaddock((s) => s.sidebarCollapsed);
   const toggleSidebar = usePaddock((s) => s.toggleSidebar);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
@@ -769,7 +772,7 @@ export function Sidebar(): JSX.Element {
             <SimpleTooltip key={s.id} label={sessionLabel(s)} side="right">
               <button
                 type="button"
-                onClick={() => select(s.id)}
+                onClick={() => select(s.id, s.projectId)}
                 aria-label={sessionLabel(s)}
                 className="flex size-10 items-center justify-center rounded-md outline-none hover:bg-flock-surface-2 focus-visible:bg-flock-surface-2"
               >
@@ -781,7 +784,7 @@ export function Sidebar(): JSX.Element {
 
         <div className="mt-auto flex flex-col items-center gap-1 border-t border-[var(--flock-border)] pt-2">
           <SimpleTooltip label="Paddock" side="right">
-            <Button size="icon-sm" variant="ghost" aria-label="Paddock" onClick={() => openOverview()}>
+            <Button size="icon-sm" variant="ghost" aria-label="Paddock" onClick={() => openMission()}>
               <LayoutGrid className="size-4" />
             </Button>
           </SimpleTooltip>
@@ -796,7 +799,7 @@ export function Sidebar(): JSX.Element {
       <header className="flex items-center gap-2 px-3 py-2.5">
         <button
           type="button"
-          onClick={() => openOverview()}
+          onClick={() => openMission()}
           aria-label="Paddock (home)"
           title="Paddock (home)"
           className="rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-label text-flock-ink-muted outline-none hover:text-flock-ink-primary focus-visible:ring-1 focus-visible:ring-flock-accent"
@@ -833,7 +836,7 @@ export function Sidebar(): JSX.Element {
                 <FileCode2 /> Config (flock.yml)…
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => openOverview()}>
+              <DropdownMenuItem onSelect={() => openMission()}>
                 <LayoutGrid /> Paddock
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => openSettings()}>
@@ -844,11 +847,20 @@ export function Sidebar(): JSX.Element {
         </div>
       </header>
 
+      {/* Agents lens: herdr-style switcher is the primary find path. */}
+      {lens === 'agents' ? (
+        <div className="min-h-0 flex-1">
+          <AgentsSwitcher />
+        </div>
+      ) : null}
+
+      {lens !== 'agents' ? (
+      <>
       {/* Primary nav: back to the Paddock home (the fleet). */}
       <div className="px-2 pb-1">
         <button
           type="button"
-          onClick={() => openOverview()}
+          onClick={() => openMission()}
           aria-current={view === 'overview'}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
             view === 'overview'
@@ -870,7 +882,7 @@ export function Sidebar(): JSX.Element {
             <button
               key={s.id}
               type="button"
-              onClick={() => select(s.id)}
+              onClick={() => select(s.id, s.projectId)}
               className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-sm text-flock-ink-primary hover:bg-flock-surface-2"
             >
               <Dot status={liveStatus(s)} pulse />
@@ -908,7 +920,12 @@ export function Sidebar(): JSX.Element {
           )}
         </div>
       </ScrollArea>
+      </>
+      ) : null}
 
+      <footer className="mt-auto shrink-0 border-t border-[var(--flock-border)] px-3 py-2.5">
+        <BuiltBy stacked />
+      </footer>
     </div>
   );
 }

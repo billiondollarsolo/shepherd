@@ -148,6 +148,44 @@ describe('DiffService.getDiff (US-33)', () => {
     expect(DiffResponse.safeParse(res).success).toBe(true);
   });
 
+  it('falls back to --no-index for an untracked single-file preview', async () => {
+    // `git diff -- path` is empty for untracked files; --no-index vs /dev/null
+    // returns the full add (exit 1 = files differ, which is success for us).
+    const untrackedDiff =
+      'diff --git a/README.md b/README.md\nnew file mode 100644\n--- /dev/null\n+++ b/README.md\n@@ -0,0 +1 @@\n+hello\n';
+    const calls: string[][] = [];
+    const transport: NodeTransport = {
+      kind: 'local',
+      async exec(command) {
+        calls.push(command);
+        if (command.includes('rev-parse')) {
+          return { exitCode: 0, signal: null, stdout: 'abc\n', stderr: '', timedOut: false };
+        }
+        if (command.includes('--no-index')) {
+          return {
+            exitCode: 1,
+            signal: null,
+            stdout: untrackedDiff,
+            stderr: '',
+            timedOut: false,
+          };
+        }
+        // plain path-scoped diff is empty for untracked
+        return { exitCode: 0, signal: null, stdout: '', stderr: '', timedOut: false };
+      },
+      async openPty() {
+        throw new Error('unused');
+      },
+      async dispose() {},
+    };
+    const service = buildService({ transport });
+
+    const res = await service.getDiff(SESSION_ID, { path: 'README.md', staged: false });
+
+    expect(res.diff).toBe(untrackedDiff);
+    expect(calls.some((c) => c.includes('--no-index'))).toBe(true);
+  });
+
   it('throws DiffSessionNotFoundError for an unknown session (route → 404)', async () => {
     const service = buildService({ session: null });
     await expect(service.getDiff(SESSION_ID)).rejects.toBeInstanceOf(

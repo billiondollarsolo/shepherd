@@ -2,11 +2,53 @@ package session
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"flock-agentd/internal/status"
 )
+
+// hookOwnedAgentNames are CLIs whose live status is owned by Flock hooks
+// (not transcript tailing, not PTY-foreground). Their process stays in the
+// foreground for the whole session, so watchForeground would always report
+// "running" even when the agent is idle waiting for the user.
+var hookOwnedAgentNames = map[string]struct{}{
+	"opencode": {},
+	"grok":     {},
+	"gemini":   {},
+}
+
+// isHookOwnedAgent reports whether the session command launches a hook-owned
+// agent. Must handle auth wrappers like:
+//
+//	sh -c '[ -f … ] || grok login --device-auth; exec grok'
+//
+// where command[0] is "sh", not "grok" — looking only at argv0 stuck those
+// sessions on "Working" forever via watchForeground.
+func isHookOwnedAgent(command []string) bool {
+	if len(command) == 0 {
+		return false
+	}
+	for _, tok := range command {
+		base := filepath.Base(strings.Trim(tok, `"'`))
+		if _, ok := hookOwnedAgentNames[base]; ok {
+			return true
+		}
+	}
+	// Shell-wrapped launches: the agent name lives in the -c script body.
+	joined := strings.Join(command, " ")
+	for name := range hookOwnedAgentNames {
+		if strings.Contains(joined, "exec "+name) {
+			return true
+		}
+		// bare token in script (e.g. "|| grok login" / trailing "exec /usr/bin/grok")
+		if strings.Contains(joined, "/"+name) || strings.Contains(joined, " "+name+" ") || strings.HasSuffix(joined, " "+name) {
+			return true
+		}
+	}
+	return false
+}
 
 // StatusEvent is a derived agent status update for one session, fanned out to
 // connected orchestrators (which feed it into the live status map + meta). It is
@@ -93,11 +135,21 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 
 	id := spec.ID
 	if agent == "" {
-		// No transcript to tail. Either PTY-activity status (gemini, via
-		// spec.ActivityStatus) or — for a plain shell/terminal — the live foreground
-		// process so the UI can show "htop" etc. instead of a bare "terminal".
+		// No transcript to tail.
+		//   1) PTY-activity heuristic (spec.ActivityStatus) — rare; most agents
+		//      that need it set the flag at launch.
+		//   2) Hook-owned TUI agents (opencode, grok, …): DetectAgent returns ""
+		//      on purpose so hooks own status. MUST NOT fall through to
+		//      watchForeground — the agent binary is ALWAYS the PTY foreground,
+		//      even when idle at the prompt, which would stick the UI on
+		//      "Working" forever.
+		//   3) Plain shell/terminal → live foreground process ("htop", …).
 		if spec.ActivityStatus {
 			go m.watchActivity(ctx, id, s)
+		} else if isHookOwnedAgent(spec.Command) {
+			// Seed idle once so the paddock doesn't sit on "starting" until the
+			// first hook. Real turn status still comes from hooks only.
+			m.emitStatus(StatusEvent{ID: id, Update: status.Update{State: status.StateIdle}})
 		} else {
 			go m.watchForeground(ctx, id, s)
 		}

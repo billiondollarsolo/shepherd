@@ -27,6 +27,11 @@ export interface StatusEntry {
   readonly detail: string | null;
   /** ISO-8601 timestamp of the transition. */
   readonly ts: string;
+  /**
+   * ISO-8601 of the last *semantic* status change (status value changed).
+   * Used for Agents "last status change" sort. Equal to `ts` on first seed/set.
+   */
+  readonly lastStatusTransitionAt: string;
 }
 
 /** A fan-out subscriber. Invoked synchronously on every transition. */
@@ -127,7 +132,11 @@ export class StatusMap {
     }
 
     const ts = this.clock();
-    const entry: StatusEntry = { status, detail, ts };
+    const statusChanged = !current || current.status !== status;
+    const lastStatusTransitionAt = statusChanged
+      ? ts
+      : (current?.lastStatusTransitionAt ?? ts);
+    const entry: StatusEntry = { status, detail, ts, lastStatusTransitionAt };
     this.map.set(sessionId, entry);
 
     // `meta` (live telemetry) rides the fan-out ONLY — it is NOT stored in the map
@@ -138,6 +147,7 @@ export class StatusMap {
       status,
       detail,
       ts,
+      lastStatusTransitionAt,
       ...(meta ? { meta } : {}),
     };
     this.fanOut(msg);
@@ -172,7 +182,8 @@ export class StatusMap {
    * replay). No legality check: it seeds, it doesn't transition.
    */
   seed(sessionId: string, status: Status, detail: string | null = null): void {
-    this.map.set(sessionId, { status, detail, ts: this.clock() });
+    const ts = this.clock();
+    this.map.set(sessionId, { status, detail, ts, lastStatusTransitionAt: ts });
   }
 
   /** Remove a session from the live map (e.g. on terminate/teardown). */

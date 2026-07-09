@@ -146,7 +146,13 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
         // session look like it had never transitioned.
         db
           .update(agentSessions)
-          .set({ status, lastStatusAt: new Date() })
+          .set({
+            status,
+            // Keep the human-readable reason (e.g. "node unreachable") on the
+            // REST mirror so refresh/rehydrate show the same truth as the WS.
+            statusDetail: detail,
+            lastStatusAt: new Date(),
+          })
           .where(eq(agentSessions.id, sessionId)),
       ).catch(() => {
         /* mirror is best-effort; a failed write never affects the live path */
@@ -386,6 +392,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
                   status: entry.status,
                   detail: entry.detail,
                   ts: entry.ts,
+                  lastStatusTransitionAt: entry.lastStatusTransitionAt,
                 }),
               );
             }

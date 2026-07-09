@@ -38,6 +38,8 @@ import {
   useTerminateSession,
 } from '../../data/queries';
 import { applyConfig, exportConfig, getNodeEnv, startRace, type ConfigApplySummary } from '../../data/treeApi';
+import { fetchLauncherPresets } from '../shell/launcherPresetsApi';
+import type { LauncherPreset } from '@flock/shared';
 import { pickBestNode } from './placement';
 import { PathBrowser } from './PathBrowser';
 
@@ -488,16 +490,33 @@ function AddProjectDialog(): JSX.Element {
 function AddSessionDialog(): JSX.Element {
   const { data: projects = [] } = useProjects();
   const fixedProjectId = usePaddock((s) => s.dialogProjectId);
+  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
   const createSession = useCreateSession();
   const closeDialog = usePaddock((s) => s.closeDialog);
-  const selectSession = usePaddock((s) => s.selectSession);
-  const setViewMode = usePaddock((s) => s.setViewMode);
-  const [projectId, setProjectId] = useState(fixedProjectId ?? projects[0]?.id ?? '');
+  const openAgent = usePaddock((s) => s.openAgent);
+  // Prefer dialog scope → active project on stage → first project (two-click target).
+  const [projectId, setProjectId] = useState(
+    fixedProjectId ?? selectedProjectId ?? projects[0]?.id ?? '',
+  );
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [permissionMode, setPermissionMode] = useState<SessionPermissionMode>('default');
   const [worktree, setWorktree] = useState(false);
   const [devCommand, setDevCommand] = useState('');
+  const [presets, setPresets] = useState<LauncherPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const busy = createSession.isPending;
+
+  useEffect(() => {
+    void fetchLauncherPresets().then(setPresets).catch(() => setPresets([]));
+  }, []);
+
+  /** Two-click path: pick a preset → apply agent/mode (optionally auto-start). */
+  function applyPreset(p: LauncherPreset): void {
+    setSelectedPresetId(p.id);
+    setAgentType(p.agentType);
+    if (p.permissionMode) setPermissionMode(p.permissionMode);
+    if (p.worktreeDefault !== undefined) setWorktree(p.worktreeDefault);
+  }
   // Only the modes THIS agent supports; if the current selection isn't valid for
   // the chosen agent (e.g. switched to Gemini while "plan" was picked), fall back
   // to default so we never send an unsupported mode.
@@ -571,10 +590,8 @@ function AddSessionDialog(): JSX.Element {
         // Only sent when the project dir is actually a git repo.
         ...(effectiveWorktree ? { worktree: true } : {}),
       });
-      // Drop straight into the new session's terminal (maximized in the main
-      // content area), not just select it in the grid.
-      selectSession(session.id);
-      setViewMode('focus');
+      // Open on stage (agents lens + terminal-first chrome).
+      openAgent(session.id, session.projectId);
       closeDialog();
     } catch {
       /* error toast handled by the mutation */
@@ -600,6 +617,39 @@ function AddSessionDialog(): JSX.Element {
           </SelectContent>
         </Select>
       </Field>
+
+      {presets.length > 0 ? (
+        <div data-testid="launcher-presets" className="grid gap-1.5">
+          <Label>Quick launch preset</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p) => {
+              const avail = agentAvailable(p.agentType);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-testid={`launcher-preset-${p.id}`}
+                  data-selected={selectedPresetId === p.id ? '1' : '0'}
+                  disabled={!avail || busy}
+                  onClick={() => applyPreset(p)}
+                  className={`rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors ${
+                    selectedPresetId === p.id
+                      ? 'border-flock-accent bg-flock-accent/15 text-flock-accent'
+                      : 'border-[var(--flock-border)] bg-flock-surface-1 text-flock-ink-muted hover:border-flock-accent/50'
+                  } disabled:opacity-40`}
+                >
+                  {p.name}
+                  {!avail ? ' · n/a' : ''}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-2xs text-flock-ink-muted/80">
+            Pick a preset, then Start — launches into the selected project (two-click path).
+          </p>
+        </div>
+      ) : null}
+
       <Field label="Agent" htmlFor="sess-agent">
         <Select value={agentType} onValueChange={(v) => setAgentType(v as AgentType)}>
           <SelectTrigger id="sess-agent"><SelectValue /></SelectTrigger>

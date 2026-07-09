@@ -89,7 +89,7 @@ function GridCellInner({
    */
   focused?: boolean;
 }): JSX.Element {
-  const setViewMode = usePaddock((s) => s.setViewMode);
+  const openAgent = usePaddock((s) => s.openAgent);
   const selectSession = usePaddock((s) => s.selectSession);
   const openDialog = usePaddock((s) => s.openDialog);
   const [ready, setReady] = useState(false);
@@ -99,8 +99,7 @@ function GridCellInner({
   }, []);
 
   const focus = (): void => {
-    selectSession(session.id);
-    setViewMode('focus');
+    openAgent(session.id, session.projectId);
   };
   // Clicking ANYWHERE in a cell (incl. the terminal body) SELECTS that session so
   // the right panel follows the pane you're actually working in — WITHOUT
@@ -432,8 +431,7 @@ export function GridView(): JSX.Element {
   const agentdHealth = useAgentdHealth();
   const selectedId = usePaddock((s) => s.selectedSessionId);
   const selectSession = usePaddock((s) => s.selectSession);
-  const setViewMode = usePaddock((s) => s.setViewMode);
-  const viewMode = usePaddock((s) => s.viewMode);
+  const openAgent = usePaddock((s) => s.openAgent);
   const gridLayout = usePaddock((s) => s.gridLayout);
   const toggleGridLayout = usePaddock((s) => s.toggleGridLayout);
   const openDialog = usePaddock((s) => s.openDialog);
@@ -527,22 +525,17 @@ export function GridView(): JSX.Element {
   }, [ids]);
 
   const maximize = (id: string): void => {
-    selectSession(id);
-    setViewMode('focus');
+    const sess = cells.find((c) => c.id === id);
+    openAgent(id, sess?.projectId ?? projectId);
   };
   const jump = (id: string): void => {
     selectSession(id);
     scrollToPane(id);
   };
 
-  // FOCUS mode = one session maximized. It is a LAYOUT over the SAME mounted cells,
-  // not a different tree: every cell stays mounted (the non-selected ones just
-  // `hidden`), so maximizing / restoring / switching the focused session is a pure
-  // CSS change — the terminals (and their PTY WebSockets) are never torn down and
-  // rebuilt. Only valid when the selection is one of these cells; during the
-  // create-gap (a new id selected before it's in the list) we fall back to the grid
-  // tiling so nothing blanks. SessionPane renders the focus header/side panel.
-  const focused = viewMode === 'focus' && cells.some((c) => c.id === selectedId);
+  // Stage maximize: when a session is selected, CSS-maximize its cell (others
+  // stay mounted/hidden). Project layout (no selection) shows the multi-leaf grid.
+  const focused = !!selectedId && cells.some((c) => c.id === selectedId);
   // Full-height side-by-side columns (vs the 2-up vertical-scroll grid), only when
   // not maximized.
   const columns = !focused && gridLayout === 'columns';

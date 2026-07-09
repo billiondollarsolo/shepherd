@@ -7,7 +7,7 @@ const SESSIONS = [
   { id: 's-closed', agentType: 'gemini', status: 'done', closedAt: '2026-01-01', nodeId: 'n1', projectId: 'p1' },
 ];
 const mockStatuses = new Map<string, string>([['s-wait', 'awaiting_input']]);
-const focusSession = vi.fn();
+const openAgent = vi.fn();
 
 vi.mock('../../data/queries', () => ({
   useSessions: () => ({ data: SESSIONS }),
@@ -24,7 +24,14 @@ vi.mock('../paddock/liveData', () => ({
 }));
 vi.mock('../../store/paddock', () => ({
   usePaddock: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ focusSession, reviewedSessions: [], setReviewed: () => {}, openDialog: () => {}, openRight: () => {} }),
+    sel({
+      openAgent,
+      reviewedSessions: [],
+      setReviewed: () => {},
+      openDialog: () => {},
+      openRight: () => {},
+      hostScope: 'all',
+    }),
 }));
 
 import { MissionControl } from './MissionControl';
@@ -52,9 +59,9 @@ describe('MissionControl (elite UI)', () => {
     expect(cards[0].getAttribute('data-testid')).toBe('mc-card-s-wait');
   });
 
-  it('clicking a card focuses that session', () => {
+  it('clicking a card opens agent with session id AND projectId (D2)', () => {
     renderMC();
     fireEvent.click(screen.getByTestId('mc-card-s-run'));
-    expect(focusSession).toHaveBeenCalledWith('s-run');
+    expect(openAgent).toHaveBeenCalledWith('s-run', 'p1');
   });
 });

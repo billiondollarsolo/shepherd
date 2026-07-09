@@ -580,21 +580,27 @@ func (s *Session) Subscribe() *Subscription {
 	// For a full-screen app, force a FULL repaint for the freshly attached client
 	// (we cleared its buffer above). A SAME-size SIGWINCH is NOT enough: a diff-
 	// rendering TUI (htop) only repaints the cells IT thinks changed against its own
-	// (now stale) buffer → scattered rows with gaps. So we JIGGLE the size — one row
-	// shorter, then back — so the app sees a REAL resize and relayouts+repaints the
-	// whole screen. Async (off s.mu) with a tiny gap so the two SIGWINCHes aren't
-	// coalesced. NOT done for a normal-screen shell — a same-size SIGWINCH there makes
+	// (now stale) buffer → scattered rows with gaps. A single row jiggle is also not
+	// enough for some agents (OpenCode): after painting at HxW they ignore H-1→H.
+	// Jiggle BOTH dims with gaps so the layout change is real, then restore.
+	// Async (off s.mu). NOT done for a normal-screen shell — SIGWINCH there makes
 	// bash/zsh reprint their prompt (the double-prompt smear).
 	if s.inAlt && s.ptmx != nil {
 		ptmx := s.ptmx
 		rows, cols := orDefault(s.spec.Rows, 24), orDefault(s.spec.Cols, 80)
-		jiggle := rows - 1
-		if jiggle < 1 {
-			jiggle = rows + 1
+		rowJ := rows - 1
+		if rowJ < 1 {
+			rowJ = rows + 1
+		}
+		colJ := cols - 1
+		if colJ < 1 {
+			colJ = cols + 1
 		}
 		go func() {
-			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: jiggle, Cols: cols})
-			time.Sleep(60 * time.Millisecond)
+			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: rowJ, Cols: cols})
+			time.Sleep(100 * time.Millisecond)
+			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: colJ})
+			time.Sleep(100 * time.Millisecond)
 			_ = pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})
 		}()
 	}

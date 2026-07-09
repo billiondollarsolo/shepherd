@@ -2,18 +2,36 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Native dev ports are overridable so we can bind remote-reachable ranges
+// (e.g. 11010–11020) without editing this file each time.
+const webPort = Number(process.env.WEB_PORT ?? 5173);
+const apiTarget = process.env.VITE_API_PROXY ?? `http://127.0.0.1:${process.env.PORT ?? 8080}`;
+
 export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: webPort,
+    strictPort: true,
     // Native dev: proxy the API + WebSocket channels to the orchestrator so the
     // browser talks to a SINGLE origin (cookies + same-origin fetch just work,
-    // exactly like the Caddy prod setup). The orchestrator runs on :8080.
+    // exactly like the Caddy prod setup).
     proxy: {
-      '/api': { target: 'http://localhost:8080', changeOrigin: true },
-      '/health': { target: 'http://localhost:8080', changeOrigin: true },
-      '/ws': { target: 'ws://localhost:8080', ws: true },
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/health': { target: apiTarget, changeOrigin: true },
+      '/ws': { target: apiTarget.replace(/^http/, 'ws'), ws: true },
+    },
+    // Test-only edits were triggering full client page reloads, which re-ran
+    // AuthGate while the API was mid-restart → false "logged out" screens.
+    watch: {
+      ignored: [
+        '**/node_modules/**',
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.spec.ts',
+        '**/*.spec.tsx',
+        '**/dist/**',
+      ],
     },
   },
   test: {

@@ -21,8 +21,13 @@ cd "$(dirname "$0")"
 
 ENV_FILE=".env.dev.local"
 PG_CONTAINER="flock-dev-postgres-1"
+# Load host/port defaults from the env file when present (remote-test ranges, etc.).
+if [[ -f "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  set -a; source "$ENV_FILE"; set +a
+fi
 API_PORT="${PORT:-8080}"
-WEB_PORT="5173"
+WEB_PORT="${WEB_PORT:-5173}"
 
 log()  { printf '\033[1;36m[flock]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[flock]\033[0m %s\n' "$*"; }
@@ -76,7 +81,7 @@ WEB_LOG="/tmp/flock-web.log"
 : > "$API_LOG"; : > "$WEB_LOG"
 
 log "Starting orchestrator (tsx watch) + web (vite HMR)…"
-log "→ Open  http://localhost:${WEB_PORT}   (API on :${API_PORT})"
+log "→ Open  http://0.0.0.0:${WEB_PORT}   (API on 0.0.0.0:${API_PORT})"
 log "  logs: $API_LOG  ·  $WEB_LOG"
 
 # Track children so we can stop them cleanly on Ctrl-C.
@@ -100,18 +105,32 @@ trap cleanup INT TERM EXIT
 # orchestrator's FLOCK_AGENTD_SECRET (read from the env file).
 AGENTD_SECRET="$(grep -E '^FLOCK_AGENTD_SECRET=' "$ENV_FILE" | cut -d= -f2- || true)"
 log "Building + starting flock-agentd (local node)…"
-if (cd agentd && go build -o /tmp/flock-agentd . 2>/tmp/flock-agentd-build.log); then
+AGENTD_BIN=""
+if command -v go >/dev/null 2>&1; then
+  # Prefer a modern toolchain if the system go is older than go.mod (1.25).
+  if [[ -d "$HOME/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.0.linux-amd64/bin" ]]; then
+    export PATH="$HOME/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.0.linux-amd64/bin:$PATH"
+  fi
+  if (cd agentd && go build -o /tmp/flock-agentd . 2>/tmp/flock-agentd-build.log); then
+    AGENTD_BIN=/tmp/flock-agentd
+  fi
+fi
+if [[ -z "$AGENTD_BIN" && -x agentd/dist/flock-agentd-linux-amd64 ]]; then
+  warn "go build failed or unavailable; using prebuilt agentd/dist/flock-agentd-linux-amd64"
+  AGENTD_BIN=agentd/dist/flock-agentd-linux-amd64
+fi
+if [[ -n "$AGENTD_BIN" ]]; then
   # Supervise the local daemon: if it ever exits (crash/OOM), restart it so local
   # sessions aren't permanently lost (T2 — the local-node equivalent of the SSH
   # nodes' systemd unit). 1s backoff avoids a tight crash loop.
   ( while true; do
-      FLOCK_AGENTD_SECRET="$AGENTD_SECRET" stdbuf -oL -eL /tmp/flock-agentd serve
+      FLOCK_AGENTD_SECRET="$AGENTD_SECRET" stdbuf -oL -eL "$AGENTD_BIN" serve
       echo "[agentd] exited — restarting in 1s"
       sleep 1
     done ) > >(tee -a /tmp/flock-agentd.log | sed $'s/^/\033[32m[agentd]\033[0m /') 2>&1 &
   pids+=($!)
 else
-  warn "flock-agentd build failed (see /tmp/flock-agentd-build.log); local node will have no transport."
+  warn "flock-agentd unavailable (see /tmp/flock-agentd-build.log); local node will have no transport."
 fi
 
 # Orchestrator: tsx watch restarts on any .ts change under apps/orchestrator.
@@ -122,7 +141,11 @@ stdbuf -oL -eL pnpm exec tsx watch --env-file="$ENV_FILE" --clear-screen=false \
 pids+=($!)
 
 # Web: Vite dev server with HMR (proxies /api + /ws to the orchestrator).
-stdbuf -oL -eL pnpm --filter @flock/web dev > >(tee -a "$WEB_LOG" | sed $'s/^/\033[35m[web]\033[0m /') 2>&1 &
+# WEB_PORT / PORT / VITE_API_PROXY flow into vite.config.ts for remote-test binds.
+stdbuf -oL -eL env WEB_PORT="$WEB_PORT" PORT="$API_PORT" \
+  VITE_API_PROXY="${VITE_API_PROXY:-http://127.0.0.1:${API_PORT}}" \
+  pnpm --filter @flock/web dev -- --host 0.0.0.0 --port "$WEB_PORT" \
+  > >(tee -a "$WEB_LOG" | sed $'s/^/\033[35m[web]\033[0m /') 2>&1 &
 pids+=($!)
 
 wait

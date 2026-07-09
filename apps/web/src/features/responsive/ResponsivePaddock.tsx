@@ -1,62 +1,64 @@
 /**
- * ResponsivePaddock — the US-36 (FR-UI6) responsive entry point.
+ * ResponsivePaddock — desktop paddock shell vs phone Agents stage.
  *
- * Picks the surface from the viewport (`useIsPhone`):
- *   - desktop / tablet → the dense US-30 three-region paddock (unchanged);
- *   - phone            → the collapsed "which agent needs me + approve/deny"
- *                        away view, fed by the same live status map the desktop
- *                        tree uses (`useStatusWebSocket`).
- *
- * Mounting both behind one component keeps the swap in a single, tested place;
- * App just renders <ResponsivePaddock />. The phone view is deliberately driven
- * by the SAME shared attention ordering as the tree (via PhoneView), so the two
- * surfaces can never disagree about "who needs me."
+ * Phone uses the same openAgent selection store and injects into real pty WS
+ * via sendPhoneInject (not a no-op Stage/Send).
  */
 import { useMemo } from 'react';
 import type { Status } from '@flock/shared';
 import { Paddock } from '../../app';
+import { useSessions } from '../../data/queries';
 import { useStatusWebSocket } from '../tree/useStatusWebSocket';
 import { PhoneView, type PhoneSession } from './PhoneView';
 import { useIsPhone } from './useIsPhone';
+import { sendPhoneInject } from './phoneInject';
 
 export function ResponsivePaddock(): JSX.Element {
   const isPhone = useIsPhone();
 
-  // Mount only ONE surface so the desktop paddock never opens the phone view's
-  // status WebSocket (and vice-versa). The status-WS subscription lives inside
-  // PhonePaddock so it is created only when the phone view is actually shown.
   if (!isPhone) {
     return <Paddock />;
   }
   return <PhonePaddock />;
 }
 
-/**
- * The phone surface: subscribes to the live status map and renders the away
- * view. Kept separate so the WS hook is only mounted on phones. The away view is
- * read-only ("which agent needs me"); remote approve/deny needs a per-agent
- * PTY-respond endpoint that doesn't exist yet, so it is not offered here (rather
- * than POSTing to a 404).
- */
 function PhonePaddock(): JSX.Element {
   const { statuses } = useStatusWebSocket();
-  const sessions = useMemo<PhoneSession[]>(() => statusesToSessions(statuses), [statuses]);
-  return <PhoneView sessions={sessions} />;
+  const { data: sessions = [] } = useSessions();
+  const phoneSessions = useMemo<PhoneSession[]>(
+    () => mergePhoneSessions(statuses, sessions),
+    [statuses, sessions],
+  );
+  return (
+    <PhoneView
+      sessions={phoneSessions}
+      onSendInput={(sessionId, text, submit) => sendPhoneInject(sessionId, text, submit)}
+    />
+  );
 }
 
-/**
- * Adapt the live `Map<sessionId, Status>` into the phone view's session list.
- *
- * The rich Node→Project→Session model (with human labels) is owned by the tree
- * stories; until that model is threaded here we derive a readable label from the
- * id so the away view is usable from the live status path alone.
- */
-function statusesToSessions(statuses: ReadonlyMap<string, Status>): PhoneSession[] {
-  return [...statuses.entries()].map(([id, status]) => ({
-    id,
-    label: id,
-    status,
-  }));
+function mergePhoneSessions(
+  statuses: ReadonlyMap<string, Status>,
+  sessions: ReadonlyArray<{
+    id: string;
+    agentType: string;
+    projectId: string;
+    closedAt: string | null;
+    status: Status;
+  }>,
+): PhoneSession[] {
+  const byId = new Map(sessions.map((s) => [s.id, s]));
+  const ids = new Set([...statuses.keys(), ...sessions.filter((s) => !s.closedAt).map((s) => s.id)]);
+  return [...ids].map((id) => {
+    const rec = byId.get(id);
+    const status: Status = statuses.get(id) ?? rec?.status ?? 'idle';
+    return {
+      id,
+      label: rec ? `${rec.agentType} · ${id.slice(0, 6)}` : id,
+      status,
+      projectId: rec?.projectId,
+    };
+  });
 }
 
 export default ResponsivePaddock;

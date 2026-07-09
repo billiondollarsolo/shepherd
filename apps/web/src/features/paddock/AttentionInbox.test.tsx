@@ -15,7 +15,7 @@ const mockStatuses = new Map<string, Status>([
   ['s-plan', 'awaiting_input'],
   ['s-err', 'error'],
 ]);
-const focusSession = vi.fn();
+const openAgent = vi.fn();
 
 vi.mock('../../data/queries', () => ({
   useSessions: () => ({ data: SESSIONS }),
@@ -24,7 +24,7 @@ vi.mock('../../data/queries', () => ({
 }));
 vi.mock('./liveData', () => ({ useLiveStatuses: () => mockStatuses }));
 vi.mock('../../store/paddock', () => ({
-  usePaddock: (sel: (s: Record<string, unknown>) => unknown) => sel({ focusSession }),
+  usePaddock: (sel: (s: Record<string, unknown>) => unknown) => sel({ openAgent }),
 }));
 
 import { AttentionInbox, attentionItems } from './AttentionInbox';

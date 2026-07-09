@@ -27,8 +27,11 @@ export type Status = z.infer<typeof StatusEnum>;
 /** Human-facing label per status — the single source for status text in the UI. */
 export const STATUS_LABEL: Readonly<Record<Status, string>> = {
   starting: 'Starting',
-  running: 'Running',
-  awaiting_input: 'Awaiting input',
+  /** Herdr-aligned: affirmative "working", not vague "running". */
+  running: 'Working',
+  /** Herdr-aligned blocked / needs human. */
+  awaiting_input: 'Needs you',
+  /** Always show Idle — absence of a word is not an affirmative status. */
   idle: 'Idle',
   done: 'Done',
   error: 'Error',

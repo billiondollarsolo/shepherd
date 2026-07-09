@@ -15,3 +15,9 @@ export {
 } from './map.js';
 export { StatusChannel, type StatusSocket } from './channel.js';
 export { rehydrateStatus, type OpenStatusRow } from './rehydrate.js';
+export {
+  planSessionTruth,
+  type NodeTruth,
+  type SessionTruthCorrection,
+  type SessionTruthRow,
+} from './session-truth.js';

@@ -4,10 +4,16 @@
  * hero band up top. Bold, status-forward design language (#100): status drives
  * colour + motion; click any agent to drop into its workspace.
  */
-import { useMemo, type CSSProperties } from 'react';
+import { useCallback, useMemo, type CSSProperties } from 'react';
 import { Bot, Check, FolderGit2, GitBranch, HardDrive, Layers, Network } from 'lucide-react';
 import { ViewSwitcher } from './ViewSwitcher';
-import { statusLabel, type GitStatusResponse, type Session, type Status } from '@flock/shared';
+import {
+  filterSessionsByHostScope,
+  statusLabel,
+  type GitStatusResponse,
+  type Session,
+  type Status,
+} from '@flock/shared';
 import {
   useNodes,
   useProjects,
@@ -208,17 +214,29 @@ export function MissionControl(): JSX.Element {
     setReviewed(id, true);
     updateSession.mutate({ id, patch: { reviewed: true } });
   };
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
   const openDialog = usePaddock((s) => s.openDialog);
   const openRight = usePaddock((s) => s.openRight);
+  /** D2: always pass projectId so stage layout scopes correctly. */
+  const openSession = useCallback(
+    (s: Session): void => {
+      openAgent(s.id, s.projectId);
+    },
+    [openAgent],
+  );
   // Jump straight to an agent's CHANGES (the work product) — the Review action.
-  const review_ = (id: string): void => {
-    focusSession(id);
+  const review_ = (s: Session): void => {
+    openSession(s);
     openRight('diff');
   };
 
   const statusOf = (s: Session): Status => live.get(s.id) ?? s.status;
-  const open = useMemo(() => sessions.filter((s) => s.closedAt === null), [sessions]);
+  const hostScope = usePaddock((s) => s.hostScope);
+  // Host chips scope the paddock home (not only the Agents list).
+  const open = useMemo(
+    () => filterSessionsByHostScope(sessions, hostScope, nodes),
+    [sessions, hostScope, nodes],
+  );
   // Fleet-wide git (shares the per-session cache) → card badges + the changes lane.
   const openIds = useMemo(() => open.map((s) => s.id), [open]);
   const fleetGit = useFleetGit(openIds);
@@ -300,8 +318,8 @@ export function MissionControl(): JSX.Element {
       meta={health?.sessions[s.id]}
       git={fleetGit.get(s.id)}
       chat={latestChats[s.id]}
-      onFocus={() => focusSession(s.id)}
-      onReview={opts?.review ? () => review_(s.id) : undefined}
+      onFocus={() => openSession(s)}
+      onReview={opts?.review ? () => review_(s) : undefined}
       onReviewed={opts?.review ? () => markReviewed(s.id) : undefined}
     />
   );
@@ -436,7 +454,7 @@ export function MissionControl(): JSX.Element {
                     <StatusDot status={statusOf(s)} pulse={statusOf(s) === 'awaiting_input'} />
                     <button
                       type="button"
-                      onClick={() => focusSession(s.id)}
+                      onClick={() => openSession(s)}
                       className="shrink-0 truncate text-sm font-medium text-flock-ink-primary hover:text-flock-accent"
                     >
                       {s.agentType}
@@ -447,7 +465,7 @@ export function MissionControl(): JSX.Element {
                     <GitBadge git={fleetGit.get(s.id)} className="shrink-0" />
                     <button
                       type="button"
-                      onClick={() => review_(s.id)}
+                      onClick={() => review_(s)}
                       className="shrink-0 rounded-md bg-flock-accent/15 px-2 py-1 text-2xs font-semibold text-flock-accent hover:bg-flock-accent/25"
                     >
                       Review →
@@ -471,7 +489,7 @@ export function MissionControl(): JSX.Element {
                       </span>
                       <button
                         type="button"
-                        onClick={() => focusSession(lead.id)}
+                        onClick={() => openSession(lead)}
                         className="truncate font-semibold text-flock-ink-primary hover:text-flock-accent"
                       >
                         {lead.agentType}
@@ -485,7 +503,7 @@ export function MissionControl(): JSX.Element {
                         <button
                           key={k.id}
                           type="button"
-                          onClick={() => focusSession(k.id)}
+                          onClick={() => openSession(k)}
                           title={latestChats[k.id]?.text ?? ''}
                           className="flex items-center gap-1.5 rounded-full border border-[var(--flock-border)] bg-flock-surface-2 px-2 py-1 text-2xs hover:border-flock-accent"
                         >

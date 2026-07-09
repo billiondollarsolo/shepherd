@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import App from './App';
 
 // App is auth-gated: on mount AuthGate probes GET /api/auth/me. With no session
-// (or no fetch) it falls back to the sign-in screen, whose card carries the
-// "Flock" wordmark. Stub fetch to a 401 so the gate resolves deterministically.
+// it falls back to the sign-in surface. Stub fetch to a 401 so the gate
+// resolves deterministically (not a transient retry).
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
@@ -13,10 +13,10 @@ beforeEach(() => {
 });
 
 describe('App', () => {
-  it('renders the Flock wordmark (sign-in surface when unauthenticated)', async () => {
+  it('renders the sign-in surface when unauthenticated', async () => {
     render(<App />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Flock' })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /sign in to flock/i })).toBeInTheDocument(),
     );
   });
 });

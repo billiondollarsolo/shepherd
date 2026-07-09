@@ -36,6 +36,35 @@ class FakeWs implements WsLike {
 }
 
 describe('usePtyWebSocket', () => {
+  it('reconnectNow closes and reopens the socket', async () => {
+    const sockets: FakeWs[] = [];
+    const factory = vi.fn((url: string) => {
+      const s = new FakeWs(url);
+      sockets.push(s);
+      return s;
+    });
+    const onReconnect = vi.fn();
+    const { result } = renderHook(() =>
+      usePtyWebSocket('sess-r', {
+        onData: () => {},
+        wsFactory: factory,
+        reconnect: false,
+        onReconnect,
+      }),
+    );
+    act(() => sockets[0]!.open());
+    expect(result.current.state).toBe('open');
+    act(() => {
+      result.current.reconnectNow();
+      // hardClose nulls handlers before close — open the new socket
+      sockets[1]!.open();
+    });
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(sockets[0]!.closed).toBe(true);
+    expect(result.current.state).toBe('open');
+    expect(onReconnect).toHaveBeenCalled();
+  });
+
   it('connects, sets binaryType=arraybuffer, and reports open', async () => {
     let socket: FakeWs | undefined;
     const factory = vi.fn((url: string) => {

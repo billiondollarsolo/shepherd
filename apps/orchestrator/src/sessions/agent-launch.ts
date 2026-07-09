@@ -238,3 +238,26 @@ export function agentSupportsAcp(agentType: AgentType): boolean {
 export function agentUsesActivityStatus(agentType: AgentType): boolean {
   return AGENT_CAPS[agentType].activityStatus;
 }
+
+/**
+ * Foreground process names that are the agent TUI itself (not a sub-tool).
+ * watchForeground reports these as tool + running whenever the CLI owns the PTY
+ * — including while idle at the prompt. Real tool use uses names like Bash/Edit.
+ */
+const BARE_AGENT_PROCESS_NAMES = new Set([
+  'grok',
+  'opencode',
+  'gemini',
+  'claude',
+  'codex',
+  'aider',
+  'cursor-agent',
+  'amp',
+]);
+
+/** True when `tool` is just the agent binary sitting on the PTY (not real work). */
+export function isBareAgentProcessName(tool: string | null | undefined): boolean {
+  if (!tool) return false;
+  const base = tool.trim().split(/[/\\]/).pop()?.toLowerCase() ?? '';
+  return BARE_AGENT_PROCESS_NAMES.has(base);
+}

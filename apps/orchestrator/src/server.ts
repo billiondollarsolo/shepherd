@@ -34,6 +34,7 @@ import {
 import { registerNodeWorkspaceRoutes } from './nodes/node-workspace-route.js';
 import type { NodeWorkspaceService } from './nodes/node-workspace-service.js';
 import { registerProjectRoutes, type ProjectService } from './projects/index.js';
+import { registerMeRoutes } from './me/me-routes.js';
 
 /** Optional collaborators wired into the server (added incrementally per phase). */
 export interface BuildServerDeps {
@@ -147,6 +148,11 @@ export interface BuildServerDeps {
    * node-scoped projects (404 on an unknown node).
    */
   projects?: ProjectService;
+  /**
+   * Per-user shell APIs (selection, launcher presets, project layouts).
+   * When provided ALONGSIDE `auth`, registers `/api/me/*` and project layout routes.
+   */
+  me?: import('./me/me-routes.js').MeRouteDeps;
   /**
    * Session list/create (FR-S2/S3). When provided ALONGSIDE `auth`, `GET/POST
    * /api/sessions` are registered: list (optionally by `?projectId=`) and create
@@ -306,6 +312,11 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     // Project CRUD (FR-N3): cookie-authed list/create.
     if (deps.projects) {
       registerProjectRoutes(app, { service: deps.projects, auth: deps.auth });
+    }
+
+    // Per-user shell: fleet selection, launcher presets, project layouts.
+    if (deps.me) {
+      registerMeRoutes(app, deps.me);
     }
 
     // Session list/create (FR-S2/S3): cookie-authed.

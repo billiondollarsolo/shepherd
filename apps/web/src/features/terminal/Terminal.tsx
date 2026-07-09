@@ -18,12 +18,13 @@
  * the pane (re-fitting on font load + socket open so tmux always gets the real
  * size). The xterm + WS factories are injectable so this is unit-testable.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Terminal as XTerm, type ITerminalOptions, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
+import { RefreshCw } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 import { usePtyWebSocket, type WsFactory } from './usePtyWebSocket';
 import { loadTerminalFont } from '../../styles/terminal-fonts';
@@ -40,10 +41,17 @@ export interface XtermLike {
   /** Clear the buffer + scrollback (used to repaint cleanly on RECONNECT so the
    *  resume replay replaces the stale screen instead of being appended). */
   reset?(): void;
+  /** Force DOM repaint of rows (real xterm; tests may omit). */
+  refresh?(start: number, end: number): void;
   dispose(): void;
   readonly cols: number;
   readonly rows: number;
 }
+
+/** How long after PTY open with zero bytes before we flag a blank pane. */
+const BLANK_DETECT_MS = 2_500;
+/** Minimum container size before FitAddon is allowed to run. */
+const MIN_FIT_PX = 16;
 
 export type XtermFactory = (opts: ITerminalOptions) => XtermLike;
 
@@ -144,9 +152,13 @@ export default function Terminal({
   initialCommand,
 }: TerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
   const cmdSentRef = useRef(false);
   const termRef = useRef<XtermLike | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const bytesRef = useRef(0);
+  const [blankSuspect, setBlankSuspect] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   // Stable refs to bridge the xterm instance <-> the WS hook without reordering
   // hooks: the hook owns the socket; the effect below owns the terminal.
@@ -154,6 +166,8 @@ export default function Terminal({
   const sendResizeRef = useRef<(cols: number, rows: number) => void>(() => {});
   // A stable fit() the open-effect can call once the socket is ready.
   const doFitRef = useRef<() => void>(() => {});
+  /** Aggressive recovery after keep-alive unhide / blank detection. */
+  const recoverRef = useRef<() => void>(() => {});
 
   // Estimate the grid size from the container's pixels BEFORE the socket opens,
   // so the PTY is created at (about) the right size and a fresh shell prints its
@@ -172,20 +186,27 @@ export default function Terminal({
     if (!el) return null;
     const w = el.clientWidth;
     const h = el.clientHeight;
-    if (w <= 0 || h <= 0) return null;
+    if (w < MIN_FIT_PX || h < MIN_FIT_PX) return null;
     return { cols: Math.max(2, Math.floor(w / 8.4)), rows: Math.max(2, Math.floor(h / 16.8)) };
   }, []);
 
-  const { state, sendInput, sendResize } = usePtyWebSocket(sessionId, {
-    onData: (bytes) => termRef.current?.write(bytes),
+  const { state, sendInput, sendResize, reconnectNow } = usePtyWebSocket(sessionId, {
+    onData: (bytes) => {
+      bytesRef.current += bytes.byteLength;
+      if (bytes.byteLength > 0) setBlankSuspect(false);
+      termRef.current?.write(bytes);
+    },
     wsFactory,
     getInitialSize,
     // On RECONNECT the terminal kept its pre-drop screen; clear it so the server's
     // resume replay repaints cleanly instead of being appended (the duplicate
     // prompts / stacked agent welcome boxes). Re-fit after, then the replay paints.
     onReconnect: () => {
+      bytesRef.current = 0;
       termRef.current?.reset?.();
       doFitRef.current();
+      // After resume replay settles, force a redraw (alt-screen TUIs).
+      window.setTimeout(() => recoverRef.current(), 80);
     },
   });
   sendInputRef.current = sendInput;
@@ -272,7 +293,7 @@ export default function Terminal({
     // visibly garbles alt-screen TUIs (gemini/claude/htop) mid-drag and can leave
     // WebGL artifacts. One settled fit → one SIGWINCH → the app repaints once.
     let fitTimer: ReturnType<typeof setTimeout> | undefined;
-    const fitAndSync = (): void => {
+    const fitAndSync = (opts?: { forceResize?: boolean; refresh?: boolean }): void => {
       if (disposed) return;
       // NEVER fit a zero-size container: FitAddon clamps to its ~10×4 / 84px minimum,
       // which leaves the PTY tiny AND seeds the resize dedupe wrong — so a backgrounded
@@ -280,9 +301,9 @@ export default function Terminal({
       // htop/vim/agent TUIs into a few rows. Skip + retry so a late layout or a
       // becoming-visible pane self-heals (ResizeObserver also re-fits on real changes).
       const elNow = containerRef.current;
-      if (!elNow || elNow.clientWidth <= 0 || elNow.clientHeight <= 0) {
+      if (!elNow || elNow.clientWidth < MIN_FIT_PX || elNow.clientHeight < MIN_FIT_PX) {
         if (fitTimer) clearTimeout(fitTimer);
-        fitTimer = setTimeout(fitAndSync, 150);
+        fitTimer = setTimeout(() => fitAndSync(opts), 150);
         return;
       }
       try {
@@ -290,19 +311,33 @@ export default function Terminal({
       } catch {
         // container not laid out yet; ignore
       }
+      if (opts?.forceResize) {
+        // Break resize dedupe so the daemon gets a real SIGWINCH (alt-screen
+        // agents redraw; blank panes after unhide often need this).
+        lastCols = 0;
+        lastRows = 0;
+      }
       scheduleResize();
-      // NOTE: no explicit refresh() here — FitAddon.fit() calls term.resize() on
-      // any dimension change, which makes the DOM renderer repaint from the buffer.
-      // (The old forced full-viewport refresh was only needed for the WebGL
-      // renderer's frame-loss/atlas-corruption on resize; WebGL is gone.)
+      if (opts?.refresh) {
+        try {
+          const rows = term.rows;
+          if (rows > 0) term.refresh?.(0, rows - 1);
+        } catch {
+          /* fake terminal */
+        }
+      }
     };
     const doFit = (): void => {
       // Never fit a terminal that's been disposed (StrictMode/unmount races).
       if (disposed) return;
       if (fitTimer) clearTimeout(fitTimer);
-      fitTimer = setTimeout(fitAndSync, 90);
+      fitTimer = setTimeout(() => fitAndSync(), 90);
     };
     doFitRef.current = doFit;
+    recoverRef.current = (): void => {
+      if (disposed) return;
+      fitAndSync({ forceResize: true, refresh: true });
+    };
 
     // Fit now, then SEED the resize dedupe with this size: the PTY is opened at
     // exactly this size (carried in the WS URL via getInitialSize), so the
@@ -360,6 +395,29 @@ export default function Terminal({
     const onWinResize = (): void => doFit();
     window.addEventListener('resize', onWinResize);
 
+    // Keep-alive panes live under display:none while another agent is zoomed.
+    // When they become visible again, force fit + SIGWINCH + refresh so TUIs
+    // repaint (hard-refresh was the previous workaround).
+    let wasVisible =
+      el.clientWidth >= MIN_FIT_PX && el.clientHeight >= MIN_FIT_PX;
+    const io =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                const vis = entry.isIntersecting && entry.intersectionRatio > 0;
+                if (vis && !wasVisible) {
+                  recoverRef.current();
+                }
+                wasVisible = vis;
+              }
+            },
+            { threshold: [0, 0.01, 0.1] },
+          )
+        : null;
+    const outer = outerRef.current;
+    if (outer) io?.observe(outer);
+
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
@@ -367,10 +425,12 @@ export default function Terminal({
       if (resizeTimer) clearTimeout(resizeTimer);
       if (fitTimer) clearTimeout(fitTimer);
       ro?.disconnect();
+      io?.disconnect();
       window.removeEventListener('resize', onWinResize);
       termRef.current = null;
       fitRef.current = null;
       doFitRef.current = () => {};
+      recoverRef.current = () => {};
       // Defer dispose to a macrotask so xterm's OWN pending open()-scheduled
       // timer (Viewport.syncScrollArea) fires on a still-live instance first
       // (avoids the StrictMode "reading 'dimensions'" crash).
@@ -399,6 +459,7 @@ export default function Terminal({
   useEffect(() => {
     if (state !== 'open') return;
     doFitRef.current();
+    recoverRef.current();
     // Run the split's initial command once, after the shell is up + sized.
     if (initialCommand && !cmdSentRef.current) {
       cmdSentRef.current = true;
@@ -406,10 +467,40 @@ export default function Terminal({
     }
   }, [state, initialCommand, sendInput]);
 
+  // Blank-pane detector: socket open, container sized, zero PTY bytes for a while.
+  useEffect(() => {
+    if (state !== 'open') {
+      setBlankSuspect(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      const el = containerRef.current;
+      const sized = !!el && el.clientWidth >= MIN_FIT_PX && el.clientHeight >= MIN_FIT_PX;
+      if (sized && bytesRef.current === 0) {
+        setBlankSuspect(true);
+        setLastError('No output received — pane may be blank.');
+        // Auto-recover once: fit + force redraw before asking the user to click.
+        recoverRef.current();
+      }
+    }, BLANK_DETECT_MS);
+    return () => window.clearTimeout(t);
+  }, [state, sessionId]);
+
+  const onRecover = (): void => {
+    setBlankSuspect(false);
+    setLastError(null);
+    bytesRef.current = 0;
+    recoverRef.current();
+    reconnectNow();
+  };
+
   return (
     <div
+      ref={outerRef}
       className="relative h-full w-full overflow-hidden"
       data-session-id={sessionId}
+      data-pty-state={state}
+      data-blank-suspect={blankSuspect ? '1' : '0'}
       style={{ backgroundColor: TERMINAL_BG, padding: '8px 10px' }}
     >
       <div
@@ -431,6 +522,24 @@ export default function Terminal({
           className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white"
         >
           {state === 'connecting' ? 'connecting…' : 'reconnecting…'}
+        </div>
+      ) : null}
+      {blankSuspect && state === 'open' ? (
+        <div
+          data-testid="terminal-blank-recover"
+          className="absolute inset-x-2 bottom-2 z-10 flex items-center justify-between gap-2 rounded-md border border-status-awaiting/40 bg-black/80 px-3 py-2 text-xs text-white shadow-lg"
+        >
+          <span className="min-w-0 truncate text-flock-ink-muted" style={{ color: '#c8ccd4' }}>
+            {lastError ?? 'Pane looks blank.'} Try recovering the PTY attach.
+          </span>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded bg-flock-accent px-2.5 py-1 font-medium text-white hover:brightness-110"
+            onClick={onRecover}
+          >
+            <RefreshCw className="size-3.5" />
+            Recover
+          </button>
         </div>
       ) : null}
     </div>

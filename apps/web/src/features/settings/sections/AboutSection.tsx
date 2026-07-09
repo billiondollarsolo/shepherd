@@ -1,3 +1,4 @@
+import { BuiltBy } from '../../../components/BuiltBy';
 import { Badge } from '../../../components/ui';
 import { SectionHeader } from '../SettingsSection';
 
@@ -14,6 +15,7 @@ export function AboutSection(): JSX.Element {
           A web paddock for supervising a flock of CLI coding agents across local and
           remote nodes. Sessions run on the flock-agentd daemon; the orchestrator holds the brains.
         </p>
+        <BuiltBy className="text-sm" />
       </div>
     </div>
   );

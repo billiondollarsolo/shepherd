@@ -379,7 +379,8 @@ export type SessionIdParams = z.infer<typeof SessionIdParams>;
 export const UpdateSessionRequest = z
   .object({
     pinned: z.boolean().optional(),
-    note: z.string().max(2000).nullable().optional(),
+    /** Markdown-capable supervisor note (raised for herdr-aligned notes). */
+    note: z.string().max(32000).nullable().optional(),
     reviewed: z.boolean().optional(),
   })
   .refine((v) => v.pinned !== undefined || v.note !== undefined || v.reviewed !== undefined, {
@@ -730,6 +731,8 @@ export const StatusUpdateMessage = z.object({
   status: StatusEnum,
   detail: z.string().nullable(),
   ts: IsoTimestamp,
+  /** ISO timestamp of last semantic status change (Agents sort key). */
+  lastStatusTransitionAt: IsoTimestamp.optional(),
   meta: AgentTelemetry.optional(),
 });
 export type StatusUpdateMessage = z.infer<typeof StatusUpdateMessage>;

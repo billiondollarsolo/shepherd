@@ -121,4 +121,14 @@ describe('agent capability table', () => {
     expect(agentUsesActivityStatus('opencode')).toBe(false);
     expect(agentUsesActivityStatus('terminal')).toBe(false);
   });
+
+  it('isBareAgentProcessName catches TUI process names (not real tools)', async () => {
+    const { isBareAgentProcessName } = await import('./agent-launch.js');
+    expect(isBareAgentProcessName('grok')).toBe(true);
+    expect(isBareAgentProcessName('/usr/bin/grok')).toBe(true);
+    expect(isBareAgentProcessName('opencode')).toBe(true);
+    expect(isBareAgentProcessName('Bash')).toBe(false);
+    expect(isBareAgentProcessName('Edit')).toBe(false);
+    expect(isBareAgentProcessName(null)).toBe(false);
+  });
 });

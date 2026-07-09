@@ -261,7 +261,9 @@ export class SupervisedSshConnection {
 
   /**
    * Open the managed connection. Resolves once connected; rejects (and sets
-   * status `error`) if the INITIAL connect fails. After a successful connect,
+   * status `error`) if the INITIAL connect fails — but still schedules the
+   * autossh-style reconnect loop so a node that was offline at boot can come
+   * online later without an orchestrator restart. After a successful connect,
    * later drops are handled by the supervisor, not by this promise.
    */
   async connect(): Promise<void> {
@@ -271,6 +273,10 @@ export class SupervisedSshConnection {
       await this.openOnce();
     } catch (err) {
       this.setStatus('error');
+      // Keep trying: VMs / networks often appear after the orchestrator boots.
+      // Without this, a failed initial connect left the node stuck in `error`
+      // forever (reconnect was only scheduled after a post-connected drop).
+      this.scheduleReconnect();
       throw err;
     }
   }

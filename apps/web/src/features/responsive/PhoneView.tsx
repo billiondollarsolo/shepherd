@@ -1,48 +1,35 @@
 /**
- * PhoneView — the US-36 phone-friendly away view (FR-UI6).
- *
- * The desktop paddock (US-30 AppShell) is three dense regions; on a phone we
- * collapse to a single scrollable "which agent needs me + approve/deny" column:
- *
- *   - sessions are ordered by the SHARED attention ranking
- *     (`sortSessionsByAttention` → `STATUS_POLICY.attentionRank`), so the agents
- *     blocked on a human (awaiting_input, then error) sit at the top — identical
- *     to the desktop tree, by construction;
- *   - any session in `awaiting_input` gets inline Approve / Deny buttons so the
- *     supervisor can unblock it from their phone (the reason the away view
- *     exists, PRD §1.2 / mobile row in §"platform support");
- *   - a calm all-clear / empty state when nothing needs attention.
- *
- * Presentational + controlled: the caller supplies the session list (from the
- * live `useStatusWebSocket` map) and an `onDecision` handler. No data fetching
- * here, so it unit-tests with no DOM server.
+ * PhoneView — mobile Agents list + driveable stage for the paddock.
+ * Stage/send injects into the real pty:<sessionId> WebSocket (same framing as desktop).
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Status } from '@flock/shared';
+import { loudStatusWord } from '@flock/shared';
 import { sortSessionsByAttention } from '../tree/ordering';
+import { usePaddock } from '../../store/paddock';
+import { StatusDot } from '../../components/StatusDot';
+import { sendPhoneInject } from './phoneInject';
 
-/**
- * The two statuses that demand a human (spec §7: awaiting_input + error "ring
- * the sidebar"). Computed locally so the away view depends only on the shared
- * StatusEnum + ordering, not on the policy helper surface.
- */
 const ATTENTION_STATUSES: ReadonlySet<Status> = new Set<Status>(['awaiting_input', 'error']);
 
 function needsAttention(status: Status): boolean {
   return ATTENTION_STATUSES.has(status);
 }
 
-/** A session as the phone view needs it. */
 export interface PhoneSession {
   readonly id: string;
   readonly label: string;
   readonly status: Status;
+  readonly projectId?: string;
 }
 
 export interface PhoneViewProps {
   readonly sessions: readonly PhoneSession[];
-  /** Called when a session row is tapped (to open it). */
   readonly onSelectSession?: (sessionId: string) => void;
+  /**
+   * Optional override for tests. Production uses {@link sendPhoneInject} into pty WS.
+   */
+  readonly onSendInput?: (sessionId: string, text: string, submit: boolean) => void | Promise<void>;
 }
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -55,7 +42,6 @@ const STATUS_LABEL: Record<Status, string> = {
   disconnected: 'Disconnected',
 };
 
-/** The `--flock-status-*` CSS variable for a status dot (awaiting_input → awaiting). */
 function statusDotVar(status: Status): string {
   const key = status === 'awaiting_input' ? 'awaiting' : status;
   return `var(--flock-status-${key})`;
@@ -69,6 +55,7 @@ function SessionRow({
   onSelectSession?: (id: string) => void;
 }): JSX.Element {
   const rings = needsAttention(session.status);
+  const loud = loudStatusWord(session.status);
 
   return (
     <li
@@ -79,72 +66,179 @@ function SessionRow({
     >
       <button
         type="button"
+        className="flex w-full items-center gap-3 text-left"
         onClick={() => onSelectSession?.(session.id)}
-        className="flex items-center gap-3 text-left"
       >
         <span
-          aria-hidden="true"
-          className={rings ? 'h-3 w-3 shrink-0 rounded-full ring-2 ring-offset-2 ring-offset-flock-bg' : 'h-3 w-3 shrink-0 rounded-full'}
-          style={{ backgroundColor: statusDotVar(session.status), color: statusDotVar(session.status) }}
+          className={`size-2.5 shrink-0 rounded-full ${rings ? 'animate-pulse' : ''}`}
+          style={{ background: statusDotVar(session.status) }}
         />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium text-flock-fg">{session.label}</span>
-          <span className="block text-xs text-flock-muted">{STATUS_LABEL[session.status]}</span>
-        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-medium text-flock-ink-primary">{session.label}</div>
+          <div className="text-2xs text-flock-ink-muted">
+            {loud ?? STATUS_LABEL[session.status]}
+          </div>
+        </div>
+        <StatusDot status={session.status} />
       </button>
     </li>
   );
 }
 
-export function PhoneView({ sessions, onSelectSession }: PhoneViewProps): JSX.Element {
-  // Same shared ordering the desktop tree uses: attention sessions float up.
-  const ordered = useMemo(() => sortSessionsByAttention(sessions), [sessions]);
-  const anyNeedsAttention = useMemo(
-    () => ordered.some((s) => needsAttention(s.status)),
-    [ordered],
-  );
+const KEY_STRIP: ReadonlyArray<{ label: string; seq: string }> = [
+  { label: 'Esc', seq: '\u001b' },
+  { label: 'Tab', seq: '\t' },
+  { label: '↑', seq: '\u001b[A' },
+  { label: '↓', seq: '\u001b[B' },
+  { label: 'Enter', seq: '\r' },
+  { label: 'Ctrl-C', seq: '\u0003' },
+];
+
+function PhoneStage({
+  session,
+  onBack,
+  onSendInput,
+}: {
+  session: PhoneSession;
+  onBack: () => void;
+  onSendInput: (sessionId: string, text: string, submit: boolean) => void | Promise<void>;
+}): JSX.Element {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const send = async (text: string, submit: boolean): Promise<void> => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSendInput(session.id, text, submit);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Send failed');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div
-      data-testid="phone-view"
-      className="flex h-screen w-screen flex-col overflow-hidden bg-flock-bg text-flock-fg"
-    >
-      <header className="flex items-center justify-between border-b border-flock-muted/15 px-4 py-3">
-        <h1 className="text-base font-semibold tracking-tight">Flock</h1>
-        <span className="text-xs text-flock-muted">Which agent needs me?</span>
+    <div className="flex h-full flex-col bg-flock-bg" data-testid="phone-stage">
+      <header className="flex items-center gap-2 border-b border-[var(--flock-border)] px-3 py-2">
+        <button type="button" className="text-sm text-flock-accent" onClick={onBack}>
+          ← Agents
+        </button>
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">{session.label}</div>
+        <span className="text-2xs text-flock-ink-muted">{STATUS_LABEL[session.status]}</span>
       </header>
-
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        {ordered.length === 0 ? (
-          <div
-            data-testid="phone-empty"
-            className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-flock-muted"
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-flock-ink-muted">
+        <p>Drive this agent from the paddock command bar.</p>
+        <p className="text-2xs">Input is sent to the agent terminal (pty) on this session.</p>
+        {err ? <p className="text-2xs text-status-error">{err}</p> : null}
+      </div>
+      <div className="flex flex-wrap gap-1 border-t border-[var(--flock-border)] px-2 py-1.5" data-testid="phone-key-strip">
+        {KEY_STRIP.map((k) => (
+          <button
+            key={k.label}
+            type="button"
+            disabled={busy}
+            className="rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1 text-2xs disabled:opacity-50"
+            onClick={() => void send(k.seq, false)}
           >
-            <p className="text-base">No sessions yet.</p>
-            <p className="text-sm">Start one from a desktop to supervise it here.</p>
-          </div>
-        ) : (
-          <>
-            {!anyNeedsAttention ? (
-              <div
-                data-testid="phone-allclear"
-                className="border-b border-flock-muted/15 px-4 py-3 text-center text-sm text-flock-muted"
-              >
-                All clear — nothing needs you right now.
-              </div>
-            ) : null}
-            <ul>
-              {ordered.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  onSelectSession={onSelectSession}
-                />
-              ))}
-            </ul>
-          </>
-        )}
-      </main>
+            {k.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2 border-t border-[var(--flock-border)] p-2">
+        <textarea
+          data-testid="phone-stage-input"
+          aria-label="Agent command"
+          className="min-h-[2.5rem] flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1.5 text-sm"
+          placeholder="Message the agent…"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={2}
+        />
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            data-testid="phone-stage-btn"
+            disabled={busy || !draft}
+            className="rounded bg-flock-surface-2 px-3 py-1.5 text-2xs font-medium disabled:opacity-50"
+            onClick={() => void send(draft, false)}
+          >
+            Stage
+          </button>
+          <button
+            type="button"
+            data-testid="phone-send-btn"
+            disabled={busy}
+            className="rounded bg-flock-accent px-3 py-1.5 text-2xs font-medium text-white disabled:opacity-50"
+            onClick={() => {
+              void send(draft || '', true).then(() => setDraft(''));
+            }}
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PhoneView({ sessions, onSelectSession, onSendInput }: PhoneViewProps): JSX.Element {
+  const openAgent = usePaddock((s) => s.openAgent);
+  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
+  const selectSession = usePaddock((s) => s.selectSession);
+
+  const inject =
+    onSendInput ??
+    ((sessionId: string, text: string, submit: boolean) => sendPhoneInject(sessionId, text, submit));
+
+  const ordered = useMemo(
+    () =>
+      sortSessionsByAttention(sessions.map((s) => ({ id: s.id, status: s.status })))
+        .map((o) => sessions.find((s) => s.id === o.id)!)
+        .filter(Boolean),
+    [sessions],
+  );
+
+  const selected = selectedSessionId
+    ? sessions.find((s) => s.id === selectedSessionId) ?? null
+    : null;
+
+  if (selected) {
+    return (
+      <PhoneStage
+        session={selected}
+        onBack={() => selectSession(null)}
+        onSendInput={inject}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col bg-flock-bg" data-testid="phone-view">
+      <header className="border-b border-[var(--flock-border)] px-4 py-3">
+        <h1 className="text-base font-semibold text-flock-ink-primary">Agents</h1>
+        <p className="text-2xs text-flock-ink-muted">Paddock away view · tap to drive</p>
+      </header>
+      {ordered.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center p-6 text-sm text-flock-ink-muted">
+          All clear — no agents in the paddock.
+        </div>
+      ) : (
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {ordered.map((s) => (
+            <SessionRow
+              key={s.id}
+              session={s}
+              onSelectSession={(id) => {
+                const sess = sessions.find((x) => x.id === id);
+                openAgent(id, sess?.projectId);
+                onSelectSession?.(id);
+              }}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

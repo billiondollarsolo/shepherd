@@ -67,7 +67,8 @@ import { GridView } from './GridView';
 
 describe('GridView (kanban — per-project, scroll, tabs)', () => {
   beforeEach(() => {
-    usePaddock.setState({ viewMode: 'grid', selectedSessionId: 'a', dialog: null });
+    // Project layout (multi-leaf): no selected session → show all panes + tabs.
+    usePaddock.setState({ selectedSessionId: null, selectedProjectId: 'P', dialog: null, lens: 'agents' });
     mockStatuses = new Map();
     mockHealth = null;
   });
@@ -89,20 +90,19 @@ describe('GridView (kanban — per-project, scroll, tabs)', () => {
     expect(within(tabs).getByTestId('grid-tab-c')).toBeInTheDocument();
   });
 
-  it('clicking a tab selects + scrolls (stays in grid, does not switch to focus)', () => {
+  it('clicking a tab selects + scrolls (stays in multi-leaf layout)', () => {
     render(<GridView />);
     const tab = within(screen.getByTestId('grid-tab-b')).getByTitle(/scroll into view/i);
     fireEvent.click(tab);
     expect(usePaddock.getState().selectedSessionId).toBe('b');
-    expect(usePaddock.getState().viewMode).toBe('grid'); // NOT switched away
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
-  it('double-clicking a tab maximizes (focus view)', () => {
+  it('double-clicking a tab opens agent on stage (agents lens)', () => {
     render(<GridView />);
     const tab = within(screen.getByTestId('grid-tab-c')).getByTitle(/scroll into view/i);
     fireEvent.doubleClick(tab);
-    expect(usePaddock.getState().viewMode).toBe('focus');
+    expect(usePaddock.getState().lens).toBe('agents');
     expect(usePaddock.getState().selectedSessionId).toBe('c');
   });
 
@@ -121,8 +121,8 @@ describe('GridView (kanban — per-project, scroll, tabs)', () => {
     expect(usePaddock.getState().dialogProjectId).toBe('P');
   });
 
-  it('shows the empty state when no session is selected (no project scope)', () => {
-    usePaddock.setState({ selectedSessionId: null });
+  it('shows the empty state when no session or project is selected', () => {
+    usePaddock.setState({ selectedSessionId: null, selectedProjectId: null });
     render(<GridView />);
     expect(screen.queryByTestId('grid-cells')).toBeNull();
   });
@@ -135,11 +135,11 @@ describe('GridView (kanban — per-project, scroll, tabs)', () => {
     expect(usePaddock.getState().dialogSessionId).toBe('b');
   });
 
-  it('maximizing from a pane switches to focus view + selects the session', async () => {
+  it('maximizing from a pane opens agent (agents lens + selection)', async () => {
     render(<GridView />);
     const cell = await screen.findByTestId('grid-cell-b');
     fireEvent.click(within(cell).getByLabelText('Focus session'));
-    expect(usePaddock.getState().viewMode).toBe('focus');
+    expect(usePaddock.getState().lens).toBe('agents');
     expect(usePaddock.getState().selectedSessionId).toBe('b');
   });
 

@@ -30,7 +30,7 @@ export function timeAgo(iso: string, now: number): string {
 }
 
 export function ActivityFeed(): JSX.Element {
-  const focusSession = usePaddock((s) => s.focusSession);
+  const openAgent = usePaddock((s) => s.openAgent);
   const { data: sessions = [] } = useSessions();
   const { data: nodes = [] } = useNodes();
   const { data: projects = [] } = useProjects();
@@ -74,7 +74,7 @@ export function ActivityFeed(): JSX.Element {
                   key={ev.id}
                   type="button"
                   data-testid={`activity-item-${ev.id}`}
-                  onClick={() => focusSession(ev.sessionId)}
+                  onClick={() => openAgent(ev.sessionId)}
                   className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-flock-surface-2"
                 >
                   <span

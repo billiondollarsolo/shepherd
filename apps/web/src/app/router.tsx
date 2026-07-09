@@ -1,19 +1,7 @@
 /**
- * URL routing (TanStack Router) — gives sessions / projects / nodes / settings
- * real, shareable, back-button-able URLs.
- *
- * DESIGN — sync-only, NOT Outlet-driven. The paddock renders from the zustand
- * store, and terminals are kept mounted across navigations (no PTY reconnect —
- * see SessionPane/GridView). If routes swapped the center via <Outlet> we'd
- * unmount terminals on every navigation. So instead:
- *   - the router OWNS the URL (history, params, back/forward, type-safe nav);
- *   - the single root route renders the existing shell ONCE; child routes render
- *     nothing (they exist only to define the URL shape);
- *   - {@link UrlStoreSync} keeps URL ⇄ store in sync both ways.
- *
- * The URL ⇄ store mapping is two PURE functions ({@link pathToNav} /
- * {@link navToPath}) so it is unit-tested without a browser, and so the two
- * directions are provably consistent (no navigation ping-pong).
+ * URL routing (TanStack Router) — sync-only, NOT Outlet-driven.
+ * herdr-aligned paths: / , /agents , /agents/:sessionId , /p/:id , /n/:id , /s/:id (compat)
+ * See docs/herdr-aligned-shell-plan.md §0.8 and @flock/shared shell-nav.
  */
 import { useEffect } from 'react';
 import {
@@ -22,6 +10,13 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
+import {
+  pathToShellNav,
+  shellNavToPath,
+  type HostScope,
+  type ShellLens,
+  type ShellChrome,
+} from '@flock/shared';
 
 import { AuthGate } from '../features/auth/AuthGate';
 import { ResponsivePaddock } from '../features/responsive';
@@ -37,109 +32,110 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 ];
 
 /** The subset of store state a URL determines. */
-type NavPatch = Partial<
+export type NavPatch = Partial<
   Pick<
     PaddockUiState,
-    'view' | 'settingsSection' | 'viewMode' | 'selectedSessionId' | 'selectedProjectId' | 'nodeInfoNodeId'
+    | 'view'
+    | 'settingsSection'
+    | 'selectedSessionId'
+    | 'selectedProjectId'
+    | 'nodeInfoNodeId'
+    | 'lens'
+    | 'chrome'
+    | 'hostScope'
   >
 >;
 
 /**
- * URL → store patch. Returns ONLY the keys a given path determines (applied as a
- * diff), so unrelated state (right panel, file viewer, …) is never clobbered.
+ * URL → store patch. Uses shared pathToShellNav; maps to paddock view fields.
  */
 export function pathToNav(pathname: string): NavPatch {
-  const seg = pathname.split('/').filter(Boolean);
+  const shell = pathToShellNav(pathname);
+  const patch: NavPatch = {};
 
-  // /settings, /settings/:section
-  if (seg[0] === 'settings') {
-    const section = seg[1];
-    if (section && (SETTINGS_SECTIONS as readonly string[]).includes(section)) {
-      return { view: 'settings', settingsSection: section as SettingsSection };
+  if (shell.settings) {
+    patch.view = 'settings';
+    if (shell.settingsSection && (SETTINGS_SECTIONS as readonly string[]).includes(shell.settingsSection)) {
+      patch.settingsSection = shell.settingsSection as SettingsSection;
     }
-    return { view: 'settings' };
+    return patch;
   }
-  // /n/:nodeId — node details overlay the center (selection is left intact)
-  if (seg[0] === 'n' && seg[1]) {
-    return { view: 'paddock', nodeInfoNodeId: seg[1] };
+
+  if (shell.lens === 'mission' && !shell.selectedSessionId && !shell.activeProjectId) {
+    patch.view = 'overview';
+  } else {
+    patch.view = 'paddock';
   }
-  // /s/:sessionId — focus a session
-  if (seg[0] === 's' && seg[1]) {
-    return {
-      view: 'paddock',
-      viewMode: 'focus',
-      selectedSessionId: seg[1],
-      nodeInfoNodeId: null,
-    };
-  }
-  // /p/:projectId — that project's grid (leaves any highlighted session as-is;
-  // selectedProjectId wins for grid scope)
-  if (seg[0] === 'p' && seg[1]) {
-    return {
-      view: 'paddock',
-      viewMode: 'grid',
-      selectedProjectId: seg[1],
-      nodeInfoNodeId: null,
-    };
-  }
-  // / — home is Paddock: the whole fleet at a glance (fleet-first).
-  return {
-    view: 'overview',
-    selectedSessionId: null,
-    selectedProjectId: null,
-    nodeInfoNodeId: null,
-  };
+
+  if (shell.lens !== undefined) patch.lens = shell.lens as ShellLens;
+  if (shell.chrome !== undefined) patch.chrome = shell.chrome as ShellChrome;
+  if (shell.hostScope !== undefined) patch.hostScope = shell.hostScope as HostScope;
+  if (shell.selectedSessionId !== undefined) patch.selectedSessionId = shell.selectedSessionId;
+  if (shell.activeProjectId !== undefined) patch.selectedProjectId = shell.activeProjectId;
+  if (shell.nodeInfoNodeId !== undefined) patch.nodeInfoNodeId = shell.nodeInfoNodeId;
+
+  return patch;
 }
 
-/** Inputs {@link navToPath} needs — store fields plus the grid's resolved project. */
+/** Inputs for navToPath — pure. */
 export interface NavToPathInput {
   view: PaddockUiState['view'];
   settingsSection: SettingsSection;
-  viewMode: PaddockUiState['viewMode'];
   selectedSessionId: string | null;
   nodeInfoNodeId: string | null;
-  /** Effective grid project: the chosen one, else the selected session's project. */
+  /** Effective project: chosen one, else selected session's project. */
   gridProjectId: string | null;
+  lens: ShellLens;
+  hostScope: HostScope;
 }
 
-/** store → canonical path. Inverse of {@link pathToNav} for the round-trip cases. */
+/** store → canonical path. */
 export function navToPath(n: NavToPathInput): string {
-  if (n.view === 'settings') return `/settings/${n.settingsSection}`;
-  if (n.view === 'overview') return '/';
-  if (n.nodeInfoNodeId) return `/n/${n.nodeInfoNodeId}`;
-  if (n.viewMode === 'focus' && n.selectedSessionId) return `/s/${n.selectedSessionId}`;
-  if (n.gridProjectId) return `/p/${n.gridProjectId}`;
-  return '/';
+  if (n.view === 'settings') {
+    return shellNavToPath({
+      settings: true,
+      settingsSection: n.settingsSection,
+      lens: n.lens,
+      selectedSessionId: null,
+      activeProjectId: null,
+      nodeInfoNodeId: null,
+      hostScope: n.hostScope,
+    });
+  }
+  return shellNavToPath({
+    settings: false,
+    settingsSection: n.settingsSection,
+    lens: n.view === 'overview' ? 'mission' : n.lens,
+    selectedSessionId: n.selectedSessionId,
+    activeProjectId: n.selectedSessionId ? null : n.gridProjectId,
+    nodeInfoNodeId: n.nodeInfoNodeId,
+    hostScope: n.hostScope,
+  });
 }
 
-/** Apply a URL patch to the store, setting only the keys that actually differ. */
 function applyNavPatch(patch: NavPatch): void {
   const cur = usePaddock.getState() as unknown as Record<string, unknown>;
   const diff: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (cur[k] !== v) diff[k] = v;
   }
+  // When opening an agent from URL, ensure stage chrome
+  if (diff.selectedSessionId && typeof diff.selectedSessionId === 'string') {
+    diff.chrome = 'stage';
+    diff.rightOpen = false;
+  }
   if (Object.keys(diff).length > 0) usePaddock.setState(diff as Partial<PaddockUiState>);
 }
 
-/**
- * Keeps the URL and the store in sync both ways. Mounted inside the authed tree
- * (so the sessions query only runs when signed in). Both directions are guarded
- * by a difference check, so they converge in one step and never ping-pong.
- */
 function UrlStoreSync(): null {
   const { data: sessions = [] } = useSessions();
 
-  // URL → store: on first mount + every navigation (incl. back/forward).
   useEffect(() => {
     const apply = (): void => applyNavPatch(pathToNav(router.state.location.pathname));
     apply();
     return router.subscribe('onResolved', apply);
   }, []);
 
-  // store → URL: derive the canonical path and push it when it changes. Resolves
-  // the selected session's project (for grid URLs) from the query cache here, so
-  // navToPath can stay a pure function.
   useEffect(() => {
     const sync = (): void => {
       const s = usePaddock.getState();
@@ -149,10 +145,11 @@ function UrlStoreSync(): null {
       const path = navToPath({
         view: s.view,
         settingsSection: s.settingsSection,
-        viewMode: s.viewMode,
         selectedSessionId: s.selectedSessionId,
         nodeInfoNodeId: s.nodeInfoNodeId,
         gridProjectId: s.selectedProjectId ?? sessionProjectId,
+        lens: s.lens,
+        hostScope: s.hostScope,
       });
       if (path !== router.state.location.pathname) router.history.push(path);
     };
@@ -170,8 +167,6 @@ function RootComponent(): JSX.Element {
         <UrlStoreSync />
         <ResponsivePaddock />
       </AuthGate>
-      {/* Child routes render nothing — they exist only to define the URL shape.
-          The shell above is what the user sees, driven by the store. */}
       <Outlet />
     </>
   );
@@ -181,6 +176,8 @@ const rootRoute = createRootRoute({ component: RootComponent });
 const nullComponent = (): null => null;
 const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: '/', component: nullComponent }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/agents', component: nullComponent }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/agents/$sessionId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/s/$sessionId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/p/$projectId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/n/$nodeId', component: nullComponent }),

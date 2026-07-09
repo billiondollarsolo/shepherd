@@ -19,13 +19,18 @@ import { AgentdBootstrap } from './nodes/agentd/agentd-bootstrap.js';
 import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js';
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
-import type { PlanItem, Status } from '@flock/shared';
+import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
   type NodeConnectionManagerDeps,
 } from './nodes/node-connection-manager.js';
+import {
+  planSessionTruth,
+  type NodeTruth,
+  type SessionTruthCorrection,
+} from './status/session-truth.js';
 import { ProjectService } from './projects/index.js';
 import {
   SessionRestService,
@@ -36,7 +41,11 @@ import {
 } from './sessions/index.js';
 import { WorktreeService } from './sessions/worktree-service.js';
 import { renderScopedConfig } from './sessions/config-injection/index.js';
-import { agentSessionKind, agentUsesActivityStatus } from './sessions/agent-launch.js';
+import {
+  agentSessionKind,
+  agentUsesActivityStatus,
+  isBareAgentProcessName,
+} from './sessions/agent-launch.js';
 import { contextPct, estimateCostUsd, lookupModel } from './sessions/model-info.js';
 import { hashHookToken, verifyHookToken } from './hooks/hook-token.js';
 import { OrchestrationService } from './orchestrate/orchestrate-service.js';
@@ -59,6 +68,8 @@ import {
   type PushRouteDeps,
 } from './push/index.js';
 import { buildServer } from './server.js';
+import { FleetSelectionStore } from './me/fleet-selection.js';
+import type { LauncherPreset, ProjectLayoutV1 } from '@flock/shared';
 
 /**
  * T14 — resolve the agentd version from the single source of truth. Priority:
@@ -155,14 +166,24 @@ export async function main(): Promise<void> {
   // to the orchestrator's own loopback hook endpoint). Bound to loopback only
   // (NFR-SEC4). The remote port is fixed so an autossh reconnect re-exposes the
   // SAME port already baked into a running agent's FLOCK_HOOK_URL.
+  //
+  // Connectivity changes drive session ground-truth reconcile (stale "running"
+  // after a VM power-off / SSH drop). The handler is installed after live
+  // channels exist; until then this is a no-op.
   const orchestratorPort = Number(process.env.PORT ?? 8080);
   const hookTunnelRemotePort = Number(process.env.FLOCK_TUNNEL_REMOTE_PORT ?? 8765);
+  let onConnectivityChange: NonNullable<NodeConnectionManagerDeps['onConnectivityChange']> = () => {
+    /* installed after liveChannels */
+  };
   const connections = new NodeConnectionManager({
     db,
     secrets,
     hookTunnel: {
       target: { host: '127.0.0.1', port: orchestratorPort },
       remotePort: hookTunnelRemotePort,
+    },
+    onConnectivityChange: (nodeId, status, prev) => {
+      onConnectivityChange(nodeId, status, prev);
     },
   });
 
@@ -336,22 +357,31 @@ export async function main(): Promise<void> {
     );
 
     // Per-session liveness: a session is live when its PTY is in its node
-    // daemon's session list (needs an active session client → peek).
+    // daemon's session list. Probes SSH nodes AND the local daemon so health
+    // matches the paddock ground-truth reconcile.
     const idsByNode = new Map<string, string[]>();
-    const sshIds = new Set(sshNodes.map((n) => n.id));
     for (const s of openSessions) {
-      if (!sshIds.has(s.nodeId)) continue; // local liveness isn't probed here
       const ids = idsByNode.get(s.nodeId) ?? [];
       ids.push(s.id);
       idsByNode.set(s.nodeId, ids);
     }
     await Promise.all(
       [...idsByNode].map(async ([nodeId, ids]) => {
-        const client = agentdConns.peekRemote(nodeId);
+        const isLocal = nodeId === localNodeId;
+        let client = isLocal ? agentdConns.peekLocal() : agentdConns.peekRemote(nodeId);
+        if (!client && isLocal) {
+          try {
+            client = await agentdConns.clientForLocal();
+          } catch {
+            client = null;
+          }
+        }
         let liveSet = new Set<string>();
+        let probed = false;
         if (client) {
           try {
             liveSet = new Set((await client.list()).map((x) => x.id));
+            probed = true;
           } catch {
             /* link hiccup → treat as not-live */
           }
@@ -361,7 +391,7 @@ export async function main(): Promise<void> {
           // contextPct/costUsd are precomputed in mergeMeta (on status change),
           // so the 4s poll does no per-session math.
           sessionHealth[id] = {
-            live: liveSet.has(id),
+            live: probed && liveSet.has(id),
             tokens: meta.tokens,
             tool: meta.tool,
             model: meta.model,
@@ -483,7 +513,21 @@ export async function main(): Promise<void> {
     forwardAgentdStatus = (id, state, meta) => {
       // Carry forward unchanged fields: the daemon emits a full snapshot but proto
       // omitempty drops zero/empty fields on the wire, so "non-zero/non-empty wins".
-      const merged = mergeMeta(agentdSessionMeta.get(id) ?? {}, meta);
+      let workState = state;
+      let workMeta = meta;
+      // Guard: watchForeground reports tool=<agent binary> + running whenever the
+      // TUI process owns the PTY — even when idle at the prompt. That happens when
+      // agentd misses hook-owned detection (e.g. grok launched via `sh -c … exec
+      // grok`). Real tool use uses names like Bash/Edit, not the agent binary.
+      if (
+        workState === 'running' &&
+        workMeta.tool &&
+        isBareAgentProcessName(workMeta.tool)
+      ) {
+        workState = 'idle';
+        workMeta = { ...workMeta, tool: undefined };
+      }
+      const merged = mergeMeta(agentdSessionMeta.get(id) ?? {}, workMeta);
       agentdSessionMeta.set(id, merged);
       // TEMP (agent-integration validation): when FLOCK_DEBUG_TELEMETRY is set, log
       // every per-session status frame + its derived telemetry so we can verify the
@@ -491,7 +535,7 @@ export async function main(): Promise<void> {
       if (process.env.FLOCK_DEBUG_TELEMETRY) {
         // eslint-disable-next-line no-console
         console.log(
-          `[telemetry] sid=${id.slice(0, 8)} state=${state} model=${merged.model ?? '-'} ` +
+          `[telemetry] sid=${id.slice(0, 8)} state=${workState} model=${merged.model ?? '-'} ` +
             `tokens=${merged.tokens ?? 0} tool=${merged.tool ?? '-'} ctx%=${merged.contextPct ?? '-'} ` +
             `cost=${merged.costUsd ?? '-'} plan=${meta.plan ? 'yes' : '-'}`,
         );
@@ -499,8 +543,8 @@ export async function main(): Promise<void> {
       // Drive the work-status dot (only the transcript-provable states) AND ride
       // the live telemetry out on the SAME fan-out, so the paddock's token/tool/
       // model/context%/cost gauges update over the WS — no 4s agentd-status poll.
-      if (agentdStates.has(state)) {
-        liveChannels.statusMap.set(id, state as Status, meta.tool ?? null, true, {
+      if (agentdStates.has(workState)) {
+        liveChannels.statusMap.set(id, workState as Status, workMeta.tool ?? null, true, {
           tokens: merged.tokens,
           tool: merged.tool,
           model: merged.model,
@@ -729,21 +773,162 @@ export async function main(): Promise<void> {
     },
   };
 
-  // (The legacy tmux "blind-gap" reconcile is gone: flock-agentd PERSISTS sessions
-  // across disconnects and the transcript tailer is the ground truth, so there is
-  // no gap to reconcile. The connectivity hook is left unbound.)
+  // Ground-truth reconcile: after rehydrate the status map can still claim
+  // `running` for sessions whose node/PTY is gone (powered-off VMs, restarted
+  // agentd). Correct those to `disconnected` so the UI never shows a stale
+  // work-status. Also re-runs on every SSH connectivity change + a slow poll.
+  const applyTruthCorrections = (corrections: ReadonlyArray<SessionTruthCorrection>): number => {
+    let n = 0;
+    for (const c of corrections) {
+      if (liveChannels.statusMap.set(c.id, c.status, c.detail, true)) n += 1;
+    }
+    return n;
+  };
+
+  const buildNodeTruthMap = async (
+    allNodes: ReadonlyArray<{ id: string; kind: string; connectionStatus: ConnectionStatus }>,
+  ): Promise<Map<string, NodeTruth>> => {
+    const truth = new Map<string, NodeTruth>();
+
+    await Promise.all(
+      allNodes.map(async (n) => {
+        if (n.kind === 'local' || n.id === localNodeId) {
+          let liveSessionIds: Set<string> | null = null;
+          try {
+            const client =
+              agentdConns.peekLocal() ?? (await agentdConns.clientForLocal().catch(() => null));
+            if (client) {
+              liveSessionIds = new Set((await client.list()).map((x) => x.id));
+            } else {
+              // Local daemon down → positive empty inventory (nothing is live).
+              liveSessionIds = new Set();
+            }
+          } catch {
+            liveSessionIds = new Set();
+          }
+          truth.set(n.id, {
+            kind: 'local',
+            connection: 'connected',
+            liveSessionIds,
+          });
+          return;
+        }
+
+        // Prefer the live supervised status; fall back to the DB mirror when the
+        // node is not yet managed (boot race before connectAll settles).
+        const liveConn = connections.statusOf(n.id);
+        const connection: ConnectionStatus = liveConn ?? n.connectionStatus;
+        let liveSessionIds: ReadonlySet<string> | null = null;
+        if (connection === 'connected') {
+          const client = agentdConns.peekRemote(n.id);
+          if (client) {
+            try {
+              liveSessionIds = new Set((await client.list()).map((x) => x.id));
+            } catch {
+              liveSessionIds = null; // transient — don't invent disconnects
+            }
+          } else {
+            // SSH up but no multiplexed agentd client yet → cannot prove PTY
+            // presence; leave null so we only disconnect on node-down.
+            liveSessionIds = null;
+          }
+        }
+        truth.set(n.id, { kind: 'ssh', connection, liveSessionIds });
+      }),
+    );
+    return truth;
+  };
+
+  const reconcileSessionTruth = async (): Promise<number> => {
+    try {
+      const [openSessions, allNodes] = await Promise.all([
+        sessions.listSessions(),
+        nodes.listNodes(),
+      ]);
+      const nodeTruth = await buildNodeTruthMap(allNodes);
+      const plan = planSessionTruth(
+        openSessions.map((s) => ({
+          id: s.id,
+          nodeId: s.nodeId,
+          status: (liveChannels.statusMap.get(s.id)?.status ?? s.status) as Status,
+        })),
+        nodeTruth,
+      );
+      const applied = applyTruthCorrections(plan);
+      if (applied > 0) {
+        const disc = plan.filter((c) => c.status === 'disconnected').length;
+        const restored = plan.filter((c) => c.status === 'idle').length;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[reconcile] ground truth: ${applied} applied` +
+            (disc ? ` (${disc} disconnected)` : '') +
+            (restored ? ` (${restored} restored idle)` : ''),
+        );
+      }
+      return applied;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[reconcile] session truth failed: ${err instanceof Error ? err.message : err}`);
+      return 0;
+    }
+  };
+
+  onConnectivityChange = (nodeId, status, prev) => {
+    // Any non-connected link means open sessions on that node cannot be live.
+    // Reconnect (`connected`) also re-runs so a recovered node re-probes agentd
+    // and can clear ghosts; live agentd status frames restore work-status.
+    if (status === prev) return;
+    void reconcileSessionTruth();
+    // Also immediately force sessions on this node when the link is clearly down
+    // so the UI does not wait on the async inventory probe.
+    if (status !== 'connected') {
+      void sessions.listSessions().then((open) => {
+        const detail =
+          status === 'error'
+            ? 'node unreachable'
+            : status === 'connecting'
+              ? 'node connecting'
+              : 'node disconnected';
+        for (const s of open) {
+          if (s.nodeId !== nodeId) continue;
+          const cur = liveChannels.statusMap.get(s.id)?.status ?? s.status;
+          if (cur === 'done' || cur === 'error' || cur === 'disconnected') continue;
+          liveChannels.statusMap.set(s.id, 'disconnected', detail, true);
+        }
+      });
+    }
+  };
 
   // Boot seeding: ensure a single `local` node exists so the paddock tree is
   // never empty. Idempotent — a restart never creates a duplicate.
   localNodeId = (await nodes.ensureLocalNode()).id;
 
-  // Reconnect to every known SSH node on boot (best-effort) so the tree shows
-  // live status after a restart (NFR-AV1/AV2).
-  void connections.connectAll().catch(() => undefined);
-
   // Hydrate the live binding from surviving sessions so the terminal can attach
-  // and status shows after an orchestrator restart (NFR-AV1).
+  // and status shows after an orchestrator restart (NFR-AV1). Rehydrate first,
+  // then ground-truth reconcile so a powered-off VM never paints as "running".
   await liveChannels.hydrate().catch(() => undefined);
+
+  // Reconnect to every known SSH node on boot (best-effort). Connectivity
+  // transitions fire onConnectivityChange → session truth.
+  void connections
+    .connectAll()
+    .catch(() => undefined)
+    .finally(() => {
+      void reconcileSessionTruth();
+    });
+
+  // Immediate reconcile against DB connection_status (before connectAll settles)
+  // so the first WS snapshot is already truthful for long-dead nodes.
+  void reconcileSessionTruth();
+
+  // Slow poll: catches local agentd restarts and sessions that died without an
+  // SSH status transition (PTY exit while node stayed up).
+  const RECONCILE_INTERVAL_MS = 15_000;
+  const reconcileTimer = setInterval(() => {
+    void reconcileSessionTruth();
+  }, RECONCILE_INTERVAL_MS);
+  // Don't keep the process alive solely for the poller.
+  reconcileTimer.unref?.();
 
   // Sweep any browser containers orphaned by a prior crash (FR-B6).
   void browserChannels.reap().catch(() => undefined);
@@ -765,6 +950,12 @@ export async function main(): Promise<void> {
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
   // exception (spec §8.1). The AuthService satisfies the `getUserBySession`
   // seam directly. TLS is terminated by the upstream Caddy proxy (NFR-SEC1).
+  // Per-user shell state (selection / presets / layouts) — in-process store for
+  // multi-device follow; durable enough for a single orchestrator instance.
+  const fleetSelection = new FleetSelectionStore();
+  const userPresets = new Map<string, LauncherPreset[]>();
+  const projectLayouts = new Map<string, ProjectLayoutV1>();
+
   const app = buildServer({
     auth,
     surfaceAuth: auth,
@@ -773,6 +964,18 @@ export async function main(): Promise<void> {
     nodeFs,
     nodeWorkspace,
     projects,
+    me: {
+      auth,
+      selection: fleetSelection,
+      getPresets: async (uid) => userPresets.get(uid) ?? [],
+      putPresets: async (uid, p) => {
+        userPresets.set(uid, p);
+      },
+      getLayout: async (id) => projectLayouts.get(id) ?? null,
+      putLayout: async (id, layout) => {
+        projectLayouts.set(id, layout);
+      },
+    },
     sessions,
     diff,
     git,
@@ -983,6 +1186,7 @@ export async function main(): Promise<void> {
     }, 10_000);
     hardExit.unref();
     try {
+      clearInterval(reconcileTimer);
       await app.close(); // stop accepting + drain HTTP; closes attached WS server
       await liveChannels.dispose().catch(() => undefined);
       await browserChannels.dispose().catch(() => undefined);
