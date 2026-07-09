@@ -238,5 +238,4 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 Active development. The full suite is green (build · ~1,000 unit · integration · `go -race`)
 and the platform runs live across simulated multi-node SSH deployments.
 
-Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).  
-🤖 Built with [Claude Code](https://claude.com/claude-code).
+Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).
