@@ -8,11 +8,7 @@ module.exports = {
     ecmaFeatures: { jsx: true },
   },
   plugins: ['@typescript-eslint', 'react-hooks'],
-  extends: [
-    'eslint:recommended',
-    'plugin:@typescript-eslint/recommended',
-    'prettier',
-  ],
+  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended', 'prettier'],
   env: {
     node: true,
     browser: true,
@@ -39,18 +35,18 @@ module.exports = {
   ],
   rules: {
     '@typescript-eslint/no-unused-vars': [
-      'warn',
+      'error',
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'error',
     'no-console': 'off',
     // This is a terminal cockpit: parsing/emitting raw VT escape & control
     // sequences (\x1b, \x00…) in regexes is intentional, not a bug.
     'no-control-regex': 'off',
-    // React hooks: rules-of-hooks is a real-bug guard (error); exhaustive-deps is
-    // advisory (warn) so intentional partial-dep effects don't fail the lint gate.
+    // React hooks: both rules guard real production bugs. Intentional partial
+    // dependencies must be documented with a narrow inline disable.
     'react-hooks/rules-of-hooks': 'error',
-    'react-hooks/exhaustive-deps': 'warn',
+    'react-hooks/exhaustive-deps': 'error',
   },
   overrides: [
     {

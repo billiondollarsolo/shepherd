@@ -57,27 +57,13 @@ export function resolveArrangeMode(opts: {
   return defaultArrangeDirection(opts.stageWidthPx);
 }
 
-/** @deprecated Prefer {@link resolveArrangeMode}. */
-export function resolveArrangeDirection(opts: {
-  explicit?: ArrangeDirection | null;
-  stored: ProjectLayoutV1 | null;
-  projectId: string;
-  stageWidthPx?: number | null;
-}): ArrangeDirection {
-  const mode = resolveArrangeMode(opts);
-  return mode === 'grid2x2' ? 'col' : mode;
-}
-
 function setEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   if (a.size !== b.size) return false;
   for (const x of a) if (!b.has(x)) return false;
   return true;
 }
 
-function focusLeafIdFor(
-  layout: ProjectLayoutV1,
-  focusedSessionId?: string | null,
-): string {
+function focusLeafIdFor(layout: ProjectLayoutV1, focusedSessionId?: string | null): string {
   const leaves = collectLeaves(layout.root);
   if (leaves.length === 0) return layout.focusedLeafId;
   if (focusedSessionId) {
@@ -175,7 +161,8 @@ export function reconcileProjectLayout(
 
   // Explicit arrange mode that differs from stored → rebuild (user clicked
   // row/col/2×2). Same-mode explicit (load path seeding from stored) preserves.
-  const storedMode = stored && stored.projectId === projectId ? layoutArrangeMode(stored.root) : null;
+  const storedMode =
+    stored && stored.projectId === projectId ? layoutArrangeMode(stored.root) : null;
   const modeChanged =
     opts?.direction != null && storedMode != null && opts.direction !== storedMode;
 

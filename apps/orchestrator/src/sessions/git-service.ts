@@ -30,7 +30,6 @@ import type {
 import type { ExecResult, NodeTransport } from '../nodes/transport/transport.js';
 import {
   DiffSessionNotFoundError,
-  GIT_EMPTY_TREE,
   gitHasHeadArgv,
   summarizeGitError,
   type DiffSessionLookup,
@@ -253,7 +252,19 @@ export function gitSwitchBranchArgv(workingDir: string, name: string): string[] 
 
 /** List open PRs whose head is `head` (gh runs in cwd — no -C). */
 export function ghPrListArgv(head: string): string[] {
-  return ['gh', 'pr', 'list', '--head', head, '--state', 'open', '--limit', '1', '--json', 'url,number,title'];
+  return [
+    'gh',
+    'pr',
+    'list',
+    '--head',
+    head,
+    '--state',
+    'open',
+    '--limit',
+    '1',
+    '--json',
+    'url,number,title',
+  ];
 }
 
 /** Open a PR for the current branch (gh runs in cwd; pushes the branch if needed). */
@@ -456,7 +467,12 @@ export class GitService {
   async push(sessionId: string): Promise<GitPushResponse> {
     const { workingDir, transport } = await this.resolve(sessionId);
 
-    let r = await this.run(transport, workingDir, ['git', '-C', workingDir, 'push'], PUSH_TIMEOUT_MS);
+    let r = await this.run(
+      transport,
+      workingDir,
+      ['git', '-C', workingDir, 'push'],
+      PUSH_TIMEOUT_MS,
+    );
     if (r.exitCode !== 0 && /no upstream branch|--set-upstream/i.test(r.stderr)) {
       r = await this.run(
         transport,
@@ -496,7 +512,8 @@ export class GitService {
   async createBranch(sessionId: string, name: string, from?: string): Promise<GitBranchResponse> {
     const { workingDir, transport } = await this.resolve(sessionId);
     const r = await this.run(transport, workingDir, gitCreateBranchArgv(workingDir, name, from));
-    if (r.exitCode !== 0) throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
+    if (r.exitCode !== 0)
+      throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
     return {
       sessionId,
       branch: name,
@@ -510,7 +527,8 @@ export class GitService {
   async switchBranch(sessionId: string, name: string): Promise<GitBranchResponse> {
     const { workingDir, transport } = await this.resolve(sessionId);
     const r = await this.run(transport, workingDir, gitSwitchBranchArgv(workingDir, name));
-    if (r.exitCode !== 0) throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
+    if (r.exitCode !== 0)
+      throw new GitOperationError(summarizeGitError(r.stderr || r.stdout, r.exitCode));
     return {
       sessionId,
       branch: name,
@@ -553,7 +571,9 @@ export class GitService {
 
     const r = await this.run(transport, workingDir, ghPrCreateArgv(input), PR_TIMEOUT_MS);
     if (r.exitCode !== 0) {
-      throw new GitOperationError(ghErrorHint([r.stdout.trim(), r.stderr.trim()].filter(Boolean).join('\n')));
+      throw new GitOperationError(
+        ghErrorHint([r.stdout.trim(), r.stderr.trim()].filter(Boolean).join('\n')),
+      );
     }
     const url = extractPrUrl(r.stdout);
     if (!url) {

@@ -33,7 +33,18 @@ import { ResponsivePaddock } from './ResponsivePaddock';
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ nodes: [], projects: [], sessions: [] }), { status: 200 })),
+    vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://flock.test').pathname;
+      const body =
+        path === '/api/activity/fleet'
+          ? { events: [] }
+          : path === '/api/chats/latest'
+            ? { chats: {} }
+            : path === '/api/teams'
+              ? { edges: [] }
+              : { nodes: [], projects: [], sessions: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }),
   );
 });
 

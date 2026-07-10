@@ -34,10 +34,12 @@ export interface ProjectLayoutViewProps {
    * Only used when 2+ leaves and not zoomed.
    */
   onArrangeMode?: (mode: ArrangeMode) => void;
-  /** @deprecated Use {@link onArrangeMode}. */
-  onArrangeDirection?: (mode: ArrangeMode) => void;
   /** Render a leaf's content (terminal, shell, …). */
-  renderLeaf: (leafId: string, sessionId: string | undefined, kind: 'session' | 'shell') => ReactNode;
+  renderLeaf: (
+    leafId: string,
+    sessionId: string | undefined,
+    kind: 'session' | 'shell',
+  ) => ReactNode;
 }
 
 /** Gutter thickness (px) — also the middle track in the CSS grid. */
@@ -78,12 +80,7 @@ function SplitNode({
     // re-fit when shown (Terminal IntersectionObserver + force redraw).
     if (isZoomHidden) {
       return (
-        <div
-          className="hidden"
-          data-leaf={node.id}
-          data-keep-alive="1"
-          aria-hidden
-        >
+        <div className="hidden" data-leaf={node.id} data-keep-alive="1" aria-hidden>
           {renderLeaf(node.id, node.sessionId, node.kind)}
         </div>
       );
@@ -244,7 +241,6 @@ export function ProjectLayoutView({
   layout,
   onLayoutChange,
   onArrangeMode,
-  onArrangeDirection,
   renderLeaf,
 }: ProjectLayoutViewProps): JSX.Element {
   const leaves = collectLeaves(layout.root);
@@ -252,7 +248,7 @@ export function ProjectLayoutView({
   const zoomedLeaf = zoomedId ? leaves.find((l) => l.id === zoomedId) : undefined;
   const multi = leaves.length > 1 && !zoomedLeaf;
   const arrange = multi ? layoutArrangeMode(layout.root) : null;
-  const applyArrange = onArrangeMode ?? onArrangeDirection;
+  const applyArrange = onArrangeMode;
   // 2×2 is most useful at 3–4 agents; still offered at 2 (degrades to a row).
   const canGrid2x2 = leaves.length >= 2 && leaves.length <= 4;
 

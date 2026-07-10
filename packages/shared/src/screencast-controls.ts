@@ -44,12 +44,7 @@ export const ScreencastBandwidthControls = z
     /** Control #1 — cap on concurrent ACTIVE streams across all sessions. */
     maxConcurrentStreams: z.number().int().min(1).max(64).default(5),
     /** Control #3 — JPEG quality for a FOCUSED pane (1..100). */
-    quality: z
-      .number()
-      .int()
-      .min(SCREENCAST_QUALITY_MIN)
-      .max(SCREENCAST_QUALITY_MAX)
-      .default(60),
+    quality: z.number().int().min(SCREENCAST_QUALITY_MIN).max(SCREENCAST_QUALITY_MAX).default(60),
     /** Throttle: send every Nth frame for a FOCUSED pane (1 = every frame). */
     everyNthFrame: z.number().int().min(1).max(60).default(1),
     /** Control #2 — what an UNFOCUSED pane does. */
@@ -71,9 +66,7 @@ export const ScreencastBandwidthControls = z
     unfocusedEveryNthFrame: z.number().int().min(1).max(120).default(10),
   })
   .strict();
-export type ScreencastBandwidthControls = z.infer<
-  typeof ScreencastBandwidthControls
->;
+export type ScreencastBandwidthControls = z.infer<typeof ScreencastBandwidthControls>;
 
 /** The canonical defaults (control #4 "on-demand only" is enforced by lifecycle). */
 export const DEFAULT_SCREENCAST_BANDWIDTH_CONTROLS: ScreencastBandwidthControls =
@@ -92,16 +85,12 @@ export const ScreencastBandwidthSettings = ScreencastBandwidthControls.pick({
 })
   .partial()
   .strict();
-export type ScreencastBandwidthSettings = z.infer<
-  typeof ScreencastBandwidthSettings
->;
+export type ScreencastBandwidthSettings = z.infer<typeof ScreencastBandwidthSettings>;
 
 /**
  * Control messages the web Browser tab sends over the `screencast:<id>` channel
- * to drive the four bandwidth controls live (spec §8.2). (Named distinctly from
- * the legacy `ScreencastControlMessage` stub in contracts.ts so both can coexist
- * through the package barrel; this is the US-29 control envelope.) Discriminated
- * by `action`:
+ * to drive the four bandwidth controls live (spec §8.2). Discriminated by
+ * `action`:
  *
  *  - `start`   : on-demand start (tab opened) — control #4.
  *  - `stop`    : on-demand stop (tab closed) — control #4.
@@ -134,16 +123,10 @@ export const ScreencastBandwidthControlMessage = z.discriminatedUnion('action', 
     channel: z.literal('screencast'),
     action: z.literal('quality'),
     sessionId: z.string().min(1),
-    quality: z
-      .number()
-      .int()
-      .min(SCREENCAST_QUALITY_MIN)
-      .max(SCREENCAST_QUALITY_MAX),
+    quality: z.number().int().min(SCREENCAST_QUALITY_MIN).max(SCREENCAST_QUALITY_MAX),
   }),
 ]);
-export type ScreencastBandwidthControlMessage = z.infer<
-  typeof ScreencastBandwidthControlMessage
->;
+export type ScreencastBandwidthControlMessage = z.infer<typeof ScreencastBandwidthControlMessage>;
 
 /** Parse an inbound control message off the `screencast:<id>` channel (or throw). */
 export function parseScreencastBandwidthControlMessage(

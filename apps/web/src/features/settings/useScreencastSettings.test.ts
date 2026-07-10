@@ -22,7 +22,7 @@ function setHidden(hidden: boolean) {
 }
 
 afterEach(() => {
-  setHidden(false);
+  act(() => setHidden(false));
 });
 
 describe('useScreencastSettings — control #4: on-demand', () => {
@@ -62,9 +62,7 @@ describe('useScreencastSettings — control #2: backgrounded stops bandwidth (NF
     const sent: ScreencastBandwidthControlMessage[] = [];
     const send = (m: ScreencastBandwidthControlMessage) => sent.push(m);
 
-    renderHook(() =>
-      useScreencastSettings({ sessionId: SID, open: false, send }),
-    );
+    renderHook(() => useScreencastSettings({ sessionId: SID, open: false, send }));
     act(() => setHidden(true));
     expect(sent.find((m) => m.action === 'blur')).toBeUndefined();
   });

@@ -13,7 +13,6 @@ function attentionCount(
   sessions: readonly Session[],
   statuses: ReadonlyMap<string, Status>,
   nodes: readonly FlockNode[],
-  hostScope: HostScope,
 ): number {
   const scope: HostScope = nodeId === 'all' ? 'all' : { nodeId };
   return sessions.filter((s) => {
@@ -34,10 +33,15 @@ export function HostChips(): JSX.Element {
   const health = useAgentdHealth();
   const ordered = orderNodes(nodes, nodeOrder);
 
-  const allAttn = attentionCount('all', sessions, statuses, nodes, 'all');
+  const allAttn = attentionCount('all', sessions, statuses, nodes);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" data-testid="host-chips" role="toolbar" aria-label="Host scope">
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      data-testid="host-chips"
+      role="toolbar"
+      aria-label="Host scope"
+    >
       <Chip
         active={hostScope === 'all'}
         label="All"
@@ -45,15 +49,16 @@ export function HostChips(): JSX.Element {
         onClick={() => setHostScope('all')}
       />
       {ordered.map((n) => {
-        const link = (health as { nodes?: Record<string, { link?: string }> } | null)?.nodes?.[
-          n.id
-        ]?.link;
+        const link = (health as { nodes?: Record<string, { link?: string }> } | null)?.nodes?.[n.id]
+          ?.link;
         const conn = link === 'up' || n.connectionStatus === 'connected';
-        const attn = attentionCount(n.id, sessions, statuses, nodes, { nodeId: n.id });
+        const attn = attentionCount(n.id, sessions, statuses, nodes);
         return (
           <Chip
             key={n.id}
-            active={typeof hostScope === 'object' && 'nodeId' in hostScope && hostScope.nodeId === n.id}
+            active={
+              typeof hostScope === 'object' && 'nodeId' in hostScope && hostScope.nodeId === n.id
+            }
             label={n.name}
             attention={attn}
             connected={!!conn}

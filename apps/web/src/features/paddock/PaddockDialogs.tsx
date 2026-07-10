@@ -2,7 +2,14 @@
  * The paddock's create dialogs — Add Node, Add Project, Add Session — driven by
  * the zustand store's `dialog` state. Rendered once near the shell root.
  */
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { HardDrive, FolderGit2, Bot, FolderOpen, TriangleAlert } from 'lucide-react';
 import type { AgentType, NodeKind, SessionPermissionMode, SshAuthMethod } from '@flock/shared';
@@ -37,7 +44,13 @@ import {
   useStack,
   useTerminateSession,
 } from '../../data/queries';
-import { applyConfig, exportConfig, getNodeEnv, startRace, type ConfigApplySummary } from '../../data/treeApi';
+import {
+  applyConfig,
+  exportConfig,
+  getNodeEnv,
+  startRace,
+  type ConfigApplySummary,
+} from '../../data/treeApi';
 import { fetchLauncherPresets } from '../shell/launcherPresetsApi';
 import type { LauncherPreset } from '@flock/shared';
 import { pickBestNode } from './placement';
@@ -104,7 +117,17 @@ const MODES_BY_AGENT: Partial<Record<AgentType, readonly SessionPermissionMode[]
   gemini: ['default', 'acceptEdits', 'autonomous'], // no real read-only plan mode
 };
 
-function Field({ label, htmlFor, children, hint }: { label: string; htmlFor: string; children: ReactNode; hint?: string }): JSX.Element {
+function Field({
+  label,
+  htmlFor,
+  children,
+  hint,
+}: {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
+  hint?: string;
+}): JSX.Element {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
@@ -140,7 +163,10 @@ function NodeDialog(): JSX.Element {
   const closeDialog = usePaddock((s) => s.closeDialog);
   const editNodeId = usePaddock((s) => s.dialogNodeId);
   const { data: allNodes = [] } = useNodes();
-  const editing = useMemo(() => allNodes.find((n) => n.id === editNodeId) ?? null, [allNodes, editNodeId]);
+  const editing = useMemo(
+    () => allNodes.find((n) => n.id === editNodeId) ?? null,
+    [allNodes, editNodeId],
+  );
 
   // In edit mode the kind is fixed; credential fields start blank ("leave to keep").
   const [name, setName] = useState(editing?.name ?? '');
@@ -261,18 +287,31 @@ function NodeDialog(): JSX.Element {
       </DialogHeader>
 
       <Field label="Name" htmlFor="node-name">
-        <Input id="node-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="build-box" autoFocus required />
+        <Input
+          id="node-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="build-box"
+          autoFocus
+          required
+        />
       </Field>
 
       {/* Kind is immutable once created (delete + re-add to change it). */}
       {editing ? (
         <Field label="Kind" htmlFor="node-kind">
-          <Input id="node-kind" value={kind === 'ssh' ? 'Remote (SSH)' : 'Local (this orchestrator)'} disabled />
+          <Input
+            id="node-kind"
+            value={kind === 'ssh' ? 'Remote (SSH)' : 'Local (this orchestrator)'}
+            disabled
+          />
         </Field>
       ) : (
         <Field label="Kind" htmlFor="node-kind">
           <Select value={kind} onValueChange={(v) => setKind(v as NodeKind)}>
-            <SelectTrigger id="node-kind"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="node-kind">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="local">Local (this orchestrator)</SelectItem>
               <SelectItem value="ssh">Remote (SSH)</SelectItem>
@@ -285,19 +324,38 @@ function NodeDialog(): JSX.Element {
         <>
           <div className="grid grid-cols-[1fr_5rem] gap-3">
             <Field label="Host" htmlFor="node-host">
-              <Input id="node-host" value={host} onChange={(e) => setHost(e.target.value)} placeholder="10.0.0.5 / box.internal" required />
+              <Input
+                id="node-host"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="10.0.0.5 / box.internal"
+                required
+              />
             </Field>
             <Field label="Port" htmlFor="node-port">
-              <Input id="node-port" value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
+              <Input
+                id="node-port"
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                inputMode="numeric"
+              />
             </Field>
           </div>
           <Field label="SSH user" htmlFor="node-user">
-            <Input id="node-user" value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="ubuntu" required />
+            <Input
+              id="node-user"
+              value={sshUser}
+              onChange={(e) => setSshUser(e.target.value)}
+              placeholder="ubuntu"
+              required
+            />
           </Field>
 
           <Field label="Authentication" htmlFor="node-auth">
             <Select value={authMethod} onValueChange={(v) => setAuthMethod(v as SshAuthMethod)}>
-              <SelectTrigger id="node-auth"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="node-auth">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="key">Private key</SelectItem>
                 <SelectItem value="password">Password</SelectItem>
@@ -316,7 +374,9 @@ function NodeDialog(): JSX.Element {
                   id="node-key"
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
-                  placeholder={editing ? '•••••• (keeping current key)' : '-----BEGIN OPENSSH PRIVATE KEY-----'}
+                  placeholder={
+                    editing ? '•••••• (keeping current key)' : '-----BEGIN OPENSSH PRIVATE KEY-----'
+                  }
                 />
               </Field>
               <div className="flex items-center gap-2">
@@ -327,20 +387,51 @@ function NodeDialog(): JSX.Element {
                   className="block w-full text-2xs text-flock-ink-muted file:mr-3 file:rounded-md file:border-0 file:bg-flock-surface-2 file:px-3 file:py-1.5 file:text-xs file:text-flock-ink-primary hover:file:bg-flock-surface-3"
                 />
               </div>
-              <Field label="Key passphrase (optional)" htmlFor="node-passphrase" hint={`Only for an encrypted key.${keepHint}`}>
-                <Input id="node-passphrase" type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder={editing ? '•••••• (unchanged)' : 'passphrase'} autoComplete="off" />
+              <Field
+                label="Key passphrase (optional)"
+                htmlFor="node-passphrase"
+                hint={`Only for an encrypted key.${keepHint}`}
+              >
+                <Input
+                  id="node-passphrase"
+                  type="password"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  placeholder={editing ? '•••••• (unchanged)' : 'passphrase'}
+                  autoComplete="off"
+                />
               </Field>
             </>
           ) : (
-            <Field label="Password" htmlFor="node-password" hint={`Encrypted at rest, never shown again.${keepHint}`}>
-              <Input id="node-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={editing ? '•••••• (keeping current)' : 'password'} autoComplete="off" />
+            <Field
+              label="Password"
+              htmlFor="node-password"
+              hint={`Encrypted at rest, never shown again.${keepHint}`}
+            >
+              <Input
+                id="node-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={editing ? '•••••• (keeping current)' : 'password'}
+                autoComplete="off"
+              />
             </Field>
           )}
         </>
       )}
 
-      <Field label="Pool (optional)" htmlFor="node-pool" hint="A group label to organize the fleet (e.g. gpu, us-east).">
-        <Input id="node-pool" value={pool} onChange={(e) => setPool(e.target.value)} placeholder="ungrouped" />
+      <Field
+        label="Pool (optional)"
+        htmlFor="node-pool"
+        hint="A group label to organize the fleet (e.g. gpu, us-east)."
+      >
+        <Input
+          id="node-pool"
+          value={pool}
+          onChange={(e) => setPool(e.target.value)}
+          placeholder="ungrouped"
+        />
       </Field>
 
       <Field
@@ -358,7 +449,9 @@ function NodeDialog(): JSX.Element {
       </Field>
 
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
+        <Button type="button" variant="ghost" onClick={closeDialog}>
+          Cancel
+        </Button>
         <Button type="submit" disabled={busy || !canSubmit}>
           {busy ? (editing ? 'Saving…' : 'Adding…') : editing ? 'Save changes' : 'Add node'}
         </Button>
@@ -397,7 +490,11 @@ function AddProjectDialog(): JSX.Element {
     const resolvedNodeId = nodeId === AUTO_NODE ? autoTarget?.id : nodeId;
     if (!resolvedNodeId) return; // Auto found no reachable node — nothing to do
     try {
-      await createProject.mutateAsync({ nodeId: resolvedNodeId, name: name.trim(), workingDir: workingDir.trim() });
+      await createProject.mutateAsync({
+        nodeId: resolvedNodeId,
+        name: name.trim(),
+        workingDir: workingDir.trim(),
+      });
       closeDialog();
     } catch {
       /* error toast handled by the mutation */
@@ -425,7 +522,9 @@ function AddProjectDialog(): JSX.Element {
         }
       >
         <Select value={nodeId} onValueChange={setNodeId} disabled={!!fixedNodeId}>
-          <SelectTrigger id="proj-node"><SelectValue placeholder="Select a node" /></SelectTrigger>
+          <SelectTrigger id="proj-node">
+            <SelectValue placeholder="Select a node" />
+          </SelectTrigger>
           <SelectContent>
             {!fixedNodeId ? <SelectItem value={AUTO_NODE}>✨ Auto (best node)</SelectItem> : null}
             {nodes.map((n) => (
@@ -438,7 +537,14 @@ function AddProjectDialog(): JSX.Element {
         </Select>
       </Field>
       <Field label="Name" htmlFor="proj-name">
-        <Input id="proj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="flock" autoFocus required />
+        <Input
+          id="proj-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="flock"
+          autoFocus
+          required
+        />
       </Field>
       <Field
         label="Working directory"
@@ -478,7 +584,9 @@ function AddProjectDialog(): JSX.Element {
       )}
 
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
+        <Button type="button" variant="ghost" onClick={closeDialog}>
+          Cancel
+        </Button>
         <Button type="submit" disabled={busy || !nodeId || !name.trim() || !workingDir.trim()}>
           {busy ? 'Adding…' : 'Add project'}
         </Button>
@@ -507,7 +615,9 @@ function AddSessionDialog(): JSX.Element {
   const busy = createSession.isPending;
 
   useEffect(() => {
-    void fetchLauncherPresets().then(setPresets).catch(() => setPresets([]));
+    void fetchLauncherPresets()
+      .then(setPresets)
+      .catch(() => setPresets([]));
   }, []);
 
   /** Two-click path: pick a preset → apply agent/mode (optionally auto-start). */
@@ -546,7 +656,7 @@ function AddSessionDialog(): JSX.Element {
   const refetchStack = stackQuery.refetch;
   useEffect(() => {
     if (project?.nodeId && project?.workingDir) void refetchStack();
-  }, [project?.id, project?.nodeId, project?.workingDir]);
+  }, [project?.id, project?.nodeId, project?.workingDir, refetchStack]);
 
   // Grey out agents whose CLI isn't installed on this project's node (flock-agentd
   // detection, NodeInfo.agents) so you can't pick one that would fail at launch
@@ -609,10 +719,14 @@ function AddSessionDialog(): JSX.Element {
 
       <Field label="Project" htmlFor="sess-project">
         <Select value={projectId} onValueChange={setProjectId} disabled={!!fixedProjectId}>
-          <SelectTrigger id="sess-project"><SelectValue placeholder="Select a project" /></SelectTrigger>
+          <SelectTrigger id="sess-project">
+            <SelectValue placeholder="Select a project" />
+          </SelectTrigger>
           <SelectContent>
             {projects.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -652,7 +766,9 @@ function AddSessionDialog(): JSX.Element {
 
       <Field label="Agent" htmlFor="sess-agent">
         <Select value={agentType} onValueChange={(v) => setAgentType(v as AgentType)}>
-          <SelectTrigger id="sess-agent"><SelectValue /></SelectTrigger>
+          <SelectTrigger id="sess-agent">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             {/* `generic` is hidden: it's a bare shell, redundant with `terminal`.
                 Kept in the model for any legacy sessions, just not offered here. */}
@@ -676,7 +792,9 @@ function AddSessionDialog(): JSX.Element {
             value={effectiveMode}
             onValueChange={(v) => setPermissionMode(v as SessionPermissionMode)}
           >
-            <SelectTrigger id="sess-mode"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="sess-mode">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {modes.map((m) => (
                 <SelectItem key={m} value={m}>
@@ -708,7 +826,9 @@ function AddSessionDialog(): JSX.Element {
         <div className="min-w-0">
           <Label
             htmlFor="sess-worktree"
-            className={worktreeBlocked ? 'cursor-not-allowed text-flock-ink-muted' : 'cursor-pointer'}
+            className={
+              worktreeBlocked ? 'cursor-not-allowed text-flock-ink-muted' : 'cursor-pointer'
+            }
           >
             Isolated worktree
           </Label>
@@ -736,10 +856,14 @@ function AddSessionDialog(): JSX.Element {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
+        <Button type="button" variant="ghost" onClick={closeDialog}>
+          Cancel
+        </Button>
         <Button
           type="submit"
-          disabled={busy || !projectId || !agentAvailable(agentType) || (isDev && !devCommand.trim())}
+          disabled={
+            busy || !projectId || !agentAvailable(agentType) || (isDev && !devCommand.trim())
+          }
         >
           {busy ? 'Starting…' : 'Start session'}
         </Button>
@@ -842,11 +966,14 @@ function ConfigDialog(): JSX.Element {
         }
         className="font-mono text-xs leading-relaxed"
       />
-      {apply.isError ? <p className="text-xs text-status-error">{(apply.error as Error).message}</p> : null}
+      {apply.isError ? (
+        <p className="text-xs text-status-error">{(apply.error as Error).message}</p>
+      ) : null}
       {summary ? (
         <div className="rounded-md border border-[var(--flock-border)] bg-flock-surface-2 p-2 text-2xs">
           <p className="text-flock-ink-primary">
-            Created {summary.projectsCreated.length} project(s) · {summary.sessionsCreated.length} agent(s).
+            Created {summary.projectsCreated.length} project(s) · {summary.sessionsCreated.length}{' '}
+            agent(s).
           </p>
           {summary.warnings.length > 0 ? (
             <ul className="mt-1 list-disc pl-4 text-flock-ink-muted">
@@ -876,7 +1003,9 @@ function RaceDialog(): JSX.Element {
   const { data: projects = [] } = useProjects();
   const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? '');
   const [task, setTask] = useState('');
-  const [picked, setPicked] = useState<Set<AgentType>>(() => new Set<AgentType>(['claude-code', 'codex']));
+  const [picked, setPicked] = useState<Set<AgentType>>(
+    () => new Set<AgentType>(['claude-code', 'codex']),
+  );
   const toggle = (a: AgentType): void =>
     setPicked((prev) => {
       const next = new Set(prev);
@@ -893,8 +1022,8 @@ function RaceDialog(): JSX.Element {
       <DialogHeader>
         <DialogTitle>Race a task</DialogTitle>
         <DialogDescription>
-          Run the same task across several agents — each in its own git worktree — then compare their
-          changes side by side and keep the winner.
+          Run the same task across several agents — each in its own git worktree — then compare
+          their changes side by side and keep the winner.
         </DialogDescription>
       </DialogHeader>
       <Field label="Project" htmlFor="race-project">
@@ -941,7 +1070,9 @@ function RaceDialog(): JSX.Element {
           })}
         </div>
       </Field>
-      {run.isError ? <p className="text-xs text-status-error">{(run.error as Error).message}</p> : null}
+      {run.isError ? (
+        <p className="text-xs text-status-error">{(run.error as Error).message}</p>
+      ) : null}
       <DialogFooter>
         <Button
           disabled={!projectId || task.trim().length === 0 || picked.size < 2 || run.isPending}

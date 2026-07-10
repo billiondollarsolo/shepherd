@@ -8,7 +8,6 @@ import {
   ProjectLayoutV1Schema,
   BUILTIN_LAUNCHER_PRESETS,
   mergePresetsWithBuiltins,
-  parseProjectLayout,
   type FleetSelectionPayload,
   type LauncherPreset,
   type ProjectLayoutV1,
@@ -82,10 +81,8 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
   );
 
   // Builtins-only fallback when no put store
-  app.get(
-    '/api/me/launcher-presets/builtins',
-    { preHandler: requireAuth },
-    async (_req, reply) => reply.code(200).send({ presets: [...BUILTIN_LAUNCHER_PRESETS] }),
+  app.get('/api/me/launcher-presets/builtins', { preHandler: requireAuth }, async (_req, reply) =>
+    reply.code(200).send({ presets: [...BUILTIN_LAUNCHER_PRESETS] }),
   );
 
   app.get(

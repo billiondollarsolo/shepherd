@@ -2,7 +2,7 @@
  * PhoneView — agents list + driveable stage (herdr-aligned).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { PhoneSession } from './PhoneView';
 import { PhoneView } from './PhoneView';
 import { usePaddock } from '../../store/paddock';
@@ -50,13 +50,14 @@ describe('PhoneView (herdr-aligned mobile stage)', () => {
     expect(screen.getByTestId('phone-stage-input')).toBeInTheDocument();
   });
 
-  it('stage/send fires onSendInput', () => {
+  it('stage/send fires onSendInput', async () => {
     usePaddock.setState({ selectedSessionId: 'blocked' });
     const onSend = vi.fn();
     render(<PhoneView sessions={sessions} onSendInput={onSend} />);
     fireEvent.change(screen.getByTestId('phone-stage-input'), { target: { value: 'y' } });
     fireEvent.click(screen.getByTestId('phone-send-btn'));
     expect(onSend).toHaveBeenCalledWith('blocked', 'y', true);
+    await waitFor(() => expect(screen.getByTestId('phone-send-btn')).not.toBeDisabled());
   });
 
   it('shows empty list message when no sessions', () => {

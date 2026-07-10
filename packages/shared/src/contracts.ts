@@ -119,16 +119,28 @@ export const CreateNodeRequest = z
     // host + user are always required for ssh.
     for (const f of ['host', 'sshUser'] as const) {
       if (!val[f]) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f], message: `${f} is required for ssh nodes` });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [f],
+          message: `${f} is required for ssh nodes`,
+        });
       }
     }
     // The credential required depends on the auth method (key is the default).
     if (val.sshAuthMethod === 'password') {
       if (!val.sshPassword) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sshPassword'], message: 'sshPassword is required for password auth' });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sshPassword'],
+          message: 'sshPassword is required for password auth',
+        });
       }
     } else if (!val.sshPrivateKey) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sshPrivateKey'], message: 'sshPrivateKey is required for key auth' });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sshPrivateKey'],
+        message: 'sshPrivateKey is required for key auth',
+      });
     }
   });
 export type CreateNodeRequest = z.infer<typeof CreateNodeRequest>;
@@ -306,49 +318,51 @@ export const ListSessionsResponse = z.object({ sessions: z.array(SessionSchema) 
 export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
 
 /** POST /api/sessions — create a session (allocates tmux name + hook token). */
-export const CreateSessionRequest = z.object({
-  projectId: Uuid,
-  agentType: AgentTypeEnum,
-  /** Optional override; defaults to the project's working_dir. */
-  workingDir: z.string().min(1).optional(),
-  /**
-   * Autonomy level to launch the agent with (maps to per-agent CLI flags).
-   * Defaults to `default` (interactive prompting) when omitted.
-   */
-  permissionMode: SessionPermissionModeEnum.optional(),
-  /** Optional system prompt injected at launch (agents with a flag, e.g. claude
-   *  `--append-system-prompt`); ignored by agents without one. */
-  systemPrompt: z.string().min(1).max(8000).optional(),
-  /**
-   * Run this session in a dedicated git worktree (isolated branch) so multiple
-   * agents can work the same repo in parallel without colliding. Requires the
-   * project dir to be a git repo. Optional branch name override (sanitized;
-   * defaults to `flock/<session-short>`).
-   */
-  worktree: z.boolean().optional(),
-  worktreeBranch: z.string().min(1).max(120).optional(),
-  /**
-   * For an agentType of `dev` ONLY: the shell command to run as a supervised,
-   * auto-restarting dev process (e.g. `npm run dev`). Required when agentType is
-   * `dev`, ignored otherwise. Run via the node's shell (`sh -lc`).
-   */
-  devCommand: z.string().min(1).max(2000).optional(),
-  /**
-   * Session transport (F6). `acp` runs an ACP-capable agent (gemini/grok) over the
-   * structured Agent Client Protocol instead of a raw PTY — enabling structured
-   * status, telemetry, and approve/deny. Ignored (falls back to PTY) for agents
-   * with no ACP entrypoint. Default: PTY.
-   */
-  transport: z.enum(['pty', 'acp']).optional(),
-}).superRefine((val, ctx) => {
-  if (val.agentType === 'dev' && !val.devCommand?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['devCommand'],
-      message: 'devCommand is required for a dev session.',
-    });
-  }
-});
+export const CreateSessionRequest = z
+  .object({
+    projectId: Uuid,
+    agentType: AgentTypeEnum,
+    /** Optional override; defaults to the project's working_dir. */
+    workingDir: z.string().min(1).optional(),
+    /**
+     * Autonomy level to launch the agent with (maps to per-agent CLI flags).
+     * Defaults to `default` (interactive prompting) when omitted.
+     */
+    permissionMode: SessionPermissionModeEnum.optional(),
+    /** Optional system prompt injected at launch (agents with a flag, e.g. claude
+     *  `--append-system-prompt`); ignored by agents without one. */
+    systemPrompt: z.string().min(1).max(8000).optional(),
+    /**
+     * Run this session in a dedicated git worktree (isolated branch) so multiple
+     * agents can work the same repo in parallel without colliding. Requires the
+     * project dir to be a git repo. Optional branch name override (sanitized;
+     * defaults to `flock/<session-short>`).
+     */
+    worktree: z.boolean().optional(),
+    worktreeBranch: z.string().min(1).max(120).optional(),
+    /**
+     * For an agentType of `dev` ONLY: the shell command to run as a supervised,
+     * auto-restarting dev process (e.g. `npm run dev`). Required when agentType is
+     * `dev`, ignored otherwise. Run via the node's shell (`sh -lc`).
+     */
+    devCommand: z.string().min(1).max(2000).optional(),
+    /**
+     * Session transport (F6). `acp` runs an ACP-capable agent (gemini/grok) over the
+     * structured Agent Client Protocol instead of a raw PTY — enabling structured
+     * status, telemetry, and approve/deny. Ignored (falls back to PTY) for agents
+     * with no ACP entrypoint. Default: PTY.
+     */
+    transport: z.enum(['pty', 'acp']).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.agentType === 'dev' && !val.devCommand?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['devCommand'],
+        message: 'devCommand is required for a dev session.',
+      });
+    }
+  });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 
 /**
@@ -767,22 +781,11 @@ export const PtyControlMessage = z.object({
 });
 export type PtyControlMessage = z.infer<typeof PtyControlMessage>;
 
-/** Screencast control/metadata for `screencast:<sessionId>` (frames are binary). */
-export const ScreencastControlMessage = z.object({
-  channel: z.literal('screencast'),
-  sessionId: Uuid,
-  op: z.enum(['started', 'stopped', 'in_control', 'released']),
-  /** JPEG quality 0..100 when applicable. */
-  quality: z.number().int().min(0).max(100).optional(),
-});
-export type ScreencastControlMessage = z.infer<typeof ScreencastControlMessage>;
-
 /** Server→client message union (JSON frames). */
 export const ServerMessage = z.discriminatedUnion('channel', [
   StatusUpdateMessage,
   NodeUpdateMessage,
   PtyControlMessage,
-  ScreencastControlMessage,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 
@@ -813,19 +816,9 @@ export const ClientPtyResizeMessage = z.object({
 });
 export type ClientPtyResizeMessage = z.infer<typeof ClientPtyResizeMessage>;
 
-export const ClientScreencastQualityMessage = z.object({
-  op: z.literal('screencast:quality'),
-  sessionId: Uuid,
-  quality: z.number().int().min(0).max(100),
-});
-export type ClientScreencastQualityMessage = z.infer<
-  typeof ClientScreencastQualityMessage
->;
-
 export const ClientMessage = z.discriminatedUnion('op', [
   ClientSubscribeMessage,
   ClientUnsubscribeMessage,
   ClientPtyResizeMessage,
-  ClientScreencastQualityMessage,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;

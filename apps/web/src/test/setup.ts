@@ -17,3 +17,16 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
     dispatchEvent: vi.fn(),
   })) as unknown as typeof window.matchMedia;
 }
+
+// jsdom deliberately leaves rendering and scrolling APIs unimplemented. xterm
+// probes a 2D context while modules load, and TanStack Router restores scroll
+// after navigation; stable no-op shims keep test output focused on real failures.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+  })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+}
+
+if (typeof window !== 'undefined') {
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+}

@@ -4,7 +4,17 @@
  * group. Shows a calm empty state when nothing is selected.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRightLeft, Command, GitBranch, LayoutGrid, PanelBottom, PanelRight, SquareTerminal, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRightLeft,
+  Command,
+  GitBranch,
+  LayoutGrid,
+  PanelBottom,
+  PanelRight,
+  SquareTerminal,
+  XCircle,
+} from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { statusLabel, type AgentType, type Session } from '@flock/shared';
 import { RightPanel } from './RightPanel';
@@ -34,7 +44,13 @@ const HANDOFF_TARGETS: ReadonlyArray<{ type: AgentType; label: string }> = [
 ];
 import { useShell } from '../../app/KeyboardProvider';
 import { usePaddock } from '../../store/paddock';
-import { useNodes, useProjects, useSessions, useSessionEvents, useGitStatus } from '../../data/queries';
+import {
+  useNodes,
+  useProjects,
+  useSessions,
+  useSessionEvents,
+  useGitStatus,
+} from '../../data/queries';
 import { useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
 
@@ -99,7 +115,10 @@ function Header({ session }: { session: Session }): JSX.Element {
   const { data: allSessions = [] } = useSessions();
   const liveStatuses = useLiveStatuses();
   const needsYou = allSessions.filter(
-    (s) => s.closedAt === null && s.id !== session.id && (liveStatuses.get(s.id) ?? s.status) === 'awaiting_input',
+    (s) =>
+      s.closedAt === null &&
+      s.id !== session.id &&
+      (liveStatuses.get(s.id) ?? s.status) === 'awaiting_input',
   ).length;
   // Live status overlay — `session.status` is the REST write-behind mirror and
   // lags the WS, which made this header contradict the sidebar dot for the SAME
@@ -167,14 +186,24 @@ function Header({ session }: { session: Session }): JSX.Element {
           </Button>
         </SimpleTooltip>
         <SimpleTooltip label="Shell drawer  ⌘J">
-          <Button size="icon-sm" variant="ghost" aria-label="Toggle shell drawer" onClick={toggleDrawer}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Toggle shell drawer"
+            onClick={toggleDrawer}
+          >
             <PanelBottom className="size-4" />
           </Button>
         </SimpleTooltip>
         <DropdownMenu>
           <SimpleTooltip label="Hand off task to another agent">
             <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant="ghost" aria-label="Hand off" disabled={handoff.isPending}>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Hand off"
+                disabled={handoff.isPending}
+              >
                 <ArrowRightLeft className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -224,7 +253,9 @@ function EmptyState(): JSX.Element {
         <SquareTerminal className="size-7" />
       </div>
       <div className="relative max-w-sm">
-        <h2 className="font-display text-xl font-bold tracking-tight text-flock-ink-primary">No session selected</h2>
+        <h2 className="font-display text-xl font-bold tracking-tight text-flock-ink-primary">
+          No session selected
+        </h2>
         <p className="mt-1 text-sm text-flock-ink-muted">
           Pick a session from the sidebar, or start a new one to bring up its live terminal.
         </p>
@@ -305,8 +336,11 @@ export function SessionPane(): JSX.Element {
   const lastTool = useMemo(() => {
     if (!assistivePanels) return null;
     for (let i = focusEvents.length - 1; i >= 0; i--) {
-      const raw = focusEvents[i]!.agentEventRaw as { chat?: { role?: string; text?: string } } | null;
-      if (raw?.chat?.role === 'tool') return { id: focusEvents[i]!.id, text: (raw.chat.text ?? '').toLowerCase() };
+      const raw = focusEvents[i]!.agentEventRaw as {
+        chat?: { role?: string; text?: string };
+      } | null;
+      if (raw?.chat?.role === 'tool')
+        return { id: focusEvents[i]!.id, text: (raw.chat.text ?? '').toLowerCase() };
     }
     return null;
   }, [focusEvents, assistivePanels]);
@@ -318,7 +352,7 @@ export function SessionPane(): JSX.Element {
     } else if (/web|browser|fetch|url|navigate|screenshot/.test(lastTool.text)) {
       if (st.rightTab !== 'browser') st.openRight('browser');
     }
-  }, [lastTool?.id, assistivePanels]);
+  }, [lastTool, assistivePanels]);
 
   const open = sessions.filter((s) => s.closedAt === null);
   if (open.length === 0) return <EmptyState />;

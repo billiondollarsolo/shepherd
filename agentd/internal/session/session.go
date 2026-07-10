@@ -43,8 +43,8 @@ type Spec struct {
 	// = structured Agent Client Protocol over stdio (F6). For "acp", Command is the
 	// ACP launch argv (e.g. gemini --experimental-acp).
 	Mode string
-	Cols    uint16
-	Rows    uint16
+	Cols uint16
+	Rows uint16
 
 	// --- scoped hook-config injection (US-19), seeded ON THE NODE ---
 	// When ConfigDirEnv is set, Open() creates a per-session scoped config dir on
@@ -89,12 +89,13 @@ const (
 type Session struct {
 	spec Spec
 
-	mu      sync.Mutex
-	ptmx    *os.File  // current PTY (swapped on each dev restart)
-	cmd     *exec.Cmd // current process
-	ring    *ring
-	subs    map[int]chan []byte
-	nextSub int
+	mu       sync.Mutex
+	ptmx     *os.File      // current PTY (swapped on each dev restart)
+	cmd      *exec.Cmd     // current process
+	pumpDone chan struct{} // closed after the current PTY's final bytes reach the ring
+	ring     *ring
+	subs     map[int]chan []byte
+	nextSub  int
 
 	// ACP (structured) mode: non-nil for Mode=="acp" sessions. statusPush sends
 	// derived status to the manager (PTY sessions use the manager's status watcher
@@ -245,6 +246,8 @@ func (s *Session) startProcess() error {
 	s.mu.Lock()
 	s.ptmx = ptmx
 	s.cmd = cmd
+	pumpDone := make(chan struct{})
+	s.pumpDone = pumpDone
 	s.exited = false
 	// Record the ACTUAL size the PTY opened at so Resize can skip a redundant
 	// SIGWINCH (TIOCSWINSZ fires SIGWINCH even when the size is unchanged, which
@@ -253,7 +256,10 @@ func (s *Session) startProcess() error {
 	s.spec.Cols = ws.Cols
 	s.spec.Rows = ws.Rows
 	s.mu.Unlock()
-	go s.pump(ptmx)
+	go func() {
+		defer close(pumpDone)
+		s.pump(ptmx)
+	}()
 	return nil
 }
 
@@ -430,10 +436,15 @@ func (s *Session) supervise() {
 	for {
 		s.mu.Lock()
 		cmd := s.cmd
+		pumpDone := s.pumpDone
 		s.mu.Unlock()
 
 		start := time.Now()
 		err := cmd.Wait()
+		// Wait may reap a short-lived child before the PTY reader is scheduled.
+		// Let the pump drain the kernel buffer before finalize marks the session
+		// closed; otherwise fast commands can nondeterministically lose all output.
+		<-pumpDone
 
 		s.mu.Lock()
 		s.exited = true

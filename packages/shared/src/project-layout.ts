@@ -117,8 +117,12 @@ export function isGrid2x2Layout(root: LayoutNode): boolean {
   if (root.type !== 'split' || root.direction !== 'col') return false;
   const rowOrLeaf = (n: LayoutNode): boolean =>
     n.type === 'leaf' || (n.type === 'split' && n.direction === 'row');
-  // Reject pure vertical stacks (col nested under col).
-  return rowOrLeaf(root.a) && rowOrLeaf(root.b);
+  // At least one side must actually be a row. A two-leaf vertical stack also
+  // has a col root with leaf children, but it is the `col` preset—not a grid.
+  const hasRow =
+    (root.a.type === 'split' && root.a.direction === 'row') ||
+    (root.b.type === 'split' && root.b.direction === 'row');
+  return hasRow && rowOrLeaf(root.a) && rowOrLeaf(root.b);
 }
 
 /** Detect which arrange preset a live layout matches (for toolbar pressed state). */
@@ -131,9 +135,7 @@ export function layoutArrangeMode(root: LayoutNode): ArrangeMode {
  * Default multi-agent arrange from stage width (Herdr-ish: columns when wide,
  * stacked rows when narrow). Threshold is CSS pixels of the stage, not viewport.
  */
-export function defaultArrangeDirection(
-  stageWidthPx: number | null | undefined,
-): ArrangeDirection {
+export function defaultArrangeDirection(stageWidthPx: number | null | undefined): ArrangeDirection {
   if (stageWidthPx != null && stageWidthPx > 0 && stageWidthPx < 900) return 'col';
   return 'row';
 }
@@ -411,10 +413,7 @@ export function setSplitRatio(
   return found ? { ...layout, root } : layout;
 }
 
-export function setZoomedLeaf(
-  layout: ProjectLayoutV1,
-  leafId: string | null,
-): ProjectLayoutV1 {
+export function setZoomedLeaf(layout: ProjectLayoutV1, leafId: string | null): ProjectLayoutV1 {
   if (leafId === null) return { ...layout, zoomedLeafId: null };
   const leaves = collectLeaves(layout.root);
   if (!leaves.some((l) => l.id === leafId)) return layout;

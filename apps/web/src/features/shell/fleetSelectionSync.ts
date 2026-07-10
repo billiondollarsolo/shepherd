@@ -6,11 +6,7 @@
  */
 import type { FleetSelectionPayload, HostScope, ShellLens } from '@flock/shared';
 import { mergeFleetSelectionLww } from '@flock/shared';
-import {
-  fetchFleetSelection,
-  putFleetSelection,
-  selectionFromStore,
-} from './fleetSelectionClient';
+import { fetchFleetSelection, putFleetSelection, selectionFromStore } from './fleetSelectionClient';
 
 export interface ShellSelectionSlice {
   selectedSessionId: string | null;
@@ -97,8 +93,6 @@ export async function runFleetSelectionTick(opts: {
   slice: ShellSelectionSlice;
   /** Last local identity we intentionally synced (after apply or put). null = cold start. */
   lastSyncedKey: string | null;
-  /** @deprecated alias for lastSyncedKey */
-  lastWrittenKey?: string | null;
   fetchImpl?: typeof fetch;
 }): Promise<{
   wrote: boolean;
@@ -109,7 +103,7 @@ export async function runFleetSelectionTick(opts: {
   puts: FleetSelectionPayload[];
 }> {
   const fetchImpl = opts.fetchImpl ?? fetch;
-  const lastSyncedKey = opts.lastSyncedKey ?? opts.lastWrittenKey ?? null;
+  const lastSyncedKey = opts.lastSyncedKey;
   const local = localPayloadFromSlice(opts.slice);
   const localId = selectionIdentity({
     selectedSessionId: local.selectedSessionId,
@@ -210,9 +204,4 @@ export async function runFleetSelectionTick(opts: {
   }
 
   return { wrote, writeKey: nextKey, apply, local, puts };
-}
-
-/** @deprecated use selectionIdentity */
-export function selectionFingerprint(p: FleetSelectionPayload): string {
-  return selectionIdentity(p) + '|' + p.updatedAt;
 }

@@ -12,8 +12,17 @@
  * NOTE: deliberately NOT react-resizable-panels — that always fills 100% width and
  * can't scroll. The kanban floor + scroll replaces hand-resizing.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, ChevronDown, Columns3, LayoutGrid, Plus, Rows3, SquareArrowOutUpRight, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Bookmark,
+  ChevronDown,
+  Columns3,
+  LayoutGrid,
+  Plus,
+  Rows3,
+  SquareArrowOutUpRight,
+  X,
+} from 'lucide-react';
 import { StatusDot } from '../../components/StatusDot';
 import { statusLabel, type Session, type Status } from '@flock/shared';
 
@@ -61,8 +70,6 @@ interface CellUsage {
   contextLimit?: number;
   costUsd?: number;
 }
-
-
 
 function sessionLabel(s: Session): string {
   return `${s.agentType} · ${s.id.slice(0, 6)}`;
@@ -128,50 +135,54 @@ function GridCellInner({
       onMouseDownCapture={selectThis}
     >
       {focused ? null : (
-      <div
-        className="group/cell flex h-7 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] bg-flock-surface-1 px-2 text-xs"
-        onDoubleClick={focus}
-        title="Double-click to maximize"
-      >
-        <span className="flock-status-dot shrink-0" data-status={status} data-testid={`grid-dot-${session.id}`} />
-        <button
-          type="button"
-          onClick={focus}
-          className="min-w-0 flex-1 truncate text-left font-medium text-flock-ink-primary hover:text-flock-accent"
-          title="Focus this session"
+        <div
+          className="group/cell flex h-7 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] bg-flock-surface-1 px-2 text-xs"
+          onDoubleClick={focus}
+          title="Double-click to maximize"
         >
-          {sessionLabel(session)}
-        </button>
-        {usage?.contextPct != null ? (
-          <ContextMeter
-            pct={usage.contextPct}
-            tokens={usage.contextTokens}
-            limit={usage.contextLimit}
-            className="shrink-0"
+          <span
+            className="flock-status-dot shrink-0"
+            data-status={status}
+            data-testid={`grid-dot-${session.id}`}
           />
-        ) : null}
-        <span className="shrink-0 text-2xs text-flock-ink-muted">{statusLabel(status)}</span>
-        <SimpleTooltip label="Maximize session">
           <button
             type="button"
             onClick={focus}
-            aria-label="Focus session"
-            className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:opacity-100 group-hover/cell:opacity-100"
+            className="min-w-0 flex-1 truncate text-left font-medium text-flock-ink-primary hover:text-flock-accent"
+            title="Focus this session"
           >
-            <SquareArrowOutUpRight className="size-3" />
+            {sessionLabel(session)}
           </button>
-        </SimpleTooltip>
-        <SimpleTooltip label="Terminate session">
-          <button
-            type="button"
-            onClick={() => openDialog('terminate-session', { sessionId: session.id })}
-            aria-label="Terminate session"
-            className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-status-error focus-visible:opacity-100 group-hover/cell:opacity-100"
-          >
-            <X className="size-3" />
-          </button>
-        </SimpleTooltip>
-      </div>
+          {usage?.contextPct != null ? (
+            <ContextMeter
+              pct={usage.contextPct}
+              tokens={usage.contextTokens}
+              limit={usage.contextLimit}
+              className="shrink-0"
+            />
+          ) : null}
+          <span className="shrink-0 text-2xs text-flock-ink-muted">{statusLabel(status)}</span>
+          <SimpleTooltip label="Maximize session">
+            <button
+              type="button"
+              onClick={focus}
+              aria-label="Focus session"
+              className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:opacity-100 group-hover/cell:opacity-100"
+            >
+              <SquareArrowOutUpRight className="size-3" />
+            </button>
+          </SimpleTooltip>
+          <SimpleTooltip label="Terminate session">
+            <button
+              type="button"
+              onClick={() => openDialog('terminate-session', { sessionId: session.id })}
+              aria-label="Terminate session"
+              className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 transition-opacity hover:bg-flock-surface-2 hover:text-status-error focus-visible:opacity-100 group-hover/cell:opacity-100"
+            >
+              <X className="size-3" />
+            </button>
+          </SimpleTooltip>
+        </div>
       )}
       <div className="relative min-h-0 flex-1">
         {ready ? (
@@ -185,7 +196,9 @@ function GridCellInner({
           className="flex h-5 shrink-0 items-center gap-1.5 border-t border-[var(--flock-border)] bg-flock-surface-1 px-2 text-2xs text-flock-ink-muted/70"
           data-testid={`grid-usage-${session.id}`}
         >
-          {usage?.live ? <span className="size-1.5 shrink-0 rounded-full bg-status-running" /> : null}
+          {usage?.live ? (
+            <span className="size-1.5 shrink-0 rounded-full bg-status-running" />
+          ) : null}
           <span className="truncate">{footerParts.join(' · ')}</span>
         </div>
       ) : null}
@@ -220,7 +233,13 @@ const GridCell = memo(
 
 /** Saved-layouts menu: recall a named grid arrangement (layout + session order) in
  *  one click, or save the current one ("Backend trio", "Review pair"). */
-function LayoutPresetsMenu({ projectId, order }: { projectId: string | null; order: string[] }): JSX.Element {
+function LayoutPresetsMenu({
+  projectId,
+  order,
+}: {
+  projectId: string | null;
+  order: string[];
+}): JSX.Element {
   const presets = usePaddock((s) => s.layoutPresets);
   const saveLayoutPreset = usePaddock((s) => s.saveLayoutPreset);
   const applyLayoutPreset = usePaddock((s) => s.applyLayoutPreset);
@@ -318,10 +337,17 @@ function GridTabBar({
       data-testid="grid-tabbar"
     >
       <LayoutGrid className="size-4 shrink-0 text-flock-accent" />
-      <span className="font-display shrink-0 truncate text-sm font-semibold text-flock-ink-primary">{projectName}</span>
-      <span className="shrink-0 rounded-full bg-flock-surface-2 px-1.5 text-2xs tabular-nums text-flock-ink-muted">{cells.length}</span>
+      <span className="font-display shrink-0 truncate text-sm font-semibold text-flock-ink-primary">
+        {projectName}
+      </span>
+      <span className="shrink-0 rounded-full bg-flock-surface-2 px-1.5 text-2xs tabular-nums text-flock-ink-muted">
+        {cells.length}
+      </span>
 
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="grid-tabs">
+      <div
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+        data-testid="grid-tabs"
+      >
         {cells.map((s) => {
           const status = statuses.get(s.id) ?? s.status;
           const onScreen = visibleIds.has(s.id);
@@ -380,42 +406,54 @@ function GridTabBar({
       <div className="flex shrink-0 items-center gap-1 pl-1">
         {cells.length > 1 && (
           <>
-          <SimpleTooltip
-            label={layout === 'columns' ? 'Switch to 2-wide grid' : 'Switch to full-height columns'}
-          >
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Toggle grid layout"
-              onClick={onToggleLayout}
+            <SimpleTooltip
+              label={
+                layout === 'columns' ? 'Switch to 2-wide grid' : 'Switch to full-height columns'
+              }
             >
-              {layout === 'columns' ? <Rows3 className="size-4" /> : <Columns3 className="size-4" />}
-            </Button>
-          </SimpleTooltip>
-          <DropdownMenu>
-            <SimpleTooltip label="Jump to a terminal">
-              <DropdownMenuTrigger asChild>
-                <Button size="icon-sm" variant="ghost" aria-label="All terminals">
-                  <ChevronDown className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Toggle grid layout"
+                onClick={onToggleLayout}
+              >
+                {layout === 'columns' ? (
+                  <Rows3 className="size-4" />
+                ) : (
+                  <Columns3 className="size-4" />
+                )}
+              </Button>
             </SimpleTooltip>
-            <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
-              <DropdownMenuLabel>Terminals</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {cells.map((s) => (
-                <DropdownMenuItem key={s.id} onSelect={() => onJump(s.id)} className="gap-2">
-                  <StatusDot status={statuses.get(s.id) ?? s.status} className="shrink-0" />
-                  <span className="truncate">{sessionLabel(s)}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <SimpleTooltip label="Jump to a terminal">
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon-sm" variant="ghost" aria-label="All terminals">
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </SimpleTooltip>
+              <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+                <DropdownMenuLabel>Terminals</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {cells.map((s) => (
+                  <DropdownMenuItem key={s.id} onSelect={() => onJump(s.id)} className="gap-2">
+                    <StatusDot status={statuses.get(s.id) ?? s.status} className="shrink-0" />
+                    <span className="truncate">{sessionLabel(s)}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
         <LayoutPresetsMenu projectId={cells[0]?.projectId ?? null} order={cells.map((c) => c.id)} />
         <SimpleTooltip label="New session in this project">
-          <Button size="icon-sm" variant="ghost" aria-label="New session" disabled={!canAdd} onClick={onNew}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="New session"
+            disabled={!canAdd}
+            onClick={onNew}
+          >
             <Plus className="size-4" />
           </Button>
         </SimpleTooltip>
@@ -464,12 +502,20 @@ export function GridView(): JSX.Element {
       ),
     [open, projectId, sessionOrder],
   );
-  const ids = cells.map((c) => c.id).join(',');
+  const cellIds = useMemo(() => cells.map((c) => c.id), [cells]);
+  const ids = cellIds.join(',');
 
   // Drag-reorder (tabs): move `fromId` to `toId`'s slot, persist the project order.
   const reorder = (fromId: string, toId: string): void => {
     if (!projectId) return;
-    setSessionOrder(projectId, moveBefore(cells.map((c) => c.id), fromId, toId));
+    setSessionOrder(
+      projectId,
+      moveBefore(
+        cells.map((c) => c.id),
+        fromId,
+        toId,
+      ),
+    );
   };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -482,9 +528,11 @@ export function GridView(): JSX.Element {
   // horizontal scroll once there are more than fit (so none gets shorter).
   const overflow = cells.length > FILL_COLS;
 
-  const scrollToPane = (id: string): void => {
-    cellEls.current.get(id)?.scrollIntoView?.({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
-  };
+  const scrollToPane = useCallback((id: string): void => {
+    cellEls.current
+      .get(id)
+      ?.scrollIntoView?.({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+  }, []);
 
   // Highlight tabs whose pane is currently on screen (the minimap ↔ scroll sync).
   useEffect(() => {
@@ -511,7 +559,7 @@ export function GridView(): JSX.Element {
   // Auto-scroll a newly opened pane into view so it's never created off-screen.
   const prevIds = useRef<string[] | null>(null);
   useEffect(() => {
-    const current = cells.map((c) => c.id);
+    const current = cellIds;
     const prior = prevIds.current;
     prevIds.current = current;
     if (prior === null) return; // first render: don't yank the scroll
@@ -522,7 +570,7 @@ export function GridView(): JSX.Element {
     }
     // Intentionally only re-run when the set of pane ids changes (auto-scroll to
     // a newly added pane); other referenced values are stable refs/setters.
-  }, [ids]);
+  }, [cellIds, scrollToPane]);
 
   const maximize = (id: string): void => {
     const sess = cells.find((c) => c.id === id);

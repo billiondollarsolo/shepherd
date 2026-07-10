@@ -106,7 +106,10 @@ async function bootstrapAdmin(page: Page): Promise<void> {
     await fillField(page, ['password', 'admin-password'], ADMIN_PASSWORD);
     // Some forms ask for confirmation.
     if ((await page.getByLabel(/confirm/i).count()) > 0) {
-      await page.getByLabel(/confirm/i).first().fill(ADMIN_PASSWORD);
+      await page
+        .getByLabel(/confirm/i)
+        .first()
+        .fill(ADMIN_PASSWORD);
     }
     await clickFirst(page, ['setup-submit', /create admin|set ?up|continue/i]);
     // US-4: redirects to login after setup.
@@ -217,9 +220,7 @@ test.describe('US-41 — e2e happy path', () => {
     await expect(projectRow.or(page.getByText(PROJECT_NAME))).toBeVisible();
 
     // ===== 5. create a Claude Code session =====
-    await (
-      await firstAttached([projectRow.getByTestId('project-disclosure'), projectRow])
-    ).click();
+    await (await firstAttached([projectRow.getByTestId('project-disclosure'), projectRow])).click();
     await clickFirst(page, [
       'add-session',
       'new-session',
@@ -245,10 +246,7 @@ test.describe('US-41 — e2e happy path', () => {
     const sessionPane = page.getByTestId('session-pane').or(page.getByTestId('center-pane'));
     await expect(sessionPane).toBeVisible({ timeout: 30_000 });
     const sessionId = await sessionPane.getAttribute('data-session-id');
-    expect(
-      sessionId,
-      'session pane must expose its single authoritative session id',
-    ).toBeTruthy();
+    expect(sessionId, 'session pane must expose its single authoritative session id').toBeTruthy();
     const sid = sessionId as string;
 
     // ===== 6. terminal renders =====
@@ -289,10 +287,7 @@ test.describe('US-41 — e2e happy path', () => {
     expect(hookResp.status(), 'valid hook token must be accepted').toBeLessThan(300);
 
     // ===== 8. sidebar rings + push fires =====
-    const sessionRow = page
-      .getByTestId('session-row')
-      .filter({ hasText: SESSION_LABEL })
-      .first();
+    const sessionRow = page.getByTestId('session-row').filter({ hasText: SESSION_LABEL }).first();
 
     // The sidebar status indicator transitions to awaiting_input live over WS,
     // with no page reload (NFR-PERF1: status off the DB path).
@@ -313,17 +308,17 @@ test.describe('US-41 — e2e happy path', () => {
     await expect
       .poll(
         async () =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (await page.evaluate(
-            () => (window as any).__flockNotifications?.length ?? 0,
-          )) as number,
+          await page.evaluate(() => {
+            const notifications = Reflect.get(window, '__flockNotifications');
+            return Array.isArray(notifications) ? notifications.length : 0;
+          }),
         { timeout: 15_000 },
       )
       .toBeGreaterThan(0)
       .catch(async () => {
-        await expect(
-          page.getByRole('alert').or(page.getByTestId('push-toast')),
-        ).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByRole('alert').or(page.getByTestId('push-toast'))).toBeVisible({
+          timeout: 15_000,
+        });
       });
 
     // ===== 9. open the Browser tab → screencast renders =====
@@ -354,8 +349,9 @@ test.describe('US-41 — e2e happy path', () => {
     if ((await confirm.count()) > 0) await confirm.first().click();
 
     // Session leaves the active tree (record marked closed, US-13).
-    await expect(
-      page.getByTestId('session-row').filter({ hasText: SESSION_LABEL }),
-    ).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByTestId('session-row').filter({ hasText: SESSION_LABEL })).toHaveCount(
+      0,
+      { timeout: 30_000 },
+    );
   });
 });

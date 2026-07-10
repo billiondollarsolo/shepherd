@@ -7,7 +7,7 @@ import type { CdpScreencastFrame } from './types.js';
  * (via an identical decoder on the web side) the Browser tab.
  *
  * The shared package already pins the screencast *control* messages
- * (`ScreencastControlMessage` — started/stopped/quality, contracts.ts §8.2).
+ * (`ScreencastBandwidthControlMessage`, shared contract §8.2).
  * This module adds the per-FRAME payload shape, which is Layer-C-specific and
  * rides the same channel: a small JSON envelope carrying the base64 JPEG plus
  * the CDP frame metadata the client needs to place/scale the image.
@@ -51,10 +51,7 @@ export type ScreencastFrameMessage = z.infer<typeof ScreencastFrameMessage>;
  * acking) and is intentionally NOT serialized — the channel already scopes to
  * the Flock session id, and the ordinal is only meaningful for the ack.
  */
-export function encodeScreencastFrame(
-  flockSessionId: string,
-  frame: CdpScreencastFrame,
-): string {
+export function encodeScreencastFrame(flockSessionId: string, frame: CdpScreencastFrame): string {
   const message: ScreencastFrameMessage = {
     channel: 'screencast',
     type: 'frame',
@@ -67,9 +64,7 @@ export function encodeScreencastFrame(
       deviceHeight: frame.metadata.deviceHeight,
       scrollOffsetX: frame.metadata.scrollOffsetX,
       scrollOffsetY: frame.metadata.scrollOffsetY,
-      ...(frame.metadata.timestamp !== undefined
-        ? { timestamp: frame.metadata.timestamp }
-        : {}),
+      ...(frame.metadata.timestamp !== undefined ? { timestamp: frame.metadata.timestamp } : {}),
     },
   };
   return JSON.stringify(message);

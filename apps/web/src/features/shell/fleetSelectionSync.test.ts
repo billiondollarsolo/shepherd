@@ -4,7 +4,6 @@ import {
   localPayloadFromSlice,
   remoteToStorePatch,
   runFleetSelectionTick,
-  selectionFingerprint,
   selectionIdentity,
 } from './fleetSelectionSync';
 
@@ -70,7 +69,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
         fleetSelectionFollow: true,
       },
       lastSyncedKey: null,
-      lastWrittenKey: null,
       fetchImpl,
     });
 
@@ -250,17 +248,9 @@ describe('fleetSelectionSync (production path helpers)', () => {
   });
 
   it('hasMeaningfulSelection is false for empty home', () => {
-    expect(hasMeaningfulSelection({ selectedSessionId: null, selectedProjectId: null })).toBe(false);
+    expect(hasMeaningfulSelection({ selectedSessionId: null, selectedProjectId: null })).toBe(
+      false,
+    );
     expect(hasMeaningfulSelection({ selectedSessionId: 's1', selectedProjectId: null })).toBe(true);
-  });
-
-  it('selectionFingerprint is stable for identical payloads', () => {
-    const a = {
-      selectedSessionId: 's',
-      activeProjectId: null,
-      updatedAt: 't',
-      lens: 'agents' as const,
-    };
-    expect(selectionFingerprint(a)).toBe(selectionFingerprint({ ...a }));
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { Session } from '@flock/shared';
 
@@ -38,7 +38,15 @@ vi.mock('../terminal/Terminal', async () => {
 vi.mock('../../data/queries', () => ({
   useSessions: () => ({ data: h.sessions }),
   useProjects: () => ({
-    data: [{ id: 'P', name: 'proj-P', nodeId: 'n', workingDir: '/w', createdAt: '2026-01-01T00:00:00.000Z' }],
+    data: [
+      {
+        id: 'P',
+        name: 'proj-P',
+        nodeId: 'n',
+        workingDir: '/w',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
   }),
   // GridCell renders TerminalArea (drag-drop upload), which reads this hook.
   useWriteNodeFile: () => ({ mutateAsync: async () => {} }),
@@ -120,7 +128,7 @@ describe('GridView — adding a pane must not remount existing terminals', () =>
     // The create flow selects the NEW session id, but the sessions query hasn't
     // refetched yet — so 'c' is selected while the list is still [a, b]. The grid
     // must NOT lose its project scope (which would blank + remount every pane).
-    usePaddock.setState({ selectedSessionId: 'c' });
+    act(() => usePaddock.setState({ selectedSessionId: 'c' }));
     rerender(
       <TooltipProvider>
         <GridView />

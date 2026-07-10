@@ -19,7 +19,7 @@ import {
  *
  * This hook is pure UI state + a `send` seam (the `screencast:<id>` control
  * channel, wired by the Browser tab). It uses the shared `ScreencastBandwidthSettings`
- * / `ScreencastControlMessage` contracts — no shape is redefined on the web side.
+ * contract — no shape is redefined on the web side.
  */
 
 export interface UseScreencastSettingsOptions {

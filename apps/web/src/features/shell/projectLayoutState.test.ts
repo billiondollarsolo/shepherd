@@ -5,7 +5,7 @@ import {
   layoutFromSessions,
   rearrangeProjectLayout,
   reconcileProjectLayout,
-  resolveArrangeDirection,
+  resolveArrangeMode,
 } from './projectLayoutState';
 import {
   collectLeaves,
@@ -86,16 +86,16 @@ describe('projectLayoutState (production reconcile)', () => {
     expect(applySelectionZoom(clear, null)).toBe(clear);
   });
 
-  it('resolveArrangeDirection prefers explicit then stored then width', () => {
+  it('resolveArrangeMode prefers explicit then stored then width', () => {
     const stored = layoutFromSessions('p1', ['a', 'b'], null, 'col')!;
     expect(
-      resolveArrangeDirection({ explicit: 'row', stored, projectId: 'p1', stageWidthPx: 500 }),
+      resolveArrangeMode({ explicit: 'row', stored, projectId: 'p1', stageWidthPx: 500 }),
     ).toBe('row');
+    expect(resolveArrangeMode({ explicit: null, stored, projectId: 'p1', stageWidthPx: 500 })).toBe(
+      'col',
+    );
     expect(
-      resolveArrangeDirection({ explicit: null, stored, projectId: 'p1', stageWidthPx: 500 }),
-    ).toBe('col');
-    expect(
-      resolveArrangeDirection({
+      resolveArrangeMode({
         explicit: null,
         stored: null,
         projectId: 'p1',
@@ -103,7 +103,7 @@ describe('projectLayoutState (production reconcile)', () => {
       }),
     ).toBe('col');
     expect(
-      resolveArrangeDirection({
+      resolveArrangeMode({
         explicit: null,
         stored: null,
         projectId: 'p1',
@@ -170,26 +170,20 @@ describe('projectLayoutState (production reconcile)', () => {
     const stored = rearrangeProjectLayout('p1', ['a', 'b', 'c', 'd'], 'grid2x2', 'a')!;
     expect(stored.root.type).toBe('split');
     const dragged =
-      stored.root.type === 'split'
-        ? { ...stored, root: { ...stored.root, ratio: 0.35 } }
-        : stored;
+      stored.root.type === 'split' ? { ...stored, root: { ...stored.root, ratio: 0.35 } } : stored;
     const next = reconcileProjectLayout('p1', ['a', 'b', 'c', 'd'], dragged, 'b', {
       direction: 'grid2x2',
     })!;
     expect(layoutArrangeMode(next.root)).toBe('grid2x2');
     expect(next.root.type).toBe('split');
     if (next.root.type === 'split') expect(next.root.ratio).toBeCloseTo(0.35, 5);
-    expect(collectLeaves(next.root).find((l) => l.id === next.focusedLeafId)?.sessionId).toBe(
-      'b',
-    );
+    expect(collectLeaves(next.root).find((l) => l.id === next.focusedLeafId)?.sessionId).toBe('b');
   });
 
   it('reconcile prunes a terminated session without equal-rebuilding survivors', () => {
     const stored = layoutFromSessions('p1', ['a', 'b'], null, 'row')!;
     const dragged =
-      stored.root.type === 'split'
-        ? { ...stored, root: { ...stored.root, ratio: 0.7 } }
-        : stored;
+      stored.root.type === 'split' ? { ...stored, root: { ...stored.root, ratio: 0.7 } } : stored;
     // Only a remains after b terminates — single leaf, no ratio to keep.
     const next = reconcileProjectLayout('p1', ['a'], dragged, null)!;
     expect(collectLeaves(next.root).map((l) => l.sessionId)).toEqual(['a']);

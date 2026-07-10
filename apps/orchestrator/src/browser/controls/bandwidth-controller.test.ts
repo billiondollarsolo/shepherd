@@ -208,7 +208,7 @@ describe('BandwidthController — control #2: throttle/pause unfocused (NFR-PERF
 });
 
 describe('BandwidthController — control-message dispatch', () => {
-  it('routes shared ScreencastControlMessages to the right control', async () => {
+  it('routes shared screencast control messages to the right control', async () => {
     const engine = makeFakeEngine();
     const ctrl = new BandwidthController({ engine });
     const startSpy = vi.spyOn(ctrl, 'open');

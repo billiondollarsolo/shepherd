@@ -98,7 +98,9 @@ describe('project-layout', () => {
   });
 
   it('rejects invalid version', () => {
-    expect(parseProjectLayout({ version: 2, projectId: 'p', focusedLeafId: 'x', root: {} })).toBeNull();
+    expect(
+      parseProjectLayout({ version: 2, projectId: 'p', focusedLeafId: 'x', root: {} }),
+    ).toBeNull();
   });
 
   it('equalSessionLayout gives each of 3 agents equal width (row)', () => {
@@ -177,6 +179,10 @@ describe('project-layout', () => {
   });
 
   it('pure col stack is not detected as grid2x2', () => {
+    const pair = equalSessionLayout('p', ['a', 'b'], null, 'col')!;
+    expect(isGrid2x2Layout(pair.root)).toBe(false);
+    expect(layoutArrangeMode(pair.root)).toBe('col');
+
     const stacked = equalSessionLayout('p', ['a', 'b', 'c'], null, 'col')!;
     expect(isGrid2x2Layout(stacked.root)).toBe(false);
     expect(layoutArrangeMode(stacked.root)).toBe('col');

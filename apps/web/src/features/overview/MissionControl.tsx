@@ -230,7 +230,7 @@ export function MissionControl(): JSX.Element {
     openRight('diff');
   };
 
-  const statusOf = (s: Session): Status => live.get(s.id) ?? s.status;
+  const statusOf = useCallback((s: Session): Status => live.get(s.id) ?? s.status, [live]);
   const hostScope = usePaddock((s) => s.hostScope);
   // Host chips scope the paddock home (not only the Agents list).
   const open = useMemo(
@@ -241,8 +241,9 @@ export function MissionControl(): JSX.Element {
   const openIds = useMemo(() => open.map((s) => s.id), [open]);
   const fleetGit = useFleetGit(openIds);
   const sorted = useMemo(
-    () => [...open].sort((a, b) => (STATUS_ORDER[statusOf(a)] ?? 9) - (STATUS_ORDER[statusOf(b)] ?? 9)),
-    [open, live],
+    () =>
+      [...open].sort((a, b) => (STATUS_ORDER[statusOf(a)] ?? 9) - (STATUS_ORDER[statusOf(b)] ?? 9)),
+    [open, statusOf],
   );
   const byId = useMemo(() => new Map(open.map((s) => [s.id, s])), [open]);
   // Sessions shown as children under the Teams section are EXCLUDED from the fleet
@@ -296,15 +297,41 @@ export function MissionControl(): JSX.Element {
     }
     return [...kids.keys()]
       .filter((p) => !childIds.has(p)) // roots = leads that aren't themselves children
-      .map((rootId) => ({ lead: byId.get(rootId)!, children: (kids.get(rootId) ?? []).map((id) => byId.get(id)!).filter(Boolean) }));
+      .map((rootId) => ({
+        lead: byId.get(rootId)!,
+        children: (kids.get(rootId) ?? []).map((id) => byId.get(id)!).filter(Boolean),
+      }));
   }, [edges, byId, childIds]);
   // A "calm" fleet (nothing demanding attention) → invite action with quick-start
   // so the home is never an empty void.
-  const calm = needs.length === 0 && review.length === 0 && working.length === 0 && teams.length === 0;
-  const quickStart: ReadonlyArray<{ icon: typeof Bot; label: string; hint: string; onClick: () => void; primary?: boolean }> = [
-    { icon: Bot, label: 'Spawn an agent', hint: 'Put a coding agent to work', onClick: () => openDialog('session'), primary: true },
-    { icon: FolderGit2, label: 'New project', hint: 'Add a repo to work in', onClick: () => openDialog('project') },
-    { icon: HardDrive, label: 'Add a node', hint: 'Connect another machine', onClick: () => openDialog('node') },
+  const calm =
+    needs.length === 0 && review.length === 0 && working.length === 0 && teams.length === 0;
+  const quickStart: ReadonlyArray<{
+    icon: typeof Bot;
+    label: string;
+    hint: string;
+    onClick: () => void;
+    primary?: boolean;
+  }> = [
+    {
+      icon: Bot,
+      label: 'Spawn an agent',
+      hint: 'Put a coding agent to work',
+      onClick: () => openDialog('session'),
+      primary: true,
+    },
+    {
+      icon: FolderGit2,
+      label: 'New project',
+      hint: 'Add a repo to work in',
+      onClick: () => openDialog('project'),
+    },
+    {
+      icon: HardDrive,
+      label: 'Add a node',
+      hint: 'Connect another machine',
+      onClick: () => openDialog('node'),
+    },
   ];
 
   const renderCard = (s: Session, opts?: { review?: boolean }): JSX.Element => (
@@ -341,7 +368,10 @@ export function MissionControl(): JSX.Element {
         >
           <span
             className="size-1.5 rounded-full"
-            style={{ background: needs.length > 0 ? 'var(--flock-status-awaiting)' : 'var(--flock-ink-muted)' }}
+            style={{
+              background:
+                needs.length > 0 ? 'var(--flock-status-awaiting)' : 'var(--flock-ink-muted)',
+            }}
           />
           {needs.length} need{needs.length === 1 ? 's' : ''} you
         </span>
@@ -415,14 +445,20 @@ export function MissionControl(): JSX.Element {
                     >
                       <span
                         className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
-                          q.primary ? 'bg-flock-accent text-white' : 'bg-flock-surface-2 text-flock-accent'
+                          q.primary
+                            ? 'bg-flock-accent text-white'
+                            : 'bg-flock-surface-2 text-flock-accent'
                         }`}
                       >
                         <Icon className="size-5" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-flock-ink-primary">{q.label}</span>
-                        <span className="block truncate text-2xs text-flock-ink-muted">{q.hint}</span>
+                        <span className="block truncate text-sm font-semibold text-flock-ink-primary">
+                          {q.label}
+                        </span>
+                        <span className="block truncate text-2xs text-flock-ink-muted">
+                          {q.hint}
+                        </span>
                       </span>
                     </button>
                   );
@@ -482,7 +518,10 @@ export function MissionControl(): JSX.Element {
               </h2>
               <div className="space-y-2">
                 {teams.map(({ lead, children }) => (
-                  <div key={lead.id} className="rounded-xl border border-flock-accent/30 bg-flock-surface-1 p-3">
+                  <div
+                    key={lead.id}
+                    className="rounded-xl border border-flock-accent/30 bg-flock-surface-1 p-3"
+                  >
                     <div className="flex items-center gap-2">
                       <span className="flex size-5 items-center justify-center rounded-full bg-flock-accent/15 text-flock-accent">
                         <Network className="size-3" />
@@ -507,7 +546,10 @@ export function MissionControl(): JSX.Element {
                           title={latestChats[k.id]?.text ?? ''}
                           className="flex items-center gap-1.5 rounded-full border border-[var(--flock-border)] bg-flock-surface-2 px-2 py-1 text-2xs hover:border-flock-accent"
                         >
-                          <StatusDot status={statusOf(k)} pulse={statusOf(k) === 'awaiting_input'} />
+                          <StatusDot
+                            status={statusOf(k)}
+                            pulse={statusOf(k) === 'awaiting_input'}
+                          />
                           <span className="text-flock-ink-primary">{k.agentType}</span>
                           <span className="text-flock-ink-muted">{statusLabel(statusOf(k))}</span>
                         </button>
