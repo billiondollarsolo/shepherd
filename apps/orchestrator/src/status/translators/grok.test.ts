@@ -8,9 +8,9 @@ import { describe, expect, it } from 'vitest';
 import { GROK_AGENT_TYPE, translateGrokHook } from './grok.js';
 
 describe('translateGrokHook (Grok lifecycle hooks)', () => {
-  it('session_start -> starting', () => {
+  it('session_start -> idle (ready for you)', () => {
     expect(translateGrokHook({ hookEventName: 'session_start' })).toEqual({
-      status: 'starting',
+      status: 'idle',
       detail: null,
     });
   });

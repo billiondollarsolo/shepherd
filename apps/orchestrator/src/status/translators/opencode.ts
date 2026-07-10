@@ -15,7 +15,7 @@
  *
  * Source → status mapping (spec §7.1 OpenCode column):
  *
- *   session.created                     -> starting   (was guessed `session.start`)
+ *   session.created                     -> idle       (booted + ready; was `starting`)
  *   tool.execute.before                 -> running
  *   tool.execute.after (success)        -> running
  *   tool.execute.after (failure)        -> error
@@ -148,10 +148,12 @@ export function translateOpenCodeHook(body: unknown): OpenCodeTransition | null 
     }
 
     // Session start: current OpenCode emits `session.created`; `session.start` was
-    // a guessed name that never fires (kept for tolerance across versions).
+    // a guessed name (kept for tolerance). Booted + ready = idle — not starting
+    // (else the session flips back to "starting" after agentd's idle seed and
+    // sticks until the first tool / session.idle).
     case 'session.created':
     case 'session.start':
-      return { status: 'starting', detail: null };
+      return { status: 'idle', detail: null };
 
     case 'tool.execute.before':
       return { status: 'running', detail: prop(e, 'tool') };

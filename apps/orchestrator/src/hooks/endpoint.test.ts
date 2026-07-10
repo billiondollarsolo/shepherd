@@ -38,7 +38,9 @@ const GOOD_HASH = 'argon2id$hash$for$good$token';
 function lookupFor(id: string, hash: string): HookSessionLookup {
   return {
     getHookAuth(sessionId: string): HookSessionAuth | undefined {
-      return sessionId === id ? { sessionId, hookTokenHash: hash } : undefined;
+      return sessionId === id
+        ? { sessionId, hookTokenHash: hash, agentType: 'claude-code' }
+        : undefined;
     },
   };
 }
@@ -224,6 +226,20 @@ describe('HookEndpointService.handle (US-15)', () => {
     expect(result).toEqual({ ok: true });
     expect(onTransition).not.toHaveBeenCalled();
     expect(enqueueEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses session agentType from lookup when handle() omits agentType', async () => {
+    // Production routes never pass agentType — only the live binding does.
+    // Session lookup is configured with agentType: 'claude-code' in build().
+    const { service, onTransition } = build();
+    await service.handle({
+      sessionId: SESSION_ID,
+      token: GOOD_TOKEN,
+      body: { hook_event_name: 'Notification', notification_type: 'permission_prompt' },
+    });
+    expect(onTransition).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'awaiting_input' }),
+    );
   });
 
   it('appends a `plan` event when the hook carries a TodoWrite (US-34)', async () => {

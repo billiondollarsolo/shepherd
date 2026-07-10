@@ -40,16 +40,16 @@ export const AgentTypeEnum = z.enum([
   'claude-code',
   'codex',
   'opencode',
-  // Google Gemini CLI (T20). Launchable with permission flags; the PTY shows full
-  // activity. Transcript-derived status granularity (thinking/idle) is not yet
-  // parsed, so its dot reflects liveness rather than per-turn state.
+  // Google Gemini CLI — launched over ACP (`--experimental-acp`) for structured
+  // chat + status (permission/turn/usage). Permission flags map to --approval-mode /
+  // --yolo. Hooks exist as a PTY-path fallback but ACP is the live transport.
   'gemini',
-  // xAI Grok Build CLI (https://x.ai/cli, binary `grok`). Native auth (browser
-  // OAuth / GROK_CODE_XAI_API_KEY). No documented transcript/hook format yet, so —
-  // like gemini — its status is derived from PTY activity (liveness), not per-turn.
+  // xAI Grok Build CLI (https://x.ai/cli, binary `grok`). Native PTY + lifecycle
+  // hooks (~/.grok/hooks/flock.json). Does NOT speak ACP. Status from hooks;
+  // no transcript → no Chat tab yet. Auth bootstrap: device-code when unauthed.
   'grok',
-  // Additional CLI agents (launchable if installed on the node; status via PTY
-  // activity like gemini/grok — no transcript/hook integration yet):
+  // Additional CLI agents (launchable if installed; status via PTY activity —
+  // no first-class transcript/hook integration yet):
   'aider', // Aider (pip) — `aider`
   'cursor-agent', // Cursor's headless agent CLI — `cursor-agent`
   'amp', // Sourcegraph Amp CLI — `amp`

@@ -123,13 +123,21 @@ export function extractPlan(body: unknown, agentType?: AgentType): ExtractedPlan
     case 'generic':
     case 'terminal':
       // No recognized plan/todo tool in the hook stream for these today.
+      // Codex plan arrives via the transcript/status channel (`update_plan`).
       return null;
     default:
       break;
   }
-  // No explicit agent type: only Claude has a recognized plan payload today.
-  if (body !== null && typeof body === 'object' && 'hook_event_name' in body) {
-    return extractClaudePlan(body);
+  // No explicit agent type: infer from payload shape so plan still works when
+  // the route/live binding has not threaded agentType yet.
+  if (body !== null && typeof body === 'object') {
+    const b = body as Record<string, unknown>;
+    if (b.type === 'todo.updated' || b.agentType === 'opencode') {
+      return extractOpenCodePlan(body);
+    }
+    if ('hook_event_name' in b) {
+      return extractClaudePlan(body);
+    }
   }
   return null;
 }

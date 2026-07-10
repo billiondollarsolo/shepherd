@@ -16,7 +16,7 @@
  */
 import type { Server as HttpServer } from 'node:http';
 
-import type { AgentTelemetry, HookTelemetry, Status } from '@flock/shared';
+import type { AgentTelemetry, AgentType, HookTelemetry, Status } from '@flock/shared';
 
 import { eq, isNull, sql } from 'drizzle-orm';
 import { WebSocketServer } from 'ws';
@@ -77,6 +77,11 @@ interface LiveSession {
   tmuxSessionName: string;
   workingDir: string;
   hookTokenHash: string;
+  /**
+   * Agent type for the hook endpoint translator (DB-free). Required for correct
+   * dispatch when payloads share shapes (Claude/Gemini `hook_event_name`, etc.).
+   */
+  agentType?: AgentType;
   /** Initial status to seed the live map with (defaults to 'starting'). A
    *  hook-less `terminal` session is created 'running' and must seed as such. */
   status?: Status;
@@ -180,7 +185,9 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
     lookup: {
       getHookAuth(sessionId: string): HookSessionAuth | undefined {
         const s = live.get(sessionId);
-        return s ? { sessionId: s.id, hookTokenHash: s.hookTokenHash } : undefined;
+        return s
+          ? { sessionId: s.id, hookTokenHash: s.hookTokenHash, agentType: s.agentType }
+          : undefined;
       },
     },
     verifyToken: (hash, token) => Promise.resolve(verifyHookToken(hash, token)),
@@ -291,6 +298,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
       tmuxSessionName: s.tmuxSessionName,
       workingDir: s.workingDir,
       hookTokenHash: s.hookTokenHash,
+      agentType: s.agentType,
     };
     live.set(s.id, entry);
     return entry;
@@ -355,6 +363,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
           tmuxSessionName: s.tmuxSessionName,
           workingDir: s.workingDir,
           hookTokenHash: s.hookTokenHash,
+          agentType: s.agentType,
         });
         if (!statusMap.get(s.id)) {
           // seed() (not set()) so boot-restore writes no event row — see StatusMap.

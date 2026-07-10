@@ -69,4 +69,33 @@ describe('extractPlan', () => {
     expect(extractPlan(TODO_WRITE, 'codex')).toBeNull();
     expect(extractPlan(TODO_WRITE, 'terminal')).toBeNull();
   });
+
+  it('extracts OpenCode todo.updated plan with agentType', () => {
+    const plan = extractPlan(
+      {
+        type: 'todo.updated',
+        properties: {
+          todos: [
+            { content: 'Ship plan', status: 'in_progress' },
+            { content: 'Write tests', status: 'pending' },
+          ],
+        },
+      },
+      'opencode',
+    );
+    expect(plan).toEqual({
+      items: [
+        { content: 'Ship plan', status: 'in_progress' },
+        { content: 'Write tests', status: 'pending' },
+      ],
+    });
+  });
+
+  it('infers OpenCode plan from payload shape when agentType is omitted', () => {
+    const plan = extractPlan({
+      type: 'todo.updated',
+      properties: { todos: [{ content: 'Infer me', status: 'completed' }] },
+    });
+    expect(plan).toEqual({ items: [{ content: 'Infer me', status: 'completed' }] });
+  });
 });

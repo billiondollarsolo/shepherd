@@ -6,21 +6,19 @@ import (
 )
 
 // LaunchCommand returns the argv to start an agent in ACP (structured) mode, and
-// whether the agent supports ACP at all. Verified against Synara's per-provider
-// support (synara/apps/server/src/provider/acp/*):
+// whether the agent supports ACP at all.
 //
-//	gemini → gemini --experimental-acp
-//	grok   → grok agent --no-leader stdio
+//	gemini → gemini --experimental-acp  (answers ACP initialize; VERIFIED)
 //	cursor → cursor-agent acp
 //
-// Agents not listed here have no ACP entrypoint and must use the raw-PTY
-// transport (the universal fallback, Invariant 1).
+// Grok is intentionally NOT listed: `grok agent stdio` is a JSON line protocol
+// that ignores ACP's initialize handshake (verified 2026-06-08). Grok runs as a
+// native PTY with status from Claude-compatible hooks. Agents not listed here
+// use the raw-PTY transport (the universal fallback, Invariant 1).
 func LaunchCommand(agentType string) ([]string, bool) {
 	switch agentType {
 	case "gemini":
 		return []string{"gemini", "--experimental-acp"}, true
-	case "grok":
-		return []string{"grok", "agent", "--no-leader", "stdio"}, true
 	case "cursor":
 		return []string{"cursor-agent", "acp"}, true
 	default:

@@ -646,8 +646,8 @@ export async function main(): Promise<void> {
           if (!client) return fail('flock-agentd unreachable on node');
           // Scoped hook-config (US-19, T1): agentd seeds it on the node so the agent
           // calls back into Flock's hook endpoint (→ awaiting_input, Plan, Web Push).
-          // ACP (structured) sessions don't use hook-config injection — status
-          // comes from the ACP stream, not hooks.
+          // ACP sessions (Gemini) skip hook injection — status + chat come from the
+          // ACP stream (`acp_bridge`), not hooks.
           const isAcp = mode === 'acp';
           const scoped = isAcp ? null : await renderScopedConfig(session.agentType).catch(() => null);
           // T17: an `autonomous` agent (--dangerously-skip-permissions) must be
@@ -703,6 +703,7 @@ export async function main(): Promise<void> {
         tmuxSessionName: session.tmuxSessionName,
         workingDir: session.workingDir,
         hookTokenHash: session.hookTokenHash,
+        agentType: session.agentType,
         status: session.status,
         statusDetail: session.statusDetail,
       });

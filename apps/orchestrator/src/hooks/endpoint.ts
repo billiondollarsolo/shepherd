@@ -23,11 +23,33 @@
  * token is 256-bit CSPRNG so it needs no salt/memory-hardness) is injected so the
  * unit tests stay fast and the hot-path cost is explicit.
  */
-import type { AgentType, HookTelemetry, Status } from '@flock/shared';
+import { AgentTypeEnum, type AgentType, type HookTelemetry, type Status } from '@flock/shared';
 
 import { translateHookEvent } from './translate.js';
 import { extractPlan, planEventFields } from './plan.js';
 import { OpenCodeChatAssembler } from './opencode-chat.js';
+
+/**
+ * Resolve which agent translator/plan extractor to use. Prefer the live session
+ * binding (always known for a Flock-managed session) over body inference — Claude
+ * and Gemini both use `hook_event_name`, Codex can too, and Grok may emit either
+ * camelCase or snake_case field names. Body `agentType` (OpenCode plugin) and
+ * payload-shape inference remain as fallbacks.
+ */
+function resolveAgentType(
+  inputAgentType: AgentType | undefined,
+  sessionAgentType: AgentType | undefined,
+  body: unknown,
+): AgentType | undefined {
+  if (inputAgentType) return inputAgentType;
+  if (sessionAgentType) return sessionAgentType;
+  if (body !== null && typeof body === 'object' && 'agentType' in body) {
+    const raw = (body as { agentType?: unknown }).agentType;
+    const parsed = AgentTypeEnum.safeParse(raw);
+    if (parsed.success) return parsed.data;
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Errors (mapped to HTTP status codes by the route layer)
@@ -58,6 +80,12 @@ export interface HookSessionAuth {
   readonly sessionId: string;
   /** Hash of the per-session hook token (NFR-SEC3); never the plaintext. */
   readonly hookTokenHash: string;
+  /**
+   * Agent type for translator/plan dispatch without a DB read. Optional for
+   * back-compat with older in-memory bindings; when absent, falls back to body
+   * `agentType` or payload-shape inference.
+   */
+  readonly agentType?: AgentType;
 }
 
 /**
@@ -233,9 +261,12 @@ export class HookEndpointService {
       throw new HookUnauthorizedError();
     }
 
-    // 3) Translate the agent event to a status and update the in-memory map
-    //    (the live path). A null mapping means "no transition" — still acked.
-    const mapped = translateHookEvent(input.body, input.agentType);
+    // 3) Resolve agent type (session binding → body tag → shape inference) then
+    //    translate. Without a reliable agentType, Claude/Gemini/Codex payloads
+    //    that share `hook_event_name` mis-route, and Grok/OpenCode plan/chat
+    //    extraction can silently no-op.
+    const agentType = resolveAgentType(input.agentType, auth.agentType, input.body);
+    const mapped = translateHookEvent(input.body, agentType);
     if (mapped) {
       this.onTransition({
         sessionId: input.sessionId,
@@ -264,9 +295,9 @@ export class HookEndpointService {
     }
 
     // 5) US-34 Plan artifact: if the event carries the agent's plan/todo (Claude
-    //    TodoWrite), append a normalized `plan` snapshot event. Same fire-and-
-    //    forget contract — never awaited, never breaks the ack.
-    const plan = extractPlan(input.body, input.agentType);
+    //    TodoWrite / OpenCode todo.updated), append a normalized `plan` snapshot.
+    //    Same fire-and-forget contract — never awaited, never breaks the ack.
+    const plan = extractPlan(input.body, agentType);
     const planFields = plan ? planEventFields(input.sessionId, plan.items) : null;
     if (planFields) {
       this.safeEnqueue({ sessionId: input.sessionId, source: 'hook', ...planFields });
@@ -276,7 +307,7 @@ export class HookEndpointService {
     //    whole messages (by message id + role) and, on turn end (`session.idle`),
     //    enqueue them as `chat` events the web Chat tab reads (agentEventRaw.chat).
     const ocType = (input.body as { agentType?: string; type?: string } | null) ?? null;
-    if (ocType?.agentType === 'opencode') {
+    if (agentType === 'opencode' || ocType?.agentType === 'opencode') {
       this.opencodeChat.observe(input.sessionId, input.body);
       if (ocType.type === 'session.idle') {
         for (const msg of this.opencodeChat.flush(input.sessionId)) {

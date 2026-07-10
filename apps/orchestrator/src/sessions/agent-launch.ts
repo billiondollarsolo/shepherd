@@ -121,11 +121,9 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
   codex: { command: ['codex'], permissionFlags: codexPermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
   // OpenCode has its own in-app permission config, so it takes no launch flag.
   opencode: { command: ['opencode'], kind: 'agent', initialStatus: 'starting', activityStatus: false },
-  // Gemini CLI v0.26.0+ ships hooks (seeded in config-injection), so status is now
-  // hook-derived like the others — NOT the PTY-activity heuristic (which couldn't
-  // distinguish idle from awaiting_input). activityStatus:false so the two don't
-  // fight. (Validate on a live authed gemini: if a pre-0.26 build / wrong hook
-  // format fires nothing, status would stall at 'starting'.)
+  // Gemini launches over ACP (`acpLaunchCommand`) for status + chat. activityStatus
+  // is false so a PTY path wouldn't fight hooks; the live ACP path also sets
+  // activityStatus:false at open. Permission flags apply to both PTY and ACP argv.
   gemini: { command: ['gemini'], permissionFlags: geminiPermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
   // xAI Grok Build CLI (binary `grok`). No documented autonomy flags (Plan Mode is
   // its built-in safety gate). Grok fires Claude-Code-compatible lifecycle hooks

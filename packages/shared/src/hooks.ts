@@ -130,8 +130,8 @@ export type OpenCodeHookPayload = z.infer<typeof OpenCodeHookPayload>;
 // but with its OWN payload shape: camelCase fields (`hookEventName`, `toolName`,
 // `toolInput`, `toolUseId`) and snake_case event-name VALUES. It reaches Flock's
 // hook endpoint via the same per-session forwarder the claude/opencode hooks use.
-//   session_start -> starting; pre_tool_use/post_tool_use -> running;
-//   stop -> done; notification (xai_session meta) -> no transition (ignored).
+//   session_start -> idle (ready); pre_tool_use/post_tool_use -> running;
+//   stop -> idle; session_end -> done; notification (xai_session) ignored.
 // ---------------------------------------------------------------------------
 
 export const GrokHookEventNameEnum = z.enum([

@@ -12,7 +12,6 @@ import (
 func TestLaunchCommand(t *testing.T) {
 	cases := map[string][]string{
 		"gemini": {"gemini", "--experimental-acp"},
-		"grok":   {"grok", "agent", "--no-leader", "stdio"},
 		"cursor": {"cursor-agent", "acp"},
 	}
 	for agent, want := range cases {
@@ -28,6 +27,10 @@ func TestLaunchCommand(t *testing.T) {
 	}
 	if _, ok := LaunchCommand("claude-code"); ok {
 		t.Fatal("claude-code must NOT claim ACP (PTY fallback)")
+	}
+	// Grok's stdio protocol is NOT ACP (ignores initialize) — native PTY only.
+	if _, ok := LaunchCommand("grok"); ok {
+		t.Fatal("grok must NOT claim ACP (native PTY + hooks)")
 	}
 	if SupportsACP("terminal") {
 		t.Fatal("terminal is not an ACP agent")

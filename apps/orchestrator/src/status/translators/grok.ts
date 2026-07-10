@@ -10,7 +10,7 @@
  * event-name values — so it needs its own mapping. Flock receives these via the
  * same per-session hook forwarder as the other agents.
  *
- *   session_start                  -> starting
+ *   session_start                  -> idle             (booted + ready for you)
  *   pre_tool_use                   -> running          (detail = the tool name)
  *   post_tool_use (success)        -> running          (detail = the tool name)
  *   post_tool_use (failure)        -> error
@@ -67,7 +67,10 @@ export function translateGrokHook(body: unknown): GrokTransition | null {
 
   switch (name) {
     case 'session_start':
-      return { status: 'starting', detail: null };
+      // Booted + ready (waiting for you) = idle, NOT starting. A launched agent
+      // you haven't prompted only fires session_start; 'starting' left it stuck
+      // until the first tool. Matches Claude/Gemini SessionStart → idle.
+      return { status: 'idle', detail: null };
     case 'pre_tool_use':
       return { status: 'running', detail: tool };
     case 'post_tool_use':

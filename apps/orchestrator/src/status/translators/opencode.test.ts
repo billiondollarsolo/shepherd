@@ -26,7 +26,7 @@ describe('translateOpenCodeHook — recorded fixtures (spec §7.1)', () => {
   // contract: each first-class OpenCode event must map exactly as the spec's
   // §7.1 OpenCode column requires.
   const cases: ReadonlyArray<readonly [fixture: string, status: Status]> = [
-    ['session-start', 'starting'],
+    ['session-start', 'idle'], // booted + ready (not stuck on starting)
     ['tool-execute-before', 'running'],
     ['tool-execute-after-success', 'running'],
     ['tool-execute-after-failure', 'error'],
