@@ -34,7 +34,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY apps/orchestrator/package.json apps/orchestrator/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 # ---- Stage 3: build shared + orchestrator -----------------------------------
 FROM deps AS build
@@ -50,7 +50,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY apps/orchestrator/package.json apps/orchestrator/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --prod \
+    pnpm install --frozen-lockfile --prod --store-dir /pnpm/store \
     --filter "@flock/orchestrator..." --filter "@flock/shared"
 
 # ---- Stage 5: lean runtime --------------------------------------------------

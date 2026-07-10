@@ -188,9 +188,12 @@ export function PhoneView({ sessions, onSelectSession, onSendInput }: PhoneViewP
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
   const selectSession = usePaddock((s) => s.selectSession);
 
-  const inject =
+  // sendPhoneInject returns a result object; PhoneStage only needs void-settling Promise.
+  const inject: (sessionId: string, text: string, submit: boolean) => void | Promise<void> =
     onSendInput ??
-    ((sessionId: string, text: string, submit: boolean) => sendPhoneInject(sessionId, text, submit));
+    (async (sessionId, text, submit) => {
+      await sendPhoneInject(sessionId, text, submit);
+    });
 
   const ordered = useMemo(
     () =>

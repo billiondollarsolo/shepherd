@@ -306,10 +306,11 @@ export class HookEndpointService {
     // 6) OpenCode structured Chat: its text streams as message PARTS, so assemble
     //    whole messages (by message id + role) and, on turn end (`session.idle`),
     //    enqueue them as `chat` events the web Chat tab reads (agentEventRaw.chat).
-    const ocType = (input.body as { agentType?: string; type?: string } | null) ?? null;
-    if (agentType === 'opencode' || ocType?.agentType === 'opencode') {
+    const ocBody = (input.body as { agentType?: string; type?: string } | null) ?? null;
+    if (agentType === 'opencode' || ocBody?.agentType === 'opencode') {
       this.opencodeChat.observe(input.sessionId, input.body);
-      if (ocType.type === 'session.idle') {
+      const eventType = ocBody?.type;
+      if (eventType === 'session.idle') {
         for (const msg of this.opencodeChat.flush(input.sessionId)) {
           this.safeEnqueue({
             sessionId: input.sessionId,
@@ -320,7 +321,7 @@ export class HookEndpointService {
             detail: null,
           });
         }
-      } else if (ocType.type === 'session.error' || ocType.type === 'session.complete') {
+      } else if (eventType === 'session.error' || eventType === 'session.complete') {
         this.opencodeChat.forget(input.sessionId);
       }
     }

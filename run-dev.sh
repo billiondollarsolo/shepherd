@@ -40,7 +40,7 @@ fi
 
 if [[ ! -d node_modules ]]; then
   log "Installing dependencies (first run)…"
-  pnpm install --store-dir "$HOME/.pnpm-store"
+  pnpm install
 fi
 
 # --- Postgres (Docker; the only containerized piece) -------------------------

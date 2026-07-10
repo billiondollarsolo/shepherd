@@ -16,7 +16,7 @@ describe('production wiring (herdr-aligned shell)', () => {
   it('Paddock mounts FleetSelectionSync', () => {
     const src = read('app/Paddock.tsx');
     expect(src).toMatch(/FleetSelectionSync/);
-    expect(src).toMatch(/from ['\"].*FleetSelectionSync['\"]/);
+    expect(src).toMatch(/from ['"].*FleetSelectionSync['"]/);
   });
 
   it('FleetSelectionSync uses runFleetSelectionTick (PUT/GET path)', () => {
@@ -30,7 +30,7 @@ describe('production wiring (herdr-aligned shell)', () => {
   it('SessionPane mounts StageLayout (not only GridView)', () => {
     const src = read('features/paddock/SessionPane.tsx');
     expect(src).toMatch(/StageLayout/);
-    expect(src).toMatch(/from ['\"].*StageLayout['\"]/);
+    expect(src).toMatch(/from ['"].*StageLayout['"]/);
   });
 
   it('SessionPane All agents control unfocuses to project multi-agent stage', () => {

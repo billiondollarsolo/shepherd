@@ -67,7 +67,7 @@ describe('StatusIndicator (US-23, FR-ST6)', () => {
   });
 
   it('exposes an accessible label per status', () => {
-    expect(renderIndicator('awaiting_input')).toHaveAttribute('aria-label', 'Awaiting input');
+    expect(renderIndicator('awaiting_input')).toHaveAttribute('aria-label', 'Needs you');
     expect(renderIndicator('error')).toHaveAttribute('aria-label', 'Error');
   });
 });

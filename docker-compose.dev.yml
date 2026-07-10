@@ -44,6 +44,9 @@ services:
       FLOCK_TEST_SSH_HOST: sshd
       FLOCK_TEST_SSH_PORT: '22'
       FLOCK_TEST_SSH_USER: flock
+      # Shared pnpm store on the named volume (not in committed .npmrc — that
+      # path breaks GitHub Actions / bare-metal installs).
+      npm_config_store_dir: /pnpm-store
     volumes:
       - .:/workspace
       - pnpm-store:/pnpm-store
@@ -68,6 +71,7 @@ services:
       # orchestrator:8080 (the daemon default is loopback-only).
       HOST: 0.0.0.0
       CHROME_BIN: /usr/bin/chromium
+      npm_config_store_dir: /pnpm-store
     ports:
       - '8080:8080'
     volumes:
@@ -88,6 +92,7 @@ services:
     command: ['pnpm', '--filter', '@flock/web', 'dev', '--host', '0.0.0.0', '--port', '5173']
     environment:
       VITE_API_URL: http://localhost:8080
+      npm_config_store_dir: /pnpm-store
     ports:
       - '5173:5173'
     volumes:

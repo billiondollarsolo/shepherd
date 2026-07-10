@@ -32,7 +32,9 @@ function PhonePaddock(): JSX.Element {
   return (
     <PhoneView
       sessions={phoneSessions}
-      onSendInput={(sessionId, text, submit) => sendPhoneInject(sessionId, text, submit)}
+      onSendInput={async (sessionId, text, submit) => {
+        await sendPhoneInject(sessionId, text, submit);
+      }}
     />
   );
 }
