@@ -4,14 +4,13 @@
  * Cold start (lastSyncedKey=null) must never stamp updatedAt=now and PUT an empty
  * home selection over a sibling device's stored selection (LWW wipe).
  */
-import type { FleetSelectionPayload, HostScope, ShellLens } from '@flock/shared';
+import type { FleetSelectionPayload, ShellLens } from '@flock/shared';
 import { mergeFleetSelectionLww } from '@flock/shared';
 import { fetchFleetSelection, putFleetSelection, selectionFromStore } from './fleetSelectionClient';
 
 export interface ShellSelectionSlice {
   selectedSessionId: string | null;
   selectedProjectId: string | null;
-  hostScope: HostScope;
   lens: ShellLens;
   fleetSelectionFollow: boolean;
 }
@@ -19,7 +18,6 @@ export interface ShellSelectionSlice {
 export interface ApplySelectionPatch {
   selectedSessionId: string | null;
   selectedProjectId: string | null;
-  hostScope?: HostScope;
   lens?: ShellLens;
   view?: 'overview' | 'paddock';
 }
@@ -30,7 +28,6 @@ export function remoteToStorePatch(remote: FleetSelectionPayload): ApplySelectio
     selectedSessionId: remote.selectedSessionId,
     selectedProjectId: remote.activeProjectId,
   };
-  if (remote.hostScope !== undefined) patch.hostScope = remote.hostScope;
   if (remote.lens !== undefined) {
     patch.lens = remote.lens;
     patch.view = remote.lens === 'mission' && !remote.selectedSessionId ? 'overview' : 'paddock';
@@ -42,7 +39,6 @@ export function localPayloadFromSlice(slice: ShellSelectionSlice): FleetSelectio
   return selectionFromStore({
     selectedSessionId: slice.selectedSessionId,
     selectedProjectId: slice.selectedProjectId,
-    hostScope: slice.hostScope,
     lens: slice.lens,
   });
 }
@@ -52,16 +48,10 @@ export function selectionIdentity(p: {
   selectedSessionId: string | null;
   activeProjectId?: string | null;
   selectedProjectId?: string | null;
-  hostScope?: HostScope | null;
   lens?: string | null;
 }): string {
   const project = p.activeProjectId ?? p.selectedProjectId ?? '';
-  return [
-    p.selectedSessionId ?? '',
-    project,
-    JSON.stringify(p.hostScope ?? null),
-    p.lens ?? '',
-  ].join('|');
+  return [p.selectedSessionId ?? '', project, p.lens ?? ''].join('|');
 }
 
 /** True when the user has more than the default empty-home selection. */
@@ -108,7 +98,6 @@ export async function runFleetSelectionTick(opts: {
   const localId = selectionIdentity({
     selectedSessionId: local.selectedSessionId,
     activeProjectId: local.activeProjectId,
-    hostScope: local.hostScope ?? null,
     lens: local.lens,
   });
 
@@ -118,7 +107,6 @@ export async function runFleetSelectionTick(opts: {
     ? selectionIdentity({
         selectedSessionId: remote.selectedSessionId,
         activeProjectId: remote.activeProjectId,
-        hostScope: remote.hostScope ?? null,
         lens: remote.lens,
       })
     : null;
@@ -190,7 +178,6 @@ export async function runFleetSelectionTick(opts: {
       const mergedId = selectionIdentity({
         selectedSessionId: merged.selectedSessionId,
         activeProjectId: merged.activeProjectId,
-        hostScope: merged.hostScope ?? null,
         lens: merged.lens,
       });
       if (mergedId === remoteId && remoteId !== localId) {

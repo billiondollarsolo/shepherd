@@ -8,17 +8,18 @@ import {
 
 describe('fleetSelectionClient', () => {
   it('fetchFleetSelection parses server body', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          selection: {
-            selectedSessionId: 's1',
-            activeProjectId: 'p1',
-            updatedAt: '2026-07-09T00:00:00.000Z',
-          },
-        }),
-        { status: 200 },
-      ),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            selection: {
+              selectedSessionId: 's1',
+              activeProjectId: 'p1',
+              updatedAt: '2026-07-09T00:00:00.000Z',
+            },
+          }),
+          { status: 200 },
+        ),
     ) as unknown as typeof fetch;
     const sel = await fetchFleetSelection(fetchImpl);
     expect(sel?.selectedSessionId).toBe('s1');
@@ -59,7 +60,6 @@ describe('fleetSelectionClient', () => {
     const s = selectionFromStore({
       selectedSessionId: 'x',
       selectedProjectId: 'y',
-      hostScope: 'all',
       lens: 'agents',
     });
     expect(s.selectedSessionId).toBe('x');

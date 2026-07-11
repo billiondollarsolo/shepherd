@@ -74,7 +74,6 @@ describe('me routes — selection / presets / layout', () => {
       const body = {
         selectedSessionId: 'sess-1',
         activeProjectId: 'proj-1',
-        hostScope: 'all' as const,
         lens: 'agents' as const,
         updatedAt: '2026-07-09T00:00:00.000Z',
       };

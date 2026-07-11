@@ -113,7 +113,6 @@ describe('AgentsSwitcher controls', () => {
     mutate.mockReset();
     penAction.mockReset();
     usePaddock.setState({
-      hostScope: 'all',
       selectedSessionId: null,
       selectedProjectId: null,
       nodeInfoNodeId: null,
@@ -178,9 +177,8 @@ describe('AgentsSwitcher controls', () => {
     });
   });
 
-  it('uses project context instead of a hidden fleet scope', () => {
+  it('uses project context', () => {
     usePaddock.setState({
-      hostScope: { nodeId: 'some-other-node' },
       selectedProjectId: 'project-1',
     });
 

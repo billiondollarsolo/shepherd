@@ -1,19 +1,26 @@
-/**
- * NodePage — a full-page node detail surface: connection (IP/port/SSH user/
- * status), host (OS/kernel/cores/uptime), live resource meters (CPU/mem/disk),
- * detected agent CLIs, and the sessions currently running on the node. Opened via
- * `openNodeInfo(nodeId)` (sidebar node header / bottom bar); the paddock `view`
- * switches to 'node', mirroring SettingsPage.
- */
-import { ArrowLeft, Cpu, HardDrive, MemoryStick, SquareTerminal } from 'lucide-react';
+/** Operational node dashboard: metrics → projects/Git/agents → host details. */
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Cpu,
+  FolderGit2,
+  GitBranch,
+  Gauge,
+  HardDrive,
+  MemoryStick,
+  SquareTerminal,
+} from 'lucide-react';
+import { displayStatus } from '@flock/shared';
 import type { LucideIcon } from 'lucide-react';
 import type { BadgeProps } from '../../components/ui';
 import { Badge, Button, ScrollArea } from '../../components/ui';
-import { useNodeInfo, useNodes, useSessions } from '../../data/queries';
+import { useFleetGit, useNodeInfo, useNodes, useProjects, useSessions } from '../../data/queries';
 import { usePaddock } from '../../store/paddock';
 import { formatGB } from '../../lib/utils';
 import { useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
+
 function fmtUptime(sec: number): string {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
@@ -52,13 +59,15 @@ function Meter({
   const tone =
     percent >= 90 ? 'bg-status-error' : percent >= 70 ? 'bg-status-awaiting' : 'bg-flock-accent';
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-3">
+    <div className="flex min-h-28 flex-col rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4">
       <div className="flex items-center gap-2 text-sm">
         <Icon className="size-4 text-flock-ink-muted" />
         <span className="font-medium text-flock-ink-primary">{label}</span>
-        <span className="ml-auto tabular-nums text-flock-ink-muted">{value}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-flock-surface-2">
+      <span className="mt-3 text-xl font-semibold tabular-nums text-flock-ink-primary">
+        {value}
+      </span>
+      <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-flock-surface-3">
         <div className={`h-full rounded-full ${tone}`} style={{ width: `${percent}%` }} />
       </div>
     </div>
@@ -76,8 +85,10 @@ function Field({ label, value }: { label: string; value: string }): JSX.Element 
 
 function Card({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
   return (
-    <section className="rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-4">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">{title}</h3>
+    <section className="rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
+        {title}
+      </h3>
       {children}
     </section>
   );
@@ -85,20 +96,26 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 export function NodePage(): JSX.Element {
   const nodeId = usePaddock((s) => s.nodeInfoNodeId);
-  const closeNodeInfo = usePaddock((s) => s.closeNodeInfo);
-  const selectSession = usePaddock((s) => s.selectSession);
+  const openMission = usePaddock((s) => s.openMission);
+  const openAgent = usePaddock((s) => s.openAgent);
+  const selectProject = usePaddock((s) => s.selectProject);
+  const openProjectGit = usePaddock((s) => s.openProjectGit);
   const { data: nodes = [] } = useNodes();
+  const { data: projects = [] } = useProjects();
   const { data: sessions = [] } = useSessions();
-  const node = nodes.find((n) => n.id === nodeId) ?? null;
+  const node = nodes.find((candidate) => candidate.id === nodeId) ?? null;
   const { data: info, isLoading, isError } = useNodeInfo(nodeId);
-
-  const nodeSessions = sessions.filter((s) => s.nodeId === nodeId && s.closedAt === null);
-  const liveStatuses = useLiveStatuses(); // overlay live WS status over the REST mirror
+  const nodeSessions = sessions.filter(
+    (session) => session.nodeId === nodeId && session.closedAt === null,
+  );
+  const nodeProjects = projects.filter((project) => project.nodeId === nodeId);
+  const gitBySession = useFleetGit(nodeSessions.map((session) => session.id));
+  const liveStatuses = useLiveStatuses();
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-flock-surface-0 text-flock-ink-primary">
       <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-[var(--flock-border)] px-4">
-        <Button size="icon-sm" variant="ghost" aria-label="Close node details" onClick={closeNodeInfo}>
+        <Button size="icon-sm" variant="ghost" aria-label="Back to Paddock" onClick={openMission}>
           <ArrowLeft className="size-4" />
         </Button>
         <HardDrive className="size-4 text-flock-ink-muted" />
@@ -115,40 +132,180 @@ export function NodePage(): JSX.Element {
       </header>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-          {/* Live resource meters */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            {info ? (
-              <>
-                <Meter
-                  icon={Cpu}
-                  label="CPU"
-                  percent={Math.round(info.cpuPercent)}
-                  value={`${Math.round(info.cpuPercent)}%`}
-                />
-                <Meter
-                  icon={MemoryStick}
-                  label="Memory"
-                  percent={pct(info.memUsed, info.memTotal)}
-                  value={`${formatGB(info.memUsed, true)} / ${formatGB(info.memTotal, true)}`}
-                />
-                <Meter
-                  icon={HardDrive}
-                  label="Disk"
-                  percent={pct(info.diskUsed, info.diskTotal)}
-                  value={`${formatGB(info.diskUsed, true)} / ${formatGB(info.diskTotal, true)}`}
-                />
-              </>
-            ) : (
-              <p className="col-span-3 rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-4 text-sm text-flock-ink-muted">
-                {isLoading ? 'Loading metrics…' : isError ? 'Could not reach this node’s daemon.' : '—'}
-              </p>
-            )}
-          </div>
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6">
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-flock-ink-primary">Node health</h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {info ? (
+                <>
+                  <Meter
+                    icon={Cpu}
+                    label="CPU"
+                    percent={Math.round(info.cpuPercent)}
+                    value={`${Math.round(info.cpuPercent)}%`}
+                  />
+                  <Meter
+                    icon={MemoryStick}
+                    label="Memory"
+                    percent={pct(info.memUsed, info.memTotal)}
+                    value={`${formatGB(info.memUsed, true)} / ${formatGB(info.memTotal, true)}`}
+                  />
+                  <Meter
+                    icon={HardDrive}
+                    label="Storage"
+                    percent={pct(info.diskUsed, info.diskTotal)}
+                    value={`${formatGB(info.diskUsed, true)} / ${formatGB(info.diskTotal, true)}`}
+                  />
+                  <div className="flex min-h-28 flex-col rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Gauge className="size-4 text-flock-ink-muted" />
+                      <span className="font-medium">Load & uptime</span>
+                    </div>
+                    <span className="mt-3 text-xl font-semibold tabular-nums">
+                      {info.load1.toFixed(2)}
+                    </span>
+                    <span className="mt-auto text-2xs text-flock-ink-muted">
+                      {info.cores} cores · up {fmtUptime(info.uptimeSec)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="col-span-full rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4 text-sm text-flock-ink-muted">
+                  {isLoading
+                    ? 'Loading metrics…'
+                    : isError
+                      ? 'Could not reach this node’s daemon.'
+                      : '—'}
+                </p>
+              )}
+            </div>
+          </section>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <section>
+            <div className="mb-3 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold text-flock-ink-primary">Projects</h2>
+              <span className="text-xs text-flock-ink-muted">
+                {nodeProjects.length} on this node
+              </span>
+            </div>
+            {nodeProjects.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[var(--flock-border)] p-8 text-center text-sm text-flock-ink-muted">
+                No projects on this node.
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {nodeProjects.map((project) => {
+                  const projectSessions = nodeSessions.filter(
+                    (session) => session.projectId === project.id,
+                  );
+                  const gitSession = projectSessions.find((session) =>
+                    gitBySession.has(session.id),
+                  );
+                  const git = gitSession ? gitBySession.get(gitSession.id) : undefined;
+                  return (
+                    <article
+                      key={project.id}
+                      className="overflow-hidden rounded-xl border border-[var(--flock-border)] bg-flock-surface-1"
+                    >
+                      <div className="flex items-start gap-3 p-4">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-flock-surface-2 text-flock-ink-muted">
+                          <FolderGit2 className="size-4" />
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => selectProject(project.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <span className="block truncate text-base font-semibold hover:text-flock-accent">
+                            {project.name}
+                          </span>
+                          <span className="block truncate font-mono text-2xs text-flock-ink-muted">
+                            {project.workingDir}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!gitSession}
+                          onClick={() => openProjectGit(project.id)}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1.5 text-xs text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary disabled:opacity-50"
+                          aria-label={`Open ${project.name} source control`}
+                        >
+                          <GitBranch className="size-3.5" /> {git?.branch ?? 'Git'}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 border-y border-[var(--flock-border)] bg-flock-surface-0 px-4 py-2 font-mono text-2xs text-flock-ink-muted">
+                        {git ? (
+                          <>
+                            <span className={git.files.length ? 'text-status-awaiting' : ''}>
+                              {git.files.length ? `${git.files.length} changed` : 'Clean'}
+                            </span>
+                            {git.ahead ? (
+                              <span className="inline-flex items-center gap-0.5">
+                                <ArrowUp className="size-3" /> {git.ahead}
+                              </span>
+                            ) : null}
+                            {git.behind ? (
+                              <span className="inline-flex items-center gap-0.5">
+                                <ArrowDown className="size-3" /> {git.behind}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span>Git status unavailable</span>
+                        )}
+                      </div>
+
+                      <div>
+                        {projectSessions.map((session) => {
+                          const status = liveStatuses.get(session.id) ?? session.status;
+                          const process = info?.processes?.[session.id];
+                          return (
+                            <button
+                              key={session.id}
+                              type="button"
+                              onClick={() => openAgent(session.id, project.id)}
+                              className="flex w-full items-center gap-2 border-b border-[var(--flock-border)] px-4 py-2.5 text-left last:border-b-0 hover:bg-flock-surface-2"
+                            >
+                              <StatusDot status={status} className="shrink-0" />
+                              <SquareTerminal className="size-3.5 shrink-0 text-flock-ink-muted" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">
+                                  {session.note?.trim() || session.agentType}
+                                </span>
+                                <span className="block truncate text-2xs text-flock-ink-muted">
+                                  {displayStatus(status).label} · {session.id.slice(0, 8)}
+                                </span>
+                              </span>
+                              {process ? (
+                                <span className="shrink-0 text-right text-2xs tabular-nums text-flock-ink-muted">
+                                  {Math.round(process.rssBytes / 1048576)} MB
+                                  <br />
+                                  {process.cpuPct.toFixed(0)}% CPU
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                        {projectSessions.length === 0 ? (
+                          <p className="px-4 py-3 text-xs text-flock-ink-muted">
+                            No active agents.
+                          </p>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-3">
             <Card title="Connection">
-              <Field label="Host" value={node?.host || (node?.kind === 'local' ? 'local socket' : '—')} />
+              <Field
+                label="Host"
+                value={node?.host || (node?.kind === 'local' ? 'local socket' : '—')}
+              />
               <Field label="Port" value={node?.port ? String(node.port) : '—'} />
               <Field label="SSH user" value={node?.sshUser || '—'} />
               <Field label="Last seen" value={fmtWhen(node?.lastSeenAt)} />
@@ -159,76 +316,40 @@ export function NodePage(): JSX.Element {
               <Field label="Hostname" value={info?.hostname || '—'} />
               <Field label="OS" value={info?.os || '—'} />
               <Field label="Kernel" value={info?.kernel || '—'} />
-              <Field label="Cores" value={info ? String(info.cores) : '—'} />
-              <Field label="Memory" value={info ? formatGB(info.memTotal, true) : '—'} />
-              <Field label="Disk" value={info ? formatGB(info.diskTotal, true) : '—'} />
-              <Field label="Uptime" value={info ? fmtUptime(info.uptimeSec) : '—'} />
               <Field
-                label="Load (1/5/15)"
-                value={info ? `${info.load1.toFixed(2)} ${info.load5.toFixed(2)} ${info.load15.toFixed(2)}` : '—'}
+                label="Load 1/5/15"
+                value={
+                  info
+                    ? `${info.load1.toFixed(2)} ${info.load5.toFixed(2)} ${info.load15.toFixed(2)}`
+                    : '—'
+                }
               />
             </Card>
-          </div>
 
-          <Card title="Detected agents">
-            {!info ? (
-              <p className="text-sm text-flock-ink-muted">—</p>
-            ) : info.agents.length === 0 ? (
-              <p className="text-sm text-flock-ink-muted">No agent CLIs found.</p>
-            ) : (
-              <ul className="grid gap-1.5 sm:grid-cols-2">
-                {info.agents.map((a) => (
-                  <li key={a.name} className="flex items-center gap-2 rounded-md bg-flock-surface-2 px-2.5 py-1.5 text-sm">
-                    <span className="size-1.5 shrink-0 rounded-full bg-status-running" />
-                    <span className="font-medium">{a.name}</span>
-                    <span className="ml-auto truncate font-mono text-2xs text-flock-ink-muted" title={a.path}>
-                      {a.version || a.path}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card title={`Sessions on this node (${nodeSessions.length})`}>
-            {nodeSessions.length === 0 ? (
-              <p className="text-sm text-flock-ink-muted">No active sessions.</p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {nodeSessions.map((s) => (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectSession(s.id);
-                        closeNodeInfo();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-flock-surface-2"
+            <Card title="Detected agent CLIs">
+              {!info || info.agents.length === 0 ? (
+                <p className="text-sm text-flock-ink-muted">No agent CLIs found.</p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {info.agents.map((agent) => (
+                    <li
+                      key={agent.name}
+                      className="flex items-center gap-2 rounded-md bg-flock-surface-2 px-2.5 py-1.5 text-sm"
                     >
-                      <StatusDot status={liveStatuses.get(s.id) ?? s.status} className="shrink-0" />
-                      <SquareTerminal className="size-3.5 shrink-0 text-flock-ink-muted" />
-                      <span className="font-medium">{s.agentType}</span>
-                      {info?.processes?.[s.id] ? (
-                        <span
-                          className="ml-auto shrink-0 tabular-nums text-2xs text-flock-ink-muted"
-                          title="This session's process: resident memory · CPU% of the host"
-                        >
-                          {Math.round(info.processes[s.id]!.rssBytes / 1048576)} MB
-                          {' · '}
-                          {info.processes[s.id]!.cpuPct.toFixed(0)}% CPU
-                        </span>
-                      ) : null}
-                      <code
-                        className={`${info?.processes?.[s.id] != null ? '' : 'ml-auto '}rounded bg-flock-surface-2 px-1 py-0.5 text-2xs text-flock-ink-muted`}
+                      <span className="size-1.5 shrink-0 rounded-full bg-status-running" />
+                      <span className="font-medium">{agent.name}</span>
+                      <span
+                        className="ml-auto truncate font-mono text-2xs text-flock-ink-muted"
+                        title={agent.path}
                       >
-                        {s.id.slice(0, 8)}
-                      </code>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+                        {agent.version || agent.path}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </section>
         </div>
       </ScrollArea>
     </div>

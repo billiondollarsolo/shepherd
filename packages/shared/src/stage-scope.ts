@@ -1,9 +1,7 @@
 /**
- * Stage / fleet scope helpers for the paddock shell (elite sprint).
+ * Stage helpers for the paddock shell.
  * Pure functions so unit tests prove the real shipped entry points.
  */
-import type { HostScope } from './shell-nav.js';
-import { sessionInHostScope } from './shell-nav.js';
 
 /**
  * Effective project for the stage when a session may be selected.
@@ -24,21 +22,6 @@ export function effectiveStageProjectId(opts: {
     return opts.selectedSessionProjectId ?? null;
   }
   return opts.selectedProjectId;
-}
-
-/** Filter open sessions to a host scope (All / node / pool). */
-export function filterSessionsByHostScope<
-  T extends { nodeId: string; closedAt?: string | null },
->(
-  sessions: readonly T[],
-  hostScope: HostScope | null | undefined,
-  nodes: ReadonlyArray<{ id: string; pool?: string | null }>,
-): T[] {
-  const scope: HostScope = hostScope ?? 'all';
-  return sessions.filter((s) => {
-    if (s.closedAt) return false;
-    return sessionInHostScope(scope, s, nodes);
-  });
 }
 
 /**

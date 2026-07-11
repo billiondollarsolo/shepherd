@@ -3,12 +3,10 @@
  * Last-write-wins merge by updatedAt.
  */
 import { z } from 'zod';
-import { HostScopeSchema } from './shell-nav.js';
 
 export const FleetSelectionPayloadSchema = z.object({
   selectedSessionId: z.string().nullable(),
   activeProjectId: z.string().nullable(),
-  hostScope: HostScopeSchema.optional(),
   lens: z.enum(['mission', 'agents']).optional(),
   /** ISO-8601 timestamp; LWW key. */
   updatedAt: z.string().min(1),

@@ -5,11 +5,12 @@ import {
   type FleetSelectionPayload,
 } from './fleet-selection.js';
 
-function sel(partial: Partial<FleetSelectionPayload> & { updatedAt: string }): FleetSelectionPayload {
+function sel(
+  partial: Partial<FleetSelectionPayload> & { updatedAt: string },
+): FleetSelectionPayload {
   return {
     selectedSessionId: partial.selectedSessionId ?? null,
     activeProjectId: partial.activeProjectId ?? null,
-    hostScope: partial.hostScope,
     lens: partial.lens,
     updatedAt: partial.updatedAt,
   };

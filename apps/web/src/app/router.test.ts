@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { pathToNav, navToPath, type NavToPathInput } from './router';
 
-describe('pathToNav (herdr-aligned shell)', () => {
-  it('D1: / is mission + all hosts', () => {
+describe('pathToNav', () => {
+  it('D1: / is the Paddock overview', () => {
     const n = pathToNav('/');
     expect(n.view).toBe('overview');
     expect(n.lens).toBe('mission');
-    expect(n.hostScope).toBe('all');
     expect(n.chrome).toBe('stage');
     expect(n.selectedSessionId).toBeNull();
   });
@@ -17,12 +16,6 @@ describe('pathToNav (herdr-aligned shell)', () => {
     expect(n.selectedSessionId).toBe('abc123');
     expect(n.chrome).toBe('stage');
     expect(n.view).toBe('paddock');
-  });
-
-  it('compat: /s/:id maps to agents selection', () => {
-    const n = pathToNav('/s/abc123');
-    expect(n.lens).toBe('agents');
-    expect(n.selectedSessionId).toBe('abc123');
   });
 
   it('maps /p/:id to project layout', () => {
@@ -47,7 +40,6 @@ describe('navToPath', () => {
     nodeInfoNodeId: null,
     gridProjectId: null,
     lens: 'mission',
-    hostScope: 'all',
     projectView: 'agents',
   };
 

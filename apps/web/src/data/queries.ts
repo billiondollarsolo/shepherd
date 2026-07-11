@@ -284,6 +284,24 @@ export function useNodeInfo(nodeId: string | null): UseQueryResult<NodeInfo> {
   });
 }
 
+/** Live metrics for several node cards. Each node keeps its own cache entry, so
+ * opening the detail page reuses the same snapshot instead of double-fetching. */
+export function useNodeInfos(nodeIds: string[]): Map<string, NodeInfo> {
+  const results = useQueries({
+    queries: nodeIds.map((nodeId) => ({
+      queryKey: ['node-info', nodeId] as const,
+      queryFn: () => getNodeInfo(nodeId),
+      refetchInterval: 10_000,
+      retry: false,
+    })),
+  });
+  const info = new Map<string, NodeInfo>();
+  results.forEach((result, index) => {
+    if (result.data) info.set(nodeIds[index]!, result.data);
+  });
+  return info;
+}
+
 /** One level of a node's file tree (dirs + files). Lazy: enabled when expanded. */
 export function useNodeFsTree(
   nodeId: string | null,

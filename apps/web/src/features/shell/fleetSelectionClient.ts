@@ -11,7 +11,9 @@ import {
 
 const BASE = '/api/me/selection';
 
-export async function fetchFleetSelection(fetchImpl: typeof fetch = fetch): Promise<FleetSelectionPayload | null> {
+export async function fetchFleetSelection(
+  fetchImpl: typeof fetch = fetch,
+): Promise<FleetSelectionPayload | null> {
   const res = await fetchImpl(BASE, { credentials: 'include' });
   if (!res.ok) return null;
   const body = (await res.json()) as { selection: unknown };
@@ -49,13 +51,11 @@ export function resolveRemoteSelection(
 export function selectionFromStore(state: {
   selectedSessionId: string | null;
   selectedProjectId: string | null;
-  hostScope: FleetSelectionPayload['hostScope'];
   lens: FleetSelectionPayload['lens'];
 }): FleetSelectionPayload {
   return {
     selectedSessionId: state.selectedSessionId,
     activeProjectId: state.selectedProjectId,
-    hostScope: state.hostScope,
     lens: state.lens,
     updatedAt: new Date().toISOString(),
   };

@@ -8,8 +8,6 @@ import { usePaddock } from '../../store/paddock';
 import { useAuthOptional } from '../auth/AuthGate';
 import { AttentionInbox } from './AttentionInbox';
 import { ActivityFeed } from './ActivityFeed';
-import { HostChips } from '../shell/HostChips';
-import { shouldShowFleetScope } from '../shell/fleetScopeVisibility';
 import { useShell } from '../../app/KeyboardProvider';
 import { useNodes, useProjects, useSessions } from '../../data/queries';
 import {
@@ -88,35 +86,26 @@ export function TopBar(): JSX.Element {
   const contextProject = projects.find((project) => project.id === contextProjectId);
   const contextNode = nodes.find((node) => node.id === nodeInfoNodeId);
   const activePen = penGroups.find((pen) => pen.id === activePenId);
-  const showFleetScope = shouldShowFleetScope({
-    selectedSessionId,
-    selectedProjectId,
-    nodeInfoNodeId,
-  });
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
       <div className="min-w-0 flex-1">
-        {showFleetScope ? (
-          <HostChips />
-        ) : (
-          <div className="flex min-w-0 items-center gap-1.5 text-sm text-flock-ink-muted">
-            <span className="truncate font-medium text-flock-ink-primary">
-              {contextProject?.name ?? contextNode?.name ?? 'Agents'}
-            </span>
-            {contextProject && projectView === 'git' ? (
-              <>
-                <span aria-hidden>/</span>
-                <span className="truncate">Source Control</span>
-              </>
-            ) : contextProject && activePen ? (
-              <>
-                <span aria-hidden>/</span>
-                <span className="truncate">{activePen.name}</span>
-                <span className="shrink-0 text-2xs">· {activePen.sessionIds.length} agents</span>
-              </>
-            ) : null}
-          </div>
-        )}
+        <div className="flex min-w-0 items-center gap-1.5 text-sm text-flock-ink-muted">
+          <span className="truncate font-medium text-flock-ink-primary">
+            {contextProject?.name ?? contextNode?.name ?? 'Paddock'}
+          </span>
+          {contextProject && projectView === 'git' ? (
+            <>
+              <span aria-hidden>/</span>
+              <span className="truncate">Source Control</span>
+            </>
+          ) : contextProject && activePen ? (
+            <>
+              <span aria-hidden>/</span>
+              <span className="truncate">{activePen.name}</span>
+              <span className="shrink-0 text-2xs">· {activePen.sessionIds.length} agents</span>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <button

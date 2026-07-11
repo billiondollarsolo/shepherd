@@ -1,14 +1,14 @@
 /**
  * Paddock UI store (zustand) — UI-only state for the herdr-aligned shell.
  *
- * Shell model (docs/herdr-aligned-shell-plan.md):
- *   hostScope · lens (mission|agents) · chrome (stage|tools) · selection
+ * Shell model:
+ *   lens (mission|agents) · chrome (stage|tools) · selection
  * No dual focus/zen modes — stage is always the drive surface; tools are opt-in.
  *
  * Server data lives in TanStack Query; this store holds NO server data.
  */
 import { create } from 'zustand';
-import type { HostScope, ShellChrome, ShellLens } from '@flock/shared';
+import type { ShellChrome, ShellLens } from '@flock/shared';
 
 /** Top-level surface. Settings is a full PAGE (not a modal). */
 export type PaddockView = 'paddock' | 'settings' | 'overview';
@@ -177,28 +177,6 @@ function saveLayoutPresets(p: LayoutPreset[]): void {
   }
 }
 
-const HOST_SCOPE_KEY = 'flock.hostScope';
-function loadHostScope(): HostScope {
-  try {
-    const raw = localStorage.getItem(HOST_SCOPE_KEY);
-    if (!raw) return 'all';
-    const v = JSON.parse(raw) as HostScope;
-    if (v === 'all') return 'all';
-    if (v && typeof v === 'object' && 'nodeId' in v && typeof v.nodeId === 'string') return v;
-    if (v && typeof v === 'object' && 'pool' in v && typeof v.pool === 'string') return v;
-    return 'all';
-  } catch {
-    return 'all';
-  }
-}
-function saveHostScope(scope: HostScope): void {
-  try {
-    localStorage.setItem(HOST_SCOPE_KEY, JSON.stringify(scope));
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 const FOLLOW_KEY = 'flock.fleetSelectionFollow';
 function loadFollow(): boolean {
   try {
@@ -242,8 +220,6 @@ export interface PaddockUiState {
    */
   selectedProjectId: string | null;
 
-  /** Fleet supervision scope (D1 default all). */
-  hostScope: HostScope;
   /** Paddock | Agents lens. */
   lens: ShellLens;
   /** stage = terminal-first (D5 default); tools = right panel open. */
@@ -292,7 +268,6 @@ export interface PaddockUiState {
   openAgent: (id: string, projectId?: string | null) => void;
   /** Scope stage to a project (multi-leaf layout / project grid). */
   selectProject: (id: string | null) => void;
-  setHostScope: (scope: HostScope) => void;
   setLens: (lens: ShellLens) => void;
   setChrome: (chrome: ShellChrome) => void;
   openTools: (tab?: RightTab) => void;
@@ -341,7 +316,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   settingsSection: 'appearance',
   selectedSessionId: null,
   selectedProjectId: null,
-  hostScope: loadHostScope(),
   lens: 'mission',
   chrome: 'stage',
   fleetSelectionFollow: loadFollow(),
@@ -413,10 +387,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       zoomLeafId: null,
     }),
 
-  setHostScope: (scope) => {
-    saveHostScope(scope);
-    set({ hostScope: scope });
-  },
   setLens: (lens) =>
     set((s) => ({
       lens,
@@ -518,7 +488,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     set({
       nodeInfoNodeId: nodeId,
       view: 'paddock',
-      hostScope: { nodeId },
     }),
   closeNodeInfo: () => set({ nodeInfoNodeId: null }),
   toggleSidebar: () =>
@@ -559,14 +528,9 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   setTerminalInput: (fn) => set({ terminalInput: fn }),
 
   openMission: () => {
-    // Paddock is the fleet home. A node-only scope left behind by /n/:id would
-    // otherwise make the overview look empty and the router would immediately
-    // canonicalize back to that node route.
-    saveHostScope('all');
     set({
       view: 'overview',
       lens: 'mission',
-      hostScope: 'all',
       nodeInfoNodeId: null,
       selectedSessionId: null,
       selectedProjectId: null,

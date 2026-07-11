@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { usePaddock } from '../../store/paddock';
 
-const openAgent = vi.fn();
-const selectProject = vi.fn();
-const openRight = vi.fn();
+const openNodeInfo = vi.fn();
 
 vi.mock('../../data/queries', () => ({
   useNodes: () => ({
@@ -29,6 +27,19 @@ vi.mock('../../data/queries', () => ({
       },
     ],
   }),
+  useNodeInfos: () =>
+    new Map([
+      [
+        'n1',
+        {
+          cpuPercent: 25,
+          memUsed: 4 * 1024 ** 3,
+          memTotal: 8 * 1024 ** 3,
+          diskUsed: 50 * 1024 ** 3,
+          diskTotal: 100 * 1024 ** 3,
+        },
+      ],
+    ]),
   useFleetGit: () =>
     new Map([
       [
@@ -55,31 +66,37 @@ import { FleetView } from './FleetView';
 
 describe('FleetView hierarchy', () => {
   beforeEach(() => {
-    openAgent.mockReset();
-    selectProject.mockReset();
-    openRight.mockReset();
-    usePaddock.setState({ hostScope: 'all', openAgent, selectProject, openRight });
+    openNodeInfo.mockReset();
+    usePaddock.setState({ nodeOrder: [], openNodeInfo });
   });
 
-  it('shows node, project, agent status, and project Git together', () => {
+  it('shows node cards with project and agent rollups', () => {
     render(<FleetView />);
 
     expect(screen.getByText('Workstation')).toBeInTheDocument();
-    expect(screen.getByText('Flock')).toBeInTheDocument();
-    expect(screen.getByText('UI cleanup')).toBeInTheDocument();
-    expect(screen.getByText('Needs you')).toBeInTheDocument();
-    expect(screen.getByText('main')).toBeInTheDocument();
-    expect(screen.getByText('1 changed')).toBeInTheDocument();
+    expect(screen.getByText('1 Needs you')).toBeInTheDocument();
+    expect(screen.getAllByText('Projects')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Agents')[0]).toBeInTheDocument();
+    expect(screen.getByText('CPU')).toBeInTheDocument();
+    expect(screen.getByText('Memory')).toBeInTheDocument();
+    expect(screen.getByText('Storage')).toBeInTheDocument();
   });
 
-  it('opens project Git and agents in the Agents workspace', () => {
+  it('uses the same saved node order as the sidebar', () => {
+    usePaddock.setState({ nodeOrder: ['n2', 'n1'] });
     render(<FleetView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Flock source control' }));
-    expect(openAgent).toHaveBeenCalledWith('s1', 'p1');
-    expect(openRight).toHaveBeenCalledWith('diff');
+    const cards = screen.getAllByTestId(/node-card-/);
+    expect(cards.map((card) => card.getAttribute('data-testid'))).toEqual([
+      'node-card-n2',
+      'node-card-n1',
+    ]);
+  });
 
-    fireEvent.click(screen.getByText('UI cleanup'));
-    expect(openAgent).toHaveBeenLastCalledWith('s1', 'p1');
+  it('drills into a node card', () => {
+    render(<FleetView />);
+
+    fireEvent.click(screen.getByTestId('node-card-n1'));
+    expect(openNodeInfo).toHaveBeenCalledWith('n1');
   });
 });

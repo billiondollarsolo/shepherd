@@ -1,8 +1,7 @@
 /**
  * Shell navigation state machine — herdr-aligned paddock model.
  *
- * Single shell: hostScope + lens + selection + chrome. No dual focus/zen modes.
- * See docs/herdr-aligned-shell-plan.md §3.3.
+ * Single shell: lens + selection + chrome. No dual focus/zen modes.
  */
 import { z } from 'zod';
 
@@ -12,16 +11,8 @@ export type ShellLens = z.infer<typeof ShellLensEnum>;
 export const ShellChromeEnum = z.enum(['stage', 'tools']);
 export type ShellChrome = z.infer<typeof ShellChromeEnum>;
 
-export const HostScopeSchema = z.union([
-  z.literal('all'),
-  z.object({ nodeId: z.string().min(1) }),
-  z.object({ pool: z.string().min(1) }),
-]);
-export type HostScope = z.infer<typeof HostScopeSchema>;
-
 /** Canonical shell navigation state (URL + store subset). */
 export interface ShellNavState {
-  hostScope: HostScope;
   lens: ShellLens;
   /** Terminal-first stage vs tools open (D5: default stage). */
   chrome: ShellChrome;
@@ -34,7 +25,6 @@ export interface ShellNavState {
 }
 
 export const DEFAULT_SHELL_NAV: ShellNavState = {
-  hostScope: 'all',
   lens: 'mission',
   chrome: 'stage',
   selectedSessionId: null,
@@ -47,8 +37,6 @@ export const DEFAULT_SHELL_NAV: ShellNavState = {
 export interface OpenAgentOpts {
   sessionId: string;
   projectId: string;
-  /** Optional: session's node — if hostScope is a single node and mismatches, keep selection (plan prefers keep). */
-  nodeId?: string;
 }
 
 /** D2: open agent → selection + agents lens + stage chrome. */
@@ -73,10 +61,6 @@ export function openMission(state: ShellNavState): ShellNavState {
     lens: 'mission',
     // do NOT clear selectedSessionId / activeProjectId
   };
-}
-
-export function setHostScope(state: ShellNavState, hostScope: HostScope): ShellNavState {
-  return { ...state, hostScope };
 }
 
 export function setLens(state: ShellNavState, lens: ShellLens): ShellNavState {
@@ -127,28 +111,6 @@ export function closeSettings(state: ShellNavState): ShellNavState {
   return { ...state, settings: false };
 }
 
-/** Filter predicate: is a node id in hostScope? */
-export function nodeInHostScope(
-  hostScope: HostScope,
-  node: { id: string; pool?: string | null },
-): boolean {
-  if (hostScope === 'all') return true;
-  if ('nodeId' in hostScope) return hostScope.nodeId === node.id;
-  return (node.pool ?? '') === hostScope.pool;
-}
-
-/** Session filter under host scope given node lookup. */
-export function sessionInHostScope(
-  hostScope: HostScope,
-  session: { nodeId: string },
-  nodes: ReadonlyArray<{ id: string; pool?: string | null }>,
-): boolean {
-  if (hostScope === 'all') return true;
-  const node = nodes.find((n) => n.id === session.nodeId);
-  if (!node) return false;
-  return nodeInHostScope(hostScope, node);
-}
-
 export interface ShellNavToPathInput {
   settings: boolean;
   settingsSection: string;
@@ -156,11 +118,9 @@ export interface ShellNavToPathInput {
   selectedSessionId: string | null;
   activeProjectId: string | null;
   nodeInfoNodeId: string | null;
-  hostScope: HostScope;
 }
 
 /**
- * store → path. Compat: /s/:id still used as alias target for agents selection.
  * Primary paths: / , /agents , /agents/:sessionId , /p/:projectId , /n/:nodeId
  */
 export function shellNavToPath(n: ShellNavToPathInput): string {
@@ -169,16 +129,12 @@ export function shellNavToPath(n: ShellNavToPathInput): string {
   if (n.selectedSessionId) return `/agents/${n.selectedSessionId}`;
   if (n.activeProjectId) return `/p/${n.activeProjectId}`;
   if (n.lens === 'agents') return '/agents';
-  if (n.hostScope !== 'all' && 'nodeId' in n.hostScope) {
-    return `/n/${n.hostScope.nodeId}`;
-  }
   return '/';
 }
 
 export type ShellNavPathPatch = Partial<
   Pick<
     ShellNavState,
-    | 'hostScope'
     | 'lens'
     | 'chrome'
     | 'selectedSessionId'
@@ -189,16 +145,10 @@ export type ShellNavPathPatch = Partial<
   >
 >;
 
-const SETTINGS_SECTIONS = new Set([
-  'appearance',
-  'notifications',
-  'nodes',
-  'account',
-  'about',
-]);
+const SETTINGS_SECTIONS = new Set(['appearance', 'notifications', 'nodes', 'account', 'about']);
 
 /**
- * URL → nav patch. /s/:id redirects semantically to agents + selection (compat).
+ * URL → nav patch.
  * Defaults chrome to stage (D5); does not force tools open.
  */
 export function pathToShellNav(pathname: string): ShellNavPathPatch {
@@ -215,22 +165,8 @@ export function pathToShellNav(pathname: string): ShellNavPathPatch {
   if (seg[0] === 'n' && seg[1]) {
     return {
       settings: false,
-      hostScope: { nodeId: seg[1] },
       nodeInfoNodeId: seg[1],
       lens: 'mission',
-    };
-  }
-
-  // Compat: /s/:sessionId → agents + selection.
-  // Clear activeProjectId so a stale /p/:id scope cannot win over the session's project.
-  if (seg[0] === 's' && seg[1]) {
-    return {
-      settings: false,
-      lens: 'agents',
-      chrome: 'stage',
-      selectedSessionId: seg[1],
-      activeProjectId: null,
-      nodeInfoNodeId: null,
     };
   }
 
@@ -266,10 +202,9 @@ export function pathToShellNav(pathname: string): ShellNavPathPatch {
     };
   }
 
-  // / — Mission Control, all hosts (D1)
+  // / — Paddock (D1)
   return {
     settings: false,
-    hostScope: 'all',
     lens: 'mission',
     chrome: 'stage',
     selectedSessionId: null,

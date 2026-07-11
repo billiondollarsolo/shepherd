@@ -9,7 +9,6 @@ describe('Paddock and Agents workspace navigation', () => {
       selectedSessionId: 'session-1',
       selectedProjectId: 'project-1',
       nodeInfoNodeId: 'node-1',
-      hostScope: { nodeId: 'node-1' },
       penProjectId: 'project-1',
       zoomLeafId: 'session-1',
     });
@@ -24,7 +23,6 @@ describe('Paddock and Agents workspace navigation', () => {
       selectedSessionId: null,
       selectedProjectId: null,
       nodeInfoNodeId: null,
-      hostScope: 'all',
       zoomLeafId: null,
     });
   });

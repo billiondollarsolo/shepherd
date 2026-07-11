@@ -38,9 +38,11 @@ function CenterPane(): JSX.Element {
   const lens = usePaddock((s) => s.lens);
   const projectView = usePaddock((s) => s.projectView);
 
-  // Paddock is a real fleet workspace, never an overlay on the staged agent.
-  if (lens === 'mission') return <FleetView />;
   if (nodeInfoNodeId) return <NodePage />;
+  // Paddock is a real fleet workspace, never an overlay on the staged agent.
+  // Node routes take precedence because /n/:id intentionally keeps the mission
+  // lens while drilling into that fleet card.
+  if (lens === 'mission') return <FleetView />;
   if (projectView === 'git') return <ProjectGitPage />;
   return <SessionPane />;
 }

@@ -1,6 +1,6 @@
 /** Agents sidebar — Pens own membership and drag order. */
 import { useMemo, useState } from 'react';
-import { displayStatus, sessionInHostScope, type Status } from '@flock/shared';
+import { displayStatus, type Status } from '@flock/shared';
 import {
   Check,
   Columns2,
@@ -37,7 +37,6 @@ export function AgentsSwitcher(): JSX.Element {
   const { data: sessions = [] } = useSessions();
   const { data: nodes = [] } = useNodes();
   const { data: projects = [] } = useProjects();
-  const hostScope = usePaddock((s) => s.hostScope);
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
   const selectedProjectId = usePaddock((s) => s.selectedProjectId);
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
@@ -69,7 +68,7 @@ export function AgentsSwitcher(): JSX.Element {
     const scoped = open.filter((session) => {
       if (contextProjectId) return session.projectId === contextProjectId;
       if (nodeInfoNodeId) return session.nodeId === nodeInfoNodeId;
-      return sessionInHostScope(hostScope, session, nodes);
+      return true;
     });
     return scoped.map((s) => {
       const st = (statuses.get(s.id) ?? s.status) as Status;
@@ -85,7 +84,7 @@ export function AgentsSwitcher(): JSX.Element {
         label: s.note?.trim() || `${s.agentType} · ${s.id.slice(0, 6)}`,
       };
     });
-  }, [sessions, nodes, projects, hostScope, contextProjectId, nodeInfoNodeId, statuses]);
+  }, [sessions, nodes, projects, contextProjectId, nodeInfoNodeId, statuses]);
 
   const penMode = contextProjectId != null && penProjectId === contextProjectId;
   const displayGroups = useMemo(() => {

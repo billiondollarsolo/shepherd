@@ -77,10 +77,9 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/onSendInput/);
   });
 
-  it('FleetView filters nodes by hostScope', () => {
+  it('FleetView uses the persisted node order', () => {
     const src = read('features/overview/FleetView.tsx');
-    expect(src).toMatch(/nodeInHostScope/);
-    expect(src).toMatch(/hostScope/);
+    expect(src).toMatch(/orderNodes/);
   });
 
   it('AddSessionDialog loads launcher presets', () => {
@@ -89,8 +88,11 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/launcher-presets|launcher-preset-/);
   });
 
-  it('FleetView opens an agent in its project', () => {
-    const src = read('features/overview/FleetView.tsx');
-    expect(src).toMatch(/openAgent\(session\.id,\s*project\.id\)/);
+  it('FleetView drills into nodes and NodePage opens project-scoped agents', () => {
+    const fleet = read('features/overview/FleetView.tsx');
+    const node = read('features/paddock/NodePage.tsx');
+    expect(fleet).toMatch(/openNodeInfo\(node\.id\)/);
+    expect(node).toMatch(/openAgent\(session\.id,\s*project\.id\)/);
+    expect(node).toMatch(/openProjectGit\(project\.id\)/);
   });
 });

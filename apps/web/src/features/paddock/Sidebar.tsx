@@ -464,6 +464,19 @@ function NodeRow({
           if (id) onReorder(id, node.id);
         }}
       >
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
+          aria-expanded={open}
+          className="shrink-0 text-flock-ink-muted hover:text-flock-ink-primary"
+        >
+          {open ? (
+            <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />
+          )}
+        </button>
         <span
           draggable
           onDragStart={(e) => {
@@ -472,7 +485,7 @@ function NodeRow({
           }}
           title="Drag to reorder nodes"
           aria-label="Drag to reorder"
-          className="shrink-0 cursor-grab text-flock-ink-muted/40 opacity-0 transition-opacity hover:text-flock-ink-muted group-hover/nrow:opacity-100 active:cursor-grabbing"
+          className="shrink-0 cursor-grab text-flock-ink-muted/50 opacity-60 transition-opacity hover:text-flock-ink-muted hover:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="size-3.5" />
         </span>
@@ -481,11 +494,6 @@ function NodeRow({
           onClick={() => setOpen((v) => !v)}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          {open ? (
-            <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" />
-          ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />
-          )}
           <HardDrive
             className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
           />

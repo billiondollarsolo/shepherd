@@ -20,14 +20,15 @@ New here? Read in this order:
 
 ## Reference
 
-| Doc | Purpose |
-|---|---|
-| [architecture.md](architecture.md) | System overview — orchestrator ⇄ agentd ⇄ web, the status pipeline, data path |
-| [agent-integration-matrix.md](agent-integration-matrix.md) | Per-agent capability matrix + the hook/transcript mechanism for each |
-| [flock-agentd-design.md](flock-agentd-design.md) | Node daemon design + protocol rationale |
-| [deployment.md](deployment.md) | Docker Compose production deploy, TLS, secrets, ops |
-| [design-tokens.md](design-tokens.md) | The web UI design system — color, type, spacing tokens |
-| [decisions/](decisions/) | Architecture Decision Records (e.g. terminal renderer, browser-driving) |
+| Doc                                                              | Purpose                                                                                                                                  |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [architecture.md](architecture.md)                               | System overview — orchestrator ⇄ agentd ⇄ web, the status pipeline, data path                                                            |
+| [agent-integration-matrix.md](agent-integration-matrix.md)       | Per-agent capability matrix + the hook/transcript mechanism for each                                                                     |
+| [flock-agentd-design.md](flock-agentd-design.md)                 | Node daemon design + protocol rationale                                                                                                  |
+| [deployment.md](deployment.md)                                   | Docker Compose production deploy, TLS, secrets, ops                                                                                      |
+| [design-tokens.md](design-tokens.md)                             | The web UI design system — color, type, spacing tokens                                                                                   |
+| [premium-single-user-roadmap.md](premium-single-user-roadmap.md) | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
+| [decisions/](decisions/)                                         | Architecture Decision Records (e.g. terminal renderer, browser-driving)                                                                  |
 
 ## Background / historical
 

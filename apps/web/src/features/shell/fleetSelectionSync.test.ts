@@ -12,7 +12,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
     const patch = remoteToStorePatch({
       selectedSessionId: 's1',
       activeProjectId: 'p1',
-      hostScope: 'all',
       lens: 'agents',
       updatedAt: '2026-07-09T00:00:00.000Z',
     });
@@ -26,13 +25,11 @@ describe('fleetSelectionSync (production path helpers)', () => {
     const p = localPayloadFromSlice({
       selectedSessionId: 'a',
       selectedProjectId: 'b',
-      hostScope: { nodeId: 'n1' },
       lens: 'agents',
       fleetSelectionFollow: true,
     });
     expect(p.selectedSessionId).toBe('a');
     expect(p.activeProjectId).toBe('b');
-    expect(p.hostScope).toEqual({ nodeId: 'n1' });
     expect(p.updatedAt).toMatch(/^\d{4}-/);
   });
 
@@ -52,7 +49,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
             selectedSessionId: 's1',
             activeProjectId: 'p1',
             lens: 'agents',
-            hostScope: 'all',
             updatedAt: '2020-01-01T00:00:00.000Z',
           },
         }),
@@ -64,7 +60,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       slice: {
         selectedSessionId: null,
         selectedProjectId: null,
-        hostScope: 'all',
         lens: 'mission',
         fleetSelectionFollow: true,
       },
@@ -81,7 +76,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       selectionIdentity({
         selectedSessionId: 's1',
         activeProjectId: 'p1',
-        hostScope: 'all',
         lens: 'agents',
       }),
     );
@@ -112,7 +106,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       slice: {
         selectedSessionId: null,
         selectedProjectId: null,
-        hostScope: 'all',
         lens: 'mission',
         fleetSelectionFollow: false,
       },
@@ -140,7 +133,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
     const prevKey = selectionIdentity({
       selectedSessionId: 'old',
       activeProjectId: null,
-      hostScope: 'all',
       lens: 'agents',
     });
 
@@ -148,7 +140,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       slice: {
         selectedSessionId: 'new-s',
         selectedProjectId: null,
-        hostScope: 'all',
         lens: 'agents',
         fleetSelectionFollow: true,
       },
@@ -166,7 +157,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
     const synced = selectionIdentity({
       selectedSessionId: 'local-s',
       activeProjectId: 'local-p',
-      hostScope: 'all',
       lens: 'agents',
     });
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -182,7 +172,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
             selectedSessionId: 'remote-s',
             activeProjectId: 'remote-p',
             lens: 'agents',
-            hostScope: 'all',
             updatedAt: '2099-01-01T00:00:00.000Z',
           },
         }),
@@ -194,7 +183,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       slice: {
         selectedSessionId: 'local-s',
         selectedProjectId: 'local-p',
-        hostScope: 'all',
         lens: 'agents',
         fleetSelectionFollow: true,
       },
@@ -211,7 +199,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
     const synced = selectionIdentity({
       selectedSessionId: 'local-s',
       activeProjectId: null,
-      hostScope: 'all',
       lens: 'agents',
     });
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -236,7 +223,6 @@ describe('fleetSelectionSync (production path helpers)', () => {
       slice: {
         selectedSessionId: 'local-s',
         selectedProjectId: null,
-        hostScope: 'all',
         lens: 'agents',
         fleetSelectionFollow: false,
       },

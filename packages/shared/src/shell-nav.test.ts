@@ -5,17 +5,14 @@ import {
   openMission,
   pathToShellNav,
   setChrome,
-  setHostScope,
   shellNavToPath,
-  sessionInHostScope,
   openTools,
   closeTools,
 } from './shell-nav.js';
 
 describe('shell-nav state machine', () => {
-  it('D1: default is mission + all hosts + stage chrome', () => {
+  it('D1: default is mission + stage chrome', () => {
     expect(DEFAULT_SHELL_NAV.lens).toBe('mission');
-    expect(DEFAULT_SHELL_NAV.hostScope).toBe('all');
     expect(DEFAULT_SHELL_NAV.chrome).toBe('stage');
     expect(DEFAULT_SHELL_NAV.selectedSessionId).toBeNull();
   });
@@ -48,37 +45,19 @@ describe('shell-nav state machine', () => {
     expect(mission.activeProjectId).toBe('p1');
   });
 
-  it('setHostScope filters session membership', () => {
-    const scoped = setHostScope(DEFAULT_SHELL_NAV, { nodeId: 'n1' });
-    expect(scoped.hostScope).toEqual({ nodeId: 'n1' });
-    const nodes = [
-      { id: 'n1', pool: null },
-      { id: 'n2', pool: 'build' },
-    ];
-    expect(sessionInHostScope(scoped.hostScope, { nodeId: 'n1' }, nodes)).toBe(true);
-    expect(sessionInHostScope(scoped.hostScope, { nodeId: 'n2' }, nodes)).toBe(false);
-    expect(sessionInHostScope('all', { nodeId: 'n2' }, nodes)).toBe(true);
-    expect(sessionInHostScope({ pool: 'build' }, { nodeId: 'n2' }, nodes)).toBe(true);
-  });
-
-  it('path: / is mission all hosts', () => {
+  it('path: / is mission', () => {
     const p = pathToShellNav('/');
     expect(p.lens).toBe('mission');
-    expect(p.hostScope).toBe('all');
     expect(p.chrome).toBe('stage');
     expect(p.selectedSessionId).toBeNull();
   });
 
-  it('path: /agents/:id and compat /s/:id clear project scope', () => {
+  it('path: /agents/:id clears project scope', () => {
     const a = pathToShellNav('/agents/sess-1');
     expect(a.lens).toBe('agents');
     expect(a.selectedSessionId).toBe('sess-1');
     expect(a.chrome).toBe('stage');
     expect(a.activeProjectId).toBeNull();
-    const s = pathToShellNav('/s/sess-1');
-    expect(s.lens).toBe('agents');
-    expect(s.selectedSessionId).toBe('sess-1');
-    expect(s.activeProjectId).toBeNull();
   });
 
   it('shellNavToPath round-trips agents selection', () => {
@@ -89,7 +68,6 @@ describe('shell-nav state machine', () => {
       selectedSessionId: 's1',
       activeProjectId: 'p1',
       nodeInfoNodeId: null,
-      hostScope: 'all',
     });
     expect(path).toBe('/agents/s1');
     expect(pathToShellNav(path).selectedSessionId).toBe('s1');
