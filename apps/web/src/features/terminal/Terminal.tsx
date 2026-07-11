@@ -50,6 +50,16 @@ export interface XtermLike {
   readonly rows: number;
 }
 
+/** Narrow private xterm surface used to avoid FitAddon's hard-coded scrollbar
+ * reservation. Keep this isolated so an xterm upgrade has one compatibility
+ * point and gracefully falls back to FitAddon when the shape changes. */
+interface XtermCore {
+  _renderService?: {
+    dimensions?: { css?: { cell?: { width: number; height: number } } };
+    clear?: () => void;
+  };
+}
+
 /** How long after PTY open with zero bytes before we flag a blank pane. */
 const BLANK_DETECT_MS = 2_500;
 /** Minimum container size before FitAddon is allowed to run. */
@@ -223,8 +233,7 @@ export default function Terminal({
     if (!el) return;
 
     const usingFake = xtermFactory !== undefined;
-    const make: XtermFactory =
-      xtermFactory ?? ((opts) => new XTerm(opts) as unknown as XtermLike);
+    const make: XtermFactory = xtermFactory ?? ((opts) => new XTerm(opts) as unknown as XtermLike);
     const term = make(DEFAULT_OPTS);
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -296,18 +305,27 @@ export default function Terminal({
     // WebGL artifacts. One settled fit → one SIGWINCH → the app repaints once.
     let fitTimer: ReturnType<typeof setTimeout> | undefined;
     const fitEdgeToEdge = (): void => {
-      fit.fit();
-      // FitAddon always subtracts xterm's measured native scrollbar width when
-      // scrollback is enabled. Our viewport uses an overlay/hidden scrollbar,
-      // so that subtraction leaves a visible ~15–21px strip in every pane.
-      // Recover those columns from the rendered cell width without stretching
-      // glyphs or breaking terminal mouse coordinates.
-      const screen = el.querySelector<HTMLElement>('.xterm-screen');
-      if (!screen || term.cols <= 0) return;
-      const cellWidth = screen.getBoundingClientRect().width / term.cols;
-      if (!Number.isFinite(cellWidth) || cellWidth <= 0) return;
-      const cols = Math.max(2, Math.floor(el.clientWidth / cellWidth));
-      if (cols !== term.cols) term.resize?.(cols, term.rows);
+      if (usingFake) {
+        fit.fit();
+        return;
+      }
+
+      // FitAddon subtracts core.viewport.scrollBarWidth whenever scrollback is
+      // enabled, even though Flock hides that native track. Calculate the grid
+      // directly from xterm's authoritative cell metrics instead. This is one
+      // atomic resize (and therefore one PTY SIGWINCH), not a fit followed by a
+      // corrective resize that can leave full-screen TUIs between two sizes.
+      const core = (term as unknown as { _core?: XtermCore })._core;
+      const cell = core?._renderService?.dimensions?.css?.cell;
+      if (!cell || cell.width <= 0 || cell.height <= 0) {
+        fit.fit();
+        return;
+      }
+      const cols = Math.max(2, Math.floor(el.clientWidth / cell.width));
+      const rows = Math.max(1, Math.floor(el.clientHeight / cell.height));
+      if (cols === term.cols && rows === term.rows) return;
+      core?._renderService?.clear?.();
+      term.resize?.(cols, rows);
     };
     const fitAndSync = (opts?: { forceResize?: boolean; refresh?: boolean }): void => {
       if (disposed) return;
@@ -401,8 +419,7 @@ export default function Terminal({
       });
     }
 
-    const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(doFit) : null;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(doFit) : null;
     ro?.observe(el);
     // A terminal "born" at its final size (e.g. a fresh split pane) never gets a
     // ResizeObserver *change*, so its first fit can land before the layout
@@ -414,8 +431,7 @@ export default function Terminal({
     // Keep-alive panes live under display:none while another agent is zoomed.
     // When they become visible again, force fit + SIGWINCH + refresh so TUIs
     // repaint (hard-refresh was the previous workaround).
-    let wasVisible =
-      el.clientWidth >= MIN_FIT_PX && el.clientHeight >= MIN_FIT_PX;
+    let wasVisible = el.clientWidth >= MIN_FIT_PX && el.clientHeight >= MIN_FIT_PX;
     const io =
       typeof IntersectionObserver !== 'undefined'
         ? new IntersectionObserver(

@@ -76,13 +76,15 @@ export function AttentionInbox(): JSX.Element {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={count > 0 ? `${count} agent${count === 1 ? '' : 's'} need you` : 'No agents need you'}
+          aria-label={
+            count > 0 ? `${count} agent${count === 1 ? '' : 's'} need you` : 'No agents need you'
+          }
           title={count > 0 ? `${count} need you` : 'All caught up'}
           className={`relative flex size-8 items-center justify-center rounded-md hover:bg-flock-surface-2 ${
             count > 0 ? 'text-status-awaiting' : 'text-flock-ink-muted'
           }`}
         >
-          <Bell className={`size-4 ${count > 0 ? 'animate-flock-pulse' : ''}`} />
+          <Bell className={`size-[18px] ${count > 0 ? 'animate-flock-pulse' : ''}`} />
           {count > 0 ? (
             <span
               data-testid="attention-badge"

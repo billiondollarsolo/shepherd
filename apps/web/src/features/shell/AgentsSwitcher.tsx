@@ -12,13 +12,30 @@ import {
   type AgentListItem,
   type Status,
 } from '@flock/shared';
-import { Columns2, GripVertical, LayoutGrid, MoreHorizontal, Pin, Rows2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import {
+  Columns2,
+  GripVertical,
+  LayoutGrid,
+  MoreHorizontal,
+  MoveRight,
+  Pencil,
+  Pin,
+  RotateCcw,
+  Rows2,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react';
 import { usePaddock } from '../../store/paddock';
 import { useNodes, useProjects, useSessions, useUpdateSession } from '../../data/queries';
 import { useLiveStatuses, useLiveStatusTransitions } from '../paddock/liveData';
 import { StatusDot } from '../../components/StatusDot';
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -28,6 +45,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Input,
 } from '../../components/ui';
 
 const SORT_LABELS: Record<AgentSortKey, string> = {
@@ -64,7 +82,9 @@ export function AgentsSwitcher(): JSX.Element {
   const updateSession = useUpdateSession();
   const contextProjectId =
     selectedProjectId ??
-    (selectedSessionId ? sessions.find((session) => session.id === selectedSessionId)?.projectId : null);
+    (selectedSessionId
+      ? sessions.find((session) => session.id === selectedSessionId)?.projectId
+      : null);
   const contextProject = projects.find((project) => project.id === contextProjectId);
   const contextNode = nodes.find((node) => node.id === nodeInfoNodeId);
 
@@ -72,6 +92,9 @@ export function AgentsSwitcher(): JSX.Element {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [workingOnly, setWorkingOnly] = useState(false);
   const [group, setGroup] = useState<AgentGroupKey>('none');
+  const [renameSession, setRenameSession] = useState<{ id: string; value: string } | null>(null);
+  const [renamePen, setRenamePen] = useState<{ id: string; value: string } | null>(null);
+  const [dragOverZone, setDragOverZone] = useState<string | null>(null);
 
   const items = useMemo(() => {
     const open = sessions.filter((s) => s.closedAt === null);
@@ -94,7 +117,7 @@ export function AgentsSwitcher(): JSX.Element {
         pinned: s.pinned,
         status: st,
         lastStatusTransitionAt: lastMs,
-        label: `${s.agentType} · ${s.id.slice(0, 6)}`,
+        label: s.note?.trim() || `${s.agentType} · ${s.id.slice(0, 6)}`,
       };
     });
     return orderAgents(list, { sort, pinnedOnly, workingOnly });
@@ -229,10 +252,21 @@ export function AgentsSwitcher(): JSX.Element {
           <div
             key={g.key}
             data-testid={g.zone ? `agent-zone-${g.zone}` : undefined}
+            className={
+              dragOverZone === g.zone
+                ? 'bg-flock-accent/5 ring-1 ring-inset ring-flock-accent/50'
+                : ''
+            }
             onDragOver={(event) => {
               if (g.zone && event.dataTransfer.types.includes('application/x-flock-session')) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
+                setDragOverZone(g.zone);
+              }
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setDragOverZone(null);
               }
             }}
             onDrop={(event) => {
@@ -240,6 +274,7 @@ export function AgentsSwitcher(): JSX.Element {
               const sessionId = event.dataTransfer.getData('application/x-flock-session');
               if (!sessionId) return;
               event.preventDefault();
+              setDragOverZone(null);
               if (g.zone === 'new') requestPenAction({ type: 'create', sessionId });
               else if (g.zone === 'other') requestPenAction({ type: 'remove', sessionId });
               else requestPenAction({ type: 'add', sessionId, penId: g.zone });
@@ -301,6 +336,54 @@ export function AgentsSwitcher(): JSX.Element {
                     </button>
                   </span>
                 ) : null}
+                {g.arrange && g.zone ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex size-6 items-center justify-center rounded hover:bg-flock-surface-2"
+                        aria-label={`${g.label} actions`}
+                      >
+                        <MoreHorizontal className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44 normal-case tracking-normal">
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setRenamePen({
+                            id: g.zone!,
+                            value: penGroups.find((pen) => pen.id === g.zone)?.name ?? 'Pen',
+                          })
+                        }
+                      >
+                        <Pencil /> Rename Pen…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          requestPenAction({
+                            type: 'arrange',
+                            penId: g.zone!,
+                            mode: 'grid2x2',
+                          })
+                        }
+                      >
+                        <RotateCcw /> Reset layout
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-status-error focus:text-status-error"
+                        onSelect={() => requestPenAction({ type: 'delete', penId: g.zone! })}
+                      >
+                        <Trash2 /> Delete Pen
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </div>
+            ) : null}
+            {dragOverZone === g.zone && g.arrange && g.items.length >= 4 ? (
+              <div className="px-2 py-1 text-center text-2xs font-medium text-flock-accent">
+                Pen full — drop on an agent to replace it
               </div>
             ) : null}
             <ul className="flex flex-col">
@@ -330,9 +413,7 @@ export function AgentsSwitcher(): JSX.Element {
                     }}
                     onDrop={(event) => {
                       if (!g.zone || g.zone === 'other' || g.zone === 'new') return;
-                      const sessionId = event.dataTransfer.getData(
-                        'application/x-flock-session',
-                      );
+                      const sessionId = event.dataTransfer.getData('application/x-flock-session');
                       if (!sessionId) return;
                       event.preventDefault();
                       event.stopPropagation();
@@ -354,6 +435,7 @@ export function AgentsSwitcher(): JSX.Element {
                         event.dataTransfer.effectAllowed = 'move';
                         event.dataTransfer.setData('application/x-flock-session', item.id);
                       }}
+                      onDragEnd={() => setDragOverZone(null)}
                       title="Drag to move between Pens; click to focus"
                       className={`flex min-w-0 flex-1 cursor-grab items-start gap-1.5 py-2 pl-1.5 text-left text-[15px] active:cursor-grabbing ${
                         active ? 'bg-flock-accent/10' : ''
@@ -394,6 +476,16 @@ export function AgentsSwitcher(): JSX.Element {
                       <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem
                           onSelect={() =>
+                            setRenameSession({
+                              id: item.id,
+                              value: sessions.find((session) => session.id === item.id)?.note ?? '',
+                            })
+                          }
+                        >
+                          <Pencil /> Rename session…
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
                             updateSession.mutate({
                               id: item.id,
                               patch: { pinned: !item.pinned },
@@ -404,11 +496,50 @@ export function AgentsSwitcher(): JSX.Element {
                           {item.pinned ? 'Remove from top' : 'Keep at top'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
+                        {penMode ? (
+                          <>
+                            <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                            {penGroups.map((pen) => {
+                              const current = pen.sessionIds.includes(item.id);
+                              return (
+                                <DropdownMenuItem
+                                  key={pen.id}
+                                  disabled={current || pen.sessionIds.length >= 4}
+                                  onSelect={() =>
+                                    requestPenAction({
+                                      type: 'add',
+                                      sessionId: item.id,
+                                      penId: pen.id,
+                                    })
+                                  }
+                                >
+                                  <MoveRight /> {pen.name}
+                                  <span className="ml-auto text-2xs text-flock-ink-muted">
+                                    {pen.sessionIds.length}/4
+                                  </span>
+                                </DropdownMenuItem>
+                              );
+                            })}
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                requestPenAction({ type: 'remove', sessionId: item.id })
+                              }
+                            >
+                              <MoveRight /> Other agents
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                requestPenAction({ type: 'create', sessionId: item.id })
+                              }
+                            >
+                              <MoveRight /> New Pen
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        ) : null}
                         <DropdownMenuItem
                           className="text-status-error focus:text-status-error"
-                          onSelect={() =>
-                            openDialog('terminate-session', { sessionId: item.id })
-                          }
+                          onSelect={() => openDialog('terminate-session', { sessionId: item.id })}
                         >
                           <Trash2 />
                           Delete session…
@@ -434,6 +565,75 @@ export function AgentsSwitcher(): JSX.Element {
           <div className="p-4 text-center text-sm text-flock-ink-muted">No agents in scope.</div>
         ) : null}
       </div>
+      <Dialog
+        open={renameSession !== null}
+        onOpenChange={(open) => !open && setRenameSession(null)}
+      >
+        <DialogContent>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renameSession) return;
+              updateSession.mutate({
+                id: renameSession.id,
+                patch: { note: renameSession.value.trim() || null },
+              });
+              setRenameSession(null);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Rename session</DialogTitle>
+            </DialogHeader>
+            <Input
+              autoFocus
+              aria-label="Session name"
+              placeholder="e.g. API migration"
+              value={renameSession?.value ?? ''}
+              onChange={(event) =>
+                setRenameSession((current) =>
+                  current ? { ...current, value: event.target.value } : current,
+                )
+              }
+            />
+            <DialogFooter>
+              <Button type="submit">Save name</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={renamePen !== null} onOpenChange={(open) => !open && setRenamePen(null)}>
+        <DialogContent>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renamePen?.value.trim()) return;
+              requestPenAction({ type: 'rename', penId: renamePen.id, name: renamePen.value });
+              setRenamePen(null);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Rename Pen</DialogTitle>
+            </DialogHeader>
+            <Input
+              autoFocus
+              aria-label="Pen name"
+              value={renamePen?.value ?? ''}
+              onChange={(event) =>
+                setRenamePen((current) =>
+                  current ? { ...current, value: event.target.value } : current,
+                )
+              }
+            />
+            <DialogFooter>
+              <Button type="submit" disabled={!renamePen?.value.trim()}>
+                Save name
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

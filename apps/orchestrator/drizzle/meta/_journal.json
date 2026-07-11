@@ -71,6 +71,13 @@
       "when": 1781149114157,
       "tag": "0009_faulty_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783742400000,
+      "tag": "0010_project_pens",
+      "breakpoints": true
     }
   ]
 }

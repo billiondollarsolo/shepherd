@@ -924,8 +924,13 @@ export function Sidebar(): JSX.Element {
             className="flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-flock-accent"
           >
             <FlockMark className="size-7 shrink-0" />
-            <span className="font-wordmark truncate text-xl font-semibold text-flock-ink-primary">
-              Flock
+            <span className="flex min-w-0 flex-col items-start">
+              <span className="font-wordmark truncate text-xl font-semibold leading-[18px] text-flock-ink-primary">
+                Flock
+              </span>
+              <span className="truncate text-[9px] font-medium leading-[9px] tracking-wide text-flock-ink-muted">
+                Shepherd Your Agents
+              </span>
             </span>
           </button>
         </div>

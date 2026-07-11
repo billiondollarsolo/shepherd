@@ -2,11 +2,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-import {
-  AuthService,
-  makeDbAuthAuditRecorder,
-  makeDbAuditSink,
-} from './auth/index.js';
+import { AuthService, makeDbAuthAuditRecorder, makeDbAuditSink } from './auth/index.js';
 import { AuditQueryService, DrizzleAuditReadStore } from './audit/index.js';
 import { AuditLogger } from './audit/index.js';
 import { getDb, closeDb } from './db/index.js';
@@ -55,8 +51,8 @@ import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
 import { makeWsAuthorizer } from './auth/ws-auth.js';
 import { makeRequireAuth } from './auth/middleware.js';
-import { agentSessions } from './db/schema.js';
-import { eq } from 'drizzle-orm';
+import { agentSessions, projectPens as projectPensTable } from './db/schema.js';
+import { and, eq } from 'drizzle-orm';
 import { createLiveChannels } from './live-channels.js';
 import { createBrowserChannels } from './browser-channels.js';
 import { EventReadService } from './events/index.js';
@@ -69,7 +65,8 @@ import {
 } from './push/index.js';
 import { buildServer } from './server.js';
 import { FleetSelectionStore } from './me/fleet-selection.js';
-import type { LauncherPreset, ProjectLayoutV1, ProjectPensV1 } from '@flock/shared';
+import type { LauncherPreset, ProjectLayoutV1 } from '@flock/shared';
+import { parseProjectPens } from '@flock/shared';
 
 /**
  * T14 — resolve the agentd version from the single source of truth. Priority:
@@ -433,7 +430,9 @@ export async function main(): Promise<void> {
   const nodeSandboxAvailable = async (nodeId: string): Promise<boolean> => {
     const cached = sandboxAvailableByNode.get(nodeId);
     if (cached !== undefined) return cached;
-    const info = (await nodeInfo(nodeId).catch(() => null)) as { sandboxAvailable?: boolean } | null;
+    const info = (await nodeInfo(nodeId).catch(() => null)) as {
+      sandboxAvailable?: boolean;
+    } | null;
     if (info === null) return false; // unreachable → don't pin; retry next time
     const ok = info.sandboxAvailable === true;
     sandboxAvailableByNode.set(nodeId, ok);
@@ -496,7 +495,8 @@ export async function main(): Promise<void> {
           // waiting out the create/attach race; if it never appears the launch
           // failed — surface the error, don't spawn a shell.
           const exists = await client.waitForSession(sessionId, 4000);
-          if (!exists) throw new Error(`flock-agentd session ${sessionId} not running on the daemon`);
+          if (!exists)
+            throw new Error(`flock-agentd session ${sessionId} not running on the daemon`);
           return mkBinding(true);
         }
       : undefined,
@@ -519,11 +519,7 @@ export async function main(): Promise<void> {
       // TUI process owns the PTY — even when idle at the prompt. That happens when
       // agentd misses hook-owned detection (e.g. grok launched via `sh -c … exec
       // grok`). Real tool use uses names like Bash/Edit, not the agent binary.
-      if (
-        workState === 'running' &&
-        workMeta.tool &&
-        isBareAgentProcessName(workMeta.tool)
-      ) {
+      if (workState === 'running' && workMeta.tool && isBareAgentProcessName(workMeta.tool)) {
         workState = 'idle';
         workMeta = { ...workMeta, tool: undefined };
       }
@@ -649,7 +645,9 @@ export async function main(): Promise<void> {
           // ACP sessions (Gemini) skip hook injection — status + chat come from the
           // ACP stream (`acp_bridge`), not hooks.
           const isAcp = mode === 'acp';
-          const scoped = isAcp ? null : await renderScopedConfig(session.agentType).catch(() => null);
+          const scoped = isAcp
+            ? null
+            : await renderScopedConfig(session.agentType).catch(() => null);
           // T17: an `autonomous` agent (--dangerously-skip-permissions) must be
           // FS-confined. Enable the Landlock sandbox iff the node supports it;
           // otherwise warn loudly (the agent then runs with full write access).
@@ -683,9 +681,10 @@ export async function main(): Promise<void> {
               kind: agentSessionKind(session.agentType),
               cwd: session.workingDir,
               command,
-              env: Object.keys(mergedEnv).length > 0
-                ? Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`)
-                : undefined,
+              env:
+                Object.keys(mergedEnv).length > 0
+                  ? Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`)
+                  : undefined,
               configDirEnv: scoped?.configDirEnv,
               configFiles: scoped?.files,
               configBaseSubdir: scoped?.configBaseSubdir,
@@ -956,7 +955,6 @@ export async function main(): Promise<void> {
   const fleetSelection = new FleetSelectionStore();
   const userPresets = new Map<string, LauncherPreset[]>();
   const projectLayouts = new Map<string, ProjectLayoutV1>();
-  const projectPens = new Map<string, ProjectPensV1>();
 
   const app = buildServer({
     auth,
@@ -977,9 +975,24 @@ export async function main(): Promise<void> {
       putLayout: async (id, layout) => {
         projectLayouts.set(id, layout);
       },
-      getPens: async (id) => projectPens.get(id) ?? null,
-      putPens: async (id, pens) => {
-        projectPens.set(id, pens);
+      getPens: async (userId, projectId) => {
+        const [row] = await db
+          .select({ document: projectPensTable.document })
+          .from(projectPensTable)
+          .where(
+            and(eq(projectPensTable.userId, userId), eq(projectPensTable.projectId, projectId)),
+          )
+          .limit(1);
+        return parseProjectPens(row?.document);
+      },
+      putPens: async (userId, projectId, pens) => {
+        await db
+          .insert(projectPensTable)
+          .values({ userId, projectId, document: pens, updatedAt: new Date() })
+          .onConflictDoUpdate({
+            target: [projectPensTable.userId, projectPensTable.projectId],
+            set: { document: pens, updatedAt: new Date() },
+          });
       },
     },
     sessions,
@@ -1071,7 +1084,9 @@ export async function main(): Promise<void> {
       const body = (request.body ?? {}) as { agentType?: string };
       const source = await sessionRegistry.getSession(sourceId).catch(() => null);
       if (!source || source.closedAt != null) {
-        return reply.code(404).send({ error: { code: 'not_found', message: 'source session not found' } });
+        return reply
+          .code(404)
+          .send({ error: { code: 'not_found', message: 'source session not found' } });
       }
       const parsed = CreateSessionRequest.safeParse({
         projectId: source.projectId,
@@ -1079,16 +1094,24 @@ export async function main(): Promise<void> {
         workingDir: source.workingDir,
       });
       if (!parsed.success) {
-        return reply.code(400).send({ error: { code: 'bad_request', message: 'valid agentType is required' } });
+        return reply
+          .code(400)
+          .send({ error: { code: 'bad_request', message: 'valid agentType is required' } });
       }
       const actor = request.authUser!;
-      const created = await sessions.createSession(parsed.data, { userId: actor.id, ip: request.ip ?? null });
+      const created = await sessions.createSession(parsed.data, {
+        userId: actor.id,
+        ip: request.ip ?? null,
+      });
       const newId = created.session.id;
       await orchestration.recordHandoff(sourceId, newId);
       // Seed the target with the handoff context once its PTY has attached (best-effort;
       // most agent CLIs buffer stdin until they're ready to read it).
       const chats = await new EventReadService(db).recentChats(sourceId, 12).catch(() => []);
-      const transcript = chats.map((c) => `${c.role}: ${c.text}`).join('\n').slice(0, 6000);
+      const transcript = chats
+        .map((c) => `${c.role}: ${c.text}`)
+        .join('\n')
+        .slice(0, 6000);
       const seed =
         `[Handoff from a ${source.agentType} agent — continue this work.]` +
         (transcript ? `\n\nRecent context:\n${transcript}` : '');
@@ -1106,11 +1129,19 @@ export async function main(): Promise<void> {
     // worktree (so they don't collide), seeded with the task. Returns the racer
     // session ids; the web compares their diffs and keeps the winner. Cookie-authed.
     app.post('/api/race', { preHandler: requireAuth }, async (request, reply) => {
-      const body = (request.body ?? {}) as { projectId?: string; task?: string; agentTypes?: unknown };
+      const body = (request.body ?? {}) as {
+        projectId?: string;
+        task?: string;
+        agentTypes?: unknown;
+      };
       const task = typeof body.task === 'string' ? body.task.trim() : '';
-      const types = Array.isArray(body.agentTypes) ? body.agentTypes.filter((t): t is string => typeof t === 'string') : [];
+      const types = Array.isArray(body.agentTypes)
+        ? body.agentTypes.filter((t): t is string => typeof t === 'string')
+        : [];
       if (!body.projectId || !task || types.length < 2) {
-        return reply.code(400).send({ error: { code: 'bad_request', message: 'projectId, task, and 2+ agentTypes required' } });
+        return reply.code(400).send({
+          error: { code: 'bad_request', message: 'projectId, task, and 2+ agentTypes required' },
+        });
       }
       const actor = request.authUser!;
       const ctx = { userId: actor.id, ip: request.ip ?? null };
@@ -1120,7 +1151,11 @@ export async function main(): Promise<void> {
         // dir when worktrees aren't possible (e.g. the project isn't a git repo).
         let id: string | null = null;
         for (const worktree of [true, false]) {
-          const parsed = CreateSessionRequest.safeParse({ projectId: body.projectId, agentType, worktree });
+          const parsed = CreateSessionRequest.safeParse({
+            projectId: body.projectId,
+            agentType,
+            worktree,
+          });
           if (!parsed.success) break;
           try {
             id = (await sessions.createSession(parsed.data, ctx)).session.id;

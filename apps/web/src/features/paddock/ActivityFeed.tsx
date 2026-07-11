@@ -57,7 +57,7 @@ export function ActivityFeed(): JSX.Element {
           title="Fleet activity"
           className="flex size-8 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2"
         >
-          <History className="size-4" />
+          <History className="size-[18px]" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-96">
@@ -83,7 +83,9 @@ export function ActivityFeed(): JSX.Element {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1.5">
-                      <span className="truncate text-xs font-semibold text-flock-ink-primary">{agent}</span>
+                      <span className="truncate text-xs font-semibold text-flock-ink-primary">
+                        {agent}
+                      </span>
                       {ev.mappedStatus ? (
                         <span className="shrink-0 text-2xs text-flock-ink-muted">
                           {statusLabel(ev.mappedStatus as Status)}
@@ -91,11 +93,19 @@ export function ActivityFeed(): JSX.Element {
                       ) : null}
                     </span>
                     {ev.detail ? (
-                      <span className="block truncate text-2xs text-flock-ink-muted">{ev.detail}</span>
+                      <span className="block truncate text-2xs text-flock-ink-muted">
+                        {ev.detail}
+                      </span>
                     ) : null}
-                    {where ? <span className="block truncate text-2xs text-flock-ink-muted/70">{where}</span> : null}
+                    {where ? (
+                      <span className="block truncate text-2xs text-flock-ink-muted/70">
+                        {where}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="shrink-0 text-2xs tabular-nums text-flock-ink-muted/70">{timeAgo(ev.ts, now)}</span>
+                  <span className="shrink-0 text-2xs tabular-nums text-flock-ink-muted/70">
+                    {timeAgo(ev.ts, now)}
+                  </span>
                 </button>
               );
             })}

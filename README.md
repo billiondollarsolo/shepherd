@@ -4,7 +4,9 @@
 
 # Flock
 
-**A self-hosted web platform for running and supervising a flock of CLI coding agents — across as many machines as you have, all from your browser.**
+### Shepherd Your Agents
+
+**A self-hosted web platform for running and supervising CLI coding agents across all your machines—from one browser.**
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) ·
 [Codex](https://openai.com/codex/) ·
@@ -23,21 +25,24 @@ and the work dies the moment you close the lid. Flock turns that into a **fleet*
 
 Point Flock at one or more machines ("**nodes**") over SSH. On each node it runs a
 tiny daemon that owns your agents' terminals. From any browser you get a live
-dashboard of every agent across every machine — what each one is doing right now
+Paddock of every agent across every machine — what each one is doing right now
 (**Idle** / **Working** / **Needs you**), what it's spending, and a real terminal you
-can type into. Run several agents side-by-side on one project stage (or focus one).
+can type into. Organize a project's agents into named **Pens** of one to four,
+arrange each Pen as columns, rows, or a 2×2 grid, or focus one agent full-screen.
 Walk away, close your laptop, come back on your phone: the agents kept working and
 the session is exactly where you left it.
 
 ### Why it's different
 
-| | |
-|---|---|
-| 🔌 **Sessions never die when you leave** | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues. |
-| 🔔 **Status you can trust at a glance** | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked. |
-| 📐 **One paddock, many agents** | Project stage with side-by-side, stacked, or **2×2** arrange; drag pane sizes; layout persists per project. Focus one agent full-stage, or **All agents** on one screen. |
-| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI. |
-| 🤖 **Works with any agent** | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else. |
+|                                           |                                                                                                                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔌 **Sessions never die when you leave**  | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues.                                                |
+| 🔔 **Status you can trust at a glance**   | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked. |
+| 🐑 **Pens for focused supervision**       | Organize any number of project agents into **Pen 1, Pen 2, …**, with 1–4 agents per Pen. Drag agents between Pens, reorder them, resize panes, and choose columns, rows, or **2×2** independently for every Pen.    |
+| 🌐 **Real fleet scope**                   | Supervise all hosts or narrow the Paddock to a node or pool. Opening a project or node gives the sidebar and main content the same explicit context.                                                                |
+| ⌨️ **Fast navigation**                    | Press **⌘K / Ctrl+K** to search and jump to any node, project, or running agent. The Agents sidebar adds status-first sorting, grouping, filters, pinning, and confirmed session deletion.                          |
+| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI.                                                                                                 |
+| 🤖 **Works with any agent**               | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else.                                                                                            |
 
 ---
 
@@ -46,13 +51,13 @@ the session is exactly where you left it.
 Flock leverages **what each agent already produces on the node** — its lifecycle hooks
 and/or its transcript files — and normalizes everything into one status + telemetry model.
 
-| Agent | Status | `awaiting_input` | Tokens / Model / Context % | Plan |
-|---|:---:|:---:|:---:|:---:|
-| **Claude Code** | ✅ hooks + transcript | ✅ | ✅ | ✅ |
-| **Codex** | ✅ transcript | ⚠️¹ | ✅ (exact ctx window) | ✅ |
-| **OpenCode** | ✅ plugin | ✅ | ✅ (exact USD cost) | ✅ |
-| **Gemini** | ✅ ACP | ✅ | ⚠️² | ⚠️² |
-| **Grok** | ✅ hooks | — | — | — |
+| Agent           |        Status         | `awaiting_input` | Tokens / Model / Context % | Plan |
+| --------------- | :-------------------: | :--------------: | :------------------------: | :--: |
+| **Claude Code** | ✅ hooks + transcript |        ✅        |             ✅             |  ✅  |
+| **Codex**       |     ✅ transcript     |       ⚠️¹        |   ✅ (exact ctx window)    |  ✅  |
+| **OpenCode**    |       ✅ plugin       |        ✅        |    ✅ (exact USD cost)     |  ✅  |
+| **Gemini**      |        ✅ ACP         |        ✅        |            ⚠️²             | ⚠️²  |
+| **Grok**        |       ✅ hooks        |        —         |             —              |  —   |
 
 <sub>¹ Codex hooks (incl. the approval signal) are wired and ready; seeding is deferred until validated on a live node (transcript still drives status/tokens/plan). ² Gemini status + chat ride ACP; tokens/model/plan fill only when the ACP stream emits usage/plan. Full detail: [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md).</sub>
 
@@ -84,16 +89,16 @@ Three components, one monorepo:
 
 - **`flock-agentd`** (Go) — the node daemon. Owns raw PTYs, speaks a framed binary
   protocol over an SSH loopback channel, tails agent transcripts/hooks for live status
-  + telemetry, and reports node + per-session resource metrics. This is what makes
-  sessions survive disconnects. See [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md).
+  - telemetry, and reports node + per-session resource metrics. This is what makes
+    sessions survive disconnects. See [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md).
 - **`apps/orchestrator`** (TypeScript · Fastify · Drizzle/Postgres) — the always-on
   brain. Authentication, the unified status model, the agent hook endpoint, SSH/agentd
   transport, per-session browser lifecycle, web push, and the REST + WebSocket API.
   Postgres is the durable record — **never** on the live status path.
-- **`apps/web`** (React · Vite · xterm.js · TanStack · Zustand) — the dashboard. A
-  `node → project → session` tree, multi-agent project stage (focus / All agents /
-  row · col · 2×2), status dots + **Idle / Working / Needs you**, telemetry,
-  source control, per-session browser screencast, and plan/activity.
+- **`apps/web`** (React · Vite · xterm.js · TanStack · Zustand) — the dashboard.
+  Paddock and Agents lenses, scalable fleet scope, project Pens with persisted
+  drag/drop membership and per-Pen layouts, live terminals, status dots +
+  **Idle / Working / Needs you**, source control, browser screencast, and activity.
 
 ---
 
@@ -125,8 +130,22 @@ Open **http://localhost:5173**, complete first-run admin setup, and you're in. T
 app proxies the API/WebSocket, so it's a single origin. (Direct API: `http://localhost:8080`.)
 
 **Then:** use the bundled **local** node (or add an SSH node) → create a **project** →
-**launch an agent**. To supervise several at once: open **All agents**, pick row / col /
-**2×2**, drag pane sizes — the layout is saved per project and survives refresh.
+**launch an agent**. The Agents sidebar creates Pens as needed (maximum four agents
+per Pen). Drag agents between Pens or into **Other agents**, select a Pen to show it,
+and choose columns, rows, or **2×2** beside its name. Pen membership and geometry
+survive refresh. Clicking any agent focuses it without changing its Pen.
+
+### Everyday controls
+
+- **Paddock** is the fleet-level supervision board; **Agents** is the project/node
+  switcher and Pen organizer.
+- Use **Fleet scope** to view all hosts, a node, or a pool. Project and node pages
+  use their own context so counts in the sidebar and main content agree.
+- Drag the grip beside an agent to move it between Pens. Drop it on **New Pen** to
+  create another; a Pen may intentionally contain one, two, three, or four agents.
+- Use an agent's `…` menu to keep it at the top or delete the session with confirmation.
+- Press **⌘K** on macOS or **Ctrl+K** elsewhere to find nodes, projects, sessions,
+  settings, and common actions. **⌘J / Ctrl+J** toggles the shell drawer.
 
 ### Option B — Deploy it (Docker Compose)
 
@@ -218,14 +237,14 @@ Both templates document every variable inline. `.env*` (except the examples) and
 
 Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 
-| Doc | What it covers |
-|---|---|
-| [`docs/roadmap.md`](docs/roadmap.md) | **The forward plan** — phased vision + tasks (success criteria + tests baked in) to the elite web platform |
-| [`docs/architecture.md`](docs/architecture.md) | How the three components fit together, end to end |
-| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Flock captures from each agent, and how |
-| [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md) | The node daemon — why it exists and how it works |
-| [`docs/deployment.md`](docs/deployment.md) | The production Docker Compose stack, in depth |
-| [`PRD.md`](PRD.md) | Product intent and the original requirements |
+| Doc                                                                    | What it covers                                                                                             |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [`docs/roadmap.md`](docs/roadmap.md)                                   | **The forward plan** — phased vision + tasks (success criteria + tests baked in) to the elite web platform |
+| [`docs/architecture.md`](docs/architecture.md)                         | How the three components fit together, end to end                                                          |
+| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Flock captures from each agent, and how                                                       |
+| [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md)           | The node daemon — why it exists and how it works                                                           |
+| [`docs/deployment.md`](docs/deployment.md)                             | The production Docker Compose stack, in depth                                                              |
+| [`PRD.md`](PRD.md)                                                     | Product intent and the original requirements                                                               |
 
 ---
 
@@ -241,7 +260,7 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 
 ## Status
 
-Active development. The full suite is green (build · ~1,000 unit · integration · `go -race`)
+Active development. The full suite is green (build · 1,200+ unit · integration · `go -race`)
 and the platform runs live across simulated multi-node SSH deployments.
 
 Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).

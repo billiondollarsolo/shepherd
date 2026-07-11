@@ -25,6 +25,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -54,13 +55,20 @@ const STATUS_VALUES: EnumTuple = [
 ];
 const ROLE_VALUES: EnumTuple = ['admin', 'member'];
 const NODE_KIND_VALUES: EnumTuple = ['local', 'ssh'];
-const CONNECTION_STATUS_VALUES: EnumTuple = [
-  'connected',
-  'connecting',
-  'disconnected',
-  'error',
+const CONNECTION_STATUS_VALUES: EnumTuple = ['connected', 'connecting', 'disconnected', 'error'];
+const AGENT_TYPE_VALUES: EnumTuple = [
+  'claude-code',
+  'codex',
+  'opencode',
+  'gemini',
+  'grok',
+  'aider',
+  'cursor-agent',
+  'amp',
+  'generic',
+  'terminal',
+  'dev',
 ];
-const AGENT_TYPE_VALUES: EnumTuple = ['claude-code', 'codex', 'opencode', 'gemini', 'grok', 'aider', 'cursor-agent', 'amp', 'generic', 'terminal', 'dev'];
 // T18: persisted agent autonomy level (mirrors shared SessionPermissionModeEnum).
 const PERMISSION_MODE_VALUES: EnumTuple = ['default', 'acceptEdits', 'plan', 'autonomous'];
 const EVENT_SOURCE_VALUES: EnumTuple = ['hook', 'osc', 'pty', 'orchestrator'];
@@ -94,8 +102,7 @@ const id = () =>
     .primaryKey()
     .default(sql`gen_random_uuid()`);
 
-const createdAt = () =>
-  timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
+const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
 // ---------------------------------------------------------------------------
 // users — operator accounts (spec §6: username, password_hash argon2id, role)
@@ -265,9 +272,7 @@ export const agentSessions = pgTable(
       .notNull()
       .default('default'),
     createdAt: createdAt(),
-    lastStatusAt: timestamp('last_status_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    lastStatusAt: timestamp('last_status_at', { withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid('created_by').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -351,6 +356,26 @@ export const auditLog = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// project_pens — durable per-user project supervision layouts
+// ---------------------------------------------------------------------------
+export const projectPens = pgTable(
+  'project_pens',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    document: jsonb('document').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.projectId] }),
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Inferred row types
 // ---------------------------------------------------------------------------
 export type UserRow = typeof users.$inferSelect;
@@ -379,6 +404,7 @@ export type NewAuditLogRow = typeof auditLog.$inferInsert;
 
 export type SecretRow = typeof secrets.$inferSelect;
 export type NewSecretRow = typeof secrets.$inferInsert;
+export type ProjectPensRow = typeof projectPens.$inferSelect;
 
 /** Full schema object for the Drizzle client. */
 export const schema = {
@@ -391,4 +417,5 @@ export const schema = {
   events,
   pushSubscriptions,
   auditLog,
+  projectPens,
 };

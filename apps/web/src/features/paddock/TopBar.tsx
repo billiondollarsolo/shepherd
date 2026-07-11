@@ -2,7 +2,7 @@
  * TopBar — main-content scope and account controls. Brand + primary navigation
  * live in the full-height sidebar.
  */
-import { LogOut, Settings, User } from 'lucide-react';
+import { Command, LogOut, Search, Settings, User } from 'lucide-react';
 import { ThemeToggle } from '../../theme';
 import { usePaddock } from '../../store/paddock';
 import { useAuthOptional } from '../auth/AuthGate';
@@ -10,6 +10,8 @@ import { AttentionInbox } from './AttentionInbox';
 import { ActivityFeed } from './ActivityFeed';
 import { HostChips } from '../shell/HostChips';
 import { shouldShowFleetScope } from '../shell/fleetScopeVisibility';
+import { useShell } from '../../app/KeyboardProvider';
+import { useNodes, useProjects, useSessions } from '../../data/queries';
 import {
   Button,
   DropdownMenu,
@@ -70,10 +72,21 @@ function AccountMenu(): JSX.Element | null {
 }
 
 export function TopBar(): JSX.Element {
+  const { openPalette } = useShell();
   const openSettings = usePaddock((s) => s.openSettings);
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
   const selectedProjectId = usePaddock((s) => s.selectedProjectId);
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
+  const activePenId = usePaddock((s) => s.activePenId);
+  const penGroups = usePaddock((s) => s.penGroups);
+  const { data: projects = [] } = useProjects();
+  const { data: sessions = [] } = useSessions();
+  const { data: nodes = [] } = useNodes();
+  const selectedSession = sessions.find((session) => session.id === selectedSessionId);
+  const contextProjectId = selectedProjectId ?? selectedSession?.projectId ?? null;
+  const contextProject = projects.find((project) => project.id === contextProjectId);
+  const contextNode = nodes.find((node) => node.id === nodeInfoNodeId);
+  const activePen = penGroups.find((pen) => pen.id === activePenId);
   const showFleetScope = shouldShowFleetScope({
     selectedSessionId,
     selectedProjectId,
@@ -81,14 +94,44 @@ export function TopBar(): JSX.Element {
   });
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
-      <div className="min-w-0 flex-1">{showFleetScope ? <HostChips /> : null}</div>
+      <div className="min-w-0 flex-1">
+        {showFleetScope ? (
+          <HostChips />
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5 text-sm text-flock-ink-muted">
+            <span className="truncate font-medium text-flock-ink-primary">
+              {contextProject?.name ?? contextNode?.name ?? 'Agents'}
+            </span>
+            {contextProject && activePen ? (
+              <>
+                <span aria-hidden>/</span>
+                <span className="truncate">{activePen.name}</span>
+                <span className="shrink-0 text-2xs">· {activePen.sessionIds.length} agents</span>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={openPalette}
+        className="hidden h-7 w-56 shrink-0 items-center gap-1.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 px-2 text-xs text-flock-ink-muted transition-colors hover:border-[var(--flock-border-strong)] hover:bg-flock-surface-2 hover:text-flock-ink-primary md:flex"
+        aria-label="Search agents, projects, nodes, and commands"
+      >
+        <Search className="size-3.5" />
+        <span className="truncate">Search agents, projects, nodes…</span>
+        <kbd className="ml-auto inline-flex items-center gap-0.5 rounded border border-[var(--flock-border)] bg-flock-surface-1 px-1.5 py-0.5 font-sans text-2xs">
+          <Command className="size-2.5" />K
+        </kbd>
+      </button>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <ActivityFeed />
         <AttentionInbox />
         <div className="mx-1 h-5 w-px bg-[var(--flock-border)]" />
         <SimpleTooltip label="Toggle theme">
-          <ThemeToggle />
+          <ThemeToggle className="!size-8 [&_svg]:!size-[18px]" />
         </SimpleTooltip>
         <SimpleTooltip label="Settings">
           <Button
@@ -97,7 +140,7 @@ export function TopBar(): JSX.Element {
             aria-label="Settings"
             onClick={() => openSettings()}
           >
-            <Settings className="size-4" />
+            <Settings className="size-[18px]" />
           </Button>
         </SimpleTooltip>
         <div className="mx-1 h-5 w-px bg-[var(--flock-border)]" />

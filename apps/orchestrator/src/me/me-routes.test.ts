@@ -47,8 +47,8 @@ describe('me routes — selection / presets / layout', () => {
       putLayout: async (id, layout) => {
         layouts.set(id, layout);
       },
-      getPens: async (id) => pens.get(id) ?? null,
-      putPens: async (id, value) => {
+      getPens: async (_userId, id) => pens.get(id) ?? null,
+      putPens: async (_userId, id, value) => {
         pens.set(id, value);
       },
     });
@@ -195,7 +195,12 @@ describe('me routes — selection / presets / layout', () => {
         version: 1 as const,
         projectId: 'proj-1',
         focusedLeafId: `leaf-${sessionId}`,
-        root: { type: 'leaf' as const, id: `leaf-${sessionId}`, kind: 'session' as const, sessionId },
+        root: {
+          type: 'leaf' as const,
+          id: `leaf-${sessionId}`,
+          kind: 'session' as const,
+          sessionId,
+        },
       });
       const payload = {
         version: 1 as const,
@@ -206,9 +211,18 @@ describe('me routes — selection / presets / layout', () => {
           { id: 'pen-2', name: 'Pen 2', layout: leaf('b') },
         ],
       };
-      const put = await f.inject({ method: 'PUT', url: '/api/projects/proj-1/pens', headers: COOKIE, payload });
+      const put = await f.inject({
+        method: 'PUT',
+        url: '/api/projects/proj-1/pens',
+        headers: COOKIE,
+        payload,
+      });
       expect(put.statusCode).toBe(200);
-      const get = await f.inject({ method: 'GET', url: '/api/projects/proj-1/pens', headers: COOKIE });
+      const get = await f.inject({
+        method: 'GET',
+        url: '/api/projects/proj-1/pens',
+        headers: COOKIE,
+      });
       expect(get.json().pens.pens).toHaveLength(2);
       expect(get.json().pens.activePenId).toBe('pen-2');
     } finally {

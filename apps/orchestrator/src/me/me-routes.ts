@@ -27,8 +27,8 @@ export interface MeRouteDeps {
   putPresets?: (userId: string, presets: LauncherPreset[]) => Promise<void>;
   getLayout?: (projectId: string) => Promise<ProjectLayoutV1 | null>;
   putLayout?: (projectId: string, layout: ProjectLayoutV1) => Promise<void>;
-  getPens?: (projectId: string) => Promise<ProjectPensV1 | null>;
-  putPens?: (projectId: string, pens: ProjectPensV1) => Promise<void>;
+  getPens?: (userId: string, projectId: string) => Promise<ProjectPensV1 | null>;
+  putPens?: (userId: string, projectId: string, pens: ProjectPensV1) => Promise<void>;
 }
 
 export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void {
@@ -123,7 +123,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     async (request: FastifyRequest, reply: FastifyReply) => {
       const id = (request.params as { id: string }).id;
       if (!id) return badRequest(reply, 'project id required');
-      const pens = deps.getPens ? await deps.getPens(id) : null;
+      const pens = deps.getPens ? await deps.getPens(request.authUser!.id, id) : null;
       return reply.code(200).send({ pens });
     },
   );
@@ -138,7 +138,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       if (parsed.data.projectId !== id) {
         return badRequest(reply, 'pens.projectId must match path id');
       }
-      if (deps.putPens) await deps.putPens(id, parsed.data);
+      if (deps.putPens) await deps.putPens(request.authUser!.id, id, parsed.data);
       return reply.code(200).send({ pens: parsed.data });
     },
   );

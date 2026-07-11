@@ -26,6 +26,13 @@
   height: 0;
 }
 
+/* The terminal owns its cell geometry. Only make its outer shell fill the pane;
+   stretching screen/row/span render layers corrupts cursor and selection size. */
+.xterm {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /*
  * Legacy aliases — earlier skeleton code (and tailwind.config.cjs) referenced
  * --flock-bg / --flock-surface / --flock-fg / --flock-muted / --flock-attention

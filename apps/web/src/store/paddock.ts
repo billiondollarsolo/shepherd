@@ -39,11 +39,12 @@ export type SettingsSection = 'appearance' | 'notifications' | 'nodes' | 'accoun
 export type RightTab = 'chat' | 'activity' | 'browser' | 'diff' | 'files' | 'search' | 'notes';
 
 export type PenAction = {
-  type: 'add' | 'remove' | 'move' | 'select' | 'create' | 'arrange';
+  type: 'add' | 'remove' | 'move' | 'select' | 'create' | 'arrange' | 'rename' | 'delete';
   sessionId?: string;
   targetSessionId?: string;
   penId?: string;
   mode?: 'row' | 'col' | 'grid2x2';
+  name?: string;
 };
 
 export interface PenSummary {
@@ -320,11 +321,7 @@ export interface PaddockUiState {
 
   setSessionOrder: (projectId: string, orderedIds: string[]) => void;
   setNodeOrder: (orderedIds: string[]) => void;
-  setPenState: (
-    projectId: string | null,
-    groups: PenSummary[],
-    activePenId: string | null,
-  ) => void;
+  setPenState: (projectId: string | null, groups: PenSummary[], activePenId: string | null) => void;
   setPenActionHandler: (handler: ((action: PenAction) => void) | null) => void;
   requestPenAction: (action: PenAction) => void;
   saveLayoutPreset: (name: string, projectId: string, order: string[]) => void;

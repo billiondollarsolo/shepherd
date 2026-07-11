@@ -31,11 +31,13 @@ function layoutFor(
   mode: ArrangeMode = 'grid2x2',
   focus?: string | null,
 ): ProjectLayoutV1 {
-  return rearrangeProjectLayout(projectId, ids, mode, focus) ??
+  return (
+    rearrangeProjectLayout(projectId, ids, mode, focus) ??
     // Callers always provide at least one id.
     (() => {
       throw new Error('cannot build an empty Pen');
-    })();
+    })()
+  );
 }
 
 function migratePens(
@@ -44,7 +46,9 @@ function migratePens(
   legacy: ProjectLayoutV1 | null,
 ): ProjectPensV1 {
   const legacyIds = legacy
-    ? layoutSessionIds(legacy.root).filter((id) => openIds.includes(id)).slice(0, MAX_PEN_SIZE)
+    ? layoutSessionIds(legacy.root)
+        .filter((id) => openIds.includes(id))
+        .slice(0, MAX_PEN_SIZE)
     : [];
   const assigned = new Set(legacyIds);
   const chunks: string[][] = [];
@@ -65,13 +69,12 @@ function migratePens(
   return { version: 1, projectId, activePenId: pens[0]?.id ?? 'pen-1', pens };
 }
 
-function reconcilePens(
-  document: ProjectPensV1,
-  openIds: readonly string[],
-): ProjectPensV1 {
+function reconcilePens(document: ProjectPensV1, openIds: readonly string[]): ProjectPensV1 {
   const open = new Set(openIds);
   const pens = document.pens.flatMap((pen) => {
-    const ids = layoutSessionIds(pen.layout.root).filter((id) => open.has(id)).slice(0, 4);
+    const ids = layoutSessionIds(pen.layout.root)
+      .filter((id) => open.has(id))
+      .slice(0, 4);
     if (ids.length === 0) return [];
     const layout = reconcileProjectLayout(document.projectId, ids, pen.layout, null, {
       direction: layoutArrangeMode(pen.layout.root),
@@ -103,7 +106,7 @@ export function StageLayout(): JSX.Element {
   const setPenActionHandler = usePaddock((state) => state.setPenActionHandler);
   const { data: sessions = [] } = useSessions();
   const selected = selectedSessionId
-    ? sessions.find((session) => session.id === selectedSessionId) ?? null
+    ? (sessions.find((session) => session.id === selectedSessionId) ?? null)
     : null;
   const projectId = effectiveStageProjectId({
     selectedSessionId,
@@ -119,7 +122,10 @@ export function StageLayout(): JSX.Element {
   );
   const openIds = useMemo(() => openInProject.map((session) => session.id), [openInProject]);
   const openKey = openIds.join(',');
-  const byId = useMemo(() => new Map(openInProject.map((session) => [session.id, session])), [openInProject]);
+  const byId = useMemo(
+    () => new Map(openInProject.map((session) => [session.id, session])),
+    [openInProject],
+  );
   const [document, setDocument] = useState<ProjectPensV1 | null>(null);
   const [ready, setReady] = useState(false);
   const lastPersisted = useRef('');
@@ -183,17 +189,45 @@ export function StageLayout(): JSX.Element {
             ? { ...current, activePenId: action.penId }
             : current;
         }
+        if (action.type === 'rename' && action.penId && action.name?.trim()) {
+          return {
+            ...current,
+            pens: current.pens.map((pen) =>
+              pen.id === action.penId ? { ...pen, name: action.name!.trim() } : pen,
+            ),
+          };
+        }
+        if (action.type === 'delete' && action.penId) {
+          const pens = current.pens.filter((pen) => pen.id !== action.penId);
+          return {
+            ...current,
+            pens,
+            activePenId:
+              current.activePenId === action.penId
+                ? (pens[0]?.id ?? current.activePenId)
+                : current.activePenId,
+          };
+        }
         if (action.type === 'create') {
           const id = crypto.randomUUID();
           const sessionId = action.sessionId;
           if (!sessionId || !byId.has(sessionId)) return current;
-          const pens = current.pens.map((pen) => {
-            const ids = layoutSessionIds(pen.layout.root).filter((value) => value !== sessionId);
-            return ids.length === 0
-              ? null
-              : { ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) };
-          }).filter((pen): pen is NonNullable<typeof pen> => pen !== null);
-          pens.push({ id, name: `Pen ${pens.length + 1}`, layout: layoutFor(projectId!, [sessionId]) });
+          const pens = current.pens
+            .map((pen) => {
+              const ids = layoutSessionIds(pen.layout.root).filter((value) => value !== sessionId);
+              return ids.length === 0
+                ? null
+                : {
+                    ...pen,
+                    layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)),
+                  };
+            })
+            .filter((pen): pen is NonNullable<typeof pen> => pen !== null);
+          pens.push({
+            id,
+            name: `Pen ${pens.length + 1}`,
+            layout: layoutFor(projectId!, [sessionId]),
+          });
           return { ...current, pens, activePenId: id };
         }
         if (action.type === 'arrange' && action.penId && action.mode) {
@@ -201,29 +235,56 @@ export function StageLayout(): JSX.Element {
             ...current,
             pens: current.pens.map((pen) =>
               pen.id === action.penId
-                ? { ...pen, layout: layoutFor(projectId!, layoutSessionIds(pen.layout.root), action.mode) }
+                ? {
+                    ...pen,
+                    layout: layoutFor(projectId!, layoutSessionIds(pen.layout.root), action.mode),
+                  }
                 : pen,
             ),
           };
         }
         if (!action.sessionId) return current;
-        const source = current.pens.find((pen) => layoutSessionIds(pen.layout.root).includes(action.sessionId!));
-        const target = action.penId ? current.pens.find((pen) => pen.id === action.penId) : undefined;
-        if (action.type === 'move' && source && target && source.id === target.id && action.targetSessionId) {
+        const source = current.pens.find((pen) =>
+          layoutSessionIds(pen.layout.root).includes(action.sessionId!),
+        );
+        const target = action.penId
+          ? current.pens.find((pen) => pen.id === action.penId)
+          : undefined;
+        if (
+          action.type === 'move' &&
+          source &&
+          target &&
+          source.id === target.id &&
+          action.targetSessionId
+        ) {
           const ids = layoutSessionIds(source.layout.root);
           const from = ids.indexOf(action.sessionId);
           const to = ids.indexOf(action.targetSessionId);
           if (from < 0 || to < 0) return current;
           const ordered = [...ids];
           [ordered[from], ordered[to]] = [ordered[to]!, ordered[from]!];
-          return { ...current, pens: current.pens.map((pen) => pen.id === source.id ? { ...pen, layout: layoutFor(projectId!, ordered, layoutArrangeMode(pen.layout.root)) } : pen) };
+          return {
+            ...current,
+            pens: current.pens.map((pen) =>
+              pen.id === source.id
+                ? {
+                    ...pen,
+                    layout: layoutFor(projectId!, ordered, layoutArrangeMode(pen.layout.root)),
+                  }
+                : pen,
+            ),
+          };
         }
         const without = current.pens.flatMap((pen) => {
           const ids = layoutSessionIds(pen.layout.root).filter((id) => id !== action.sessionId);
-          return ids.length === 0 ? [] : [{ ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) }];
+          return ids.length === 0
+            ? []
+            : [{ ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) }];
         });
         if (action.type === 'remove') {
-          const activePenId = without.some((pen) => pen.id === current.activePenId) ? current.activePenId : (without[0]?.id ?? current.activePenId);
+          const activePenId = without.some((pen) => pen.id === current.activePenId)
+            ? current.activePenId
+            : (without[0]?.id ?? current.activePenId);
           return { ...current, pens: without, activePenId };
         }
         if (!target) return current;
@@ -232,11 +293,25 @@ export function StageLayout(): JSX.Element {
         let targetIds = layoutSessionIds(targetAfterRemoval.layout.root);
         if (targetIds.length >= MAX_PEN_SIZE) {
           if (!action.targetSessionId) return current;
-          targetIds = targetIds.map((id) => id === action.targetSessionId ? action.sessionId! : id);
+          targetIds = targetIds.map((id) =>
+            id === action.targetSessionId ? action.sessionId! : id,
+          );
         } else {
           targetIds = [...targetIds, action.sessionId];
         }
-        const pens = without.map((pen) => pen.id === target.id ? { ...pen, layout: layoutFor(projectId!, targetIds, layoutArrangeMode(pen.layout.root), action.sessionId) } : pen);
+        const pens = without.map((pen) =>
+          pen.id === target.id
+            ? {
+                ...pen,
+                layout: layoutFor(
+                  projectId!,
+                  targetIds,
+                  layoutArrangeMode(pen.layout.root),
+                  action.sessionId,
+                ),
+              }
+            : pen,
+        );
         return { ...current, pens, activePenId: target.id };
       });
       if (projectId) selectProject(projectId);
@@ -250,25 +325,46 @@ export function StageLayout(): JSX.Element {
   }, [handleAction, setPenActionHandler]);
 
   if (!projectId || openIds.length === 0) {
-    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">No agents in this project.</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
+        No agents in this project.
+      </div>
+    );
   }
   if (!ready || !document) {
-    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">Preparing project Pens…</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
+        Preparing project Pens…
+      </div>
+    );
   }
-  const activePen = document.pens.find((pen) => pen.id === document.activePenId) ?? document.pens[0];
+  const activePen =
+    document.pens.find((pen) => pen.id === document.activePenId) ?? document.pens[0];
   if (!activePen) {
-    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">Drag an agent into a new Pen from the sidebar.</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
+        Drag an agent into a new Pen from the sidebar.
+      </div>
+    );
   }
   const activeIds = layoutSessionIds(activePen.layout.root);
-  const selectedOutside = selected && selected.projectId === projectId && !activeIds.includes(selected.id);
+  const selectedOutside =
+    selected && selected.projectId === projectId && !activeIds.includes(selected.id);
   if (selectedOutside) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 py-1.5 text-2xs text-flock-ink-muted">
           <span className="flex-1">Agent focused — Pen membership is unchanged.</span>
-          <button className="rounded px-2 py-1 hover:bg-flock-surface-2" onClick={() => selectProject(projectId)}>Back to {activePen.name}</button>
+          <button
+            className="rounded px-2 py-1 hover:bg-flock-surface-2"
+            onClick={() => selectProject(projectId)}
+          >
+            Back to {activePen.name}
+          </button>
         </div>
-        <div className="min-h-0 flex-1"><TerminalArea session={selected} register /></div>
+        <div className="min-h-0 flex-1">
+          <TerminalArea session={selected} register />
+        </div>
       </div>
     );
   }
@@ -280,8 +376,14 @@ export function StageLayout(): JSX.Element {
       onLayoutChange={(layout) => updatePenLayout(activePen.id, layout)}
       renderLeaf={(leafId, sessionId, kind) => {
         const session = sessionId ? byId.get(sessionId) : null;
-        if (kind !== 'session' || !session) return <div className="flex h-full items-center justify-center text-xs text-flock-ink-muted">Unavailable</div>;
-        const focused = displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
+        if (kind !== 'session' || !session)
+          return (
+            <div className="flex h-full items-center justify-center text-xs text-flock-ink-muted">
+              Unavailable
+            </div>
+          );
+        const focused =
+          displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
         return <TerminalArea session={session} register={focused} />;
       }}
     />
