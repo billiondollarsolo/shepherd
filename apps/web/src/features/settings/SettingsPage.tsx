@@ -125,7 +125,7 @@ export function SettingsPage(): JSX.Element {
                     data-testid={`settings-nav-${id}`}
                     className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                       selected
-                        ? 'bg-flock-accent/15 font-medium text-flock-accent ring-1 ring-flock-accent/20'
+                        ? 'bg-flock-accent/15 font-medium text-flock-ink-primary ring-1 ring-flock-accent/20'
                         : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
                     }`}
                   >

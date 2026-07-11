@@ -111,7 +111,7 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find in files…"
             autoFocus
-            className="min-w-0 flex-1 bg-transparent text-sm text-flock-ink-primary outline-none placeholder:text-flock-ink-muted/60"
+            className="min-w-0 flex-1 bg-transparent text-sm text-flock-ink-primary outline-none placeholder:text-flock-ink-muted"
           />
           <Toggle
             on={caseSensitive}

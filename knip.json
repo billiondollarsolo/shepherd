@@ -2,10 +2,11 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignore": ["codex/**"],
   "ignoreBinaries": ["printf"],
+  "ignoreDependencies": ["@fontsource/jetbrains-mono", "@fontsource/noto-sans-symbols-2"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs"],
+      "entry": ["scripts/*.{mjs,ts}"],
       "project": ["scripts/**/*.{js,mjs,ts}"]
     },
     "apps/orchestrator": {

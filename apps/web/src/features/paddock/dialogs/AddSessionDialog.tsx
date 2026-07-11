@@ -259,7 +259,7 @@ export function AddSessionDialog(): JSX.Element {
               );
             })}
           </div>
-          <p className="text-2xs text-flock-ink-muted/80">
+          <p className="text-2xs text-flock-ink-muted">
             Pick a preset, then Start — launches into the selected project (two-click path).
           </p>
         </div>

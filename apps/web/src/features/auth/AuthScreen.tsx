@@ -248,9 +248,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
                 minLength={isSetup ? 8 : undefined}
                 className="h-10 text-base sm:text-sm"
               />
-              {isSetup && (
-                <p className="text-2xs text-flock-ink-muted/80">At least 8 characters.</p>
-              )}
+              {isSetup && <p className="text-2xs text-flock-ink-muted">At least 8 characters.</p>}
             </div>
 
             {isSetup && (
@@ -298,7 +296,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           </form>
 
           <div className="mt-10 flex flex-col items-center gap-1.5 text-center">
-            <p className="text-2xs leading-relaxed text-flock-ink-muted/80 lg:hidden">
+            <p className="text-2xs leading-relaxed text-flock-ink-muted lg:hidden">
               A web paddock for supervising a flock of coding agents.
             </p>
             <BuiltBy className="text-center" />

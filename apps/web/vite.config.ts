@@ -14,6 +14,9 @@ export default defineConfig({
   define: {
     __FLOCK_VERSION__: JSON.stringify(flockVersion),
   },
+  build: {
+    manifest: true,
+  },
   server: {
     host: '0.0.0.0',
     port: webPort,

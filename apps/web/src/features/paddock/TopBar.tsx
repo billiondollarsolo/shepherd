@@ -43,7 +43,7 @@ function AccountMenu(): JSX.Element | null {
           type="button"
           aria-label="Account menu"
           title={display}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-flock-accent text-2xs font-semibold text-white ring-1 ring-flock-accent/30 transition-shadow hover:ring-2 hover:ring-flock-accent/50"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-flock-surface-3 text-2xs font-semibold text-flock-ink-primary ring-1 ring-flock-accent/40 transition-shadow hover:ring-2 hover:ring-flock-accent/60"
         >
           {initials(display)}
         </button>

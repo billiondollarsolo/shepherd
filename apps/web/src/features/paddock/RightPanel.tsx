@@ -19,15 +19,28 @@ import {
   Search,
   type LucideIcon,
 } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 import type { Session } from '@flock/shared';
 import { ChatPanel } from '../chat/ChatPanel';
-import BrowserPane from '../browser/BrowserPane';
-import SourceControlPanel from '../center/SourceControlPanel';
-import FilesPanel from '../files/FilesPanel';
-import SearchPanel from '../search/SearchPanel';
 import { ActivitySidebar } from '../activity';
 import { usePaddock, type RightTab } from '../../store/paddock';
 import { useSessionEvents, useSessionPlan, useUpdateSession } from '../../data/queries';
+
+const BrowserPane = lazy(() => import('../browser/BrowserPane'));
+const SourceControlPanel = lazy(() => import('../center/SourceControlPanel'));
+const FilesPanel = lazy(() => import('../files/FilesPanel'));
+const SearchPanel = lazy(() => import('../search/SearchPanel'));
+
+function ToolLoading(): JSX.Element {
+  return (
+    <div
+      className="flex h-full items-center justify-center text-xs text-flock-ink-muted"
+      role="status"
+    >
+      Loading tool…
+    </div>
+  );
+}
 
 interface SubTab {
   id: RightTab;
@@ -143,37 +156,39 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'chat' ? <ChatPanel key={session.id} session={session} /> : null}
-        {tab === 'activity' ? (
-          <ActivitySidebar
-            session={session}
-            events={events}
-            plan={plan ?? null}
-            onSaveNote={(note) => updateSession.mutate({ id: session.id, patch: { note } })}
-          />
-        ) : null}
-        {tab === 'notes' ? (
-          <div className="flex h-full flex-col gap-2 p-3" data-testid="session-notes">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-flock-ink-muted">
-              Notes (markdown)
-            </p>
-            <textarea
-              className="min-h-0 flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-bg p-2 font-mono text-xs text-flock-ink-primary"
-              defaultValue={session.note ?? ''}
-              placeholder="Supervisor notes for this agent…"
-              onBlur={(e) => {
-                const next = e.target.value;
-                if (next !== (session.note ?? '')) {
-                  updateSession.mutate({ id: session.id, patch: { note: next || null } });
-                }
-              }}
+        <Suspense fallback={<ToolLoading />}>
+          {tab === 'chat' ? <ChatPanel key={session.id} session={session} /> : null}
+          {tab === 'activity' ? (
+            <ActivitySidebar
+              session={session}
+              events={events}
+              plan={plan ?? null}
+              onSaveNote={(note) => updateSession.mutate({ id: session.id, patch: { note } })}
             />
-          </div>
-        ) : null}
-        {tab === 'files' ? <FilesPanel key={session.id} session={session} /> : null}
-        {tab === 'search' ? <SearchPanel key={session.id} session={session} /> : null}
-        {tab === 'browser' ? <BrowserPane key={session.id} sessionId={session.id} /> : null}
-        {tab === 'diff' ? <SourceControlPanel key={session.id} sessionId={session.id} /> : null}
+          ) : null}
+          {tab === 'notes' ? (
+            <div className="flex h-full flex-col gap-2 p-3" data-testid="session-notes">
+              <p className="text-2xs font-semibold uppercase tracking-wide text-flock-ink-muted">
+                Notes (markdown)
+              </p>
+              <textarea
+                className="min-h-0 flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-bg p-2 font-mono text-xs text-flock-ink-primary"
+                defaultValue={session.note ?? ''}
+                placeholder="Supervisor notes for this agent…"
+                onBlur={(e) => {
+                  const next = e.target.value;
+                  if (next !== (session.note ?? '')) {
+                    updateSession.mutate({ id: session.id, patch: { note: next || null } });
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          {tab === 'files' ? <FilesPanel key={session.id} session={session} /> : null}
+          {tab === 'search' ? <SearchPanel key={session.id} session={session} /> : null}
+          {tab === 'browser' ? <BrowserPane key={session.id} sessionId={session.id} /> : null}
+          {tab === 'diff' ? <SourceControlPanel key={session.id} sessionId={session.id} /> : null}
+        </Suspense>
       </div>
     </div>
   );

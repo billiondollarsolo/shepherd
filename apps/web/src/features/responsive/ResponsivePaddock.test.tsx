@@ -72,36 +72,40 @@ function renderPaddock(): void {
 }
 
 describe('ResponsivePaddock (US-36, FR-UI6)', () => {
-  it('renders the desktop paddock on a wide viewport', () => {
+  it('renders the desktop paddock on a wide viewport', async () => {
     isPhoneMock.mockReturnValue(false);
     renderPaddock();
-    expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-shell', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.queryByTestId('phone-view')).toBeNull();
   });
 
-  it('collapses to the phone away view on a narrow viewport', () => {
+  it('collapses to the phone away view on a narrow viewport', async () => {
     isPhoneMock.mockReturnValue(true);
     renderPaddock();
-    expect(screen.getByTestId('phone-view')).toBeInTheDocument();
+    expect(await screen.findByTestId('phone-view', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.queryByTestId('app-shell')).toBeNull();
   });
 
-  it('renders mobile settings inside the shared viewport frame', () => {
+  it('renders mobile settings inside the shared viewport frame', async () => {
     isPhoneMock.mockReturnValue(true);
     usePaddock.setState({ view: 'settings' });
     renderPaddock();
-    expect(screen.getByTestId('phone-settings')).toHaveAttribute('data-mobile-viewport');
+    expect(await screen.findByTestId('phone-settings', {}, { timeout: 5_000 })).toHaveAttribute(
+      'data-mobile-viewport',
+    );
     expect(screen.getByLabelText('Settings section')).toBeInTheDocument();
   });
 
-  it('renders mobile node details inside the shared viewport frame', () => {
+  it('renders mobile node details inside the shared viewport frame', async () => {
     isPhoneMock.mockReturnValue(true);
     usePaddock.setState({ view: 'paddock', nodeInfoNodeId: 'node-1' });
     renderPaddock();
-    expect(screen.getByTestId('phone-node-details')).toHaveAttribute('data-mobile-viewport');
+    expect(await screen.findByTestId('phone-node-details', {}, { timeout: 5_000 })).toHaveAttribute(
+      'data-mobile-viewport',
+    );
   });
 
-  it('renders mobile project Git inside the shared viewport frame', () => {
+  it('renders mobile project Git inside the shared viewport frame', async () => {
     isPhoneMock.mockReturnValue(true);
     usePaddock.setState({
       view: 'paddock',
@@ -109,6 +113,8 @@ describe('ResponsivePaddock (US-36, FR-UI6)', () => {
       selectedProjectId: 'project-1',
     });
     renderPaddock();
-    expect(screen.getByTestId('phone-project-git')).toHaveAttribute('data-mobile-viewport');
+    expect(await screen.findByTestId('phone-project-git', {}, { timeout: 5_000 })).toHaveAttribute(
+      'data-mobile-viewport',
+    );
   });
 });

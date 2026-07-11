@@ -15,7 +15,7 @@ export const SelectTrigger = React.forwardRef<
     className={cn(
       'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-[var(--flock-border-strong)] bg-flock-surface-0 px-2.5 text-sm text-flock-ink-primary',
       'shadow-sm transition-shadow focus:outline-none focus-visible:shadow-focus focus-visible:border-flock-accent disabled:cursor-not-allowed disabled:opacity-50',
-      'data-[placeholder]:text-flock-ink-muted/70 [&>span]:truncate',
+      'data-[placeholder]:text-flock-ink-muted [&>span]:truncate',
       className,
     )}
     {...props}

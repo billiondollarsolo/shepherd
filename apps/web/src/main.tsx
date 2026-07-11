@@ -6,7 +6,7 @@ import { registerServiceWorker } from './push';
 import { ThemeProvider } from './theme';
 import { queryClient } from './data/queryClient';
 import { Toaster, TooltipProvider } from './components/ui';
-import './styles/terminal-fonts';
+import './styles/ui-fonts';
 import './index.css';
 import './styles/responsive.css';
 

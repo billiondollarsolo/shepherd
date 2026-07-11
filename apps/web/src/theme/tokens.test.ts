@@ -21,6 +21,7 @@ const REQUIRED_PATHS = [
   'surface.1',
   'surface.2',
   'accent',
+  'accentForeground',
   'ink.primary',
   'ink.muted',
   'status.starting',

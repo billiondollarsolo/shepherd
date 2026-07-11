@@ -159,6 +159,35 @@ describe('AgentsSwitcher controls', () => {
     expect(screen.getByTestId('agent-row-waiting')).toBeInTheDocument();
   });
 
+  it('provides keyboard-equivalent Pen reordering', () => {
+    usePaddock.setState({
+      selectedProjectId: 'project-1',
+      penProjectId: 'project-1',
+      activePenId: 'pen-1',
+      penGroups: [
+        {
+          id: 'pen-1',
+          name: 'Pen 1',
+          sessionIds: ['working', 'waiting'],
+          arrange: 'row',
+        },
+      ],
+      penActionHandler: penAction,
+    });
+    renderSwitcher();
+
+    fireEvent.keyDown(screen.getByTestId('agent-row-waiting'), {
+      key: 'ArrowUp',
+      altKey: true,
+    });
+    expect(penAction).toHaveBeenCalledWith({
+      type: 'move',
+      sessionId: 'waiting',
+      targetSessionId: 'working',
+      penId: 'pen-1',
+    });
+  });
+
   it('keeps confirmed deletion in the agent actions menu without pinning', async () => {
     renderSwitcher();
 

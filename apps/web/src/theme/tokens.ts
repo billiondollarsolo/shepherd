@@ -46,6 +46,8 @@ export interface ThemeTokens {
   };
   /** Primary brand/interaction accent. */
   accent: string;
+  /** Text/icon colour with AA contrast on the accent fill. */
+  accentForeground: string;
   /** Foreground text. */
   ink: {
     primary: string;
@@ -123,6 +125,7 @@ export const lightTheme: ThemeTokens = {
     3: '#e0e3e9',
   },
   accent: '#2563eb',
+  accentForeground: '#ffffff',
   ink: {
     primary: '#1c2024',
     muted: '#5b6470',
@@ -156,6 +159,7 @@ export const darkTheme: ThemeTokens = {
     3: '#222222', // highest — chips / nested raised
   },
   accent: '#5b8cff', // deliberate highlight on otherwise neutral surfaces
+  accentForeground: '#080808',
   ink: {
     primary: '#ededed', // near-white, neutral
     muted: '#8c8c8c', // neutral grey secondary text
@@ -201,6 +205,7 @@ export function tokensToCssVars(t: ThemeTokens): Record<string, string> {
     '--flock-surface-2': t.surface[2],
     '--flock-surface-3': t.surface[3],
     '--flock-accent': t.accent,
+    '--flock-accent-foreground': t.accentForeground,
     '--flock-ink-primary': t.ink.primary,
     '--flock-ink-muted': t.ink.muted,
     '--flock-status-starting': t.status.starting,

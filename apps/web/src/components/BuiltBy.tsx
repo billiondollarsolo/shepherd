@@ -21,8 +21,8 @@ export function BuiltBy({ className = '', stacked = false }: BuiltByProps): JSX.
     <p
       className={
         stacked
-          ? `flex flex-col gap-0.5 text-2xs leading-snug text-flock-ink-muted/80 ${className}`
-          : `text-2xs leading-snug text-flock-ink-muted/80 ${className}`
+          ? `flex flex-col gap-0.5 text-2xs leading-snug text-flock-ink-muted ${className}`
+          : `text-2xs leading-snug text-flock-ink-muted ${className}`
       }
     >
       <span className={stacked ? '' : 'mr-1'}>Built by</span>

@@ -236,6 +236,7 @@ function PhoneStage({
         </div>
         <div className="min-w-0 flex-1 truncate text-xs font-medium">{session.label}</div>
         <span
+          role="img"
           className="size-2 shrink-0 rounded-full"
           style={{ background: statusDotVar(session.status) }}
           title={STATUS_LABEL[session.status]}

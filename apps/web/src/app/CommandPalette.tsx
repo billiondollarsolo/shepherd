@@ -60,6 +60,11 @@ export function CommandPalette({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       runAt(active);
+    } else if (e.key === 'Tab') {
+      // The palette has one intentional keyboard focus target; results are
+      // selected with arrows/Enter. Keep focus inside the modal.
+      e.preventDefault();
+      inputRef.current?.focus();
     }
     // Escape is handled globally by KeyboardProvider.
   }
@@ -83,6 +88,9 @@ export function CommandPalette({
           role="combobox"
           aria-expanded="true"
           aria-controls="command-palette-list"
+          aria-activedescendant={
+            results[active] ? `command-option-${results[active]!.id}` : undefined
+          }
           aria-label="Search commands"
           placeholder="Type a command…"
           value={query}
@@ -94,9 +102,13 @@ export function CommandPalette({
             <li className="px-4 py-3 text-sm text-flock-muted">No matching commands</li>
           ) : (
             results.map((cmd, i) => (
-              <li key={cmd.id} role="option" aria-selected={i === active}>
+              <li key={cmd.id} role="none">
                 <button
                   type="button"
+                  id={`command-option-${cmd.id}`}
+                  role="option"
+                  aria-selected={i === active}
+                  tabIndex={-1}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => runAt(i)}
                   className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm ${

@@ -16,7 +16,7 @@ export function DialogField({
     <div className="grid gap-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {hint ? <p className="text-2xs text-flock-ink-muted/80">{hint}</p> : null}
+      {hint ? <p className="text-2xs text-flock-ink-muted">{hint}</p> : null}
     </div>
   );
 }

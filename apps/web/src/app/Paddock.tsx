@@ -4,6 +4,7 @@
  * One shell always: host/lens chrome via TopBar + Sidebar, stage or Paddock
  * dashboard in center. No zen rebuild of the tree. Tools are opt-in (chrome).
  */
+import { lazy, Suspense } from 'react';
 import { AppShell } from './AppShell';
 import { KeyboardProvider } from './KeyboardProvider';
 import { PaddockCommands } from './usePaddockCommands';
@@ -16,13 +17,37 @@ import { LiveDataProvider } from '../features/paddock/liveData';
 import { BottomBar } from '../features/paddock/BottomBar';
 import { TopBar } from '../features/paddock/TopBar';
 import { ConnectivityBanner } from '../features/paddock/ConnectivityBanner';
-import { NodePage } from '../features/paddock/NodePage';
 import { PaddockDialogs } from '../features/paddock/PaddockDialogs';
-import { SettingsPage } from '../features/settings/SettingsPage';
-import { ShellDrawer } from '../features/shell-drawer/ShellDrawer';
 import { useSessions } from '../data/queries';
 import { usePaddock } from '../store/paddock';
-import { ProjectGitPage } from '../features/paddock/ProjectGitPage';
+
+const NodePage = lazy(() =>
+  import('../features/paddock/NodePage').then(({ NodePage: Page }) => ({ default: Page })),
+);
+const ProjectGitPage = lazy(() =>
+  import('../features/paddock/ProjectGitPage').then(({ ProjectGitPage: Page }) => ({
+    default: Page,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import('../features/settings/SettingsPage').then(({ SettingsPage: Page }) => ({ default: Page })),
+);
+const ShellDrawer = lazy(() =>
+  import('../features/shell-drawer/ShellDrawer').then(({ ShellDrawer: Drawer }) => ({
+    default: Drawer,
+  })),
+);
+
+function PanelLoading(): JSX.Element {
+  return (
+    <div
+      className="flex h-full items-center justify-center text-sm text-flock-ink-muted"
+      role="status"
+    >
+      Loading…
+    </div>
+  );
+}
 
 /** The currently-selected session record (from the Query cache), or null. */
 function useSelectedSession() {
@@ -37,12 +62,22 @@ function CenterPane(): JSX.Element {
   const lens = usePaddock((s) => s.lens);
   const projectView = usePaddock((s) => s.projectView);
 
-  if (nodeInfoNodeId) return <NodePage />;
+  if (nodeInfoNodeId)
+    return (
+      <Suspense fallback={<PanelLoading />}>
+        <NodePage />
+      </Suspense>
+    );
   // Paddock is a real fleet workspace, never an overlay on the staged agent.
   // Node routes take precedence because /n/:id intentionally keeps the mission
   // lens while drilling into that fleet card.
   if (lens === 'mission') return <FleetView />;
-  if (projectView === 'git') return <ProjectGitPage />;
+  if (projectView === 'git')
+    return (
+      <Suspense fallback={<PanelLoading />}>
+        <ProjectGitPage />
+      </Suspense>
+    );
   return <SessionPane />;
 }
 
@@ -55,7 +90,11 @@ function DrawerContent(): JSX.Element {
       </div>
     );
   }
-  return <ShellDrawer sessionId={session.id} workingDir={session.workingDir} />;
+  return (
+    <Suspense fallback={<PanelLoading />}>
+      <ShellDrawer sessionId={session.id} workingDir={session.workingDir} />
+    </Suspense>
+  );
 }
 
 export function Paddock(): JSX.Element {
@@ -67,7 +106,9 @@ export function Paddock(): JSX.Element {
     <TooltipProvider delayDuration={300}>
       <KeyboardProvider>
         {view === 'settings' ? (
-          <SettingsPage />
+          <Suspense fallback={<PanelLoading />}>
+            <SettingsPage />
+          </Suspense>
         ) : (
           <LiveDataProvider>
             {/* One shell always — no zen tree rebuild (plan Phase 0). */}

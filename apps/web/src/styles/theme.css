@@ -28,6 +28,7 @@
   --flock-surface-2: #eaecf0;
   --flock-surface-3: #e0e3e9;
   --flock-accent: #2563eb;
+  --flock-accent-foreground: #ffffff;
   --flock-ink-primary: #1c2024;
   --flock-ink-muted: #5b6470;
   /* Raw RGB channels mirroring the hex above — Tailwind needs these to inject the
@@ -64,6 +65,7 @@
     --flock-surface-2: #191919;
     --flock-surface-3: #222222;
     --flock-accent: #5b8cff;
+    --flock-accent-foreground: #080808;
     --flock-ink-primary: #ededed;
     --flock-ink-muted: #8c8c8c;
     --flock-accent-rgb: 91 140 255;
@@ -92,6 +94,7 @@
   --flock-surface-2: #191919;
   --flock-surface-3: #222222;
   --flock-accent: #5b8cff;
+  --flock-accent-foreground: #080808;
   --flock-ink-primary: #ededed;
   --flock-ink-muted: #8c8c8c;
   --flock-accent-rgb: 91 140 255;

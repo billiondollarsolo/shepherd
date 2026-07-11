@@ -17,7 +17,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          'bg-flock-accent text-white shadow-sm hover:bg-[var(--flock-accent-hover)] active:brightness-95',
+          'bg-flock-accent text-[var(--flock-accent-foreground)] shadow-sm hover:bg-[var(--flock-accent-hover)] active:brightness-95',
         secondary:
           'bg-flock-surface-2 text-flock-ink-primary border border-[var(--flock-border)] hover:bg-[var(--flock-surface-hover)]',
         outline:

@@ -121,7 +121,7 @@ export interface PtySubscription {
  * a running byte total, trimming oldest chunks once the cap is exceeded. This is
  * O(1) amortised per write and avoids re-copying a giant buffer on every chunk.
  */
-class ResumeRing {
+export class ResumeRing {
   private chunks: Buffer[] = [];
   private total = 0;
 

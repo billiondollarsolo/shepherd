@@ -95,7 +95,7 @@ export function RaceDialog(): JSX.Element {
                 onClick={() => toggle(a)}
                 className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                   on
-                    ? 'border-flock-accent/40 bg-flock-accent/15 text-flock-accent'
+                    ? 'border-flock-accent/40 bg-flock-accent/15 text-flock-ink-primary'
                     : 'border-[var(--flock-border)] text-flock-ink-muted hover:bg-flock-surface-2'
                 }`}
               >

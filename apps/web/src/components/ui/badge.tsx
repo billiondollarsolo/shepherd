@@ -8,7 +8,7 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         neutral: 'border-[var(--flock-border)] bg-flock-surface-2 text-flock-ink-muted',
-        accent: 'border-flock-accent/30 bg-flock-accent/10 text-flock-accent',
+        accent: 'border-flock-accent/30 bg-flock-accent/10 text-flock-ink-primary',
         success: 'border-status-idle/30 bg-status-idle/10 text-status-idle',
         warning: 'border-status-awaiting/30 bg-status-awaiting/10 text-status-awaiting',
         danger: 'border-status-error/30 bg-status-error/10 text-status-error',

@@ -7,10 +7,9 @@
  * terminal that has a Nerd Font installed. The "Mono" variant keeps every glyph
  * single-cell-width so icons never break the xterm grid.
  *
- * Only the two weights the terminal uses are shipped (Regular 400, Bold 700).
- * `font-display: swap` so the terminal paints immediately in the JetBrains Mono
- * fallback, then upgrades when this (~1 MB/weight) font arrives. Vite fingerprints
- * the woff2 as a build asset.
+ * One regular face is shipped; browsers synthesize terminal bold from it. This
+ * avoids transferring a second ~1 MB face solely for occasional bold cells.
+ * `font-display: swap` keeps first paint immediate in the JetBrains Mono fallback.
  */
 @font-face {
   font-family: 'JetBrainsMono Nerd Font Mono';
@@ -18,12 +17,4 @@
   font-weight: 400;
   font-display: swap;
   src: url('./fonts/JetBrainsMonoNerdFontMono-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'JetBrainsMono Nerd Font Mono';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('./fonts/JetBrainsMonoNerdFontMono-Bold.woff2') format('woff2');
 }

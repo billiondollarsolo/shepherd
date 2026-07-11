@@ -89,7 +89,7 @@ export default function DiffTab({ sessionId, fetchImpl }: DiffTabProps): JSX.Ele
         className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-flock-muted"
       >
         <p>No tracked changes in the working directory.</p>
-        <p className="max-w-sm text-2xs text-flock-ink-muted/80">
+        <p className="max-w-sm text-2xs text-flock-ink-muted">
           Untracked files appear under Source Control. Use a git project with at least one commit so
           agent edits show up as a real diff.
         </p>

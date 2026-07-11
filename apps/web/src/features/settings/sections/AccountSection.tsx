@@ -41,7 +41,7 @@ function DisplayNameForm(): JSX.Element {
     <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-3 p-4">
       <p className="text-sm font-medium text-flock-ink-primary">Display name</p>
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-flock-accent text-sm font-semibold text-white">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-flock-accent text-sm font-semibold text-[var(--flock-accent-foreground)]">
           {initialsOf(preview)}
         </span>
         <div className="grid flex-1 gap-1.5">

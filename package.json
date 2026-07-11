@@ -42,7 +42,7 @@
     "test:coverage": "pnpm --filter @flock/shared exec vitest run --coverage && pnpm --filter @flock/orchestrator exec vitest run --coverage && pnpm --filter @flock/web exec vitest run --coverage",
     "test:int": "pnpm -r test:int",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test apps/web/e2e/agent-policy.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",
+    "test:e2e:smoke": "playwright test apps/web/e2e/accessibility.spec.ts apps/web/e2e/agent-policy.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",
     "test": "pnpm test:unit",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
@@ -55,9 +55,12 @@
     "quality:dead-code": "knip",
     "quality:architecture": "node scripts/check-architecture.mjs",
     "quality:duplicates": "node scripts/check-duplicates.mjs",
-    "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates"
+    "quality:bundle": "node scripts/check-bundle-budget.mjs",
+    "quality:performance": "tsx scripts/benchmark-runtime.ts --output=artifacts/performance/runtime-benchmarks.json",
+    "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates && pnpm quality:bundle && pnpm quality:performance"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.55.1",
     "@types/node": "22.10.2",
     "@typescript-eslint/eslint-plugin": "8.18.1",

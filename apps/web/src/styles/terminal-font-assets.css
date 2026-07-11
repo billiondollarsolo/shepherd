@@ -1,0 +1,6 @@
+/* Loaded on demand by terminal-fonts.ts. Keep terminal-only font payloads out
+ * of the application shell and initial mobile/desktop routes. */
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/700.css';
+@import '@fontsource/noto-sans-symbols-2/symbols-400.css';
+@import './jetbrains-mono-nerd.css';

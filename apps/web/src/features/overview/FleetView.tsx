@@ -1,5 +1,5 @@
 /** Paddock fleet home: node cards only; details live on the node page. */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { HardDrive } from 'lucide-react';
 import { displayStatus, type Session, type Status } from '@flock/shared';
 import { StatusDot } from '../../components/StatusDot';
@@ -7,6 +7,7 @@ import { useNodeInfos, useNodes, useProjects, useSessions } from '../../data/que
 import { formatGB } from '../../lib/utils';
 import { orderNodes, usePaddock } from '../../store/paddock';
 import { useLiveStatuses } from '../paddock/liveData';
+import { buildFleetIndex, FLEET_PAGE_SIZE, nextFleetLimit } from './fleetModel';
 
 const CONNECTION_COLOR: Record<string, string> = {
   connected: 'bg-status-idle',
@@ -58,13 +59,12 @@ export function FleetView(): JSX.Element {
   const nodeOrder = usePaddock((s) => s.nodeOrder);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
   const visibleNodes = useMemo(() => orderNodes(nodes, nodeOrder), [nodeOrder, nodes]);
+  const [nodeLimit, setNodeLimit] = useState(FLEET_PAGE_SIZE);
+  const displayedNodes = visibleNodes.slice(0, nodeLimit);
   const nodeInfos = useNodeInfos(
-    visibleNodes.filter((node) => node.connectionStatus === 'connected').map((node) => node.id),
+    displayedNodes.filter((node) => node.connectionStatus === 'connected').map((node) => node.id),
   );
-  const openSessions = useMemo(
-    () => sessions.filter((session) => session.closedAt === null),
-    [sessions],
-  );
+  const fleetIndex = useMemo(() => buildFleetIndex(projects, sessions), [projects, sessions]);
   const statusOf = (session: Session): Status => live.get(session.id) ?? session.status;
 
   return (
@@ -77,9 +77,9 @@ export function FleetView(): JSX.Element {
       </header>
 
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 2xl:grid-cols-3">
-        {visibleNodes.map((node) => {
-          const nodeProjects = projects.filter((project) => project.nodeId === node.id);
-          const nodeSessions = openSessions.filter((session) => session.nodeId === node.id);
+        {displayedNodes.map((node) => {
+          const nodeProjects = fleetIndex.projectsByNode.get(node.id) ?? [];
+          const nodeSessions = fleetIndex.openSessionsByNode.get(node.id) ?? [];
           const info = nodeInfos.get(node.id);
           const counts = new Map<Status, number>();
           for (const session of nodeSessions) {
@@ -183,6 +183,18 @@ export function FleetView(): JSX.Element {
           <div className="col-span-full rounded-xl border border-dashed border-[var(--flock-border)] p-10 text-center text-sm text-flock-ink-muted">
             No nodes are connected.
           </div>
+        ) : null}
+        {displayedNodes.length < visibleNodes.length ? (
+          <button
+            type="button"
+            onClick={() => setNodeLimit((current) => nextFleetLimit(current, visibleNodes.length))}
+            className="col-span-full rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 px-4 py-3 text-sm font-medium text-flock-accent hover:bg-flock-surface-2"
+          >
+            Show {Math.min(FLEET_PAGE_SIZE, visibleNodes.length - displayedNodes.length)} more nodes
+            <span className="ml-2 text-flock-ink-muted">
+              ({displayedNodes.length} of {visibleNodes.length})
+            </span>
+          </button>
         ) : null}
       </div>
     </div>

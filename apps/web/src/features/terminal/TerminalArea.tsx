@@ -9,14 +9,15 @@
  * The terminal registers its PTY writer into the paddock store so the tree / drops
  * can type into it.
  */
-import type { DragEvent } from 'react';
+import { lazy, Suspense, type DragEvent } from 'react';
 import type { Session } from '@flock/shared';
 
-import Terminal from './Terminal';
 import { usePaddock } from '../../store/paddock';
 import { useWriteNodeFile } from '../../data/queries';
 import { bytesToBase64 } from '../files/base64';
 import { toast } from '../../components/ui';
+
+const Terminal = lazy(() => import('./Terminal'));
 
 function shellQuote(p: string): string {
   return /^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
@@ -79,7 +80,21 @@ export function TerminalArea({
       data-testid="terminal-area"
     >
       <div className="min-h-0 flex-1">
-        <Terminal sessionId={session.id} registerInput={register ? setTerminalInput : undefined} />
+        <Suspense
+          fallback={
+            <div
+              className="flex h-full items-center justify-center bg-[#090909] text-xs text-[#a1a1aa]"
+              role="status"
+            >
+              Loading terminal…
+            </div>
+          }
+        >
+          <Terminal
+            sessionId={session.id}
+            registerInput={register ? setTerminalInput : undefined}
+          />
+        </Suspense>
       </div>
     </div>
   );

@@ -136,7 +136,7 @@ export function AgentsSwitcher(): JSX.Element {
               data-active={projectView === 'git' ? '1' : '0'}
               className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium ${
                 projectView === 'git'
-                  ? 'bg-flock-accent/15 text-flock-accent'
+                  ? 'bg-flock-accent/15 text-flock-ink-primary'
                   : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
               }`}
             >
@@ -180,7 +180,7 @@ export function AgentsSwitcher(): JSX.Element {
           >
             {penMode ? (
               <div
-                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-accent' : 'text-flock-ink-muted'}`}
+                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-ink-primary' : 'text-flock-ink-muted'}`}
               >
                 <button
                   type="button"
@@ -274,7 +274,7 @@ export function AgentsSwitcher(): JSX.Element {
                     : disp.kind === 'error'
                       ? 'font-semibold text-status-error'
                       : disp.kind === 'working'
-                        ? 'font-semibold text-flock-accent'
+                        ? 'font-semibold text-flock-ink-primary'
                         : disp.kind === 'disconnected'
                           ? 'font-medium text-status-disconnected'
                           : 'font-medium text-flock-ink-muted'; // Idle — affirmative, calm
@@ -313,7 +313,26 @@ export function AgentsSwitcher(): JSX.Element {
                         event.dataTransfer.setData('application/x-flock-session', item.id);
                       }}
                       onDragEnd={() => setDragOverZone(null)}
-                      title="Drag to move between Pens; click to focus"
+                      onKeyDown={(event) => {
+                        if (!event.altKey || !g.zone || g.zone === 'other' || g.zone === 'new') {
+                          return;
+                        }
+                        const offset =
+                          event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+                        if (offset === 0) return;
+                        const orderedItems = g.items as typeof items;
+                        const target = orderedItems[orderedItems.indexOf(item) + offset];
+                        if (!target) return;
+                        event.preventDefault();
+                        requestPenAction({
+                          type: 'move',
+                          sessionId: item.id,
+                          targetSessionId: target.id,
+                          penId: g.zone,
+                        });
+                      }}
+                      title="Drag to move between Pens; Alt+Up/Down reorders; click to focus"
+                      aria-label={`${item.label}; Alt+Up or Alt+Down reorders within this Pen`}
                       className={`flex min-w-0 flex-1 cursor-grab items-start gap-1.5 py-2 pl-1.5 text-left text-[15px] active:cursor-grabbing ${
                         active ? 'bg-flock-accent/10' : ''
                       }`}

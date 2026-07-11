@@ -47,6 +47,7 @@ import { AgentsSwitcher } from '../shell/AgentsSwitcher';
 import { FLOCK_VERSION } from '../../version';
 import { NodeRow, WorkspaceList } from './SidebarTree';
 import { NODE_CONN_BG, reorderNodeIds, sessionLabel } from './sidebarModel';
+import { FLEET_PAGE_SIZE, nextFleetLimit } from '../overview/fleetModel';
 
 const EMPTY_SESSIONS: Session[] = [];
 
@@ -242,6 +243,8 @@ export function Sidebar(): JSX.Element {
   const nodeOrder = usePaddock((s) => s.nodeOrder);
   const setNodeOrder = usePaddock((s) => s.setNodeOrder);
   const orderedNodes = useMemo(() => orderNodes(nodes, nodeOrder), [nodes, nodeOrder]);
+  const [nodeLimit, setNodeLimit] = useState(FLEET_PAGE_SIZE);
+  const displayedNodes = orderedNodes.slice(0, nodeLimit);
   const reorderNode = (draggedId: string, targetId: string): void => {
     const ids = orderedNodes.map((n) => n.id);
     setNodeOrder(reorderNodeIds(ids, draggedId, targetId));
@@ -383,7 +386,7 @@ export function Sidebar(): JSX.Element {
         <div className="my-0.5 h-px w-6 bg-[var(--flock-border)]" />
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto py-1">
           {/* Nodes — icon + connection dot; HOVER flies out the node's sessions. */}
-          {orderedNodes.map((n) => (
+          {displayedNodes.map((n) => (
             <NodeRailItem
               key={n.id}
               node={n}
@@ -399,6 +402,23 @@ export function Sidebar(): JSX.Element {
               onDismiss={dismissFlyout}
             />
           ))}
+          {displayedNodes.length < orderedNodes.length ? (
+            <SimpleTooltip
+              label={`Show more nodes (${displayedNodes.length} of ${orderedNodes.length})`}
+              side="right"
+            >
+              <button
+                type="button"
+                aria-label="Show more nodes"
+                onClick={() =>
+                  setNodeLimit((current) => nextFleetLimit(current, orderedNodes.length))
+                }
+                className="flex size-10 items-center justify-center rounded-md text-xs font-medium text-flock-accent hover:bg-flock-surface-2"
+              >
+                +{Math.min(FLEET_PAGE_SIZE, orderedNodes.length - displayedNodes.length)}
+              </button>
+            </SimpleTooltip>
+          ) : null}
           {/* "Needs you" sessions (awaiting_input / error) as pulsing status dots. */}
           {attention.length > 0 && nodes.length > 0 && (
             <div className="my-0.5 h-px w-6 bg-[var(--flock-border)]" />
@@ -547,9 +567,24 @@ export function Sidebar(): JSX.Element {
                 // Multiple nodes: keep the node grouping so "which machine" is clear,
                 // with a divider between each node so the groups don't run together.
                 <div className="divide-y divide-[var(--flock-border)]">
-                  {orderedNodes.map((n) => (
+                  {displayedNodes.map((n) => (
                     <NodeRow key={n.id} node={n} onReorder={reorderNode} onMove={moveNode} />
                   ))}
+                  {displayedNodes.length < orderedNodes.length ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNodeLimit((current) => nextFleetLimit(current, orderedNodes.length))
+                      }
+                      className="my-2 w-full rounded-md border border-[var(--flock-border)] px-2 py-2 text-xs font-medium text-flock-accent hover:bg-flock-surface-2"
+                    >
+                      Show {Math.min(FLEET_PAGE_SIZE, orderedNodes.length - displayedNodes.length)}{' '}
+                      more nodes
+                      <span className="ml-1 text-flock-ink-muted">
+                        ({displayedNodes.length} of {orderedNodes.length})
+                      </span>
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>

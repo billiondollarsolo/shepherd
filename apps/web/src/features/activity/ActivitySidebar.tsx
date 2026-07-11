@@ -187,7 +187,7 @@ function NoteEditor({
         readOnly={!onSave}
         rows={3}
         placeholder={onSave ? 'What is this session working on?' : 'No note.'}
-        className="w-full resize-y rounded border border-flock-muted/25 bg-transparent px-2 py-1.5 text-sm text-flock-fg placeholder:text-flock-muted/60 focus:border-flock-accent focus:outline-none"
+        className="w-full resize-y rounded border border-flock-muted/25 bg-transparent px-2 py-1.5 text-sm text-flock-fg placeholder:text-flock-muted focus:border-flock-accent focus:outline-none"
       />
     </section>
   );

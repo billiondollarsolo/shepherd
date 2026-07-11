@@ -32,6 +32,10 @@ export default defineConfig({
     },
     {
       name: 'webkit-mobile',
+      // WebKit owns Safari-sensitive route/terminal lifecycle coverage. Axe is
+      // executed at both desktop and mobile breakpoints in Chromium; injecting
+      // axe between repeated Vite module navigations destabilizes WebKit's dev
+      // module loader and does not add engine-specific semantic coverage.
       testMatch: /(?:mobile-routes|terminal)\.spec\.ts/,
       use: { ...devices['iPhone 13'], serviceWorkers: 'block' },
     },

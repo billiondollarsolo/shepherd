@@ -1609,6 +1609,9 @@ allowing release metadata and usable images to drift if the build fails.
 
 **Priority:** Medium
 
+**Implementation status:** Complete; enforced by `scripts/check-bundle-budget.mjs`
+and documented in `docs/performance-and-accessibility.md`.
+
 **Why**
 
 Terminal engines, editors, and fonts are legitimately large, but without route-level
@@ -1647,6 +1650,9 @@ budgets they can silently make mobile startup and refresh progressively worse.
 
 **Priority:** Medium
 
+**Implementation status:** Complete; scalable fleet paging/indexing, render-count
+tests, bounded terminal memory, and p50/p95 CI benchmarks are in place.
+
 **Why**
 
 Live telemetry and multiple mounted terminal renderers can regress CPU, memory, and
@@ -1677,6 +1683,9 @@ input responsiveness without changing bundle size.
 ### Q8.3 — Add accessibility and keyboard gates
 
 **Priority:** Medium
+
+**Implementation status:** Complete; axe route/dialog coverage, focus and motion
+checks, and keyboard-equivalent node/Pen controls gate CI.
 
 **Why**
 

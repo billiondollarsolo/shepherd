@@ -58,7 +58,7 @@ body,
 
 body {
   margin: 0;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 /* US-37 polish: deliberate base type, one-confident-accent focus, mono nums. */
@@ -81,8 +81,7 @@ samp,
   font-variant-numeric: tabular-nums;
 }
 
-/* Display face for headings + branding (Space Grotesk) — gives Flock a distinct,
-   technical wordmark vs the Inter body. Tight tracking for a confident headline. */
+/* Display face for headings + branding. Tight tracking for a confident headline. */
 .font-display {
   font-family: var(--flock-font-display);
   letter-spacing: -0.02em;

@@ -141,8 +141,8 @@ const DEFAULT_OPTS: ITerminalOptions = {
     "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
   fontSize: 14,
   fontWeight: 400,
-  // The Nerd build ships Regular (400) + Bold (700) only — request 700 so bold
-  // text uses a real face instead of a synthesised/incorrect weight.
+  // Only the regular Nerd face is shipped; synthesize bold to avoid another
+  // ~1 MB transfer for occasional emphasized terminal cells.
   fontWeightBold: 700,
   lineHeight: 1.2,
   letterSpacing: 0,
