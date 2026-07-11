@@ -26,6 +26,7 @@ export async function seed(db: Database): Promise<void> {
       role: 'admin',
     })
     .returning();
+  if (!admin) throw new Error('[seed] failed to insert owner');
 
   const [node] = await db
     .insert(nodes)
@@ -33,7 +34,7 @@ export async function seed(db: Database): Promise<void> {
       name: 'local',
       kind: 'local',
       connectionStatus: 'connected',
-      createdBy: admin?.id ?? null,
+      createdBy: admin.id,
     })
     .returning();
 
@@ -58,7 +59,7 @@ export async function seed(db: Database): Promise<void> {
     workingDir: project.workingDir,
     hookTokenHash: 'dev-hook-token-hash-please-rotate',
     status: 'idle',
-    createdBy: admin?.id ?? null,
+    createdBy: admin.id,
   });
 }
 

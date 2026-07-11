@@ -16,7 +16,7 @@ import type {
   AuditEntry,
   Node as SharedNode,
   Project as SharedProject,
-  Session,
+  SessionRecord,
   SessionPermissionMode,
   Status,
 } from '@flock/shared';
@@ -42,7 +42,7 @@ function toIsoOrNull(value: Date | string | null | undefined): string | null {
  * Threads the single authoritative identity (tmux + hook token + CDP) through
  * the one session_id.
  */
-export function rowToSession(row: AgentSessionRow): Session {
+export function rowToSession(row: AgentSessionRow): SessionRecord {
   return {
     id: row.id,
     nodeId: row.nodeId,
@@ -60,9 +60,7 @@ export function rowToSession(row: AgentSessionRow): Session {
     permissionMode: (row.permissionMode ?? 'default') as SessionPermissionMode,
     createdAt: toIso(row.createdAt),
     lastStatusAt: toIso(row.lastStatusAt),
-    // Shared contract requires a non-null createdBy; the column is nullable only
-    // so a user delete sets it null without orphaning the session history.
-    createdBy: row.createdBy ?? '',
+    createdBy: row.createdBy,
     closedAt: toIsoOrNull(row.closedAt),
   };
 }
@@ -71,7 +69,7 @@ export function rowToSession(row: AgentSessionRow): Session {
  * Map a shared `Session` to an insertable/updatable row. `id` is the session_id;
  * the threaded identity (tmux + hook token hash + CDP) is preserved exactly.
  */
-export function sessionToRow(session: Session): NewAgentSessionRow {
+export function sessionToRow(session: SessionRecord): NewAgentSessionRow {
   return {
     id: session.id,
     nodeId: session.nodeId,
@@ -88,7 +86,7 @@ export function sessionToRow(session: Session): NewAgentSessionRow {
     permissionMode: session.permissionMode ?? 'default',
     createdAt: new Date(session.createdAt),
     lastStatusAt: new Date(session.lastStatusAt),
-    createdBy: session.createdBy === '' ? null : session.createdBy,
+    createdBy: session.createdBy,
     closedAt: session.closedAt ? new Date(session.closedAt) : null,
   };
 }

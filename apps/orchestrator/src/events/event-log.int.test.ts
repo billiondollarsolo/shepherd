@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.js';
 import type { DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { agentSessions, events, nodes, projects } from '../db/schema.js';
+import { agentSessions, events, nodes, projects, users } from '../db/schema.js';
 import { StatusMap } from '../status/map.js';
 
 import { WriteBehindEventQueue } from './queue.js';
@@ -33,6 +33,14 @@ beforeAll(async () => {
 
   const { db } = handle;
   // Minimal node -> project -> session graph so the events FK resolves.
+  const [owner] = await db
+    .insert(users)
+    .values({
+      username: `evt-owner-${randomUUID().slice(0, 8)}`,
+      passwordHash: 'argon2id$placeholder',
+      role: 'admin',
+    })
+    .returning();
   const [node] = await db
     .insert(nodes)
     .values({ name: `n-${randomUUID().slice(0, 8)}`, kind: 'local', connectionStatus: 'connected' })
@@ -51,6 +59,7 @@ beforeAll(async () => {
       workingDir: '/tmp',
       hookTokenHash: `hash-evt-${randomUUID()}`,
       status: 'starting',
+      createdBy: owner!.id,
     })
     .returning();
   sessionId = session!.id;

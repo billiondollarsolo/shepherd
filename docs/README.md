@@ -33,6 +33,11 @@ New here? Read in this order:
 | [premium-single-user-roadmap.md](premium-single-user-roadmap.md) | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
 | [decisions/](decisions/)                                         | Architecture Decision Records (e.g. terminal renderer, browser-driving)                                                                  |
 
+Security boundary decisions:
+
+- [Threat model and product boundary](decisions/security-threat-model.md)
+- [Privilege-separated agentd control plane](decisions/agentd-privilege-separation.md)
+
 ## Background / historical
 
 These capture original intent and the build history — useful for context, not required

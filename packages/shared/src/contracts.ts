@@ -357,14 +357,9 @@ export const CreateSessionRequest = z
   });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 
-/**
- * Session-create response. The plaintext hook token is returned EXACTLY ONCE
- * here (only its hash is stored, per NFR-SEC3) so it can be injected into the
- * session's hook config; it is never returned by any GET.
- */
+/** Session-create response. Agent-only capability material never reaches the web. */
 export const CreateSessionResponse = z.object({
   session: SessionSchema,
-  hookToken: z.string().min(1),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
 

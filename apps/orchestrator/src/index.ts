@@ -16,7 +16,7 @@ import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
-import { CreateSessionRequest } from '@flock/shared';
+import { CreateSessionRequest, toPublicSession } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
@@ -1021,7 +1021,7 @@ export async function main(): Promise<void> {
     // spawn: launch a sibling in the project (reuses the full create machinery).
     async (projectId, createdBy, agentType) => {
       const input = CreateSessionRequest.parse({ projectId, agentType });
-      const r = await sessions.createSession(input, { userId: createdBy ?? '', ip: null });
+      const r = await sessions.createSession(input, { userId: createdBy, ip: null });
       return r.session.id;
     },
     // send: deliver input to a sibling's live PTY (it must be running on a node).
@@ -1102,7 +1102,7 @@ export async function main(): Promise<void> {
           if (client) client.write(newId, Buffer.from(`${seed}\r`));
         })();
       }, 4500);
-      return reply.code(201).send(created);
+      return reply.code(201).send({ session: toPublicSession(created.session) });
     });
 
     // Compare / race: spawn the same task across N agents in the project directory.

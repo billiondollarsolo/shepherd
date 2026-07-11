@@ -29,7 +29,7 @@ import {
 } from '../auth/index.js';
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { auditLog, sessionsAuth, users } from '../db/schema.js';
+import { agentSessions, auditLog, sessionsAuth, users } from '../db/schema.js';
 import { buildServer } from '../server.js';
 
 let handle: DbHandle;
@@ -52,6 +52,7 @@ beforeAll(async () => {
   handle = createDb();
   await runMigrations(handle);
   // Deterministic first-run setup (test DB only).
+  await handle.db.delete(agentSessions);
   await handle.db.delete(sessionsAuth);
   await handle.db.delete(users);
 

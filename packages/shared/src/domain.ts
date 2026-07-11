@@ -156,7 +156,7 @@ export type Project = z.infer<typeof ProjectSchema>;
  * binds the browser endpoint (`browserCdpEndpoint`). `status` here is the
  * write-behind MIRROR of the in-memory authoritative status (spec §6.6).
  */
-export const SessionSchema = z.object({
+export const SessionRecordSchema = z.object({
   id: Uuid,
   nodeId: Uuid,
   projectId: Uuid,
@@ -187,7 +187,27 @@ export const SessionSchema = z.object({
   createdBy: Uuid,
   closedAt: IsoTimestamp.nullable(),
 });
+export type SessionRecord = z.infer<typeof SessionRecordSchema>;
+
+/**
+ * Browser-safe session view. Control-plane identity and capability material are
+ * deliberately absent: the web never needs the daemon handle, raw CDP endpoint,
+ * hook-token hash, or creating-user id. Keep this allowlist-shaped projection at
+ * the shared contract boundary so adding an internal field cannot leak it
+ * accidentally through a REST response.
+ */
+export const SessionSchema = SessionRecordSchema.omit({
+  tmuxSessionName: true,
+  browserCdpEndpoint: true,
+  hookTokenHash: true,
+  createdBy: true,
+});
 export type Session = z.infer<typeof SessionSchema>;
+
+/** Strip every internal-only field from a durable session record. */
+export function toPublicSession(session: SessionRecord): Session {
+  return SessionSchema.parse(session);
+}
 
 /** events — append-only, write-behind log (spec §6). */
 export const EventSchema = z.object({

@@ -7,7 +7,7 @@
  * OWNS the session, so any authed user could attach to any `/ws/pty/<id>` (read +
  * inject keystrokes) or `/ws/screencast/<id>`. This module closes both:
  *   - T5: reject upgrades whose Origin isn't our own.
- *   - T4: for a session-scoped socket, require the user to own it (or be admin).
+ *   - T4: for a session-scoped socket, require the user to own it.
  */
 import type { IncomingMessage } from 'node:http';
 import type { User } from '@flock/shared';
@@ -24,7 +24,7 @@ export interface WsAuthDeps {
   insecureDev?: boolean;
   /** Resolve the signed-in user from the request cookie, or null. */
   resolveUser(cookieHeader: string | undefined): Promise<User | null>;
-  /** Owner (user id) of a session, or null if unknown/legacy. */
+  /** Owner (user id) of a session, or null when the session is unknown/invalid. */
   sessionOwner(sessionId: string): Promise<string | null>;
 }
 
@@ -73,10 +73,10 @@ export function originAllowed(
 
 /**
  * Build the WS upgrade authorizer. Returns `(req, sessionId?) => Promise<boolean>`:
- * with a sessionId it's a session-scoped socket (PTY/screencast) → owner-or-admin;
+ * with a sessionId it's a session-scoped socket (PTY/screencast) → exact owner;
  * without (the global status stream) → any authed user. Origin is always checked.
- * A null owner (legacy session created before owner tracking) is allowed for any
- * authed user so existing sessions keep working.
+ * Unknown and null-owner sessions fail closed. Human-role bypasses do not belong in
+ * this boundary; Flock's supported product model has one explicit owner.
  */
 export function makeWsAuthorizer(deps: WsAuthDeps) {
   return async (req: IncomingMessage, sessionId?: string | null): Promise<boolean> => {
@@ -84,9 +84,8 @@ export function makeWsAuthorizer(deps: WsAuthDeps) {
     const user = await deps.resolveUser(req.headers.cookie);
     if (!user) return false;
     if (!sessionId) return true; // status stream: any authed user
-    if (user.role === 'admin') return true;
     const owner = await deps.sessionOwner(sessionId);
-    return owner === null || owner === user.id;
+    return owner !== null && owner === user.id;
   };
 }
 

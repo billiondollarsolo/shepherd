@@ -20,7 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { auditLog, sessionsAuth, users } from '../db/schema.js';
+import { agentSessions, auditLog, sessionsAuth, users } from '../db/schema.js';
 import { buildServer } from '../server.js';
 import { AuthService } from './service.js';
 import { makeDbAuthAuditRecorder } from './audit-sink.js';
@@ -46,7 +46,9 @@ beforeAll(async () => {
   await runMigrations(handle);
   // First-run setup is GLOBAL ("admin when none exists"); make it deterministic
   // by clearing the users table (test DB only) so this run's setup is genuinely
-  // the first run. sessions_auth + user-owned audit rows cascade/clear with it.
+  // the first run. Sessions must be removed first because production ownership
+  // intentionally uses ON DELETE RESTRICT.
+  await handle.db.delete(agentSessions);
   await handle.db.delete(sessionsAuth);
   await handle.db.delete(users);
   const auth = new AuthService({

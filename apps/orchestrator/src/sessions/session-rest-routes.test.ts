@@ -4,7 +4,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import type { CreateSessionRequest, Session, User } from '@flock/shared';
+import type { CreateSessionRequest, SessionRecord, User } from '@flock/shared';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
@@ -27,7 +27,7 @@ const authStub: AuthGuardDeps = {
 };
 const COOKIE = { cookie: `${SESSION_COOKIE}=good-cookie` };
 
-function fakeSession(over: Partial<Session> = {}): Session {
+function fakeSession(over: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: '11111111-1111-4111-8111-111111111111',
     nodeId: '22222222-2222-4222-8222-222222222222',
@@ -39,6 +39,10 @@ function fakeSession(over: Partial<Session> = {}): Session {
     hookTokenHash: 'hash:abc',
     status: 'starting',
     statusDetail: null,
+    pinned: false,
+    note: null,
+    reviewedAt: null,
+    permissionMode: 'default',
     createdAt: '2026-05-29T00:00:00.000Z',
     lastStatusAt: '2026-05-29T00:00:00.000Z',
     createdBy: FAKE_USER.id,
@@ -50,7 +54,7 @@ function fakeSession(over: Partial<Session> = {}): Session {
 class FakeSessionService {
   listArg: string | undefined;
   notFound = false;
-  async listSessions(projectId?: string): Promise<Session[]> {
+  async listSessions(projectId?: string): Promise<SessionRecord[]> {
     this.listArg = projectId;
     return [fakeSession()];
   }
@@ -90,6 +94,10 @@ describe('GET /api/sessions', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().sessions).toHaveLength(1);
+      expect(res.json().sessions[0]).not.toHaveProperty('hookTokenHash');
+      expect(res.json().sessions[0]).not.toHaveProperty('tmuxSessionName');
+      expect(res.json().sessions[0]).not.toHaveProperty('browserCdpEndpoint');
+      expect(res.json().sessions[0]).not.toHaveProperty('createdBy');
       expect(service.listArg).toBe(PROJECT_ID);
     } finally {
       await app.close();
@@ -98,7 +106,7 @@ describe('GET /api/sessions', () => {
 });
 
 describe('POST /api/sessions', () => {
-  it('201 + { session, hookToken } for a valid body (token returned once)', async () => {
+  it('201 returns a browser-safe session without agent capability material', async () => {
     const app = buildApp(new FakeSessionService());
     try {
       const res = await app.inject({
@@ -109,7 +117,11 @@ describe('POST /api/sessions', () => {
       });
       expect(res.statusCode).toBe(201);
       expect(res.json().session.agentType).toBe('codex');
-      expect(res.json().hookToken).toBe('plain-token');
+      expect(res.json()).not.toHaveProperty('hookToken');
+      expect(res.json().session).not.toHaveProperty('hookTokenHash');
+      expect(res.json().session).not.toHaveProperty('tmuxSessionName');
+      expect(res.json().session).not.toHaveProperty('browserCdpEndpoint');
+      expect(res.json().session).not.toHaveProperty('createdBy');
     } finally {
       await app.close();
     }

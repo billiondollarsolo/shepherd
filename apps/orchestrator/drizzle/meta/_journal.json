@@ -85,6 +85,13 @@
       "when": 1783746000000,
       "tag": "0011_drop_managed_worktrees",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783794000000,
+      "tag": "0012_require_session_owner",
+      "breakpoints": true
     }
   ]
 }

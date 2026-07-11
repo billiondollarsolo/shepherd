@@ -3,13 +3,13 @@
  *
  *   GET  /api/sessions[?projectId=...]   { sessions: Session[] }
  *   POST /api/sessions                   body CreateSessionRequest → 201
- *                                        CreateSessionResponse { session, hookToken }
+ *                                        CreateSessionResponse { session }
  *
  * Cookie-authed via the shared `requireAuth` guard. Query/body validated with the
  * shared zod contracts (`ListSessionsQuery`, `CreateSessionRequest`); an unknown
  * project on create maps to 404. The success body is the shared
- * `CreateSessionResponse`: the plaintext hook token is returned EXACTLY ONCE here
- * (only its hash is stored) and never by any GET.
+ * `CreateSessionResponse`. Agent-only hook capability material stays inside the
+ * orchestrator and is never serialized to the browser.
  *
  * NOTE: this registers ONLY `GET`/`POST /api/sessions`. `DELETE /api/sessions/:id`
  * (terminate, US-13) is owned by `registerTerminateSessionRoute`.
@@ -19,6 +19,7 @@ import {
   CreateSessionRequest,
   ListSessionsQuery,
   SessionIdParams,
+  toPublicSession,
   UpdateSessionRequest,
 } from '@flock/shared';
 import { badRequest } from '../http/reply.js';
@@ -47,7 +48,7 @@ export function registerSessionRestRoutes(
         return badRequest(reply, 'projectId, when provided, must be a valid id.');
       }
       const sessions = await deps.service.listSessions(parsed.data.projectId);
-      return reply.code(200).send({ sessions });
+      return reply.code(200).send({ sessions: sessions.map(toPublicSession) });
     },
   );
 
@@ -67,7 +68,7 @@ export function registerSessionRestRoutes(
           userId: actor.id,
           ip: request.ip ?? null,
         });
-        return reply.code(201).send(result);
+        return reply.code(201).send({ session: toPublicSession(result.session) });
       } catch (err) {
         if (err instanceof SessionProjectNotFoundError) {
           return reply
@@ -97,7 +98,7 @@ export function registerSessionRestRoutes(
           .code(404)
           .send({ error: { code: 'session_not_found', message: 'Session not found.' } });
       }
-      return reply.code(200).send({ session });
+      return reply.code(200).send({ session: toPublicSession(session) });
     },
   );
 }

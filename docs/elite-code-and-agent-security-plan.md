@@ -178,6 +178,8 @@ optional and separately authorized; it must not be implied by callback access.
 
 **Priority:** Blocking
 
+**Implementation status:** Complete in `bfc7023` (pushed to `main`)
+
 **Why**
 
 The current hardening and formatting pass spans hundreds of files. Beginning security
@@ -217,6 +219,9 @@ reversion, and blame unnecessarily risky.
 
 **Priority:** Blocking
 
+**Implementation status:** Complete; see
+`docs/decisions/security-threat-model.md`
+
 **Why**
 
 The code currently contains both single-user product assumptions and member/admin
@@ -252,6 +257,10 @@ ambiguous.
 ### P0.3 — Select the agentd privilege-separation architecture
 
 **Priority:** Blocking for Phase 2
+
+**Implementation status:** Architecture accepted in
+`docs/decisions/agentd-privilege-separation.md`; required spike evidence remains
+incomplete
 
 **Why**
 

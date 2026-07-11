@@ -81,14 +81,14 @@ describe('makeWsAuthorizer (T4)', () => {
     expect(await auth(req(o), 'owned')).toBe(true);
     expect(await auth(req(o), 'other')).toBe(false);
   });
-  it('admin may attach to any session', async () => {
+  it('human role does not bypass exact session ownership', async () => {
     expect(await auth(req({ origin: 'https://flock.example', cookie: 'admin' }), 'other')).toBe(
-      true,
+      false,
     );
   });
-  it('legacy session with null owner is allowed for any authed user', async () => {
+  it('unknown or null-owner session fails closed', async () => {
     expect(await auth(req({ origin: 'https://flock.example', cookie: 'member' }), 'unknown')).toBe(
-      true,
+      false,
     );
   });
   it('status stream (no sessionId) allows any authed user, rejects anon', async () => {

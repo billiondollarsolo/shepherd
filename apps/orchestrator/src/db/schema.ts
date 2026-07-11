@@ -271,9 +271,9 @@ export const agentSessions = pgTable(
       .default('default'),
     createdAt: createdAt(),
     lastStatusAt: timestamp('last_status_at', { withTimezone: true }).notNull().defaultNow(),
-    createdBy: uuid('created_by').references(() => users.id, {
-      onDelete: 'set null',
-    }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
   },
   (t) => ({

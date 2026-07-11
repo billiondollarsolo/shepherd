@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb } from './client.js';
@@ -39,6 +39,7 @@ afterAll(async () => {
 });
 
 async function seedChain(): Promise<{
+  ownerId: string;
   nodeId: string;
   projectId: string;
 }> {
@@ -71,13 +72,13 @@ async function seedChain(): Promise<{
       workingDir: '/home/flock/work/demo',
     })
     .returning();
-  return { nodeId: node!.id, projectId: project!.id };
+  return { ownerId: admin!.id, nodeId: node!.id, projectId: project!.id };
 }
 
 describe('US-2 integration — node -> project -> agent_session chain', () => {
   it('inserts the chain and reads back the single authoritative session record', async () => {
     const { db } = handle;
-    const { nodeId, projectId } = await seedChain();
+    const { ownerId, nodeId, projectId } = await seedChain();
 
     const tmuxSessionName = `flock-${randomUUID().slice(0, 8)}`;
     const hookTokenHash = `argon2id$${randomUUID()}`;
@@ -94,6 +95,7 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
         browserCdpEndpoint,
         hookTokenHash,
         status: 'running',
+        createdBy: ownerId,
       })
       .returning();
 
@@ -120,7 +122,7 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
 
   it('enforces hook_token_hash uniqueness (per-session token cannot collide)', async () => {
     const { db } = handle;
-    const { nodeId, projectId } = await seedChain();
+    const { ownerId, nodeId, projectId } = await seedChain();
 
     const dupHash = `argon2id$${randomUUID()}`;
     await db.insert(agentSessions).values({
@@ -131,6 +133,7 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
       workingDir: '/w',
       hookTokenHash: dupHash,
       status: 'idle',
+      createdBy: ownerId,
     });
 
     await expect(
@@ -142,13 +145,14 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
         workingDir: '/w',
         hookTokenHash: dupHash,
         status: 'idle',
+        createdBy: ownerId,
       }),
     ).rejects.toThrow();
   });
 
   it('accepts append-only event writes ordered by (session_id, seq)', async () => {
     const { db } = handle;
-    const { nodeId, projectId } = await seedChain();
+    const { ownerId, nodeId, projectId } = await seedChain();
 
     const [session] = await db
       .insert(agentSessions)
@@ -160,6 +164,7 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
         workingDir: '/w',
         hookTokenHash: `argon2id$${randomUUID()}`,
         status: 'running',
+        createdBy: ownerId,
       })
       .returning();
 
@@ -186,5 +191,52 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
     for (let i = 1; i < rows.length; i += 1) {
       expect(Number(rows[i]!.seq)).toBeGreaterThan(Number(rows[i - 1]!.seq));
     }
+  });
+
+  it('rejects sessions without an owner at the database boundary', async () => {
+    const { db } = handle;
+    const { nodeId, projectId } = await seedChain();
+
+    await expect(
+      db.execute(sql`
+        INSERT INTO agent_sessions (
+          node_id,
+          project_id,
+          agent_type,
+          tmux_session_name,
+          working_dir,
+          hook_token_hash,
+          status,
+          created_by
+        ) VALUES (
+          ${nodeId},
+          ${projectId},
+          'codex',
+          ${`t-${randomUUID().slice(0, 8)}`},
+          '/w',
+          ${`argon2id$${randomUUID()}`},
+          'idle',
+          NULL
+        )
+      `),
+    ).rejects.toThrow();
+  });
+
+  it('prevents deletion of an owner referenced by a session', async () => {
+    const { db } = handle;
+    const { ownerId, nodeId, projectId } = await seedChain();
+
+    await db.insert(agentSessions).values({
+      nodeId,
+      projectId,
+      agentType: 'codex',
+      tmuxSessionName: `t-${randomUUID().slice(0, 8)}`,
+      workingDir: '/w',
+      hookTokenHash: `argon2id$${randomUUID()}`,
+      status: 'idle',
+      createdBy: ownerId,
+    });
+
+    await expect(db.delete(users).where(eq(users.id, ownerId))).rejects.toThrow();
   });
 });

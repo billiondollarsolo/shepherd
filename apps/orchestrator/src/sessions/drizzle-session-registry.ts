@@ -13,7 +13,7 @@
  */
 import { eq, isNull } from 'drizzle-orm';
 
-import type { Session } from '@flock/shared';
+import type { SessionRecord } from '@flock/shared';
 
 import type { Database } from '../db/client.js';
 import { rowToSession, sessionToRow } from '../db/mappers.js';
@@ -23,7 +23,7 @@ export class DrizzleSessionRegistry {
   constructor(private readonly db: Database) {}
 
   /** Insert the new authoritative session record; return the stored row mapped. */
-  async insertSession(session: Session): Promise<Session> {
+  async insertSession(session: SessionRecord): Promise<SessionRecord> {
     const [row] = await this.db.insert(agentSessions).values(sessionToRow(session)).returning();
     if (!row) {
       throw new Error('Failed to persist agent_session record.');
@@ -35,7 +35,7 @@ export class DrizzleSessionRegistry {
    * Load the authoritative record by session_id (US-13 terminate), or null when
    * it does not exist. Reads the identity/registry store, never the live path.
    */
-  async getSession(id: string): Promise<Session | null> {
+  async getSession(id: string): Promise<SessionRecord | null> {
     const [row] = await this.db.select().from(agentSessions).where(eq(agentSessions.id, id));
     return row ? rowToSession(row) : null;
   }
@@ -45,7 +45,7 @@ export class DrizzleSessionRegistry {
    * candidate set (FR-S4). A session that was explicitly terminated has a
    * `closed_at` and is excluded.
    */
-  async listOpenSessions(): Promise<Session[]> {
+  async listOpenSessions(): Promise<SessionRecord[]> {
     const rows = await this.db.select().from(agentSessions).where(isNull(agentSessions.closedAt));
     return rows.map(rowToSession);
   }

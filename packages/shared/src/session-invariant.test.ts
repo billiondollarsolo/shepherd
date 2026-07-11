@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionSchema, type Session } from './domain.js';
+import { SessionRecordSchema, type SessionRecord } from './domain.js';
 
 /**
  * Single authoritative session record invariant (spec §4.2, §6, §15).
@@ -13,7 +13,7 @@ import { SessionSchema, type Session } from './domain.js';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
-function sampleSession(overrides: Partial<Session> = {}): Session {
+function sampleSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: SESSION_ID,
     nodeId: '22222222-2222-4222-8222-222222222222',
@@ -39,7 +39,7 @@ function sampleSession(overrides: Partial<Session> = {}): Session {
 
 describe('Session single-record invariant (§4.2)', () => {
   it('one record carries the tmux name, hook token hash, and browser endpoint together', () => {
-    const session = SessionSchema.parse(sampleSession());
+    const session = SessionRecordSchema.parse(sampleSession());
 
     // All three identities live on the SAME record keyed by the one session_id.
     expect(session.id).toBe(SESSION_ID);
@@ -52,17 +52,19 @@ describe('Session single-record invariant (§4.2)', () => {
     for (const field of ['tmuxSessionName', 'hookTokenHash'] as const) {
       const broken: Record<string, unknown> = { ...sampleSession() };
       delete broken[field];
-      expect(SessionSchema.safeParse(broken).success).toBe(false);
+      expect(SessionRecordSchema.safeParse(broken).success).toBe(false);
     }
   });
 
   it('allows browserCdpEndpoint to be null before a browser is started', () => {
-    const session = SessionSchema.parse(sampleSession({ browserCdpEndpoint: null }));
+    const session = SessionRecordSchema.parse(sampleSession({ browserCdpEndpoint: null }));
     expect(session.browserCdpEndpoint).toBeNull();
   });
 
   it('rejects a divergent browser endpoint that is not a valid url', () => {
-    const result = SessionSchema.safeParse(sampleSession({ browserCdpEndpoint: 'not-a-url' }));
+    const result = SessionRecordSchema.safeParse(
+      sampleSession({ browserCdpEndpoint: 'not-a-url' }),
+    );
     expect(result.success).toBe(false);
   });
 });

@@ -79,7 +79,7 @@ export class OrchestrationService {
     /** Launch a new agent in the project; returns the new session id. */
     private readonly spawnFn: (
       projectId: string,
-      createdBy: string | null,
+      createdBy: string,
       agentType: string,
     ) => Promise<string>,
     /** Deliver text (as input) to a session; returns whether it was sent. */
@@ -137,7 +137,7 @@ export class OrchestrationService {
   private async authCaller(
     callerId: string,
     token: string,
-  ): Promise<{ projectId: string; createdBy: string | null }> {
+  ): Promise<{ projectId: string; createdBy: string }> {
     const [row] = await this.db
       .select({
         projectId: agentSessions.projectId,
@@ -148,7 +148,7 @@ export class OrchestrationService {
       .from(agentSessions)
       .where(eq(agentSessions.id, callerId))
       .limit(1);
-    if (!row || row.closedAt)
+    if (!row || row.closedAt || !row.createdBy)
       throw new OrchestrationError('unauthorized', 'unknown or closed caller session');
     if (!token || !(await this.verifyToken(row.hash, token))) {
       throw new OrchestrationError('unauthorized', 'invalid session token');

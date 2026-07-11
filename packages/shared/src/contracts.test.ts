@@ -10,11 +10,11 @@ import {
   StatusUpdateMessage,
 } from './contracts.js';
 import { ClaudeHookPayload, CodexHookPayload, OpenCodeHookPayload } from './hooks.js';
-import { SessionSchema, type Session } from './domain.js';
+import { SessionSchema, type SessionRecord } from './domain.js';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
-function sampleSession(): Session {
+function sampleSession(): SessionRecord {
   return {
     id: SESSION_ID,
     nodeId: '22222222-2222-4222-8222-222222222222',
@@ -38,10 +38,14 @@ function sampleSession(): Session {
 }
 
 describe('REST contract round-trips (spec §8.1)', () => {
-  it('CreateSessionResponse parses and preserves the one-time hook token', () => {
+  it('CreateSessionResponse strips agent-only token and internal record fields', () => {
     const value = { session: sampleSession(), hookToken: 'plaintext-once' };
     const parsed = CreateSessionResponse.parse(value);
-    expect(parsed.hookToken).toBe('plaintext-once');
+    expect(parsed).not.toHaveProperty('hookToken');
+    expect(parsed.session).not.toHaveProperty('hookTokenHash');
+    expect(parsed.session).not.toHaveProperty('tmuxSessionName');
+    expect(parsed.session).not.toHaveProperty('browserCdpEndpoint');
+    expect(parsed.session).not.toHaveProperty('createdBy');
     expect(parsed.session.id).toBe(SESSION_ID);
     // Round-trip is idempotent.
     expect(CreateSessionResponse.parse(parsed)).toEqual(parsed);
@@ -61,9 +65,26 @@ describe('REST contract round-trips (spec §8.1)', () => {
     ).toBe(true);
   });
 
-  it('SessionSchema is a faithful round-trip', () => {
-    const s = sampleSession();
-    expect(SessionSchema.parse(s)).toEqual(s);
+  it('SessionSchema is an allowlisted public projection', () => {
+    const parsed = SessionSchema.parse(sampleSession());
+    expect(Object.keys(parsed).sort()).toEqual(
+      [
+        'agentType',
+        'closedAt',
+        'createdAt',
+        'id',
+        'lastStatusAt',
+        'nodeId',
+        'note',
+        'permissionMode',
+        'pinned',
+        'projectId',
+        'reviewedAt',
+        'status',
+        'statusDetail',
+        'workingDir',
+      ].sort(),
+    );
   });
 });
 

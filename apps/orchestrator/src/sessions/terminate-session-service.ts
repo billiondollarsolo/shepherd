@@ -25,7 +25,7 @@
  * testable without a real daemon, Postgres, or Chrome. Postgres here is the
  * REGISTRY/identity write path — NOT the live status path (spec §6.6).
  */
-import type { Session } from '@flock/shared';
+import type { SessionRecord } from '@flock/shared';
 
 import type { AuditLogger } from '../audit/audit.js';
 
@@ -47,7 +47,7 @@ export interface SessionTerminator {
  */
 export interface TerminableSessionRegistry {
   /** Load the authoritative record by session_id, or null if unknown. */
-  getSession(id: string): Promise<Session | null>;
+  getSession(id: string): Promise<SessionRecord | null>;
   /** Mark the record closed (sets `closed_at`); excludes it from boot re-attach. */
   markClosed(id: string, closedAt: string): Promise<void>;
 }
@@ -62,7 +62,7 @@ export interface TerminableSessionRegistry {
  * the harness keys off the SAME record that owns the session name + hook token.
  */
 export interface BrowserHarnessTeardown {
-  teardown(session: Session): Promise<void>;
+  teardown(session: SessionRecord): Promise<void>;
 }
 
 /** Context carried with the audited terminate action (actor + network origin). */

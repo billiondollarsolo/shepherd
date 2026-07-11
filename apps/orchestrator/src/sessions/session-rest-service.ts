@@ -19,7 +19,7 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import type { CreateSessionRequest, CreateSessionResponse, Session } from '@flock/shared';
+import type { CreateSessionRequest, SessionRecord } from '@flock/shared';
 
 import type { AuditLogger } from '../audit/audit.js';
 import type { Database } from '../db/client.js';
@@ -56,7 +56,7 @@ export interface SessionRestServiceDeps {
    * Per-session env injected into the launched agent (hook URL/token/config dir,
    * US-19). Resolver so the caller can mint session-scoped values. Optional.
    */
-  sessionEnv?: (session: Session, hookToken: string) => Promise<Record<string, string>>;
+  sessionEnv?: (session: SessionRecord, hookToken: string) => Promise<Record<string, string>>;
   /**
    * Called synchronously after the authoritative record is persisted, BEFORE the
    * tmux launch, so live channels (status map + hook binding + PTY) can track the
@@ -64,7 +64,7 @@ export interface SessionRestServiceDeps {
    * attach). Receives the persisted session + its plaintext hook token (the token
    * is needed nowhere else; only its hash is stored).
    */
-  onSessionCreated?: (session: Session, hookToken: string) => void;
+  onSessionCreated?: (session: SessionRecord, hookToken: string) => void;
   /**
    * Launch the agent on the node's flock-agentd daemon (the only transport).
    * Returns 'launched' on success or 'failed' on a hard failure — in which case
@@ -72,7 +72,7 @@ export interface SessionRestServiceDeps {
    * disconnected), so the failure is visible, never a silent shell.
    */
   agentdLaunch?: (args: {
-    session: Session;
+    session: SessionRecord;
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
@@ -93,12 +93,12 @@ export class SessionRestService {
   private readonly hashToken: HookTokenHasher;
   private readonly audit: AuditLogger;
   private readonly sessionEnv?: (
-    session: Session,
+    session: SessionRecord,
     hookToken: string,
   ) => Promise<Record<string, string>>;
-  private readonly onSessionCreated?: (session: Session, hookToken: string) => void;
+  private readonly onSessionCreated?: (session: SessionRecord, hookToken: string) => void;
   private readonly agentdLaunch?: (args: {
-    session: Session;
+    session: SessionRecord;
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
@@ -127,7 +127,7 @@ export class SessionRestService {
    * Terminated sessions are excluded so they leave the paddock tree immediately;
    * their history lives in the registry/audit log, not the live session list.
    */
-  async listSessions(projectId?: string): Promise<Session[]> {
+  async listSessions(projectId?: string): Promise<SessionRecord[]> {
     const openOnly = isNull(agentSessions.closedAt);
     const where = projectId ? and(eq(agentSessions.projectId, projectId), openOnly) : openOnly;
     const rows = await this.db.select().from(agentSessions).where(where);
@@ -143,7 +143,7 @@ export class SessionRestService {
   async createSession(
     input: CreateSessionRequest,
     ctx: SessionActionContext,
-  ): Promise<CreateSessionResponse> {
+  ): Promise<{ session: SessionRecord; hookToken: string }> {
     const [project] = await this.db
       .select()
       .from(projects)
@@ -171,7 +171,7 @@ export class SessionRestService {
 
     const now = new Date().toISOString();
     // ONE id threads the session name + hook token hash + (null) browser endpoint (§4.2).
-    const record: Session = {
+    const record: SessionRecord = {
       id,
       nodeId: node.id,
       projectId: project.id,
@@ -274,7 +274,7 @@ export class SessionRestService {
     id: string,
     patch: { pinned?: boolean; note?: string | null; reviewed?: boolean },
     ctx?: { userId?: string | null },
-  ): Promise<Session | null> {
+  ): Promise<SessionRecord | null> {
     const set: {
       pinned?: boolean;
       note?: string | null;
