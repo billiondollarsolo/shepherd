@@ -344,8 +344,14 @@ const STACK_LABELS: Record<string, string> = {
 };
 
 /** Small auto-detected tech-stack badges on a project row (hiteterm-style). */
-function StackBadges({ project }: { project: Project }): JSX.Element | null {
-  const { data } = useStack(project.nodeId, project.workingDir);
+function StackBadges({
+  project,
+  nodeConnected,
+}: {
+  project: Project;
+  nodeConnected: boolean;
+}): JSX.Element | null {
+  const { data } = useStack(project.nodeId, project.workingDir, nodeConnected);
   const stacks = data?.stacks ?? [];
   if (stacks.length === 0) return null;
   return (
@@ -363,7 +369,13 @@ function StackBadges({ project }: { project: Project }): JSX.Element | null {
   );
 }
 
-function ProjectRow({ project }: { project: Project }): JSX.Element {
+function ProjectRow({
+  project,
+  nodeConnected,
+}: {
+  project: Project;
+  nodeConnected: boolean;
+}): JSX.Element {
   const { data: allSessions = [] } = useSessions();
   const live = useLiveStatuses();
   // Auto-sorted by live status — the agents that NEED YOU float to the top, no
@@ -400,7 +412,7 @@ function ProjectRow({ project }: { project: Project }): JSX.Element {
           )}
           <FolderGit2 className="size-3.5 shrink-0 text-flock-ink-muted" />
           <span className="truncate font-medium">{project.name}</span>
-          <StackBadges project={project} />
+          <StackBadges project={project} nodeConnected={nodeConnected} />
         </button>
         <SimpleTooltip label="New session (launch an agent here)">
           <button
@@ -537,7 +549,7 @@ function NodeRow({
           {projects.length === 0 ? (
             <p className="py-1 pl-4 text-xs text-flock-ink-muted/70">No projects</p>
           ) : (
-            projects.map((p) => <ProjectRow key={p.id} project={p} />)
+            projects.map((p) => <ProjectRow key={p.id} project={p} nodeConnected={connected} />)
           )}
         </div>
       )}
@@ -597,7 +609,7 @@ function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
         {projects.length === 0 ? (
           <p className="py-1 pl-4 text-2xs text-flock-ink-muted/70">No projects</p>
         ) : (
-          projects.map((p) => <ProjectRow key={p.id} project={p} />)
+          projects.map((p) => <ProjectRow key={p.id} project={p} nodeConnected={connected} />)
         )}
       </div>
     </div>

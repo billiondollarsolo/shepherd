@@ -17,8 +17,8 @@ export function ProjectGitPage(): JSX.Element {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-flock-surface-0" data-testid="project-git-page">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-flock-surface-0" data-testid="project-git-page">
+      <header className="flex h-12 min-w-0 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] bg-flock-surface-1 px-2 sm:gap-3 sm:px-3">
         <Button
           size="sm"
           variant="ghost"
@@ -29,7 +29,7 @@ export function ProjectGitPage(): JSX.Element {
         </Button>
         <div className="h-5 w-px bg-[var(--flock-border)]" />
         <GitBranch className="size-4 text-flock-accent" />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-flock-ink-primary">
             {project?.name ?? 'Project'} Source Control
           </div>

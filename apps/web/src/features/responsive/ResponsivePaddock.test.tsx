@@ -10,6 +10,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '../../theme';
+import { TooltipProvider } from '../../components/ui';
+import { usePaddock } from '../../store/paddock';
 
 // Mock the viewport hook so we control which branch renders.
 const isPhoneMock = vi.fn(() => false);
@@ -31,6 +33,12 @@ import { ResponsivePaddock } from './ResponsivePaddock';
 // The desktop paddock chrome (Sidebar theme toggle) reads the theme context, and
 // the store's refresh() calls fetch on mount; provide both so the test is hermetic.
 beforeEach(() => {
+  usePaddock.setState({
+    view: 'overview',
+    nodeInfoNodeId: null,
+    projectView: 'agents',
+    selectedProjectId: null,
+  });
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -55,7 +63,9 @@ function renderPaddock(): void {
   render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <ResponsivePaddock />
+        <TooltipProvider>
+          <ResponsivePaddock />
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>,
   );
@@ -74,5 +84,31 @@ describe('ResponsivePaddock (US-36, FR-UI6)', () => {
     renderPaddock();
     expect(screen.getByTestId('phone-view')).toBeInTheDocument();
     expect(screen.queryByTestId('app-shell')).toBeNull();
+  });
+
+  it('renders mobile settings inside the shared viewport frame', () => {
+    isPhoneMock.mockReturnValue(true);
+    usePaddock.setState({ view: 'settings' });
+    renderPaddock();
+    expect(screen.getByTestId('phone-settings')).toHaveAttribute('data-mobile-viewport');
+    expect(screen.getByLabelText('Settings section')).toBeInTheDocument();
+  });
+
+  it('renders mobile node details inside the shared viewport frame', () => {
+    isPhoneMock.mockReturnValue(true);
+    usePaddock.setState({ view: 'paddock', nodeInfoNodeId: 'node-1' });
+    renderPaddock();
+    expect(screen.getByTestId('phone-node-details')).toHaveAttribute('data-mobile-viewport');
+  });
+
+  it('renders mobile project Git inside the shared viewport frame', () => {
+    isPhoneMock.mockReturnValue(true);
+    usePaddock.setState({
+      view: 'paddock',
+      projectView: 'git',
+      selectedProjectId: 'project-1',
+    });
+    renderPaddock();
+    expect(screen.getByTestId('phone-project-git')).toHaveAttribute('data-mobile-viewport');
   });
 });

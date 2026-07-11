@@ -11,6 +11,7 @@ class FakeXterm implements XtermLike {
   dataCb: ((data: string) => void) | null = null;
   opened = false;
   disposed = false;
+  focusCalls = 0;
   open(): void {
     this.opened = true;
   }
@@ -21,6 +22,9 @@ class FakeXterm implements XtermLike {
     this.dataCb = cb;
   }
   loadAddon(): void {}
+  focus(): void {
+    this.focusCalls += 1;
+  }
   dispose(): void {
     this.disposed = true;
   }
@@ -50,7 +54,7 @@ class FakeWs implements WsLike {
 }
 
 describe('Terminal (US-12)', () => {
-  it('mounts xterm bound to pty:<id> and renders the container', () => {
+  it('mounts xterm bound to pty:<id> and renders the container', async () => {
     const term = new FakeXterm();
     let socket: FakeWs | undefined;
     const { getByTestId } = render(
@@ -63,10 +67,11 @@ describe('Terminal (US-12)', () => {
     expect(getByTestId('terminal')).toBeInTheDocument();
     expect(term.opened).toBe(true);
     // The WS is opened for this session's pty channel.
+    await waitFor(() => expect(socket).toBeDefined());
     expect(socket!.url).toContain('/ws/pty/sess-42');
   });
 
-  it('writes inbound PTY output to the terminal (output renders)', () => {
+  it('writes inbound PTY output to the terminal (output renders)', async () => {
     const term = new FakeXterm();
     let socket: FakeWs | undefined;
     render(
@@ -76,6 +81,7 @@ describe('Terminal (US-12)', () => {
         wsFactory={(url) => (socket = new FakeWs(url))}
       />,
     );
+    await waitFor(() => expect(socket).toBeDefined());
     act(() => {
       socket!.open();
       socket!.emit(new Uint8Array([104, 105]).buffer); // "hi"
@@ -84,7 +90,7 @@ describe('Terminal (US-12)', () => {
     expect(Array.from(term.writes[0] as Uint8Array)).toEqual([104, 105]);
   });
 
-  it('forwards keystrokes upstream so typing echoes', () => {
+  it('forwards keystrokes upstream so typing echoes', async () => {
     const term = new FakeXterm();
     let socket: FakeWs | undefined;
     render(
@@ -94,6 +100,7 @@ describe('Terminal (US-12)', () => {
         wsFactory={(url) => (socket = new FakeWs(url))}
       />,
     );
+    await waitFor(() => expect(socket).toBeDefined());
     act(() => socket!.open());
     act(() => term.dataCb!('a'));
     // On open the terminal also sends a resize (JSON string) frame; the keystroke
@@ -120,6 +127,7 @@ describe('Terminal (US-12)', () => {
       />,
     );
     // The connect URL carries the real size so the PTY opens at it.
+    await waitFor(() => expect(socket).toBeDefined());
     expect(socket!.url).toContain('cols=142');
     expect(socket!.url).toContain('rows=48');
 
@@ -147,6 +155,7 @@ describe('Terminal (US-12)', () => {
       />,
     );
     expect(getByTestId('terminal-status')).toHaveTextContent('connecting');
+    await waitFor(() => expect(socket).toBeDefined());
     act(() => socket!.open());
     await waitFor(() => expect(queryByTestId('terminal-status')).toBeNull());
   });

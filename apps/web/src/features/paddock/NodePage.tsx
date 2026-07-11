@@ -114,15 +114,19 @@ export function NodePage(): JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-flock-surface-0 text-flock-ink-primary">
-      <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-[var(--flock-border)] px-4">
+      <header className="flex h-topbar min-w-0 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 sm:gap-3 sm:px-4">
         <Button size="icon-sm" variant="ghost" aria-label="Back to Paddock" onClick={openMission}>
           <ArrowLeft className="size-4" />
         </Button>
-        <HardDrive className="size-4 text-flock-ink-muted" />
-        <span className="text-md font-semibold tracking-tight">{node?.name ?? 'Node'}</span>
+        <HardDrive className="hidden size-4 shrink-0 text-flock-ink-muted sm:block" />
+        <span className="min-w-0 flex-1 truncate text-md font-semibold tracking-tight">
+          {node?.name ?? 'Node'}
+        </span>
         {node ? (
           <>
-            <Badge variant="neutral">{node.kind}</Badge>
+            <Badge variant="neutral" className="hidden shrink-0 sm:inline-flex">
+              {node.kind}
+            </Badge>
             <Badge variant={STATUS_VARIANT[node.connectionStatus] ?? 'neutral'}>
               <span className="flock-status-dot" data-status={node.connectionStatus} />
               {node.connectionStatus}

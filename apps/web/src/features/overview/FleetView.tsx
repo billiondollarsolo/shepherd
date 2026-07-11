@@ -58,7 +58,9 @@ export function FleetView(): JSX.Element {
   const nodeOrder = usePaddock((s) => s.nodeOrder);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
   const visibleNodes = useMemo(() => orderNodes(nodes, nodeOrder), [nodeOrder, nodes]);
-  const nodeInfos = useNodeInfos(visibleNodes.map((node) => node.id));
+  const nodeInfos = useNodeInfos(
+    visibleNodes.filter((node) => node.connectionStatus === 'connected').map((node) => node.id),
+  );
   const openSessions = useMemo(
     () => sessions.filter((session) => session.closedAt === null),
     [sessions],

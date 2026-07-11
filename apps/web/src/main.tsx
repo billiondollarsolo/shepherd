@@ -5,6 +5,7 @@ import App from './App';
 import { registerServiceWorker } from './push';
 import { ThemeProvider } from './theme';
 import { queryClient } from './data/queryClient';
+import { Toaster, TooltipProvider } from './components/ui';
 import './styles/terminal-fonts';
 import './index.css';
 import './styles/responsive.css';
@@ -22,7 +23,10 @@ createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <App />
+        <TooltipProvider delayDuration={300}>
+          <App />
+          <Toaster />
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,

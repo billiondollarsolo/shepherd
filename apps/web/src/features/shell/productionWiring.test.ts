@@ -71,15 +71,24 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/toolsOpen|stage-tools-toggle|chrome === 'tools'/);
   });
 
-  it('Phone production path wires sendPhoneInject', () => {
-    const src = read('features/responsive/ResponsivePaddock.tsx');
-    expect(src).toMatch(/sendPhoneInject/);
-    expect(src).toMatch(/onSendInput/);
+  it('Phone production path mounts the live terminal transport', () => {
+    const src = read('features/responsive/PhoneView.tsx');
+    expect(src).toMatch(/<GhosttyMobileTerminal/);
+    expect(src).toMatch(/registerInput/);
+    expect(src).not.toMatch(/from ['"].*terminal\/Terminal['"]/);
+    expect(src).not.toMatch(/phone-composer|phone-stage-input/);
   });
 
   it('FleetView uses the persisted node order', () => {
     const src = read('features/overview/FleetView.tsx');
     expect(src).toMatch(/orderNodes/);
+  });
+
+  it('workspace probes skip disconnected nodes', () => {
+    const sidebar = read('features/paddock/Sidebar.tsx');
+    const fleet = read('features/overview/FleetView.tsx');
+    expect(sidebar).toMatch(/useStack\(project\.nodeId, project\.workingDir, nodeConnected\)/);
+    expect(fleet).toMatch(/connectionStatus === 'connected'/);
   });
 
   it('AddSessionDialog loads launcher presets', () => {

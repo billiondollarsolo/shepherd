@@ -175,7 +175,10 @@ function BranchHeader({
         />
       ) : (
         <>
-          <span className="font-medium text-flock-ink-primary" data-testid="sc-branch">
+          <span
+            className="min-w-0 flex-1 truncate font-medium text-flock-ink-primary"
+            data-testid="sc-branch"
+          >
             {branch ?? 'detached'}
           </span>
           {ahead > 0 ? <span className="text-flock-muted">↑{ahead}</span> : null}

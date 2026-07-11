@@ -9,7 +9,7 @@ import { KeyboardProvider } from './KeyboardProvider';
 import { PaddockCommands } from './usePaddockCommands';
 import { FleetView } from '../features/overview/FleetView';
 import { CompareView } from '../features/overview/CompareView';
-import { TooltipProvider, Toaster } from '../components/ui';
+import { TooltipProvider } from '../components/ui';
 import { Sidebar } from '../features/paddock/Sidebar';
 import { SessionPane } from '../features/paddock/SessionPane';
 import { LiveDataProvider } from '../features/paddock/liveData';
@@ -96,7 +96,6 @@ export function Paddock(): JSX.Element {
         <PaddockCommands />
         <PaddockDialogs />
       </KeyboardProvider>
-      <Toaster />
     </TooltipProvider>
   );
 }

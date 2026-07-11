@@ -35,7 +35,7 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
+        'fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100dvw-1rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-lg',
         'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         'rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-5 shadow-overlay',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -59,14 +59,23 @@ export const DialogContent = React.forwardRef<
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
+export function DialogHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
   return <div className={cn('flex flex-col gap-1.5 pr-6', className)} {...props} />;
 }
 
-export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
+export function DialogFooter({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
   return (
     <div
-      className={cn('sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-lg border-t border-[var(--flock-border)] bg-flock-surface-1 px-5 py-3.5 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-lg border-t border-[var(--flock-border)] bg-flock-surface-1 px-5 py-3.5 sm:flex-row sm:justify-end',
+        className,
+      )}
       {...props}
     />
   );
@@ -78,7 +87,10 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('font-display text-md font-semibold tracking-tight text-flock-ink-primary', className)}
+    className={cn(
+      'font-display text-md font-semibold tracking-tight text-flock-ink-primary',
+      className,
+    )}
     {...props}
   />
 ));

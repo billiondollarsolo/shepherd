@@ -119,7 +119,10 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
   const isSetup = mode === 'setup';
 
   return (
-    <main className="relative flex min-h-screen bg-flock-surface-0 text-flock-ink-primary">
+    <main
+      className="relative flex min-h-[100dvh] w-full min-w-0 max-w-full overflow-x-hidden bg-flock-surface-0 text-flock-ink-primary"
+      data-testid="auth-screen"
+    >
       {/* ── Left: brand / product story ─────────────────────────────────── */}
       <aside className="relative hidden w-[48%] max-w-xl flex-col justify-between overflow-hidden border-r border-[var(--flock-border)] bg-flock-surface-1 px-10 py-10 lg:flex xl:w-1/2 xl:max-w-none xl:px-14">
         {/* Atmosphere */}
@@ -170,7 +173,9 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
                   {f.icon}
                 </span>
                 <span>
-                  <span className="block text-sm font-medium text-flock-ink-primary">{f.title}</span>
+                  <span className="block text-sm font-medium text-flock-ink-primary">
+                    {f.title}
+                  </span>
                   <span className="mt-0.5 block text-2xs leading-relaxed text-flock-ink-muted">
                     {f.body}
                   </span>
@@ -189,7 +194,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
       </aside>
 
       {/* ── Right: credentials ──────────────────────────────────────────── */}
-      <section className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-10 lg:px-14">
+      <section className="relative flex min-w-0 flex-1 flex-col justify-center px-4 py-8 sm:px-10 sm:py-12 lg:px-14">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 lg:hidden"
@@ -199,7 +204,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           }}
         />
 
-        <div className="relative mx-auto w-full max-w-[22rem]">
+        <div className="relative mx-auto w-full min-w-0 max-w-[22rem]">
           <div className="mb-8 lg:mb-10">
             <BrandWordmark className="mb-8 lg:hidden" />
             <h2 className="text-2xl font-semibold tracking-tight text-flock-ink-primary">
@@ -215,7 +220,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           <form
             onSubmit={onSubmit}
             aria-label={isSetup ? 'First-run admin setup' : 'Log in'}
-            className="grid gap-4"
+            className="grid min-w-0 max-w-full gap-4"
           >
             <div className="grid gap-1.5">
               <Label htmlFor="auth-username">Username</Label>
@@ -227,7 +232,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 autoFocus
-                className="h-10"
+                className="h-10 text-base sm:text-sm"
               />
             </div>
             <div className="grid gap-1.5">
@@ -241,7 +246,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={isSetup ? 8 : undefined}
-                className="h-10"
+                className="h-10 text-base sm:text-sm"
               />
               {isSetup && (
                 <p className="text-2xs text-flock-ink-muted/80">At least 8 characters.</p>
@@ -260,7 +265,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
                   onChange={(e) => setConfirm(e.target.value)}
                   required
                   aria-invalid={confirm.length > 0 && confirm !== password}
-                  className="h-10"
+                  className="h-10 text-base sm:text-sm"
                 />
                 {confirm.length > 0 && confirm !== password && (
                   <p className="text-2xs text-status-error">Passwords do not match.</p>

@@ -19,10 +19,13 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import '@fontsource/jetbrains-mono/700.css';
+import '@fontsource/noto-sans-symbols-2/symbols-400.css';
 import './jetbrains-mono-nerd.css';
 
 /** The terminal's primary font family (Nerd-patched; falls back to JetBrains Mono). */
 export const TERMINAL_FONT_FAMILY = 'JetBrainsMono Nerd Font Mono';
+/** Monochrome fallback for terminal symbols that otherwise become platform emoji. */
+export const TERMINAL_SYMBOL_FONT_FAMILY = 'Noto Sans Symbols 2';
 
 /**
  * Load the terminal (Nerd) font weights, resolving once they're ready (or fail).
@@ -38,6 +41,7 @@ export function loadTerminalFont(): Promise<unknown> {
   return Promise.all([
     fonts.load(`400 1em "${TERMINAL_FONT_FAMILY}"`),
     fonts.load(`700 1em "${TERMINAL_FONT_FAMILY}"`),
+    fonts.load(`400 1em "${TERMINAL_SYMBOL_FONT_FAMILY}"`, '\u23f8'),
     // Also ensure the JetBrains Mono fallback is hot (instant first paint).
     fonts.load('400 1em "JetBrains Mono"'),
   ]).catch(() => undefined);

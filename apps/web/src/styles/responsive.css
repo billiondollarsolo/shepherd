@@ -21,10 +21,54 @@
 
 /* Comfortable tap targets + edge padding on phones. */
 @media (max-width: 767px) {
-  [data-testid='phone-view'] {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  [data-testid='phone-view'],
+  [data-testid='phone-stage'],
+  [data-mobile-viewport] {
     /* Respect the iOS notch / home indicator when launched as a PWA. */
+    max-width: 100dvw;
+    min-width: 0;
+    overflow-x: hidden;
     padding-top: env(safe-area-inset-top, 0);
     padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  [data-testid='auth-screen'] {
+    width: 100%;
+    max-width: 100dvw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  /* Ghostty's mobile input is fixed offscreen, independent of the visible
+     terminal cursor. Activating it at 1px gives iOS a stable keyboard target
+     without allowing Safari to pan toward the agent's bottom-row prompt. */
+  .flock-ghostty-mobile-input {
+    position: fixed !important;
+    top: 0 !important;
+    left: -10000px !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    font-size: 16px !important;
+    color: transparent !important;
+    background: transparent !important;
+    caret-color: transparent !important;
+  }
+
+  .flock-ghostty-mobile-input.flock-ghostty-mobile-input-active {
+    top: 1px !important;
+    left: 1px !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
   }
 
   /* Decision buttons (Approve / Deny) keep a 44px minimum touch target. */

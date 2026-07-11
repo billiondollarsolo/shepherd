@@ -13,12 +13,7 @@
  * fake socket (no real network). Defaults to the global `WebSocket`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  decodePtyFrame,
-  encodePtyInput,
-  encodeResize,
-  ptyWebSocketUrl,
-} from './ptyProtocol';
+import { decodePtyFrame, encodePtyInput, encodeResize, ptyWebSocketUrl } from './ptyProtocol';
 import { reconnectDelay } from '../../lib/utils';
 
 /** Minimal browser-WebSocket surface the hook depends on (eases faking in tests). */
@@ -80,8 +75,7 @@ const WS_OPEN = 1;
 const MAX_BACKOFF_MS = 5_000;
 const BASE_BACKOFF_MS = 250;
 
-const defaultFactory: WsFactory = (url) =>
-  new WebSocket(url) as unknown as WsLike;
+const defaultFactory: WsFactory = (url) => new WebSocket(url) as unknown as WsLike;
 
 export function usePtyWebSocket(
   sessionId: string,
@@ -117,6 +111,7 @@ export function usePtyWebSocket(
     let hasOpened = false; // distinguishes the first open from a reconnect
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let manualReconnect = false;
+    let initialConnectPending = true;
 
     const hardClose = (): void => {
       const ws = wsRef.current;
@@ -208,16 +203,28 @@ export function usePtyWebSocket(
 
     reconnectNowRef.current = (): void => {
       if (disposed || exited) return;
+      initialConnectPending = false;
       if (retryTimer) clearTimeout(retryTimer);
       attempts = 0;
       manualReconnect = true;
       connect();
     };
 
-    connect();
+    // React Strict Mode intentionally runs effect setup → cleanup → setup once
+    // in development. Constructing the browser socket synchronously here makes
+    // that provisional cleanup close a CONNECTING socket, which Chromium logs
+    // as a failed WebSocket even though the real mount connects immediately
+    // afterward. Deferring one microtask lets cleanup cancel the provisional
+    // connection before any network resource exists.
+    queueMicrotask(() => {
+      if (!initialConnectPending) return;
+      initialConnectPending = false;
+      connect();
+    });
 
     return () => {
       disposed = true;
+      initialConnectPending = false;
       reconnectNowRef.current = () => {};
       if (retryTimer) clearTimeout(retryTimer);
       hardClose();

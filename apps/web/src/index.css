@@ -53,6 +53,12 @@ html,
 body,
 #root {
   height: 100%;
+  max-width: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
 }
 
 /* US-37 polish: deliberate base type, one-confident-accent focus, mono nums. */

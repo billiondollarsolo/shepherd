@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { usePaddock } from '../../store/paddock';
 
 const openNodeInfo = vi.fn();
+const querySpies = vi.hoisted(() => ({ useNodeInfos: vi.fn() }));
 
 vi.mock('../../data/queries', () => ({
   useNodes: () => ({
@@ -27,8 +28,9 @@ vi.mock('../../data/queries', () => ({
       },
     ],
   }),
-  useNodeInfos: () =>
-    new Map([
+  useNodeInfos: (nodeIds: string[]) => {
+    querySpies.useNodeInfos(nodeIds);
+    return new Map([
       [
         'n1',
         {
@@ -39,7 +41,8 @@ vi.mock('../../data/queries', () => ({
           diskTotal: 100 * 1024 ** 3,
         },
       ],
-    ]),
+    ]);
+  },
   useFleetGit: () =>
     new Map([
       [
@@ -67,6 +70,7 @@ import { FleetView } from './FleetView';
 describe('FleetView hierarchy', () => {
   beforeEach(() => {
     openNodeInfo.mockReset();
+    querySpies.useNodeInfos.mockReset();
     usePaddock.setState({ nodeOrder: [], openNodeInfo });
   });
 
@@ -80,6 +84,7 @@ describe('FleetView hierarchy', () => {
     expect(screen.getByText('CPU')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Storage')).toBeInTheDocument();
+    expect(querySpies.useNodeInfos).toHaveBeenCalledWith(['n1']);
   });
 
   it('uses the same saved node order as the sidebar', () => {

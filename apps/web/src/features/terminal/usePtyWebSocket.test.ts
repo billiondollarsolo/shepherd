@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { createElement, StrictMode, type ReactNode } from 'react';
 import { usePtyWebSocket, type WsLike } from './usePtyWebSocket';
 
 /** A controllable fake WebSocket for driving the hook deterministically. */
@@ -52,6 +53,7 @@ describe('usePtyWebSocket', () => {
         onReconnect,
       }),
     );
+    await waitFor(() => expect(sockets).toHaveLength(1));
     act(() => sockets[0]!.open());
     expect(result.current.state).toBe('open');
     act(() => {
@@ -76,7 +78,7 @@ describe('usePtyWebSocket', () => {
       usePtyWebSocket('sess-1', { onData: () => {}, wsFactory: factory, reconnect: false }),
     );
 
-    expect(factory).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
     expect(factory.mock.calls[0][0]).toContain('/ws/pty/sess-1');
     expect(socket!.binaryType).toBe('arraybuffer');
     expect(result.current.state).toBe('connecting');
@@ -85,7 +87,7 @@ describe('usePtyWebSocket', () => {
     await waitFor(() => expect(result.current.state).toBe('open'));
   });
 
-  it('delivers inbound binary frames to onData as bytes', () => {
+  it('delivers inbound binary frames to onData as bytes', async () => {
     const frames: number[][] = [];
     let socket: FakeWs | undefined;
     const factory = (url: string): FakeWs => (socket = new FakeWs(url));
@@ -97,6 +99,7 @@ describe('usePtyWebSocket', () => {
         reconnect: false,
       }),
     );
+    await waitFor(() => expect(socket).toBeDefined());
 
     act(() => {
       socket!.open();
@@ -105,7 +108,7 @@ describe('usePtyWebSocket', () => {
     expect(frames).toEqual([[104, 105]]);
   });
 
-  it('ignores TEXT control frames (does not render JSON acks into the terminal)', () => {
+  it('ignores TEXT control frames (does not render JSON acks into the terminal)', async () => {
     const frames: number[][] = [];
     let socket: FakeWs | undefined;
     const factory = (url: string): FakeWs => (socket = new FakeWs(url));
@@ -117,6 +120,7 @@ describe('usePtyWebSocket', () => {
         reconnect: false,
       }),
     );
+    await waitFor(() => expect(socket).toBeDefined());
 
     act(() => {
       socket!.open();
@@ -127,13 +131,14 @@ describe('usePtyWebSocket', () => {
     expect(frames).toEqual([[97]]); // only the binary frame rendered
   });
 
-  it('sends keystrokes as binary frames once open (typing echoes upstream)', () => {
+  it('sends keystrokes as binary frames once open (typing echoes upstream)', async () => {
     let socket: FakeWs | undefined;
     const factory = (url: string): FakeWs => (socket = new FakeWs(url));
 
     const { result } = renderHook(() =>
       usePtyWebSocket('s', { onData: () => {}, wsFactory: factory, reconnect: false }),
     );
+    await waitFor(() => expect(socket).toBeDefined());
 
     // Before open: dropped (no socket OPEN).
     act(() => result.current.sendInput('x'));
@@ -145,13 +150,14 @@ describe('usePtyWebSocket', () => {
     expect(Array.from(socket!.sent[0] as Uint8Array)).toEqual([108, 115]); // "ls"
   });
 
-  it('sends a JSON resize envelope once open', () => {
+  it('sends a JSON resize envelope once open', async () => {
     let socket: FakeWs | undefined;
     const factory = (url: string): FakeWs => (socket = new FakeWs(url));
 
     const { result } = renderHook(() =>
       usePtyWebSocket('s', { onData: () => {}, wsFactory: factory, reconnect: false }),
     );
+    await waitFor(() => expect(socket).toBeDefined());
     act(() => socket!.open());
     act(() => result.current.sendResize(120, 40));
     expect(JSON.parse(socket!.sent[0] as string)).toEqual({
@@ -175,7 +181,7 @@ describe('usePtyWebSocket', () => {
     renderHook(() =>
       usePtyWebSocket('s', { onData: () => {}, wsFactory: factory, reconnect: true }),
     );
-    expect(sockets).toHaveLength(1);
+    await waitFor(() => expect(sockets).toHaveLength(1));
     act(() => sockets[0].open());
 
     vi.useFakeTimers();
@@ -189,7 +195,7 @@ describe('usePtyWebSocket', () => {
     }
   });
 
-  it('closes the socket on unmount and does not reconnect', () => {
+  it('closes the socket on unmount and does not reconnect', async () => {
     const sockets: FakeWs[] = [];
     const factory = (url: string): FakeWs => {
       const s = new FakeWs(url);
@@ -199,8 +205,22 @@ describe('usePtyWebSocket', () => {
     const { unmount } = renderHook(() =>
       usePtyWebSocket('s', { onData: () => {}, wsFactory: factory, reconnect: true }),
     );
+    await waitFor(() => expect(sockets).toHaveLength(1));
     act(() => sockets[0].open());
     unmount();
     expect(sockets[0].closed).toBe(true);
+  });
+
+  it('does not construct a provisional socket during Strict Mode effect replay', async () => {
+    const factory = vi.fn((url: string) => new FakeWs(url));
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element =>
+      createElement(StrictMode, null, children);
+
+    renderHook(
+      () => usePtyWebSocket('strict', { onData: () => {}, wsFactory: factory, reconnect: false }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
   });
 });
