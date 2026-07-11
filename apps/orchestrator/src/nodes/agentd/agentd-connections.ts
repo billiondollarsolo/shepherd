@@ -13,6 +13,33 @@ import type { AgentdBootstrap } from './agentd-bootstrap.js';
 import type { AgentdHost } from './ssh-agentd-host.js';
 import type { NodeControlIdentity } from './node-control-credentials.js';
 
+export type AgentdFailureCode = 'network' | 'authentication' | 'protocol' | 'enrollment';
+
+export interface AgentdConnectionFailure {
+  code: AgentdFailureCode;
+  /** Stable, redacted operator guidance. Never the raw exception text. */
+  message: string;
+  at: string;
+}
+
+const FAILURE_MESSAGES: Record<AgentdFailureCode, string> = {
+  network: 'The daemon control channel is unreachable.',
+  authentication: 'The daemon rejected the node control credential.',
+  protocol: 'The daemon and orchestrator control protocols are incompatible.',
+  enrollment: 'The daemon could not be installed or upgraded safely.',
+};
+
+/** Convert internal failures to a stable, secret-free operator category. */
+export function classifyAgentdFailure(error: unknown): AgentdFailureCode {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (/credential|authentication|authenticate|\bmac\b|unauthenticated/.test(message)) {
+    return 'authentication';
+  }
+  if (/protocol|version|challenge|capabilit/.test(message)) return 'protocol';
+  if (/bootstrap|install|upgrade|checksum|architecture|service/.test(message)) return 'enrollment';
+  return 'network';
+}
+
 export interface AgentdConnectionsDeps {
   /** Local daemon unix socket; defaults to the daemon's own default path. */
   socketPath?: string;
@@ -26,6 +53,16 @@ export interface AgentdConnectionsDeps {
    * snapshot replay is captured. The caller feeds this into the live status map.
    */
   onStatus?: (sessionId: string, state: string, meta: { tokens?: number; tool?: string }) => void;
+  /** Security audit seam. Payloads are stable categories and never raw errors. */
+  onAudit?: (
+    nodeId: string,
+    event:
+      | 'connected'
+      | 'disconnected'
+      | 'authentication_failed'
+      | 'protocol_failed'
+      | 'enrollment_failed',
+  ) => void;
 }
 
 /** The daemon's default socket path (mirrors agentd/main.go defaultSocket). */
@@ -40,6 +77,8 @@ export class AgentdConnections {
   private localPending: Promise<NodeAgentdClient> | null = null;
   private readonly remotes = new Map<string, NodeAgentdClient>();
   private readonly remotePending = new Map<string, Promise<NodeAgentdClient>>();
+  private readonly failures = new Map<string, AgentdConnectionFailure>();
+  private readonly connectedNodes = new Set<string>();
 
   constructor(private readonly deps: AgentdConnectionsDeps) {}
 
@@ -56,6 +95,39 @@ export class AgentdConnections {
   /** Peek the cached local-daemon client without connecting. */
   peekLocal(): NodeAgentdClient | null {
     return this.local;
+  }
+
+  /** Last redacted failure for a node, cleared after a successful authenticated link. */
+  failureFor(nodeId: string): AgentdConnectionFailure | null {
+    return this.failures.get(nodeId) ?? null;
+  }
+
+  private recordFailure(nodeId: string, error: unknown): void {
+    const code = classifyAgentdFailure(error);
+    const previous = this.failures.get(nodeId);
+    this.failures.set(nodeId, {
+      code,
+      message: FAILURE_MESSAGES[code],
+      at: new Date().toISOString(),
+    });
+    const wasConnected = this.connectedNodes.delete(nodeId);
+    if (previous?.code === code && !wasConnected) return;
+    const event =
+      code === 'authentication'
+        ? 'authentication_failed'
+        : code === 'protocol'
+          ? 'protocol_failed'
+          : code === 'enrollment'
+            ? 'enrollment_failed'
+            : 'disconnected';
+    this.deps.onAudit?.(nodeId, event);
+  }
+
+  private connected(nodeId: string): void {
+    const transition = !this.connectedNodes.has(nodeId);
+    this.connectedNodes.add(nodeId);
+    this.failures.delete(nodeId);
+    if (transition) this.deps.onAudit?.(nodeId, 'connected');
   }
 
   /**
@@ -77,11 +149,13 @@ export class AgentdConnections {
         await client.hello(identity, {
           allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
         });
+        this.connected(nodeId);
         return true;
       } finally {
         client.dispose();
       }
-    } catch {
+    } catch (error) {
+      this.recordFailure(nodeId, error);
       return false;
     }
   }
@@ -108,16 +182,24 @@ export class AgentdConnections {
         // T23: a failed handshake otherwise leaks the socket + frame decoder.
         client.dispose();
         sock.destroy();
+        this.recordFailure(nodeId, err);
         throw err;
       }
       sock.on('close', () => {
-        if (this.local === client) this.local = null;
+        if (this.local === client) {
+          this.local = null;
+          this.recordFailure(nodeId, new Error('agentd connection closed'));
+        }
       });
       this.local = client;
+      this.connected(nodeId);
       return client;
     })();
     try {
       return await this.localPending;
+    } catch (error) {
+      this.recordFailure(nodeId, error);
+      throw error;
     } finally {
       this.localPending = null;
     }
@@ -141,26 +223,35 @@ export class AgentdConnections {
     const pending = this.remotePending.get(nodeId);
     if (pending) return pending;
     const p = (async () => {
-      const identity = await this.deps.identityFor(nodeId, 'ssh');
-      const endpoint = await bootstrap.ensureRunning(host, identity);
-      const channel = await host.forwardOut(endpoint.host, endpoint.port);
-      const client = new NodeAgentdClient(channel);
-      if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
       try {
-        await client.hello(identity, {
-          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
+        const identity = await this.deps.identityFor(nodeId, 'ssh');
+        const endpoint = await bootstrap.ensureRunning(host, identity);
+        const channel = await host.forwardOut(endpoint.host, endpoint.port);
+        const client = new NodeAgentdClient(channel);
+        if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
+        try {
+          await client.hello(identity, {
+            allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
+          });
+        } catch (err) {
+          // T23: a failed handshake otherwise leaks the channel + frame decoder.
+          client.dispose();
+          channel.destroy();
+          throw err;
+        }
+        channel.on('close', () => {
+          if (this.remotes.get(nodeId) === client) {
+            this.remotes.delete(nodeId);
+            this.recordFailure(nodeId, new Error('agentd connection closed'));
+          }
         });
-      } catch (err) {
-        // T23: a failed handshake otherwise leaks the channel + frame decoder.
-        client.dispose();
-        channel.destroy();
-        throw err;
+        this.remotes.set(nodeId, client);
+        this.connected(nodeId);
+        return client;
+      } catch (error) {
+        this.recordFailure(nodeId, error);
+        throw error;
       }
-      channel.on('close', () => {
-        if (this.remotes.get(nodeId) === client) this.remotes.delete(nodeId);
-      });
-      this.remotes.set(nodeId, client);
-      return client;
     })();
     this.remotePending.set(nodeId, p);
     try {

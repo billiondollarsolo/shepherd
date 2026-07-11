@@ -82,6 +82,7 @@ const AUDIT_ACTION_VALUES: EnumTuple = [
   'node_update',
   'node_remove',
   'node_credential_rotate',
+  'node_control_event',
   'session_create',
   'session_terminate',
   'browser_takeover',

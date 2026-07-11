@@ -465,6 +465,9 @@ func TestBroadcastNonBlockingAndFinalizeRaceSafe(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("broadcast blocked on an undrained subscriber (backpressure regression)")
 	}
+	if s.DroppedOutputBytes() == 0 {
+		t.Fatal("expected dropped live output to increment the diagnostic counter")
+	}
 
 	// 2) Hammer broadcast concurrently while finalize() closes the channels — the
 	// exact race that used to panic. Must complete cleanly.

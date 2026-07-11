@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -40,6 +41,32 @@ type Server struct {
 	credentialFile string
 	layout         LayoutStore
 	runtime        *identity.Runtime
+	stats          controlStats
+}
+
+type controlStats struct {
+	connections    atomic.Uint64
+	authFailures   atomic.Uint64
+	malformed      atomic.Uint64
+	writeTimeouts  atomic.Uint64
+	sessionsOpened atomic.Uint64
+	sessionsClosed atomic.Uint64
+	rotations      atomic.Uint64
+}
+
+type ControlDiagnostics struct {
+	Mode           string `json:"mode"`
+	Protocol       int    `json:"protocol"`
+	NodeID         string `json:"nodeId"`
+	DaemonVersion  string `json:"daemonVersion"`
+	Connections    uint64 `json:"connections"`
+	AuthFailures   uint64 `json:"authFailures"`
+	Malformed      uint64 `json:"malformedFrames"`
+	WriteTimeouts  uint64 `json:"writeTimeouts"`
+	DroppedOutput  uint64 `json:"droppedOutputBytes"`
+	SessionsOpened uint64 `json:"sessionsOpened"`
+	SessionsClosed uint64 `json:"sessionsClosed"`
+	Rotations      uint64 `json:"credentialRotations"`
 }
 
 // LayoutStore persists per-workspace pane layouts (implemented in task #22).
@@ -74,6 +101,7 @@ type authChallenge struct {
 
 // HandleConn services one connection until it closes.
 func (s *Server) HandleConn(raw net.Conn) {
+	s.stats.connections.Add(1)
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(os.Stderr, "[flock-agentd] connection handler panic: %v\n", r)
@@ -90,6 +118,7 @@ func (s *Server) HandleConn(raw net.Conn) {
 		case proto.TypeControl:
 			ctrl, derr := proto.DecodeControl(payload)
 			if derr != nil {
+				s.stats.malformed.Add(1)
 				continue
 			}
 			c.handleControl(ctrl)
@@ -196,6 +225,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
 			return
 		}
+		c.s.stats.sessionsOpened.Add(1)
 		c.sendControl(proto.Control{Op: "opened", ID: ctrl.ID})
 	case "subscribe":
 		sess := c.s.mgr.Get(ctrl.ID)
@@ -219,6 +249,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		}
 	case "close":
 		c.s.mgr.Close(ctrl.ID)
+		c.s.stats.sessionsClosed.Add(1)
 	case "list":
 		specs := c.s.mgr.List()
 		infos := make([]proto.SessionInfo, 0, len(specs))
@@ -232,7 +263,8 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		combined := struct {
 			metrics.NodeInfo
 			Processes map[string]session.ProcStat `json:"processes,omitempty"`
-		}{metrics.Snapshot(), c.s.mgr.ProcessStats()}
+			Control   ControlDiagnostics          `json:"control"`
+		}{metrics.Snapshot(), c.s.mgr.ProcessStats(), c.s.diagnostics()}
 		if blob, err := json.Marshal(combined); err == nil {
 			c.sendControl(proto.Control{Op: "nodeInfo", NodeInfo: blob})
 		}
@@ -284,7 +316,23 @@ func (s *Server) rotateCredential(next string) error {
 	s.previousUntil = time.Now().Add(credentialRotationOverlap)
 	s.secret = next
 	s.secretMu.Unlock()
+	s.stats.rotations.Add(1)
 	return nil
+}
+
+func (s *Server) diagnostics() ControlDiagnostics {
+	mode := "secure"
+	if s.runtime == nil {
+		mode = "insecure-development"
+	}
+	return ControlDiagnostics{
+		Mode: mode, Protocol: proto.ProtocolVersion, NodeID: s.nodeID, DaemonVersion: s.version,
+		Connections: s.stats.connections.Load(), AuthFailures: s.stats.authFailures.Load(),
+		Malformed: s.stats.malformed.Load(), WriteTimeouts: s.stats.writeTimeouts.Load(),
+		DroppedOutput:  s.mgr.DroppedOutputBytes(),
+		SessionsOpened: s.stats.sessionsOpened.Load(), SessionsClosed: s.stats.sessionsClosed.Load(),
+		Rotations: s.stats.rotations.Load(),
+	}
 }
 
 func replaceCredentialFile(path, value string) error {
@@ -381,6 +429,7 @@ func pathWithin(root, candidate string) bool {
 }
 
 func (c *conn) reject(message string) {
+	c.s.stats.authFailures.Add(1)
 	c.sendControl(proto.Control{Op: "error", Message: message})
 	_ = c.raw.Close()
 }
@@ -470,6 +519,9 @@ func (c *conn) sendControl(ctrl proto.Control) {
 	defer c.wmu.Unlock()
 	_ = c.raw.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if err := proto.WriteControl(c.raw, ctrl); err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			c.s.stats.writeTimeouts.Add(1)
+		}
 		_ = c.raw.Close() // unblocks the read loop → HandleConn returns → cleanup
 	}
 }
@@ -479,6 +531,9 @@ func (c *conn) sendData(sid string, data []byte) {
 	defer c.wmu.Unlock()
 	_ = c.raw.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if err := proto.WriteFrame(c.raw, proto.TypePtyOutput, proto.EncodeData(sid, data)); err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			c.s.stats.writeTimeouts.Add(1)
+		}
 		_ = c.raw.Close()
 	}
 }

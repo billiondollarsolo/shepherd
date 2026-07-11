@@ -216,6 +216,17 @@ func (m *Manager) ProcessStats() map[string]ProcStat {
 	return out
 }
 
+// DroppedOutputBytes returns a bounded diagnostic counter without exposing output.
+func (m *Manager) DroppedOutputBytes() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var total uint64
+	for _, s := range m.sessions {
+		total += s.DroppedOutputBytes()
+	}
+	return total
+}
+
 // Shutdown gracefully stops every session for daemon teardown: SIGTERM each (so
 // agents can flush transcripts/state), wait up to grace for them to exit, then
 // CloseAll() force-kills + clears any stragglers. Replaces a blunt CloseAll on

@@ -122,6 +122,8 @@ type Session struct {
 
 	configDir string // scoped hook-config dir seeded for this session (rm on Close); "" = none
 
+	// droppedOutputBytes contains only counts, never terminal content.
+	droppedOutputBytes atomic.Uint64
 	// lastActivityNanos is the unix-nano timestamp of the most recent PTY output.
 	// Read lock-free by the activity-status watcher (T61) to derive running/idle for
 	// agents with no transcript/hook status source (e.g. gemini).
@@ -404,9 +406,14 @@ func (s *Session) broadcast(chunk []byte) {
 		case ch <- chunk:
 		default:
 			// subscriber buffer full → drop this chunk for it (see doc above).
+			s.droppedOutputBytes.Add(uint64(len(chunk)))
 		}
 	}
 }
+
+// DroppedOutputBytes is the cumulative live-output loss across slow subscribers.
+// The reconnect ring still retains the newest output, so clients can self-heal.
+func (s *Session) DroppedOutputBytes() uint64 { return s.droppedOutputBytes.Load() }
 
 // tailAfterAltExit returns the portion of chunk AFTER its last alt-screen-exit
 // sequence, so the stale alt frames preceding it aren't retained in scrollback.

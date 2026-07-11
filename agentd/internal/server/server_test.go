@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -155,7 +157,7 @@ func TestCapturedAuthenticateCannotBeReplayed(t *testing.T) {
 }
 
 func TestCredentialRotationKeepsActiveLinkAndAllowsBoundedReconnect(t *testing.T) {
-	dial, _, _ := testServerFixture(t, nil)
+	dial, _, srv := testServerFixture(t, nil)
 	active := dial()
 	authenticateWithSecret(t, active, testSecret)
 	const next = "next-control-credential-0123456789abcdef"
@@ -174,6 +176,30 @@ func TestCredentialRotationKeepsActiveLinkAndAllowsBoundedReconnect(t *testing.T
 	// the orchestrator to commit its encrypted DB reference and reconnect safely.
 	overlap := dial()
 	authenticateWithSecret(t, overlap, testSecret)
+	diagnostics := srv.diagnostics()
+	if diagnostics.Rotations != 1 || diagnostics.Connections != 3 {
+		t.Fatalf("unexpected control diagnostics: %+v", diagnostics)
+	}
+}
+
+func TestControlDiagnosticsCountMalformedFramesWithoutLeakingContent(t *testing.T) {
+	dial, _, srv := testServerFixture(t, nil)
+	client := dial()
+	if err := proto.WriteFrame(client, proto.TypeControl, []byte(`{"op":`)); err != nil {
+		t.Fatal(err)
+	}
+	authenticate(t, client)
+	diagnostics := srv.diagnostics()
+	if diagnostics.Malformed != 1 || diagnostics.Mode != "insecure-development" {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+	blob, err := json.Marshal(diagnostics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(blob, []byte(testSecret)) || bytes.Contains(blob, []byte(`{"op":`)) {
+		t.Fatalf("diagnostics leaked credential or malformed payload: %s", blob)
+	}
 }
 
 func TestCredentialRotationAtomicallyPreservesProtectedFileMode(t *testing.T) {

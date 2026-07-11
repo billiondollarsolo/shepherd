@@ -113,7 +113,18 @@ export function searchNode(
 export interface AgentdHealth {
   enabled: boolean;
   /** Keyed by nodeId — whether the multiplexed daemon link is live. */
-  nodes: Record<string, { link: 'up' | 'down' }>;
+  nodes: Record<
+    string,
+    {
+      link: 'up' | 'down';
+      /** Last stable, server-redacted control failure; cleared after reconnect. */
+      failure?: {
+        code: 'network' | 'authentication' | 'protocol' | 'enrollment';
+        message: string;
+        at: string;
+      };
+    }
+  >;
   /**
    * Keyed by sessionId — whether the session's PTY is running on the daemon, plus
    * derived telemetry from the agent's transcript: cumulative tokens, current tool,

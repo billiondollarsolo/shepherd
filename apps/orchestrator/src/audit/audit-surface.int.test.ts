@@ -3,10 +3,10 @@
  *
  * Exercises the admin audit READ surface end to end against the compose
  * `postgres` service (DATABASE_URL), proving FR-A3's two halves together:
- *   1. WRITE  — the six audited actions land as rows in `audit_log`: this test
+ *   1. WRITE  — the audited actions land as rows in `audit_log`: this test
  *               writes them through the SAME seam production uses (the Drizzle
  *               `AuditSink` for the AuditLogger). (login is also covered live by
- *               auth.int.test.ts; here we assert all six action kinds are
+ *               auth.int.test.ts; here we assert the action kinds are
  *               readable through the admin endpoint.)
  *   2. READ   — `GET /api/audit` returns the rows for an ADMIN (200), rejects a
  *               MEMBER (403), and rejects an unauthenticated caller (401), and
@@ -84,6 +84,13 @@ beforeAll(async () => {
   const logger = new AuditLogger(makeDbAuditSink(handle.db));
   await logger.recordNodeAdd({ nodeId: randomUUID(), userId: adminId });
   await logger.recordNodeRemove({ nodeId: randomUUID(), userId: adminId });
+  await logger.record({
+    action: 'node_control_event',
+    userId: adminId,
+    targetType: 'node',
+    targetId: randomUUID(),
+    detail: { event: 'connected' },
+  });
   await logger.recordSessionCreate({ sessionId: randomUUID(), userId: adminId });
   await logger.record({
     action: 'session_terminate',
@@ -144,11 +151,12 @@ describe('GET /api/audit — admin-only read (US-40, FR-A3)', () => {
     const { entries } = res.json() as { entries: Array<{ action: string; ts: string }> };
     const actions = new Set(entries.map((e) => e.action));
 
-    // All six US-40 audited actions are present and readable by the admin.
+    // Security-relevant actions are present and readable by the owner.
     for (const a of [
       'login',
       'node_add',
       'node_remove',
+      'node_control_event',
       'session_create',
       'session_terminate',
       'browser_takeover',

@@ -276,11 +276,22 @@ export async function main(): Promise<void> {
   // autonomous launch doesn't fetch full host metrics every time.
   const sandboxAvailableByNode = new Map<string, boolean>();
   let forwardAgentdStatus: (id: string, state: string, meta: AgentdStatusMeta) => void = () => {};
+  const recordNodeControlEvent = (nodeId: string, event: string): void => {
+    void auditLogger
+      .record({
+        action: 'node_control_event',
+        targetType: 'node',
+        targetId: nodeId,
+        detail: { event },
+      })
+      .catch(() => undefined);
+  };
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
     identityFor: (nodeId, kind) => nodeControlCredentials.forNode(nodeId, kind),
     allowLegacyDevelopment: process.env.NODE_ENV !== 'production',
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
+    onAudit: recordNodeControlEvent,
   });
   // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
   // as a root-owned system service, then drops sessions to flock-agent.
@@ -291,6 +302,7 @@ export async function main(): Promise<void> {
     binaries: new FsAgentdBinaryProvider(
       process.env.FLOCK_AGENTD_DIST_DIR || path.resolve(process.cwd(), '../../agentd/dist'),
     ),
+    onEvent: recordNodeControlEvent,
   });
   let localNodeId = '';
 
@@ -346,7 +358,17 @@ export async function main(): Promise<void> {
       nodes.listNodes(),
     ]);
     const sshNodes = allNodes.filter((n) => n.kind === 'ssh');
-    const nodeHealth: Record<string, { link: 'up' | 'down' }> = {};
+    const nodeHealth: Record<
+      string,
+      {
+        link: 'up' | 'down';
+        failure?: {
+          code: 'network' | 'authentication' | 'protocol' | 'enrollment';
+          message: string;
+          at: string;
+        };
+      }
+    > = {};
     const sessionHealth: Record<
       string,
       {
@@ -362,13 +384,24 @@ export async function main(): Promise<void> {
       }
     > = {};
 
+    for (const node of allNodes) {
+      const failure = agentdConns.failureFor(node.id) ?? undefined;
+      nodeHealth[node.id] = {
+        link: node.id === localNodeId && agentdConns.peekLocal() ? 'up' : 'down',
+        failure,
+      };
+    }
+
     // Per-node link: PROACTIVELY probe each ssh node's daemon (connect-only, no
     // bootstrap) so the node dot reflects the persistent (systemd) daemon even
     // with zero sessions. Only probe nodes whose SSH link is up.
     await Promise.all(
       sshNodes.map(async (n) => {
         if (connections.statusOf(n.id) !== 'connected') {
-          nodeHealth[n.id] = { link: 'down' };
+          nodeHealth[n.id] = {
+            link: 'down',
+            failure: agentdConns.failureFor(n.id) ?? undefined,
+          };
           return;
         }
         let up = agentdConns.peekRemote(n.id) !== null;
@@ -386,7 +419,10 @@ export async function main(): Promise<void> {
             probeCache.set(n.id, { up, at: Date.now() });
           }
         }
-        nodeHealth[n.id] = { link: up ? 'up' : 'down' };
+        nodeHealth[n.id] = {
+          link: up ? 'up' : 'down',
+          failure: agentdConns.failureFor(n.id) ?? undefined,
+        };
       }),
     );
 

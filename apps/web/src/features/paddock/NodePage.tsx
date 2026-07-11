@@ -9,16 +9,19 @@ import {
   Gauge,
   HardDrive,
   MemoryStick,
+  ShieldAlert,
+  ShieldCheck,
   SquareTerminal,
 } from 'lucide-react';
-import { displayStatus } from '@flock/shared';
+import { displayStatus, type NodeInfo } from '@flock/shared';
 import type { LucideIcon } from 'lucide-react';
 import type { BadgeProps } from '../../components/ui';
 import { Badge, Button, ScrollArea } from '../../components/ui';
 import { useFleetGit, useNodeInfo, useNodes, useProjects, useSessions } from '../../data/queries';
+import type { AgentdHealth } from '../../data/treeApi';
 import { usePaddock } from '../../store/paddock';
 import { formatGB } from '../../lib/utils';
-import { useLiveStatuses } from './liveData';
+import { useAgentdHealth, useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
 
 function fmtUptime(sec: number): string {
@@ -94,6 +97,68 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
+function ControlPlaneCard({
+  control,
+  failure,
+}: {
+  control: NodeInfo['control'];
+  failure: AgentdHealth['nodes'][string]['failure'];
+}): JSX.Element {
+  if (!control) {
+    return (
+      <Card title="Control plane">
+        {failure ? (
+          <div className="space-y-2">
+            <Badge variant="danger">{failure.code}</Badge>
+            <p className="text-sm text-flock-ink-primary">{failure.message}</p>
+            <p className="text-2xs text-flock-ink-muted">Last failure {fmtWhen(failure.at)}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-flock-ink-muted">
+            Control diagnostics are unavailable. The daemon may need an upgrade.
+          </p>
+        )}
+      </Card>
+    );
+  }
+
+  const secure = control.mode === 'secure';
+  const anomalies = control.authFailures + control.malformedFrames + control.writeTimeouts;
+  return (
+    <Card title="Control plane">
+      <div className="mb-2 flex items-center gap-2">
+        {secure ? (
+          <ShieldCheck className="size-4 text-status-running" aria-hidden="true" />
+        ) : (
+          <ShieldAlert className="size-4 text-status-error" aria-hidden="true" />
+        )}
+        <Badge variant={secure ? 'success' : 'danger'}>
+          {secure ? 'Secure' : 'Insecure development'}
+        </Badge>
+        {anomalies > 0 ? (
+          <Badge variant="danger" className="ml-auto">
+            {anomalies} anomalies
+          </Badge>
+        ) : null}
+      </div>
+      <Field label="Daemon" value={control.daemonVersion} />
+      <Field label="Protocol" value={`v${control.protocol}`} />
+      <Field label="Connections" value={String(control.connections)} />
+      <Field label="Sessions opened" value={String(control.sessionsOpened)} />
+      <Field label="Sessions closed" value={String(control.sessionsClosed)} />
+      <Field label="Credential rotations" value={String(control.credentialRotations)} />
+      <Field label="Dropped output" value={`${control.droppedOutputBytes} bytes`} />
+      {anomalies > 0 ? (
+        <div className="mt-2 border-t border-[var(--flock-border)] pt-2">
+          <Field label="Authentication failures" value={String(control.authFailures)} />
+          <Field label="Malformed frames" value={String(control.malformedFrames)} />
+          <Field label="Write timeouts" value={String(control.writeTimeouts)} />
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 export function NodePage(): JSX.Element {
   const nodeId = usePaddock((s) => s.nodeInfoNodeId);
   const openMission = usePaddock((s) => s.openMission);
@@ -111,6 +176,7 @@ export function NodePage(): JSX.Element {
   const nodeProjects = projects.filter((project) => project.nodeId === nodeId);
   const gitBySession = useFleetGit(nodeSessions.map((session) => session.id));
   const liveStatuses = useLiveStatuses();
+  const agentdHealth = useAgentdHealth();
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-flock-surface-0 text-flock-ink-primary">
@@ -304,7 +370,7 @@ export function NodePage(): JSX.Element {
             )}
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-3">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card title="Connection">
               <Field
                 label="Host"
@@ -329,6 +395,11 @@ export function NodePage(): JSX.Element {
                 }
               />
             </Card>
+
+            <ControlPlaneCard
+              control={info?.control}
+              failure={nodeId ? agentdHealth?.nodes[nodeId]?.failure : undefined}
+            />
 
             <Card title="Detected agent CLIs">
               {!info || info.agents.length === 0 ? (

@@ -27,6 +27,7 @@ export interface AgentdBootstrapConfig {
   binaries: AgentdBinaryProvider;
   runtimeUser?: string;
   logger?: { warn(msg: string): void };
+  onEvent?: (nodeId: string, event: 'installed' | 'upgraded' | 'service_started') => void;
 }
 
 export interface AgentdEndpoint {
@@ -46,6 +47,7 @@ export class AgentdBootstrap {
   private readonly binaries: AgentdBinaryProvider;
   private readonly runtimeUser: string;
   private readonly logger: { warn(msg: string): void };
+  private readonly onEvent?: AgentdBootstrapConfig['onEvent'];
 
   constructor(cfg: AgentdBootstrapConfig) {
     this.version = cfg.version;
@@ -58,6 +60,7 @@ export class AgentdBootstrap {
         console.warn(`[agentd-bootstrap] ${msg}`);
       },
     };
+    this.onEvent = cfg.onEvent;
   }
 
   async ensureRunning(host: AgentdHost, identity: NodeControlIdentity): Promise<AgentdEndpoint> {
@@ -70,11 +73,13 @@ export class AgentdBootstrap {
       const platform = await this.detectPlatform(host);
       const local = await this.binaries.resolve(platform);
       await this.installBinary(host, local, platform);
+      this.onEvent?.(identity.nodeId, installed ? 'upgraded' : 'installed');
     }
     const running = await this.isListening(host);
     if (upgraded || !running) {
       await this.installCredential(host, identity.credential);
       await this.installAndStartService(host, identity.nodeId);
+      this.onEvent?.(identity.nodeId, 'service_started');
     }
     return { host: '127.0.0.1', port: this.port };
   }

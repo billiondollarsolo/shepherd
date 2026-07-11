@@ -629,6 +629,15 @@ what binary and service configuration are being activated.
 
 **Priority:** Medium
 
+**Implementation status:** In progress. Agentd exposes bounded, content-free counters
+for connections, authentication failures, malformed frames, write timeouts, dropped
+live output, session lifecycle, and credential rotation. The orchestrator categorizes
+network, authentication, protocol, and enrollment failures into stable redacted
+operator messages, deduplicates transition audit events, and the node page reports the
+secure/insecure mode, protocol, daemon version, counters, and failures. Credential
+rotation and user-facing session create/terminate are already audited. Policy-denial
+audit coverage will be completed with S3.2.
+
 **Why**
 
 Strong authentication is operationally incomplete if an operator cannot distinguish

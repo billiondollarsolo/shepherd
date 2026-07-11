@@ -94,6 +94,7 @@ export const AuditActionEnum = z.enum([
   'node_update',
   'node_remove',
   'node_credential_rotate',
+  'node_control_event',
   'session_create',
   'session_terminate',
   'browser_takeover',
@@ -290,6 +291,22 @@ export const NodeInfoSchema = z.object({
    *  RAM/CPU to specific sessions. Omitted by older daemons. */
   processes: z
     .record(z.string(), z.object({ rssBytes: z.number(), cpuPct: z.number() }))
+    .optional(),
+  control: z
+    .object({
+      mode: z.enum(['secure', 'insecure-development']),
+      protocol: z.number().int().positive(),
+      nodeId: z.string(),
+      daemonVersion: z.string(),
+      connections: z.number().int().nonnegative(),
+      authFailures: z.number().int().nonnegative(),
+      malformedFrames: z.number().int().nonnegative(),
+      writeTimeouts: z.number().int().nonnegative(),
+      droppedOutputBytes: z.number().int().nonnegative(),
+      sessionsOpened: z.number().int().nonnegative(),
+      sessionsClosed: z.number().int().nonnegative(),
+      credentialRotations: z.number().int().nonnegative(),
+    })
     .optional(),
 });
 export type NodeInfo = z.infer<typeof NodeInfoSchema>;

@@ -120,6 +120,29 @@ describe('AgentdBootstrap secure system service', () => {
     expect(install).toContain('install.json');
   });
 
+  it('emits stable install lifecycle events without credential material', async () => {
+    const events: string[] = [];
+    const host = new FakeHost([
+      {
+        match: /^\/usr\/local\/lib\/flock-agentd\/flock-agentd version/,
+        result: { stdout: '' },
+      },
+      { match: /uname/, result: { stdout: 'Linux\nx86_64\n' } },
+      { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
+    ]);
+    const bootstrap = new AgentdBootstrap({
+      version: '1.2.3',
+      port: 48222,
+      binaries,
+      onEvent: (_nodeId, event) => events.push(event),
+    });
+
+    await bootstrap.ensureRunning(host, IDENTITY);
+
+    expect(events).toEqual(['installed', 'service_started']);
+    expect(JSON.stringify(events)).not.toContain(SECRET);
+  });
+
   it('uploads the credential as protected file content, never shell text', async () => {
     const host = new FakeHost([
       {
