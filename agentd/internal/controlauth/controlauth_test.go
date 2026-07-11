@@ -30,3 +30,13 @@ func TestNonceShapeAndVerification(t *testing.T) {
 		t.Fatal("MAC comparison failed")
 	}
 }
+
+func TestCredentialIDIsStableAndNonSecret(t *testing.T) {
+	a := CredentialID("0123456789abcdef0123456789abcdef")
+	if len(a) != 32 || a != CredentialID("0123456789abcdef0123456789abcdef") {
+		t.Fatalf("bad credential id %q", a)
+	}
+	if a == CredentialID("different-credential-value-000000") {
+		t.Fatal("different credentials shared an id")
+	}
+}

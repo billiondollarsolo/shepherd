@@ -77,6 +77,14 @@ A captured authenticate frame cannot be replayed on another connection because t
 new server nonce changes the transcript. Go and TypeScript share a fixed MAC test
 vector, and a cross-language socket smoke verifies negotiation and PTY use.
 
+Credential rotation runs over an already authenticated link. Agentd atomically
+replaces the protected file without changing ownership/mode, keeps existing PTYs and
+authenticated connections alive, and accepts the previous credential for a bounded
+five-minute commit/reconnect window. The orchestrator updates the encrypted per-node
+record only after daemon acknowledgement and rotates back if that database claim
+fails. Rotation is an owner-authenticated audited node operation; no key value is
+returned or logged.
+
 The wire sources of truth are:
 
 - `agentd/internal/proto/proto.go`

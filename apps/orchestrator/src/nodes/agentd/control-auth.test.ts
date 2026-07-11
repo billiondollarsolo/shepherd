@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { controlMac, controlNonce, validControlNonce, verifyControlMac } from './control-auth.js';
+import {
+  controlCredentialId,
+  controlMac,
+  controlNonce,
+  validControlNonce,
+  verifyControlMac,
+} from './control-auth.js';
 
 describe('agentd v2 control authentication', () => {
   it('matches the shared Go/TypeScript vector', () => {
@@ -23,5 +29,11 @@ describe('agentd v2 control authentication', () => {
     expect(validControlNonce('short')).toBe(false);
     expect(verifyControlMac('same', 'same')).toBe(true);
     expect(verifyControlMac('same', 'different')).toBe(false);
+  });
+
+  it('matches the Go credential selector', () => {
+    expect(controlCredentialId('0123456789abcdef0123456789abcdef')).toBe(
+      '3eb1bd439947eb762998e566ccc2e099',
+    );
   });
 });

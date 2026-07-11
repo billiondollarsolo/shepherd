@@ -250,6 +250,12 @@ export class NodeService {
     return rows.map(rowToNode);
   }
 
+  /** Internal/public-safe node lookup; credential references remain opaque. */
+  async getNode(id: string): Promise<SharedNode | null> {
+    const [row] = await this.db.select().from(nodes).where(eq(nodes.id, id)).limit(1);
+    return row ? rowToNode(row) : null;
+  }
+
   /**
    * Create a node. For `local`: persist `connected`, no SSH fields. For `ssh`:
    * encrypt the private key, store the secret id in `ssh_key_ref`, persist

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { NodeAgentdClient } from './agentd-client.js';
 import { controlMac } from './control-auth.js';
+import { controlCredentialId } from './control-auth.js';
 import {
   AGENTD_PROTOCOL_VERSION,
   encodeControl,
@@ -69,6 +70,7 @@ describe('NodeAgentdClient v2 handshake', () => {
           serverNonce: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
           daemonVersion,
           capabilities,
+          credentialId: controlCredentialId(identity.credential),
         };
         challenge.serverMac = controlMac({
           credential: identity.credential,
@@ -100,6 +102,13 @@ describe('NodeAgentdClient v2 handshake', () => {
             capabilities,
           }),
         );
+      } else if (control.op === 'rotateCredential') {
+        socket.write(
+          encodeControl({
+            op: 'credentialRotated',
+            credentialId: controlCredentialId(control.newCredential!),
+          }),
+        );
       }
     });
     await expect(client.hello(identity)).resolves.toMatchObject({
@@ -107,6 +116,9 @@ describe('NodeAgentdClient v2 handshake', () => {
       nodeId: identity.nodeId,
       daemonVersion,
     });
+    await expect(
+      client.rotateCredential('new-credential-value-0123456789abcdef'),
+    ).resolves.toBeUndefined();
     client.dispose();
   });
 
@@ -122,6 +134,7 @@ describe('NodeAgentdClient v2 handshake', () => {
           serverNonce: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
           daemonVersion,
           capabilities,
+          credentialId: controlCredentialId(identity.credential),
           serverMac: 'invalid',
         }),
       );

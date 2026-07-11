@@ -11,7 +11,13 @@
 import type { Duplex } from 'node:stream';
 
 import type { NodeControlIdentity } from './node-control-credentials.js';
-import { controlMac, controlNonce, validControlNonce, verifyControlMac } from './control-auth.js';
+import {
+  controlCredentialId,
+  controlMac,
+  controlNonce,
+  validControlNonce,
+  verifyControlMac,
+} from './control-auth.js';
 
 import {
   AGENTD_PROTOCOL_VERSION,
@@ -167,11 +173,13 @@ export class NodeAgentdClient {
     options: { allowLegacyDevelopment?: boolean } = {},
   ): Promise<AgentdControl> {
     const clientNonce = controlNonce();
+    const credentialId = controlCredentialId(identity.credential);
     this.send({
       op: 'hello',
       protocolVersion: AGENTD_PROTOCOL_VERSION,
       nodeId: identity.nodeId,
       clientNonce,
+      credentialId,
       // Explicit development migration only: an already-running v1 daemon
       // rejects the v2 hello before it can be restarted without killing PTYs.
       secret: options.allowLegacyDevelopment ? identity.credential : undefined,
@@ -188,6 +196,7 @@ export class NodeAgentdClient {
     if (
       challenge.protocolVersion !== AGENTD_PROTOCOL_VERSION ||
       challenge.nodeId !== identity.nodeId ||
+      challenge.credentialId !== credentialId ||
       challenge.clientNonce !== clientNonce ||
       !challenge.serverNonce ||
       !validControlNonce(challenge.serverNonce) ||
@@ -233,6 +242,21 @@ export class NodeAgentdClient {
       throw new Error('agentd authenticated identity changed during handshake');
     }
     return ok;
+  }
+
+  /** Rotate this node's key over an already authenticated control connection. */
+  async rotateCredential(newCredential: string): Promise<void> {
+    if (newCredential.length < 32) throw new Error('new agentd credential is too short');
+    this.send({ op: 'rotateCredential', newCredential });
+    const response = await this.await(
+      (control) => control.op === 'credentialRotated' || control.op === 'error',
+    );
+    if (response.op === 'error') {
+      throw new Error(`agentd credential rotation failed: ${response.message}`);
+    }
+    if (response.credentialId !== controlCredentialId(newCredential)) {
+      throw new Error('agentd acknowledged the wrong rotated credential');
+    }
   }
 
   /** Open (or re-attach to) a session. Idempotent on the daemon side. */

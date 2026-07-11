@@ -24,6 +24,8 @@ export interface AgentdControl {
   serverMac?: string;
   clientMac?: string;
   capabilities?: string[];
+  credentialId?: string;
+  newCredential?: string;
   id?: string;
   kind?: string;
   cwd?: string;

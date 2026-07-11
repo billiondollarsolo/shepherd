@@ -25,22 +25,31 @@ func dialServer(t *testing.T) (net.Conn, *session.Manager) {
 
 func dialServerWith(t *testing.T, layouts LayoutStore) (net.Conn, *session.Manager) {
 	t.Helper()
+	dial, mgr, _ := testServerFixture(t, layouts)
+	return dial(), mgr
+}
+
+func testServerFixture(t *testing.T, layouts LayoutStore) (func() net.Conn, *session.Manager, *Server) {
+	t.Helper()
 	sock := filepath.Join(t.TempDir(), "a.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 	mgr := session.NewManager()
-	srv := New(mgr, "test", testNodeID, testSecret, layouts, nil)
+	srv := New(mgr, "test", testNodeID, testSecret, "", layouts, nil)
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = ln.Close(); mgr.CloseAll() })
 
-	cli, err := net.Dial("unix", sock)
-	if err != nil {
-		t.Fatalf("dial: %v", err)
+	dial := func() net.Conn {
+		cli, dialErr := net.Dial("unix", sock)
+		if dialErr != nil {
+			t.Fatalf("dial: %v", dialErr)
+		}
+		t.Cleanup(func() { _ = cli.Close() })
+		return cli
 	}
-	t.Cleanup(func() { _ = cli.Close() })
-	return cli, mgr
+	return dial, mgr, srv
 }
 
 func mustControl(t *testing.T, c net.Conn, ctrl proto.Control) {
@@ -100,8 +109,8 @@ func TestHelloHandshake(t *testing.T) {
 
 func TestHandshakeRejectsWrongVersionNodeAndMAC(t *testing.T) {
 	tests := []proto.Control{
-		{Op: "hello", ProtocolVersion: proto.ProtocolVersion + 1, NodeID: testNodeID, ClientNonce: mustNonce(t)},
-		{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: "wrong-node", ClientNonce: mustNonce(t)},
+		{Op: "hello", ProtocolVersion: proto.ProtocolVersion + 1, NodeID: testNodeID, ClientNonce: mustNonce(t), CredentialID: controlauth.CredentialID(testSecret)},
+		{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: "wrong-node", ClientNonce: mustNonce(t), CredentialID: controlauth.CredentialID(testSecret)},
 	}
 	for _, hello := range tests {
 		cli, _ := dialServer(t)
@@ -112,7 +121,7 @@ func TestHandshakeRejectsWrongVersionNodeAndMAC(t *testing.T) {
 
 	cli, _ := dialServer(t)
 	nonce := mustNonce(t)
-	mustControl(t, cli, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: nonce})
+	mustControl(t, cli, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: nonce, CredentialID: controlauth.CredentialID(testSecret)})
 	challenge := readControlOp(t, cli, "challenge", 2*time.Second)
 	mustControl(t, cli, proto.Control{
 		Op: "authenticate", NodeID: testNodeID, ClientNonce: nonce,
@@ -124,7 +133,7 @@ func TestHandshakeRejectsWrongVersionNodeAndMAC(t *testing.T) {
 func TestCapturedAuthenticateCannotBeReplayed(t *testing.T) {
 	clientNonce := mustNonce(t)
 	first, _ := dialServer(t)
-	mustControl(t, first, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce})
+	mustControl(t, first, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce, CredentialID: controlauth.CredentialID(testSecret)})
 	oldChallenge := readControlOp(t, first, "challenge", 2*time.Second)
 	replayed := proto.Control{
 		Op: "authenticate", NodeID: testNodeID, ClientNonce: clientNonce,
@@ -136,13 +145,55 @@ func TestCapturedAuthenticateCannotBeReplayed(t *testing.T) {
 	readControlOp(t, first, "helloOk", 2*time.Second)
 
 	second, _ := dialServer(t)
-	mustControl(t, second, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce})
+	mustControl(t, second, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce, CredentialID: controlauth.CredentialID(testSecret)})
 	newChallenge := readControlOp(t, second, "challenge", 2*time.Second)
 	if newChallenge.ServerNonce == oldChallenge.ServerNonce {
 		t.Fatal("server reused authentication nonce")
 	}
 	mustControl(t, second, replayed)
 	readControlOp(t, second, "error", 2*time.Second)
+}
+
+func TestCredentialRotationKeepsActiveLinkAndAllowsBoundedReconnect(t *testing.T) {
+	dial, _, _ := testServerFixture(t, nil)
+	active := dial()
+	authenticateWithSecret(t, active, testSecret)
+	const next = "next-control-credential-0123456789abcdef"
+	mustControl(t, active, proto.Control{Op: "rotateCredential", NewCredential: next})
+	rotated := readControlOp(t, active, "credentialRotated", 2*time.Second)
+	if rotated.CredentialID != controlauth.CredentialID(next) {
+		t.Fatalf("wrong rotation acknowledgement: %+v", rotated)
+	}
+	// The authenticated connection remains usable, so live PTYs are not dropped.
+	mustControl(t, active, proto.Control{Op: "list"})
+	readControlOp(t, active, "sessions", 2*time.Second)
+
+	fresh := dial()
+	authenticateWithSecret(t, fresh, next)
+	// The previous key remains valid only for the bounded overlap window, allowing
+	// the orchestrator to commit its encrypted DB reference and reconnect safely.
+	overlap := dial()
+	authenticateWithSecret(t, overlap, testSecret)
+}
+
+func TestCredentialRotationAtomicallyPreservesProtectedFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "control.key")
+	if err := os.WriteFile(path, []byte(testSecret+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{secret: testSecret, credentialFile: path}
+	const next = "persisted-control-credential-0123456789"
+	if err := srv.rotateCredential(next); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil || strings.TrimSpace(string(body)) != next {
+		t.Fatalf("credential file not replaced: %q %v", body, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o640 {
+		t.Fatalf("credential mode changed: %v %v", info, err)
+	}
 }
 
 func TestSecureWorkingDirectoryPolicyRejectsEscapeAndCanonicalizes(t *testing.T) {
@@ -187,14 +238,18 @@ func mustNonce(t *testing.T) string {
 }
 
 func authenticate(t *testing.T, cli net.Conn) proto.Control {
+	return authenticateWithSecret(t, cli, testSecret)
+}
+
+func authenticateWithSecret(t *testing.T, cli net.Conn, secret string) proto.Control {
 	t.Helper()
 	clientNonce := mustNonce(t)
 	mustControl(t, cli, proto.Control{
 		Op: "hello", ProtocolVersion: proto.ProtocolVersion,
-		NodeID: testNodeID, ClientNonce: clientNonce,
+		NodeID: testNodeID, ClientNonce: clientNonce, CredentialID: controlauth.CredentialID(secret),
 	})
 	challenge := readControlOp(t, cli, "challenge", 2*time.Second)
-	expectedServerMAC := controlauth.MAC(testSecret, "server", testNodeID, clientNonce,
+	expectedServerMAC := controlauth.MAC(secret, "server", testNodeID, clientNonce,
 		challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities)
 	if !controlauth.Verify(expectedServerMAC, challenge.ServerMAC) {
 		t.Fatal("server did not authenticate")
@@ -202,7 +257,7 @@ func authenticate(t *testing.T, cli net.Conn) proto.Control {
 	mustControl(t, cli, proto.Control{
 		Op: "authenticate", NodeID: testNodeID, ClientNonce: clientNonce,
 		ServerNonce: challenge.ServerNonce,
-		ClientMAC: controlauth.MAC(testSecret, "client", testNodeID, clientNonce,
+		ClientMAC: controlauth.MAC(secret, "client", testNodeID, clientNonce,
 			challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities),
 	})
 	return readControlOp(t, cli, "helloOk", 2*time.Second)

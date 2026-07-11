@@ -192,7 +192,7 @@ func serve(args []string) {
 	if err != nil {
 		fatal("open layout store", err)
 	}
-	srv := server.New(mgr, resolveVersion(), *nodeID, resolvedSecret, layouts, runtimeIdentity)
+	srv := server.New(mgr, resolveVersion(), *nodeID, resolvedSecret, *secretFile, layouts, runtimeIdentity)
 
 	var lns []net.Listener
 

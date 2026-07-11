@@ -7,10 +7,17 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"strings"
 )
 
 const context = "flock-agentd-control-v2"
+
+// CredentialID is a non-secret stable selector for overlapping rotations.
+func CredentialID(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:16])
+}
 
 // Nonce returns a 256-bit base64url nonce.
 func Nonce() (string, error) {

@@ -548,12 +548,14 @@ secret from a child process running under the same UID.
 
 **Priority:** High
 
-**Implementation status:** In progress. Unique per-node credentials are encrypted
+**Implementation status:** Complete. Unique per-node credentials are encrypted
 at rest and mirrored to protected daemon files. Protocol v2 mutually authenticates
 node/client with fresh nonces and domain-separated HMAC-SHA-256, binds version,
 identity, daemon version, and capabilities, and has shared Go/TypeScript vectors,
 replay tests, a real cross-language socket smoke, and production-image validation.
-Credential rotation/revocation with an active-session reconnect remains outstanding.
+Authenticated rotation atomically replaces the protected file and encrypted DB
+reference, keeps active PTYs/links alive, permits a bounded previous-key reconnect
+window, and is exposed as an owner-authenticated audited node action.
 
 **Why**
 

@@ -41,6 +41,8 @@ type Control struct {
 	ServerMAC       string   `json:"serverMac,omitempty"`
 	ClientMAC       string   `json:"clientMac,omitempty"`
 	Capabilities    []string `json:"capabilities,omitempty"`
+	CredentialID    string   `json:"credentialId,omitempty"`
+	NewCredential   string   `json:"newCredential,omitempty"`
 
 	// session open / close / subscribe / resize / exit
 	ID      string   `json:"id,omitempty"`

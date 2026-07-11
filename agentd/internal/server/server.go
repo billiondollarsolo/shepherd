@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"flock-agentd/internal/controlauth"
@@ -29,12 +30,16 @@ const writeTimeout = 30 * time.Second
 
 // Server holds shared daemon state.
 type Server struct {
-	mgr     *session.Manager
-	version string
-	nodeID  string
-	secret  string
-	layout  LayoutStore
-	runtime *identity.Runtime
+	mgr            *session.Manager
+	version        string
+	nodeID         string
+	secretMu       sync.RWMutex
+	secret         string
+	previousSecret string
+	previousUntil  time.Time
+	credentialFile string
+	layout         LayoutStore
+	runtime        *identity.Runtime
 }
 
 // LayoutStore persists per-workspace pane layouts (implemented in task #22).
@@ -43,8 +48,8 @@ type LayoutStore interface {
 	Set(workspace string, tree []byte) error
 }
 
-func New(mgr *session.Manager, version, nodeID, secret string, layout LayoutStore, runtime *identity.Runtime) *Server {
-	return &Server{mgr: mgr, version: version, nodeID: nodeID, secret: secret, layout: layout, runtime: runtime}
+func New(mgr *session.Manager, version, nodeID, secret, credentialFile string, layout LayoutStore, runtime *identity.Runtime) *Server {
+	return &Server{mgr: mgr, version: version, nodeID: nodeID, secret: secret, credentialFile: credentialFile, layout: layout, runtime: runtime}
 }
 
 var controlCapabilities = []string{"pty", "resize", "scrollback", "status", "node-info", "layout", "acp"}
@@ -64,6 +69,7 @@ type conn struct {
 type authChallenge struct {
 	clientNonce string
 	serverNonce string
+	secret      string
 }
 
 // HandleConn services one connection until it closes.
@@ -115,12 +121,17 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			c.reject("invalid client nonce")
 			return
 		}
+		secret, ok := c.s.secretForID(ctrl.CredentialID)
+		if !ok {
+			c.reject("unknown control credential")
+			return
+		}
 		serverNonce, err := controlauth.Nonce()
 		if err != nil {
 			c.reject("authentication unavailable")
 			return
 		}
-		c.challenge = &authChallenge{clientNonce: ctrl.ClientNonce, serverNonce: serverNonce}
+		c.challenge = &authChallenge{clientNonce: ctrl.ClientNonce, serverNonce: serverNonce, secret: secret}
 		c.sendControl(proto.Control{
 			Op:              "challenge",
 			ProtocolVersion: proto.ProtocolVersion,
@@ -129,7 +140,8 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			ClientNonce:     ctrl.ClientNonce,
 			ServerNonce:     serverNonce,
 			Capabilities:    controlCapabilities,
-			ServerMAC: controlauth.MAC(c.s.secret, "server", c.s.nodeID,
+			CredentialID:    ctrl.CredentialID,
+			ServerMAC: controlauth.MAC(secret, "server", c.s.nodeID,
 				ctrl.ClientNonce, serverNonce, c.s.version, controlCapabilities),
 		})
 		return
@@ -141,7 +153,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			c.reject("invalid authentication state")
 			return
 		}
-		expected := controlauth.MAC(c.s.secret, "client", c.s.nodeID,
+		expected := controlauth.MAC(challenge.secret, "client", c.s.nodeID,
 			challenge.clientNonce, challenge.serverNonce, c.s.version, controlCapabilities)
 		if !controlauth.Verify(expected, ctrl.ClientMAC) {
 			c.reject("unauthorized")
@@ -232,7 +244,84 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		if c.s.layout != nil {
 			_ = c.s.layout.Set(ctrl.Workspace, ctrl.Layout)
 		}
+	case "rotateCredential":
+		if err := c.s.rotateCredential(ctrl.NewCredential); err != nil {
+			c.sendControl(proto.Control{Op: "error", Message: err.Error()})
+			return
+		}
+		c.sendControl(proto.Control{
+			Op: "credentialRotated", CredentialID: controlauth.CredentialID(ctrl.NewCredential),
+		})
 	}
+}
+
+const credentialRotationOverlap = 5 * time.Minute
+
+func (s *Server) secretForID(id string) (string, bool) {
+	s.secretMu.RLock()
+	defer s.secretMu.RUnlock()
+	if id != "" && id == controlauth.CredentialID(s.secret) {
+		return s.secret, true
+	}
+	if id != "" && time.Now().Before(s.previousUntil) &&
+		id == controlauth.CredentialID(s.previousSecret) {
+		return s.previousSecret, true
+	}
+	return "", false
+}
+
+func (s *Server) rotateCredential(next string) error {
+	if len(next) < 32 {
+		return fmt.Errorf("new control credential is too short")
+	}
+	if s.credentialFile != "" {
+		if err := replaceCredentialFile(s.credentialFile, next); err != nil {
+			return fmt.Errorf("persist new control credential: %w", err)
+		}
+	}
+	s.secretMu.Lock()
+	s.previousSecret = s.secret
+	s.previousUntil = time.Now().Add(credentialRotationOverlap)
+	s.secret = next
+	s.secretMu.Unlock()
+	return nil
+}
+
+func replaceCredentialFile(path, value string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("credential ownership is unavailable")
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".control-key-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chown(int(stat.Uid), int(stat.Gid)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(value + "\n"); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }
 
 // validateSessionSpec prevents the root daemon from being used as a cwd/symlink

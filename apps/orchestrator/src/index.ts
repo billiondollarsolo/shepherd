@@ -22,6 +22,7 @@ import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.js';
+import { registerNodeCredentialRotationRoute } from './nodes/agentd/credential-rotation-route.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest, toPublicSession } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
@@ -1048,6 +1049,28 @@ export async function main(): Promise<void> {
           liveChannels.untrackSession(ptyId); // drop the shared PtySession (fresh on re-split)
         }
       : undefined,
+  });
+
+  registerNodeCredentialRotationRoute(app, {
+    auth,
+    rotate: async (nodeId, context) => {
+      const node = await nodes.getNode(nodeId);
+      if (!node) return 'not_found';
+      const client = await agentdClientForNode(node.id, node.kind);
+      if (!client) return 'unavailable';
+      await nodeControlCredentials.rotate(node.id, node.kind, (next) =>
+        client.rotateCredential(next.credential),
+      );
+      await auditLogger.record({
+        action: 'node_credential_rotate',
+        userId: context.userId,
+        targetType: 'node',
+        targetId: node.id,
+        ip: context.ip,
+        detail: { mode: 'secure' },
+      });
+      return 'rotated';
+    },
   });
 
   // Agent-facing orchestration API: separate durable capability, project scope,

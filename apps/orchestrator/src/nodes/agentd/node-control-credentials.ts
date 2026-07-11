@@ -47,6 +47,43 @@ export class NodeControlCredentials {
     return pending;
   }
 
+  /**
+   * Rotate through the already-authenticated daemon link, then atomically point
+   * the node at the new encrypted record. If the DB claim fails, rotate the daemon
+   * back before returning so file and database never intentionally diverge.
+   */
+  async rotate(
+    nodeId: string,
+    kind: 'local' | 'ssh',
+    applyToDaemon: (next: NodeControlIdentity) => Promise<void>,
+  ): Promise<NodeControlIdentity> {
+    const current = await this.forNode(nodeId, kind);
+    const [node] = await this.deps.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);
+    if (!node?.agentdCredentialRef) throw new Error('agentd: node has no control credential');
+    const previousSecretId = node.agentdCredentialRef;
+    const next: NodeControlIdentity = {
+      nodeId: current.nodeId,
+      credential: randomBytes(32).toString('base64url'),
+    };
+    const nextSecretId = await this.store(next.credential);
+    try {
+      await applyToDaemon(next);
+      const [updated] = await this.deps.db
+        .update(nodes)
+        .set({ agentdCredentialRef: nextSecretId })
+        .where(and(eq(nodes.id, nodeId), eq(nodes.agentdCredentialRef, previousSecretId)))
+        .returning({ id: nodes.id });
+      if (!updated) throw new Error('agentd: node credential changed concurrently');
+    } catch (error) {
+      await applyToDaemon(current).catch(() => undefined);
+      await this.deps.db.delete(secrets).where(eq(secrets.id, nextSecretId));
+      throw error;
+    }
+    await this.deps.db.delete(secrets).where(eq(secrets.id, previousSecretId));
+    this.pending.delete(nodeId);
+    return next;
+  }
+
   private async resolve(nodeId: string, kind: 'local' | 'ssh'): Promise<NodeControlIdentity> {
     const [node] = await this.deps.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);
     if (!node || node.kind !== kind) throw new Error(`agentd: unknown ${kind} node ${nodeId}`);

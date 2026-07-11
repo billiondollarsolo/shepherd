@@ -1,9 +1,13 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const CONTEXT = 'flock-agentd-control-v2';
 
 export function controlNonce(): string {
   return randomBytes(32).toString('base64url');
+}
+
+export function controlCredentialId(credential: string): string {
+  return createHash('sha256').update(credential).digest('hex').slice(0, 32);
 }
 
 export function validControlNonce(value: string): boolean {

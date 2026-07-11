@@ -64,6 +64,35 @@ describe('per-node agentd control credentials', () => {
     expect(Buffer.from(storedSecret!.ciphertext).toString('utf8')).not.toContain(first.credential);
   });
 
+  it('rotates the daemon first, commits a new encrypted record, and removes the old one', async () => {
+    const [node] = await handle.db
+      .insert(nodes)
+      .values({
+        name: `rotate-${randomUUID()}`,
+        kind: 'ssh',
+        connectionStatus: 'disconnected',
+      })
+      .returning();
+    const credentials = new NodeControlCredentials({ db: handle.db, secrets: secretStore });
+    const before = await credentials.forNode(node!.id, 'ssh');
+    const [beforeNode] = await handle.db.select().from(nodes).where(eq(nodes.id, node!.id));
+    const applied: string[] = [];
+    const after = await credentials.rotate(node!.id, 'ssh', async (identity) => {
+      applied.push(identity.credential);
+    });
+
+    expect(applied).toEqual([after.credential]);
+    expect(after.credential).not.toBe(before.credential);
+    await expect(credentials.forNode(node!.id, 'ssh')).resolves.toEqual(after);
+    const [afterNode] = await handle.db.select().from(nodes).where(eq(nodes.id, node!.id));
+    expect(afterNode!.agentdCredentialRef).not.toBe(beforeNode!.agentdCredentialRef);
+    const oldRows = await handle.db
+      .select()
+      .from(secrets)
+      .where(eq(secrets.id, beforeNode!.agentdCredentialRef!));
+    expect(oldRows).toHaveLength(0);
+  });
+
   it('mirrors the protected local files and fails closed on later mismatch', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'flock-local-control-test-'));
     const credentialFile = path.join(dir, 'control.key');
