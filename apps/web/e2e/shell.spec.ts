@@ -1,21 +1,21 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './flock-test';
 
 /**
  * US-30 smoke — Codex-style three-region shell + keyboard model (Appendix A.1/A.2).
  *
- *  - The three regions render (tree | session | activity).
+ *  - The current two-region shell renders (tree | session); activity is opt-in.
  *  - Cmd+K opens the command palette.
  *  - Cmd+J toggles the bottom shell drawer.
  *
  * Uses Meta+ (mac) which the app also accepts as Ctrl+; the chromium project
  * runs headless in the dev image. The bottom drawer is absent until toggled.
  */
-test('renders the three cockpit regions', async ({ page }) => {
+test('renders the current paddock shell regions', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('region-tree')).toBeVisible();
   await expect(page.getByTestId('region-session')).toBeVisible();
-  await expect(page.getByTestId('region-activity')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Flock' })).toBeVisible();
+  await expect(page.getByTestId('region-activity')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Flock home' })).toBeVisible();
 });
 
 test('Cmd+K opens the command palette', async ({ page }) => {

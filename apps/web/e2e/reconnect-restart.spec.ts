@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './flock-test';
 
 /**
  * US-42 — Reconnect / restart resilience (Playwright e2e).

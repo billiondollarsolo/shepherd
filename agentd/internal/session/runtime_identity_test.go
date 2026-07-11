@@ -173,6 +173,30 @@ func TestRuntimeIdentityCannotConnectControlSocket(t *testing.T) {
 	}
 }
 
+func TestRuntimeIdentityCannotAccessDockerSocket(t *testing.T) {
+	runtime, workspace := privilegedRuntimeFixture(t)
+	const dockerSocket = "/var/run/docker.sock"
+	info, err := os.Stat(dockerSocket)
+	if err != nil || info.Mode()&os.ModeSocket == 0 {
+		t.Skip("host Docker socket is not mounted into this adversarial fixture")
+	}
+
+	s, err := Open(Spec{
+		ID:       "runtime-docker-socket-denial",
+		Cwd:      workspace,
+		Command:  []string{"/bin/sh", "-c", "if [ -r " + dockerSocket + " ] || [ -w " + dockerSocket + " ]; then echo ACCESSIBLE; else echo DENIED; fi"},
+		Identity: runtime,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer s.Close()
+	out := drain(t, s.Subscribe(), "DENIED", 3*time.Second)
+	if !strings.Contains(out, "DENIED") || strings.Contains(out, "ACCESSIBLE") {
+		t.Fatalf("runtime identity can access the Docker control socket: %q", out)
+	}
+}
+
 func TestRuntimeIdentityPreservesPTYResizeAndScrollback(t *testing.T) {
 	runtime, workspace := privilegedRuntimeFixture(t)
 	s, err := Open(Spec{

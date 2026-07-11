@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './flock-test';
 
 /**
  * US-41 — E2E happy path (Playwright).

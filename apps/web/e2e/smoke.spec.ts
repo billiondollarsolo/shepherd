@@ -1,6 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './flock-test';
 
-test('cockpit shell renders the Flock title', async ({ page }) => {
+test('paddock shell renders the Flock wordmark', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Flock' })).toBeVisible();
+  await expect(page.getByTestId('app-shell')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Flock home' })).toBeVisible();
 });

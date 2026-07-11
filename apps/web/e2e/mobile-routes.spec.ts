@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './flock-test';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const NODE_ID = '22222222-2222-4222-8222-222222222222';
@@ -36,6 +36,14 @@ const project = {
   nodeId: NODE_ID,
   name: 'A deliberately long project name',
   workingDir: '/workspace/a-very-long-project-directory',
+  agentPolicy: {
+    defaultAuthority: 'callback_only',
+    maxAuthority: 'manage',
+    maxConcurrentAgents: 12,
+    spawnRateLimitPerMinute: 10,
+    maxSendBytes: 16384,
+    maxReadMessages: 100,
+  },
   createdAt: NOW,
 };
 const session = {
@@ -51,6 +59,7 @@ const session = {
   statusDetail: null,
   note: 'Mobile agent',
   permissionMode: 'default',
+  orchestrationAuthority: 'callback_only',
   createdAt: NOW,
   lastStatusAt: NOW,
   createdBy: USER_ID,
@@ -66,7 +75,19 @@ function apiBody(path: string): unknown {
   if (path === '/api/agentd/status') return { enabled: false, nodes: [], sessions: {} };
   if (path === '/api/activity/fleet') return { events: [] };
   if (path === '/api/chats/latest') return { chats: {} };
-  if (path === '/api/teams') return { edges: [] };
+  if (path === '/api/me/preferences') {
+    return {
+      preferences: {
+        version: 1,
+        revision: 0,
+        updatedAt: null,
+        nodeOrder: [],
+        sessionOrder: {},
+        layoutPresets: [],
+      },
+    };
+  }
+  if (path === `/api/projects/${PROJECT_ID}/pens`) return { pens: null, revision: 0 };
   if (path === `/api/nodes/${NODE_ID}/info`) {
     return {
       hostname: 'mobile-test-host-with-a-long-name',
@@ -120,7 +141,15 @@ async function installMobileMocks(page: Page, authenticated = true): Promise<str
   page.on('console', (message) => {
     const text = message.text();
     const expectedAuthProbe = !authenticated && text.includes('401 (Unauthorized)');
-    if (message.type() === 'error' && !text.includes('WebSocket') && !expectedAuthProbe) {
+    const expectedWebKitViewportWarning = text.includes(
+      'Viewport argument key "interactive-widget" not recognized and ignored.',
+    );
+    if (
+      message.type() === 'error' &&
+      !text.includes('WebSocket') &&
+      !expectedAuthProbe &&
+      !expectedWebKitViewportWarning
+    ) {
       errors.push(text);
     }
   });

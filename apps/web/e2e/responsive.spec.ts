@@ -1,4 +1,4 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect, devices } from './flock-test';
 
 /**
  * US-36 (FR-UI6) — responsive collapse + installable PWA, verified at a mobile
@@ -42,7 +42,7 @@ test.describe('installable PWA', () => {
   test('links the manifest and a theme-color from the document', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#06090d');
   });
 
   test('registers a service worker (Web Push + offline shell)', async ({ page }) => {

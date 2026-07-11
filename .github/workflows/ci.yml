@@ -1,8 +1,6 @@
 # T13 — CI gate. Blocks merge on red typecheck / lint / unit tests (web +
-# orchestrator + shared) and on a broken agentd (go vet / go test / cross-build).
-# This mirrors `make verify` but runs natively on the runner (no Docker-in-Docker)
-# for speed. Integration/e2e suites (need Postgres + sshd + chromium) are out of
-# scope here and run separately.
+# orchestrator + shared), integration/browser regressions, architecture drift,
+# coverage loss, and a broken agentd.
 name: CI
 
 permissions:
@@ -20,7 +18,8 @@ concurrency:
 
 jobs:
   verify:
-    name: typecheck · lint · build · unit
+    name: typecheck · lint · build · coverage · architecture
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -66,8 +65,20 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test:unit
+      - name: Architecture, dead-code, and duplication gates
+        run: pnpm quality
+
+      - name: Unit tests and coverage thresholds
+        run: pnpm test:coverage
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: warn
+          retention-days: 14
 
       # Vuln gate: fail the build on a known-vulnerable production npm dependency
       # (high/critical). Keeps fastify/ws/drizzle/etc. patched over time.
@@ -75,8 +86,9 @@ jobs:
         run: pnpm audit --prod --audit-level high
 
   agentd:
-    name: agentd · vet · test · dist
+    name: agentd · vet · staticcheck · race · vuln · dist
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: agentd
@@ -92,16 +104,111 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: go test
-        run: go test ./...
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+          staticcheck ./...
+
+      - name: race tests
+        run: go test -race ./...
+
+      - name: Adversarial runtime boundary with host Docker socket present
+        working-directory: .
+        run: >-
+          docker run --rm
+          -v "$PWD:/workspace:ro"
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -w /workspace/agentd
+          golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4
+          go test -race ./internal/session -run
+          'TestRuntimeIdentity(DropsPTYCredentialsAndForcesEnvironment|CannotReadControlCredential|CannotConnectControlSocket|CannotAccessDockerSocket)'
 
       # Vuln gate: scan agentd (and its module graph) for known Go CVEs that the
       # code actually reaches — including stdlib CVEs, which is why the build runs
       # on a current Go (1.25) toolchain.
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
       # Cross-compile the release binaries the remote-node bootstrap ships, so a
       # build break (or a bad VERSION) is caught in CI, not at deploy time (T14).
       - name: make dist
         run: make dist
+
+  integration:
+    name: PostgreSQL · SSH · tunnel integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build deterministic integration runner
+        run: docker compose -f docker-compose.dev.yml build builder sshd
+
+      - name: Start PostgreSQL and SSH fixtures
+        run: docker compose -f docker-compose.dev.yml up -d --wait postgres sshd
+
+      - name: Run integration suite
+        run: >-
+          docker compose -f docker-compose.dev.yml run --rm builder sh -lc
+          'until [ -s /ssh-keys/id_test ]; do sleep 1; done;
+          pnpm install --frozen-lockfile;
+          pnpm test:int'
+
+      - name: Collect service logs
+        if: always()
+        run: docker compose -f docker-compose.dev.yml logs --no-color > integration-services.log
+
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: integration-diagnostics
+          path: integration-services.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop integration services
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down --volumes --remove-orphans
+
+  browser-smoke:
+    name: browser smoke · Chromium + mobile WebKit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies and browsers
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run pull-request browser smoke
+        if: github.event_name == 'pull_request'
+        run: pnpm test:e2e:smoke
+
+      - name: Run complete browser suite on main
+        if: github.event_name == 'push'
+        run: pnpm test:e2e
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-smoke-diagnostics
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14

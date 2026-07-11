@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './flock-test';
 
 /**
  * US-12 smoke: selecting a session mounts the chosen emulator (xterm.js per

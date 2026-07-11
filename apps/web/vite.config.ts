@@ -46,5 +46,34 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['node_modules', 'dist', 'e2e'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/main.tsx',
+        'src/features/terminal/terminalHarness.tsx',
+      ],
+      reporter: ['text', 'json-summary', 'html'],
+      reportsDirectory: '../../coverage/web',
+      thresholds: {
+        statements: 58,
+        branches: 78,
+        functions: 52,
+        lines: 58,
+        'src/lib/{apiClient,reconnectGate}.ts': {
+          statements: 92,
+          branches: 86,
+          functions: 70,
+          lines: 92,
+        },
+        'src/features/terminal/ptyProtocol.ts': {
+          statements: 100,
+          branches: 86,
+          functions: 100,
+          lines: 100,
+        },
+      },
+    },
   },
 });

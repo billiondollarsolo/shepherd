@@ -39,8 +39,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:unit": "pnpm -r test:unit",
+    "test:coverage": "pnpm --filter @flock/shared exec vitest run --coverage && pnpm --filter @flock/orchestrator exec vitest run --coverage && pnpm --filter @flock/web exec vitest run --coverage",
     "test:int": "pnpm -r test:int",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test apps/web/e2e/agent-policy.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",
     "test": "pnpm test:unit",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
@@ -51,21 +53,24 @@
     "dev:native": "pnpm db:up && pnpm dev:migrate && concurrently -n api,web -c blue,magenta \"tsx watch --env-file=.env.dev.local apps/orchestrator/src/index.ts\" \"pnpm --filter @flock/web dev\"",
     "release:check": "node scripts/check-release-version.mjs",
     "quality:dead-code": "knip",
-    "quality:architecture": "node scripts/check-architecture.mjs"
+    "quality:architecture": "node scripts/check-architecture.mjs",
+    "quality:duplicates": "node scripts/check-duplicates.mjs",
+    "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
     "@types/node": "22.10.2",
     "@typescript-eslint/eslint-plugin": "8.18.1",
     "@typescript-eslint/parser": "8.18.1",
+    "@vitest/coverage-v8": "3.2.6",
     "concurrently": "^10.0.1",
     "eslint": "8.57.1",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "knip": "5.64.1",
     "prettier": "3.4.2",
     "tsx": "4.23.0",
     "typescript": "5.7.2",
-    "vitest": "3.2.6",
-    "knip": "5.64.1"
+    "vitest": "3.2.6"
   }
 }

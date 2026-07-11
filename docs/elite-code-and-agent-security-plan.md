@@ -1415,6 +1415,20 @@ not hide important differences.
 
 ## Phase 7 — CI and enforceable quality gates
 
+**Implementation status:** Complete. Pull requests now gate on the real PostgreSQL,
+SSH transport, reverse-tunnel, migration, Chromium, and mobile WebKit suites; preserve
+coverage, browser, and service diagnostics; enforce Knip, import cycles/boundaries,
+duplicate-code budgets, security-domain coverage thresholds, pinned Staticcheck,
+Go race, govulncheck, and a root-run adversarial agent fixture with the host Docker
+socket present. Main and release candidates run the complete deterministic browser
+suite. Tagged releases now build immutable multi-architecture candidates, smoke the
+exact images from a clean database through setup/login/readiness, verify agent tool
+versions and amd64/arm64 manifests, promote those digests, and create the public
+GitHub release only after every preceding gate succeeds. Local validation passed 103
+PostgreSQL/SSH integration tests, 25 Chromium tests (three environment-dependent
+journeys skipped), eight mobile WebKit tests, all coverage thresholds, Staticcheck,
+and Go race/adversarial tests.
+
 ### Q7.1 — Run integration tests in CI
 
 **Priority:** Critical

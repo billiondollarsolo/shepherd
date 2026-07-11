@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './flock-test';
 
 const NODE_ID = '22222222-2222-4222-8222-222222222222';
 const PROJECT_ID = '33333333-3333-4333-8333-333333333333';
@@ -15,6 +15,9 @@ const policy = {
 };
 
 async function mockFlock(page: Page, createdBodies: Array<Record<string, unknown>>): Promise<void> {
+  await page.routeWebSocket('**/ws/**', (socket) => {
+    socket.onMessage(() => undefined);
+  });
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -113,7 +116,18 @@ async function mockFlock(page: Page, createdBodies: Array<Record<string, unknown
     if (path === '/api/agentd/status') return json({ enabled: true, nodes: {}, sessions: {} });
     if (path === '/api/activity/fleet') return json({ events: [] });
     if (path === '/api/chats/latest') return json({ chats: {} });
-    if (path === '/api/teams') return json({ edges: [] });
+    if (path === '/api/me/preferences') {
+      return json({
+        preferences: {
+          version: 1,
+          revision: 0,
+          updatedAt: null,
+          nodeOrder: [],
+          sessionOrder: {},
+          layoutPresets: [],
+        },
+      });
+    }
     if (path === '/api/me/launcher-presets') return json({ presets: [] });
     return json({});
   });

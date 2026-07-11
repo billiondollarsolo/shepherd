@@ -1,11 +1,11 @@
 name: Release images
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
 
 concurrency:
-  group: release-images-${{ github.event.release.tag_name }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -13,15 +13,18 @@ permissions:
 
 jobs:
   validate:
-    name: Validate release version
+    name: Validate release candidate
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
-      - name: Require a release commit from main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Require a tagged commit from main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - name: Install pnpm
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -45,7 +48,7 @@ jobs:
 
       - name: Match tag to repository version
         env:
-          EXPECTED_VERSION: ${{ github.event.release.tag_name }}
+          EXPECTED_VERSION: ${{ github.ref_name }}
         run: node scripts/check-release-version.mjs
 
       - name: Verify TypeScript release
@@ -54,23 +57,56 @@ jobs:
           pnpm -r build
           pnpm -r typecheck
           pnpm lint
-          pnpm test:unit
+          pnpm quality
+          pnpm test:coverage
           pnpm audit --prod --audit-level high
+
+      - name: Verify Chromium and mobile WebKit behavior
+        run: |
+          pnpm exec playwright install --with-deps chromium webkit
+          pnpm test:e2e
 
       - name: Verify Go release
         working-directory: agentd
         run: |
           go vet ./...
-          go test ./...
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+          staticcheck ./...
+          go test -race ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
           make dist
 
-      - name: Validate production Compose
-        run: docker compose -f docker-compose.yml config --quiet
+      - name: Run PostgreSQL and SSH integration suite
+        run: |
+          docker compose -f docker-compose.dev.yml build builder sshd
+          docker compose -f docker-compose.dev.yml up -d --wait postgres sshd
+          docker compose -f docker-compose.dev.yml run --rm builder sh -lc \
+            'until [ -s /ssh-keys/id_test ]; do sleep 1; done; pnpm install --frozen-lockfile; pnpm test:int'
 
-  publish:
-    name: Publish ${{ matrix.image }}
+      - name: Collect integration logs
+        if: always()
+        run: docker compose -f docker-compose.dev.yml logs --no-color > release-integration.log 2>&1 || true
+
+      - name: Stop integration services
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down --volumes --remove-orphans
+
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-validation
+          path: |
+            coverage/
+            release-integration.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  candidate:
+    name: Build candidate ${{ matrix.image }}
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -82,15 +118,13 @@ jobs:
         include:
           - image: flock-orchestrator
             dockerfile: docker/Dockerfile.orchestrator
-            platforms: linux/amd64,linux/arm64
           - image: flock-web
             dockerfile: docker/Dockerfile.web
-            platforms: linux/amd64,linux/arm64
           - image: flock-session-chrome
             dockerfile: docker/Dockerfile.session-chrome
-            platforms: linux/amd64,linux/arm64
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+      CANDIDATE_TAG: candidate-${{ github.sha }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -107,33 +141,36 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.licenses=MIT
-
-      - name: Build and push
+      - name: Build and push immutable candidate
         id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.IMAGE }}:${{ env.CANDIDATE_TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.licenses=MIT
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max
           sbom: true
+
+      - name: Record candidate digest
+        run: |
+          mkdir -p digests
+          printf '%s\n' '${{ steps.push.outputs.digest }}' > 'digests/${{ matrix.image }}.digest'
+
+      - name: Upload digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: digest-${{ matrix.image }}
+          path: digests/
+          retention-days: 30
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
@@ -141,3 +178,159 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  smoke:
+    name: Smoke exact candidate images
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CANDIDATE_TAG: candidate-${{ github.sha }}
+      FLOCK_IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+      HTTP_HOST_PORT: '18080'
+      HTTPS_HOST_PORT: '18443'
+      FLOCK_DOMAIN: localhost
+      PUBLIC_BASE_URL: https://localhost:18443
+      FLOCK_ALLOWED_ORIGINS: https://localhost:18443
+      FLOCK_INSTALL_CLAUDE_CODE: '0'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare isolated release secrets
+        run: |
+          mkdir -p secrets
+          openssl rand -base64 32 > secrets/flock_master_key
+          openssl rand -base64 32 > secrets/postgres_password
+
+      - name: Pull exact candidates
+        run: |
+          for image in flock-orchestrator flock-web flock-session-chrome; do
+            docker pull "$FLOCK_IMAGE_REGISTRY/$image:$CANDIDATE_TAG"
+          done
+
+      - name: Start clean candidate stack
+        env:
+          FLOCK_VERSION: ${{ env.CANDIDATE_TAG }}
+          BROWSER_IMAGE: ${{ env.FLOCK_IMAGE_REGISTRY }}/flock-session-chrome:${{ env.CANDIDATE_TAG }}
+        run: docker compose up -d --no-build --wait postgres orchestrator web caddy
+
+      - name: Verify migrations, readiness, setup, login, and API
+        run: |
+          set -eu
+          curl --fail --silent --show-error --insecure https://localhost:18443/health | tee release-smoke.log
+          docker compose exec -T orchestrator node -e \
+            "fetch('http://127.0.0.1:8080/ready').then(async r => { console.log(await r.text()); process.exit(r.ok ? 0 : 1) })" \
+            | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure \
+            -H 'content-type: application/json' \
+            -d '{"username":"release-owner","password":"Release-Smoke-Only-2026!"}' \
+            https://localhost:18443/api/auth/setup | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure -c release-cookies.txt \
+            -H 'content-type: application/json' \
+            -d '{"username":"release-owner","password":"Release-Smoke-Only-2026!"}' \
+            https://localhost:18443/api/auth/login | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure -b release-cookies.txt \
+            https://localhost:18443/api/auth/me | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure https://localhost:18443/ \
+            | grep -q '<div id="root">'
+          docker compose exec -T orchestrator flock-agentd version | tee -a release-smoke.log
+          docker compose exec -T orchestrator codex --version | tee -a release-smoke.log
+          docker compose exec -T orchestrator opencode --version | tee -a release-smoke.log
+
+      - name: Collect candidate diagnostics
+        if: always()
+        run: docker compose logs --no-color > release-containers.log 2>&1 || true
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-smoke
+          path: |
+            release-smoke.log
+            release-containers.log
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Stop candidate stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  promote:
+    name: Promote verified manifests
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download candidate digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote exact digests and verify both architectures
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          version="${VERSION#v}"
+          major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
+          for image in flock-orchestrator flock-web flock-session-chrome; do
+            digest="$(cat "digests/$image.digest")"
+            source="$REGISTRY/$image@$digest"
+            tags="--tag $REGISTRY/$image:$version"
+            if ! printf '%s' "$version" | grep -q -- '-'; then
+              tags="$tags --tag $REGISTRY/$image:$major_minor --tag $REGISTRY/$image:latest"
+            fi
+            # shellcheck disable=SC2086
+            docker buildx imagetools create $tags "$source"
+            manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"
+            printf '%s\n' "$manifest" | grep -q 'linux/amd64'
+            printf '%s\n' "$manifest" | grep -q 'linux/arm64'
+          done
+
+  release:
+    name: Publish GitHub release last
+    needs: promote
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Create release only after image verification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=''
+          if printf '%s' "$TAG" | grep -q -- '-'; then prerelease='--prerelease'; fi
+          # shellcheck disable=SC2086
+          gh release create "$TAG" --verify-tag --generate-notes --title "Flock ${TAG#v}" $prerelease
