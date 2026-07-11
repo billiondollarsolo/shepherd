@@ -72,14 +72,14 @@ describe('production wiring (herdr-aligned shell)', () => {
   });
 
   it('workspace probes skip disconnected nodes', () => {
-    const sidebar = read('features/paddock/Sidebar.tsx');
+    const sidebar = read('features/paddock/SidebarTree.tsx');
     const fleet = read('features/overview/FleetView.tsx');
     expect(sidebar).toMatch(/useStack\(project\.nodeId, project\.workingDir, nodeConnected\)/);
     expect(fleet).toMatch(/connectionStatus === 'connected'/);
   });
 
   it('AddSessionDialog loads launcher presets', () => {
-    const src = read('features/paddock/PaddockDialogs.tsx');
+    const src = read('features/paddock/dialogs/AddSessionDialog.tsx');
     expect(src).toMatch(/fetchLauncherPresets/);
     expect(src).toMatch(/launcher-presets|launcher-preset-/);
   });

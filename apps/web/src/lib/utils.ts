@@ -35,9 +35,14 @@ export function formatGB(bytes: number, withUnit = false): string {
  * in lockstep after an orchestrator restart (a thundering-herd stampede). Shared
  * by the pty / status / screencast reconnect loops so they can't drift.
  */
-export function reconnectDelay(attempts: number, baseMs = 250, maxMs = 5_000): number {
+export function reconnectDelay(
+  attempts: number,
+  baseMs = 250,
+  maxMs = 5_000,
+  random: () => number = Math.random,
+): number {
   const capped = Math.min(baseMs * 2 ** attempts, maxMs);
-  return Math.round(capped * (0.8 + Math.random() * 0.4));
+  return Math.round(capped * (0.8 + random() * 0.4));
 }
 
 const SHELL_NAMES = new Set(['bash', 'zsh', 'sh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'ash']);

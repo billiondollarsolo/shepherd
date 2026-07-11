@@ -24,7 +24,7 @@ import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.js';
 import { registerNodeCredentialRotationRoute } from './nodes/agentd/credential-rotation-route.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
-import { CreateSessionRequest, toPublicSession } from '@flock/shared';
+import { CreateSessionRequest } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
@@ -49,7 +49,7 @@ import {
   agentUsesActivityStatus,
   isBareAgentProcessName,
 } from './sessions/agent-launch.js';
-import { contextPct, estimateCostUsd, lookupModel } from './sessions/model-info.js';
+import { lookupModel } from './sessions/model-info.js';
 import { hashHookToken } from './hooks/hook-token.js';
 import { OrchestrationService } from './orchestrate/orchestrate-service.js';
 import { registerOrchestrateRoute } from './orchestrate/orchestrate-route.js';
@@ -59,7 +59,6 @@ import { ConfigService } from './config/config-service.js';
 import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
 import { makeWsAuthorizer } from './auth/ws-auth.js';
-import { makeRequireAuth } from './auth/middleware.js';
 import { UserPreferencesService } from './me/user-preferences-service.js';
 import { ProjectPensService } from './me/project-pens-service.js';
 import { agentSessions } from './db/schema.js';
@@ -75,71 +74,10 @@ import {
   type PushRouteDeps,
 } from './push/index.js';
 import { buildServer } from './server.js';
-
-/**
- * T14 — resolve the agentd version from the single source of truth. Priority:
- *   1. `FLOCK_AGENTD_VERSION` (deploy sets this from `agentd/VERSION`);
- *   2. the bundled `agentd/VERSION` file (dev repo / image that COPYs it);
- *   3. a constant fallback (logs a warning — a mismatch with the shipped binary
- *      forces a daemon re-ship + restart, which kills live sessions).
- * The fallback constant MUST be kept equal to `agentd/VERSION`.
- */
-/**
- * Cached per-session telemetry: the raw fields PLUS the derived context-% and $
- * cost, computed once here (on each status frame) rather than on every 4s health
- * poll. `contextPct`/`costUsd` are the values surfaced to the paddock.
- */
-type CachedMeta = Omit<AgentdStatusMeta, 'plan'> & {
-  contextPct?: number;
-  costUsd?: number;
-};
-
-/** Merge an incoming status frame's telemetry over the cached value (a non-zero
- * number / non-empty string wins — the daemon omits unchanged fields on the
- * wire), then recompute the derived context-% + cost from the merged values. */
-function mergeMeta(prev: CachedMeta, next: AgentdStatusMeta): CachedMeta {
-  const num = (a: number | undefined, b: number | undefined) => (a && a > 0 ? a : b);
-  const str = (a: string | undefined, b: string | undefined) => a || b;
-  const model = str(next.model, prev.model);
-  const tokens = num(next.tokens, prev.tokens);
-  const contextTokens = num(next.contextTokens, prev.contextTokens);
-  const contextLimit = num(next.contextLimit, prev.contextLimit);
-  return {
-    tokens,
-    tool: str(next.tool, prev.tool),
-    model,
-    contextTokens,
-    contextLimit,
-    contextPct: contextPct(model, contextTokens, contextLimit),
-    costUsd: estimateCostUsd(model, tokens),
-  };
-}
-
-/**
- * Resolve the expected agentd version (T14): an explicit `FLOCK_AGENTD_VERSION`
- * override, else the SINGLE SOURCE OF TRUTH — the COPYed `agentd/VERSION` file.
- * Fails LOUD if neither is available: a wrong/stale version makes the bootstrap
- * believe every node's daemon is the wrong version and re-ship+relaunch it on
- * every connect (killing live sessions), so a silent fallback is worse than a
- * crash. The container COPYs agentd/VERSION to /app/agentd/VERSION; dev runs from
- * the repo root where ./agentd/VERSION exists.
- */
-function resolveAgentdVersion(): string {
-  const env = process.env.FLOCK_AGENTD_VERSION;
-  if (env && env.trim() !== '') return env.trim();
-  for (const rel of ['../../agentd/VERSION', '../agentd/VERSION', './agentd/VERSION']) {
-    try {
-      const v = readFileSync(path.resolve(process.cwd(), rel), 'utf8').trim();
-      if (v) return v;
-    } catch {
-      /* try the next candidate path */
-    }
-  }
-  throw new Error(
-    'Cannot resolve the agentd version: FLOCK_AGENTD_VERSION is unset and agentd/VERSION ' +
-      `was not found from cwd ${process.cwd()}. Set FLOCK_AGENTD_VERSION or ship agentd/VERSION.`,
-  );
-}
+import { registerCollaborationRoutes } from './sessions/collaboration-routes.js';
+import { resolveAgentdVersion } from './runtime/agentd-version.js';
+import { mergeAgentMeta, type CachedAgentMeta } from './runtime/telemetry-cache.js';
+import { createGracefulShutdown, installShutdownSignals } from './runtime/graceful-shutdown.js';
 
 /**
  * Entry point. Starts the HTTP server ONLY when this module is run directly
@@ -268,7 +206,7 @@ export async function main(): Promise<void> {
   // per-session meta (token usage + current tool) shown in the paddock sidebar.
   // Per-session telemetry cache (everything except `plan`, which is routed to the
   // plan-event artifact rather than cached here).
-  const agentdSessionMeta = new Map<string, CachedMeta>();
+  const agentdSessionMeta = new Map<string, CachedAgentMeta>();
   // Cache the connect-only daemon probe per ssh node so a down/zero-session node
   // isn't re-probed (connect + handshake + teardown) on every 4s health poll.
   const probeCache = new Map<string, { up: boolean; at: number }>();
@@ -592,7 +530,7 @@ export async function main(): Promise<void> {
         workState = 'idle';
         workMeta = { ...workMeta, tool: undefined };
       }
-      const merged = mergeMeta(agentdSessionMeta.get(id) ?? {}, workMeta);
+      const merged = mergeAgentMeta(agentdSessionMeta.get(id) ?? {}, workMeta);
       agentdSessionMeta.set(id, merged);
       // TEMP (agent-integration validation): when FLOCK_DEBUG_TELEMETRY is set, log
       // every per-session status frame + its derived telemetry so we can verify the
@@ -1123,110 +1061,14 @@ export async function main(): Promise<void> {
     },
   );
   registerOrchestrateRoute(app, orchestration);
-  // The live collaboration graph (which agent spawned which) for the web — cookie
-  // authed via the global surface guard (not in the orchestrate allowlist).
-  app.get('/api/teams', async (_req, reply) =>
-    reply.code(200).send({ edges: await orchestration.spawnEdges() }),
-  );
 
-  // Provider handoff: spawn a fresh agent (any type) in the SAME project/cwd, seeded
-  // with the source agent's recent context, and record the lineage edge. Lets you
-  // pass a task Claude→Gemini (etc.) without losing the thread. Cookie-authed.
-  {
-    const requireAuth = makeRequireAuth(auth);
-    app.post('/api/sessions/:id/handoff', { preHandler: requireAuth }, async (request, reply) => {
-      const sourceId = (request.params as { id: string }).id;
-      const body = (request.body ?? {}) as { agentType?: string };
-      const source = await sessionRegistry.getSession(sourceId).catch(() => null);
-      if (!source || source.closedAt != null) {
-        return reply
-          .code(404)
-          .send({ error: { code: 'not_found', message: 'source session not found' } });
-      }
-      const parsed = CreateSessionRequest.safeParse({
-        projectId: source.projectId,
-        agentType: body.agentType,
-        workingDir: source.workingDir,
-      });
-      if (!parsed.success) {
-        return reply
-          .code(400)
-          .send({ error: { code: 'bad_request', message: 'valid agentType is required' } });
-      }
-      const actor = request.authUser!;
-      const created = await sessions.createSession(parsed.data, {
-        userId: actor.id,
-        ip: request.ip ?? null,
-      });
-      const newId = created.session.id;
-      await orchestration.recordHandoff(sourceId, newId);
-      // Seed the target with the handoff context once its PTY has attached (best-effort;
-      // most agent CLIs buffer stdin until they're ready to read it).
-      const chats = await new EventReadService(db).recentChats(sourceId, 12).catch(() => []);
-      const transcript = chats
-        .map((c) => `${c.role}: ${c.text}`)
-        .join('\n')
-        .slice(0, 6000);
-      const seed =
-        `[Handoff from a ${source.agentType} agent — continue this work.]` +
-        (transcript ? `\n\nRecent context:\n${transcript}` : '');
-      setTimeout(() => {
-        void (async () => {
-          const s = await sessionRegistry.getSession(newId).catch(() => null);
-          const client = s ? peekClientForNode(s.nodeId) : null;
-          if (client) client.write(newId, Buffer.from(`${seed}\r`));
-        })();
-      }, 4500);
-      return reply.code(201).send({ session: toPublicSession(created.session) });
-    });
-
-    // Compare / race: spawn the same task across N agents in the project directory.
-    // Flock does not manage Git isolation; the user and agents own repository state.
-    app.post('/api/race', { preHandler: requireAuth }, async (request, reply) => {
-      const body = (request.body ?? {}) as {
-        projectId?: string;
-        task?: string;
-        agentTypes?: unknown;
-      };
-      const task = typeof body.task === 'string' ? body.task.trim() : '';
-      const types = Array.isArray(body.agentTypes)
-        ? body.agentTypes.filter((t): t is string => typeof t === 'string')
-        : [];
-      if (!body.projectId || !task || types.length < 2) {
-        return reply.code(400).send({
-          error: { code: 'bad_request', message: 'projectId, task, and 2+ agentTypes required' },
-        });
-      }
-      const actor = request.authUser!;
-      const ctx = { userId: actor.id, ip: request.ip ?? null };
-      const sessionIds: string[] = [];
-      for (const agentType of types) {
-        const parsed = CreateSessionRequest.safeParse({
-          projectId: body.projectId,
-          agentType,
-        });
-        if (!parsed.success) continue;
-        try {
-          sessionIds.push((await sessions.createSession(parsed.data, ctx)).session.id);
-        } catch {
-          /* one unavailable agent does not prevent the remaining racers */
-        }
-      }
-      // Seed every racer with the task once its PTY attaches (best-effort).
-      const seed = `[Race task — work this independently.]\n\n${task}`;
-      for (const id of sessionIds) {
-        setTimeout(() => {
-          void (async () => {
-            const s = await sessionRegistry.getSession(id).catch(() => null);
-            const client = s ? peekClientForNode(s.nodeId) : null;
-            if (client) client.write(id, Buffer.from(`${seed}\r`));
-          })();
-        }, 4500);
-      }
-      return reply.code(201).send({ task, sessionIds });
-    });
-  }
-
+  registerCollaborationRoutes(app, {
+    auth,
+    sessions,
+    registry: sessionRegistry,
+    events: new EventReadService(db),
+    clientForNode: peekClientForNode,
+  });
   // Config-as-code (flock.yml): apply a reproducible workspace + export the fleet.
   registerConfigRoutes(
     app,
@@ -1255,43 +1097,20 @@ export async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`[flock-orchestrator] listening on http://${host}:${port}`);
 
-  // T11 — graceful shutdown. On SIGTERM/SIGINT (redeploy, `docker compose stop`)
-  // stop accepting connections, drain in-flight requests + close WS with proper
-  // close frames, dispose live/browser channels (stops Chrome containers + PTY
-  // attaches), tear down SSH links, then drain the pg pool. Idempotent + bounded
-  // by a hard timeout so a stuck dispose can't block the orchestrator forever.
-  let shuttingDown = false;
-  const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    // eslint-disable-next-line no-console
-    console.log(`[flock-orchestrator] ${signal} received — shutting down`);
-    const hardExit = setTimeout(() => {
-      // eslint-disable-next-line no-console
-      console.error('[flock-orchestrator] shutdown timed out — forcing exit');
-      process.exit(1);
-    }, 10_000);
-    hardExit.unref();
-    try {
-      clearInterval(reconcileTimer);
-      await app.close(); // stop accepting + drain HTTP; closes attached WS server
-      await liveChannels.dispose().catch(() => undefined);
-      await browserChannels.dispose().catch(() => undefined);
-      await connections.disposeAll().catch(() => undefined);
-      await closeDb().catch(() => undefined);
-      clearTimeout(hardExit);
-      // eslint-disable-next-line no-console
-      console.log('[flock-orchestrator] shutdown complete');
-      process.exit(0);
-    } catch (err) {
-      clearTimeout(hardExit);
-      // eslint-disable-next-line no-console
-      console.error('[flock-orchestrator] error during shutdown', err);
-      process.exit(1);
-    }
-  };
-  process.once('SIGTERM', () => void shutdown('SIGTERM'));
-  process.once('SIGINT', () => void shutdown('SIGINT'));
+  installShutdownSignals(
+    createGracefulShutdown({
+      stopBackground: () => clearInterval(reconcileTimer),
+      closeHttp: () => app.close(),
+      disposeLiveChannels: () => liveChannels.dispose(),
+      disposeBrowserChannels: () => browserChannels.dispose(),
+      disposeConnections: () => connections.disposeAll(),
+      closeDatabase: closeDb,
+      log: (message, error) => {
+        if (error === undefined) console.log(message);
+        else console.error(message, error);
+      },
+    }),
+  );
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);

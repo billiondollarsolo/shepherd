@@ -1,0 +1,211 @@
+import { z } from 'zod';
+import {
+  ConnectionStatusEnum,
+  IsoTimestamp,
+  NodeKindEnum,
+  NodeSchema,
+  SshAuthMethodEnum,
+  Uuid,
+} from '../domain.js';
+
+// --- nodes -----------------------------------------------------------------
+
+/** POST /api/nodes — register a local or SSH node. */
+/** A node's environment variables: a flat map of name → value. */
+export const NodeEnv = z.record(z.string(), z.string());
+export type NodeEnv = z.infer<typeof NodeEnv>;
+
+export const CreateNodeRequest = z
+  .object({
+    name: z.string().min(1),
+    kind: NodeKindEnum,
+    host: z.string().min(1).optional(),
+    port: z.number().int().positive().optional(),
+    sshUser: z.string().min(1).optional(),
+    /** Auth method for ssh nodes (defaults to 'key' when omitted). */
+    sshAuthMethod: SshAuthMethodEnum.optional(),
+    /** Plaintext private key; orchestrator encrypts at rest, never echoes it. */
+    sshPrivateKey: z.string().min(1).optional(),
+    /** Optional passphrase for an encrypted private key (encrypted at rest). */
+    sshPassphrase: z.string().min(1).optional(),
+    /** Plaintext password for password auth; encrypted at rest, never echoed. */
+    sshPassword: z.string().min(1).optional(),
+    /** Per-node env vars merged (under) the launch env for every agent here;
+     *  encrypted at rest, never echoed in the Node list. */
+    env: NodeEnv.optional(),
+    /** Optional pool/group label. */
+    pool: z.string().nullable().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.kind !== 'ssh') return;
+    // host + user are always required for ssh.
+    for (const f of ['host', 'sshUser'] as const) {
+      if (!val[f]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [f],
+          message: `${f} is required for ssh nodes`,
+        });
+      }
+    }
+    // The credential required depends on the auth method (key is the default).
+    if (val.sshAuthMethod === 'password') {
+      if (!val.sshPassword) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sshPassword'],
+          message: 'sshPassword is required for password auth',
+        });
+      }
+    } else if (!val.sshPrivateKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sshPrivateKey'],
+        message: 'sshPrivateKey is required for key auth',
+      });
+    }
+  });
+export type CreateNodeRequest = z.infer<typeof CreateNodeRequest>;
+
+/**
+ * PATCH /api/nodes/:id — edit a node. Every field is optional (a partial update);
+ * `kind` is immutable (delete + re-add to change it). Credential fields left out
+ * KEEP the existing value (SSH clients behave the same), so the form can show
+ * blank "leave to keep" inputs. Switching `sshAuthMethod` to a method with no
+ * stored credential requires sending that credential.
+ */
+export const UpdateNodeRequest = z
+  .object({
+    name: z.string().min(1).optional(),
+    host: z.string().min(1).optional(),
+    port: z.number().int().positive().optional(),
+    sshUser: z.string().min(1).optional(),
+    sshAuthMethod: SshAuthMethodEnum.optional(),
+    sshPrivateKey: z.string().min(1).optional(),
+    sshPassphrase: z.string().min(1).optional(),
+    sshPassword: z.string().min(1).optional(),
+    /** Replace the node's env vars wholesale ({} clears them); omitted = keep. */
+    env: NodeEnv.optional(),
+    /** Set/clear the pool label (null clears; omitted = keep). */
+    pool: z.string().nullable().optional(),
+  })
+  .strict();
+export type UpdateNodeRequest = z.infer<typeof UpdateNodeRequest>;
+
+export const NodeResponse = z.object({ node: NodeSchema });
+export type NodeResponse = z.infer<typeof NodeResponse>;
+
+/** GET /api/nodes/:id/env — the node's decrypted env, for the editor (cookie-authed). */
+export const NodeEnvResponse = z.object({ env: NodeEnv });
+export type NodeEnvResponse = z.infer<typeof NodeEnvResponse>;
+export const ListNodesResponse = z.object({ nodes: z.array(NodeSchema) });
+export type ListNodesResponse = z.infer<typeof ListNodesResponse>;
+
+/** GET /api/nodes/:id/status */
+export const NodeStatusResponse = z.object({
+  id: Uuid,
+  connectionStatus: ConnectionStatusEnum,
+  lastSeenAt: IsoTimestamp.nullable(),
+});
+export type NodeStatusResponse = z.infer<typeof NodeStatusResponse>;
+
+// --- node filesystem browse (pick a working dir without typing it) ----------
+
+/**
+ * GET /api/nodes/:id/fs?path=... — list directories under `path` ON the node, so
+ * the UI can offer a path browser instead of a blind text field (works for local
+ * AND remote/ssh nodes, over that node's transport). Directories only (you pick a
+ * working dir / repo root). `path` defaults to the node's home dir when omitted.
+ */
+export const ListNodeDirQuery = z.object({ path: z.string().optional() });
+export type ListNodeDirQuery = z.infer<typeof ListNodeDirQuery>;
+
+/** A single directory entry returned by the path browser. */
+export const NodeDirEntrySchema = z.object({
+  name: z.string(),
+  /** Absolute path of the entry on the node. */
+  path: z.string(),
+});
+export type NodeDirEntry = z.infer<typeof NodeDirEntrySchema>;
+
+/**
+ * GET /api/nodes/:id/fs response. `path` is the absolute, resolved directory
+ * being listed; `parent` is its parent (null at filesystem root); `entries` are
+ * the child directories (sorted, dotfiles excluded by default).
+ */
+export const ListNodeDirResponse = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  entries: z.array(NodeDirEntrySchema),
+});
+export type ListNodeDirResponse = z.infer<typeof ListNodeDirResponse>;
+
+// --- node file tree + read/write (VS Code–style file browser) ---------------
+
+/** Whether a tree entry is a directory or a regular file. */
+export const NodeFsKind = z.enum(['dir', 'file']);
+export type NodeFsKind = z.infer<typeof NodeFsKind>;
+
+/** One entry (dir OR file) from the file-tree listing. */
+export const NodeFsEntry = z.object({
+  name: z.string(),
+  path: z.string(),
+  kind: NodeFsKind,
+});
+export type NodeFsEntry = z.infer<typeof NodeFsEntry>;
+
+/** GET /api/nodes/:id/fs/tree?path=... — dirs AND files under `path` (one level). */
+export const NodeFsTreeResponse = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  entries: z.array(NodeFsEntry),
+});
+export type NodeFsTreeResponse = z.infer<typeof NodeFsTreeResponse>;
+
+/**
+ * GET /api/nodes/:id/fs/file?path=... — read a file's bytes (base64, capped).
+ * `truncated` is true when the file was larger than the read cap. The client
+ * decodes `contentBase64`; if it isn't valid UTF-8 it renders as binary.
+ */
+export const NodeFileReadResponse = z.object({
+  path: z.string(),
+  size: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  contentBase64: z.string(),
+});
+export type NodeFileReadResponse = z.infer<typeof NodeFileReadResponse>;
+
+/**
+ * PUT /api/nodes/:id/fs/file — write bytes to `path` (base64). Serves both the
+ * in-browser editor (save) and drag-and-drop upload. The parent dir must exist.
+ */
+export const NodeFileWriteRequest = z.object({
+  path: z.string().min(1),
+  contentBase64: z.string(),
+});
+export type NodeFileWriteRequest = z.infer<typeof NodeFileWriteRequest>;
+
+export const NodeFileWriteResponse = z.object({ ok: z.literal(true), path: z.string() });
+export type NodeFileWriteResponse = z.infer<typeof NodeFileWriteResponse>;
+
+/**
+ * POST /api/nodes/:id/fs/mkdir — create ONE new directory `name` inside the
+ * existing `parent` dir (the path picker's "New folder"). `name` is a single path
+ * component — no separators or `.`/`..` (enforced server-side too) so it can't
+ * escape `parent`. Like the file write, this is an authenticated node filesystem
+ * mutation.
+ */
+export const NodeMakeDirRequest = z.object({
+  parent: z.string().min(1),
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((n) => !n.includes('/') && n !== '.' && n !== '..' && n.trim() === n, {
+      message: 'name must be a single path component (no "/", "." or "..")',
+    }),
+});
+export type NodeMakeDirRequest = z.infer<typeof NodeMakeDirRequest>;
+
+export const NodeMakeDirResponse = z.object({ path: z.string() });
+export type NodeMakeDirResponse = z.infer<typeof NodeMakeDirResponse>;

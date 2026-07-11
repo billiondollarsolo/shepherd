@@ -1188,6 +1188,10 @@ preference change disappear after refresh.
 
 **Priority:** Medium
 
+**Implementation status:** Complete. Version resolution, telemetry merging, graceful
+shutdown, and human collaboration routes are import-safe modules with focused tests;
+`index.ts` remains the wiring root and no longer owns those policies.
+
 **Target:** `apps/orchestrator/src/index.ts`
 
 **Why**
@@ -1230,6 +1234,10 @@ one high-conflict module, making unrelated work harder to review and isolate.
 
 **Priority:** Medium
 
+**Implementation status:** Complete. Tree rows, pure ordering policy, and shell/rail
+composition are separate modules. Pointer and Alt+Arrow keyboard reordering call the
+same tested model operation.
+
 **Target:** `apps/web/src/features/paddock/Sidebar.tsx`
 
 **Why**
@@ -1263,6 +1271,9 @@ behavior currently compete inside one component, increasing regression risk.
 
 **Priority:** Medium
 
+**Implementation status:** Complete. Node, project, session, termination, config, and
+race dialogs own independent modules and share focused field/environment primitives.
+
 **Target:** `apps/web/src/features/paddock/PaddockDialogs.tsx`
 
 **Why**
@@ -1292,6 +1303,11 @@ which caused formatting and mobile behavior to drift between dialogs.
 ### Q6.4 — Split agentd session lifecycle
 
 **Priority:** Medium
+
+**Implementation status:** Complete. PTY lifecycle remains in `session.go`; child
+environment, native config merge, private temp space, and lifecycle helpers are
+separate files. `CONCURRENCY.md` records ownership and lock order, enforced by the Go
+race suite.
 
 **Target:** `agentd/internal/session/session.go`
 
@@ -1327,6 +1343,10 @@ are independently risky concerns that currently share one large implementation u
 
 **Priority:** Medium
 
+**Implementation status:** Complete. Auth, nodes, projects, sessions, source control,
+operations, and WebSocket schemas have canonical domain modules behind the unchanged
+`contracts.ts` public entrypoint and a surface test.
+
 **Target:** `packages/shared/src/contracts.ts`
 
 **Why**
@@ -1359,6 +1379,11 @@ unrelated imports while still needing one canonical runtime schema per domain.
 ### Q6.6 — Extract reusable connection state machines where justified
 
 **Priority:** Medium
+
+**Implementation status:** Complete for the justified common policy. PTY, status, and
+screencast adapters share one capped exponential-jitter calculation with deterministic
+tests, while their resume, subscription, and control semantics remain explicit and
+independently socket-tested.
 
 **Why**
 

@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { decodePtyFrame, encodePtyInput, encodeResize, ptyWebSocketUrl } from './ptyProtocol';
 import { reconnectDelay } from '../../lib/utils';
+import { deferReconnect } from '../../lib/reconnectGate';
 
 /** Minimal browser-WebSocket surface the hook depends on (eases faking in tests). */
 export interface WsLike {
@@ -109,7 +110,7 @@ export function usePtyWebSocket(
     let exited = false; // PTY process ended (terminal) — never reconnect
     let attempts = 0;
     let hasOpened = false; // distinguishes the first open from a reconnect
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelRetry: (() => void) | undefined;
     let manualReconnect = false;
     let initialConnectPending = true;
 
@@ -197,14 +198,16 @@ export function usePtyWebSocket(
             ? Math.round(Math.random() * 150)
             : reconnectDelay(attempts, BASE_BACKOFF_MS, MAX_BACKOFF_MS);
         attempts += 1;
-        retryTimer = setTimeout(connect, delay);
+        cancelRetry?.();
+        cancelRetry = deferReconnect(connect, delay);
       };
     };
 
     reconnectNowRef.current = (): void => {
       if (disposed || exited) return;
       initialConnectPending = false;
-      if (retryTimer) clearTimeout(retryTimer);
+      cancelRetry?.();
+      cancelRetry = undefined;
       attempts = 0;
       manualReconnect = true;
       connect();
@@ -226,7 +229,7 @@ export function usePtyWebSocket(
       disposed = true;
       initialConnectPending = false;
       reconnectNowRef.current = () => {};
-      if (retryTimer) clearTimeout(retryTimer);
+      cancelRetry?.();
       hardClose();
     };
   }, [sessionId]);

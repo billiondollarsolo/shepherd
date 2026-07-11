@@ -299,10 +299,6 @@ export const agentSessions = pgTable(
     statusDetail: text('status_detail'),
     /** Free-text supervisor note about this session; null = none. */
     note: text('note'),
-    /** Collaboration lineage: the session that spawned/handed off to this one
-     *  (durable teams graph; rehydrates the spatial graph on boot). No FK — a
-     *  missing parent just drops the edge. */
-    parentSessionId: uuid('parent_session_id'),
     /** T18: the autonomy level the agent was launched with (restart-as-is + UI badge). */
     permissionMode: text('permission_mode', { enum: PERMISSION_MODE_VALUES })
       .notNull()
@@ -321,8 +317,6 @@ export const agentSessions = pgTable(
     byNode: index('agent_sessions_node_id_idx').on(t.nodeId),
     byProject: index('agent_sessions_project_id_idx').on(t.projectId),
     byStatus: index('agent_sessions_status_idx').on(t.status),
-    // Teams graph: spawnEdges() scans rows WHERE parent_session_id IS NOT NULL.
-    byParent: index('agent_sessions_parent_session_id_idx').on(t.parentSessionId),
   }),
 );
 

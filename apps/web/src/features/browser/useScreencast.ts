@@ -17,6 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reconnectDelay } from '../../lib/utils';
+import { deferReconnect } from '../../lib/reconnectGate';
 import {
   decodeScreencastFrame,
   encodeClose,
@@ -83,7 +84,7 @@ export function useScreencast(
   useEffect(() => {
     let disposed = false;
     let attempts = 0;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelRetry: (() => void) | undefined;
 
     const connect = (): void => {
       if (disposed) return;
@@ -123,7 +124,8 @@ export function useScreencast(
         if (disposed || !reconnectRef.current) return;
         const delay = reconnectDelay(attempts, BASE_BACKOFF_MS, MAX_BACKOFF_MS);
         attempts += 1;
-        retryTimer = setTimeout(connect, delay);
+        cancelRetry?.();
+        cancelRetry = deferReconnect(connect, delay);
       };
     };
 
@@ -131,7 +133,7 @@ export function useScreencast(
 
     return () => {
       disposed = true;
-      if (retryTimer) clearTimeout(retryTimer);
+      cancelRetry?.();
       const ws = wsRef.current;
       wsRef.current = null;
       if (ws) {

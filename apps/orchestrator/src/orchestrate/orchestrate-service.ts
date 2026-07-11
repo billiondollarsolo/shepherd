@@ -10,7 +10,7 @@
  * durable scope and remains bound to the caller session, project, installation,
  * expiry, and revocation state.
  */
-import { and, count, eq, isNull, isNotNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import type { AgentCapabilityScope, ProjectAgentPolicy, Status } from '@flock/shared';
 
 import type { Database } from '../db/client.js';
@@ -64,28 +64,6 @@ const WAITABLE: ReadonlySet<string> = new Set([
 ]);
 
 export class OrchestrationService {
-  /** Spawn/handoff edges (parent → child) for the collaboration graph. Backed by
-   *  `agent_sessions.parent_session_id` so the teams graph SURVIVES restarts
-   *  (was an in-memory Map that evaporated on every reboot). */
-  async spawnEdges(): Promise<Array<{ parent: string; child: string }>> {
-    const rows = await this.db
-      .select({ child: agentSessions.id, parent: agentSessions.parentSessionId })
-      .from(agentSessions)
-      .where(isNotNull(agentSessions.parentSessionId));
-    return rows
-      .filter((r): r is { child: string; parent: string } => Boolean(r.parent))
-      .map((r) => ({ parent: r.parent, child: r.child }));
-  }
-
-  /** Record a parent→child edge (agent spawn OR user handoff) so the spatial graph
-   *  shows the lineage. Persisted on the child row. Best-effort. */
-  async recordHandoff(parentId: string, childId: string): Promise<void> {
-    await this.db
-      .update(agentSessions)
-      .set({ parentSessionId: parentId })
-      .where(eq(agentSessions.id, childId));
-  }
-
   constructor(
     private readonly db: Database,
     private readonly statusMap: StatusMap,
@@ -271,7 +249,6 @@ export class OrchestrationService {
     try {
       const id = await this.spawnFn(projectId, createdBy, agentType);
       // Collaboration edge is cosmetic (teams graph) — never fail a live spawn on it.
-      void this.recordHandoff(callerId, id).catch(() => undefined);
       return { id };
     } catch (e) {
       throw new OrchestrationError('bad_request', e instanceof Error ? e.message : 'spawn failed');
@@ -342,7 +319,6 @@ export class OrchestrationService {
     const { agentType } = await this.requireTargetInProject(projectId, targetId);
     await this.killFn(targetId);
     const id = await this.spawnFn(projectId, createdBy, agentType);
-    void this.recordHandoff(callerId, id).catch(() => undefined);
     return { id };
   }
 }

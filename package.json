@@ -50,7 +50,8 @@
     "dev:web": "pnpm --filter @flock/web dev",
     "dev:native": "pnpm db:up && pnpm dev:migrate && concurrently -n api,web -c blue,magenta \"tsx watch --env-file=.env.dev.local apps/orchestrator/src/index.ts\" \"pnpm --filter @flock/web dev\"",
     "release:check": "node scripts/check-release-version.mjs",
-    "quality:dead-code": "knip"
+    "quality:dead-code": "knip",
+    "quality:architecture": "node scripts/check-architecture.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",

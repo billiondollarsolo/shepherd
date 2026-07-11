@@ -148,6 +148,13 @@
       "when": 1783825200000,
       "tag": "0020_project_pens_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783828800000,
+      "tag": "0021_remove_session_lineage",
+      "breakpoints": true
     }
   ]
 }

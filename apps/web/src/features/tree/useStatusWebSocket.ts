@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Status, StatusUpdateMessage } from '@flock/shared';
 import { reconnectDelay } from '../../lib/utils';
+import { deferReconnect } from '../../lib/reconnectGate';
 import { encodeStatusSubscribe, parseStatusFrame, statusWebSocketUrl } from './statusWsProtocol';
 
 /** Minimal browser-WebSocket surface the hook depends on (eases faking in tests). */
@@ -93,7 +94,7 @@ export function useStatusWebSocket({
   useEffect(() => {
     let disposed = false;
     let attempts = 0;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelRetry: (() => void) | undefined;
     let ws: StatusWsLike | null = null;
 
     const connect = (): void => {
@@ -138,7 +139,8 @@ export function useStatusWebSocket({
         if (disposed || !reconnectRef.current) return;
         const delay = reconnectDelay(attempts, BASE_BACKOFF_MS, MAX_BACKOFF_MS);
         attempts += 1;
-        retryTimer = setTimeout(connect, delay);
+        cancelRetry?.();
+        cancelRetry = deferReconnect(connect, delay);
       };
     };
 
@@ -146,7 +148,7 @@ export function useStatusWebSocket({
 
     return () => {
       disposed = true;
-      if (retryTimer) clearTimeout(retryTimer);
+      cancelRetry?.();
       if (!ws) return;
       ws.onclose = ws.onerror = ws.onmessage = null;
       // Closing a socket that's still CONNECTING logs a noisy browser warning
