@@ -28,6 +28,7 @@ const orchDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.orchestrator');
 const orchEntrypoint = resolve(repoRoot, 'docker', 'orchestrator-entrypoint.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
 const envExample = resolve(repoRoot, '.env.example');
+const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
 
 function read(path: string): string {
   return readFileSync(path, 'utf8');
@@ -165,6 +166,35 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
       /(?:ENV|ARG)\s+\w*(?:SECRET|PASSWORD|TOKEN|MASTER_KEY|PRIVATE_KEY)\w*\s*[=\s]\s*\S+/i;
     expect(secretAssign.test(orch)).toBe(false);
     expect(secretAssign.test(web)).toBe(false);
+  });
+});
+
+describe('NFR-SEC1: production browser security headers', () => {
+  const caddy = read(caddyfile);
+
+  it('ships a restrictive CSP without general unsafe-eval', () => {
+    expect(caddy).toMatch(/Content-Security-Policy/);
+    expect(caddy).toMatch(/default-src 'self'/);
+    expect(caddy).toMatch(/object-src 'none'/);
+    expect(caddy).toMatch(/frame-ancestors 'none'/);
+    expect(caddy).toMatch(/script-src 'self' 'wasm-unsafe-eval'/);
+    expect(caddy).not.toMatch(/(?:^|[\s;])'unsafe-eval'(?:[\s;]|$)/m);
+    expect(caddy).toMatch(/connect-src 'self'/);
+    expect(caddy).toMatch(/upgrade-insecure-requests/);
+  });
+
+  it('documents every necessary CSP exception next to the policy', () => {
+    expect(caddy).toMatch(/Ghostty needs WebAssembly/);
+    expect(caddy).toMatch(/React components use[\s\S]*runtime style attributes/);
+    expect(caddy).toMatch(/Screencast frames[\s\S]*data:image\/jpeg/);
+  });
+
+  it('sets permissions and cross-origin policies', () => {
+    expect(caddy).toMatch(/Permissions-Policy/);
+    expect(caddy).toMatch(/camera=\(\)/);
+    expect(caddy).toMatch(/microphone=\(\)/);
+    expect(caddy).toMatch(/Cross-Origin-Opener-Policy "same-origin"/);
+    expect(caddy).toMatch(/Cross-Origin-Resource-Policy "same-origin"/);
   });
 });
 

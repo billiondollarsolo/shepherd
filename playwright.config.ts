@@ -25,10 +25,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'pnpm --filter @flock/web dev --host 0.0.0.0 --port 5173',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer:
+    process.env.E2E_NO_WEB_SERVER === '1'
+      ? undefined
+      : {
+          command: 'pnpm --filter @flock/web dev --host 0.0.0.0 --port 5173',
+          url: 'http://localhost:5173',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
 });

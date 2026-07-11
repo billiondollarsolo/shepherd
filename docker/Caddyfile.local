@@ -7,6 +7,21 @@
 :48080 {
 	encode zstd gzip
 
+	# Match production browser protections while allowing this deliberate local
+	# plain-HTTP origin. React style attributes, Ghostty WebAssembly, and data-URL
+	# screencast frames are the only non-default source exceptions.
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://localhost:48080; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src 'none'"
+		Permissions-Policy "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Permitted-Cross-Domain-Policies "none"
+		-Server
+	}
+
 	# Cookie-authed UI/API + the per-session-token hook endpoint.
 	handle /api/* {
 		reverse_proxy orchestrator:8080
