@@ -232,7 +232,10 @@ export async function main(): Promise<void> {
   // direct-tcpip channel. `localNodeId` is filled at boot (ensureLocalNode).
   // Pinned on; the `useAgentd` branches below are always taken.
   const useAgentd = true;
-  const agentdSecret = process.env.FLOCK_AGENTD_SECRET || undefined;
+  const agentdSecret = process.env.FLOCK_AGENTD_SECRET;
+  if (!agentdSecret || agentdSecret.length < 32) {
+    throw new Error('FLOCK_AGENTD_SECRET must contain a strong agentd control credential');
+  }
   // Derived agent status (daemon tails the agent transcript) → live status map +
   // per-session meta (token usage + current tool) shown in the paddock sidebar.
   // Per-session telemetry cache (everything except `plan`, which is routed to the
@@ -251,8 +254,8 @@ export async function main(): Promise<void> {
     secret: agentdSecret,
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
   });
-  // Bootstrap for REMOTE nodes: ships the arch-matched binary from the dist dir
-  // (built via `cd agentd && make dist`) and launches it under systemd --user.
+  // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
+  // as a root-owned system service, then drops sessions to flock-agent.
   const agentdPort = Number(process.env.FLOCK_AGENTD_PORT || 48222);
   const agentdBootstrap = new AgentdBootstrap({
     version: resolveAgentdVersion(),

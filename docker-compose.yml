@@ -161,10 +161,10 @@ services:
       # dockerode needs the host Docker socket to manage browser containers.
       # Read-write is required to create/destroy containers (NFR-DEP1).
       - '${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock'
-      # Persistent working dir for LOCAL-node sessions (agents run inside this
-      # container). Point a local project's working dir under /home/node/workspace
-      # so its files survive orchestrator restarts/redeploys.
-      - 'flock_workdir:/home/node/workspace'
+      # Runtime home/workspaces/tool credentials belong only to flock-agent.
+      - 'flock_agent_home:/home/flock-agent'
+      # Root-owned daemon state and its control credential persist independently.
+      - 'flock_agentd_state:/var/lib/flock-agentd'
     # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
     # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
     # network. `expose` documents the internal port without publishing it.
@@ -204,9 +204,9 @@ services:
 # -----------------------------------------------------------------------------
 volumes:
   pgdata:
-  # Working dir for LOCAL-node sessions (agents run inside the orchestrator
-  # container). Persisted so local session files survive restarts/redeploys.
-  flock_workdir:
+  # Separate durable agent runtime home and root-owned daemon control state.
+  flock_agent_home:
+  flock_agentd_state:
   # Caddy TLS certificates + ACME account keys (US-39, NFR-SEC1/DEP2). Persisted
   # so certs survive restarts and are never baked into an image.
   caddy_data:

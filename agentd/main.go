@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"flock-agentd/internal/identity"
 	"flock-agentd/internal/layout"
 	"flock-agentd/internal/metrics"
 	"flock-agentd/internal/sandbox"
@@ -111,19 +112,69 @@ func serve(args []string) {
 	socket := fs.String("socket", defaultSocket(), "unix socket path (local node)")
 	addr := fs.String("addr", "", "loopback TCP addr for SSH direct-tcpip, e.g. 127.0.0.1:48222")
 	secret := fs.String("secret", os.Getenv("FLOCK_AGENTD_SECRET"), "shared secret (optional)")
+	secretFile := fs.String("secret-file", os.Getenv("FLOCK_AGENTD_SECRET_FILE"), "protected shared-secret file")
 	stateDir := fs.String("state-dir", defaultStateDir(), "dir for persisted layouts")
+	runtimeUser := fs.String("runtime-user", "", "fixed non-root user for every agent process")
+	allowInsecureSameUser := fs.Bool(
+		"allow-insecure-same-user",
+		false,
+		"DEVELOPMENT ONLY: run agents as the daemon user",
+	)
+	controlGroup := fs.String("control-group", "", "group permitted to open the unix control socket")
 	_ = fs.Parse(args)
+
+	var runtimeIdentity *identity.Runtime
+	if *runtimeUser != "" {
+		var resolveErr error
+		runtimeIdentity, resolveErr = identity.Resolve(*runtimeUser)
+		if resolveErr != nil {
+			fatal("resolve runtime identity", resolveErr)
+		}
+		if validateErr := runtimeIdentity.ValidateControlIdentity(); validateErr != nil {
+			fatal("validate control identity", validateErr)
+		}
+	} else if !*allowInsecureSameUser {
+		fatal("missing runtime identity", fmt.Errorf(
+			"--runtime-user is required; same-UID agent execution is unsupported (development may opt in with --allow-insecure-same-user)"))
+	} else {
+		fmt.Fprintln(os.Stderr, "[flock-agentd] SECURITY WARNING: insecure same-user development mode enabled")
+	}
+
+	resolvedSecret := *secret
+	if *secretFile != "" {
+		var readErr error
+		resolvedSecret, readErr = readCredentialFile(*secretFile, runtimeIdentity != nil)
+		if readErr != nil {
+			fatal("read control credential", readErr)
+		}
+	}
+	if runtimeIdentity != nil && *secretFile == "" {
+		fatal("missing control credential", fmt.Errorf("--secret-file is required in secure mode"))
+	}
+	if runtimeIdentity != nil && resolvedSecret == "" {
+		fatal("missing control credential", fmt.Errorf("--secret-file is required in secure mode"))
+	}
 
 	// A loopback TCP listener (remote nodes, reached via SSH direct-tcpip) is the
 	// one surface another LOCAL user/process on the node could reach. Refuse to
 	// open it without a shared secret — otherwise anyone who can reach
 	// 127.0.0.1:<port> could open/close/drive every session. The unix socket
 	// (local node) is already protected by 0600 file perms, so it needs no secret.
-	if *addr != "" && *secret == "" {
+	if *addr != "" && resolvedSecret == "" {
 		fatal("refusing TCP listener", fmt.Errorf(
 			"a --secret (or FLOCK_AGENTD_SECRET) is required when --addr is set; refusing to expose an unauthenticated control port"))
 	}
+	if *addr != "" {
+		host, _, splitErr := net.SplitHostPort(*addr)
+		ip := net.ParseIP(host)
+		if splitErr != nil || ip == nil || !ip.IsLoopback() {
+			fatal("refusing TCP listener", fmt.Errorf("--addr must use a literal loopback IP"))
+		}
+	}
 
+	if runtimeIdentity != nil {
+		metrics.SetAgentHome(runtimeIdentity.Home)
+	}
 	metrics.Start() // begin the background CPU sampler (host metrics for nodeInfo)
 	// A fresh daemon owns no sessions yet, so any leftover scoped-config temp dirs
 	// are orphans from a prior crashed/killed run — sweep them so /tmp doesn't grow
@@ -134,12 +185,20 @@ func serve(args []string) {
 	if err != nil {
 		fatal("open layout store", err)
 	}
-	srv := server.New(mgr, resolveVersion(), *secret, layouts)
+	srv := server.New(mgr, resolveVersion(), resolvedSecret, layouts, runtimeIdentity)
 
 	var lns []net.Listener
 
 	// Unix socket (local node path).
 	if *socket != "" {
+		var controlGID *uint32
+		if runtimeIdentity != nil {
+			gid, groupErr := identity.ResolveGroupID(*controlGroup)
+			if groupErr != nil {
+				fatal("resolve control group", groupErr)
+			}
+			controlGID = &gid
+		}
 		_ = os.Remove(*socket)
 		if err := os.MkdirAll(filepath.Dir(*socket), 0o700); err != nil {
 			fatal("mkdir socket dir", err)
@@ -148,7 +207,16 @@ func serve(args []string) {
 		if err != nil {
 			fatal("listen unix", err)
 		}
-		_ = os.Chmod(*socket, 0o600)
+		if controlGID != nil {
+			if err := os.Chown(*socket, 0, int(*controlGID)); err != nil {
+				fatal("chown unix socket", err)
+			}
+			if err := os.Chmod(*socket, 0o660); err != nil {
+				fatal("chmod unix socket", err)
+			}
+		} else {
+			_ = os.Chmod(*socket, 0o600)
+		}
 		lns = append(lns, ln)
 		fmt.Fprintf(os.Stderr, "[flock-agentd] listening on unix %s\n", *socket)
 	}
@@ -184,6 +252,34 @@ func serve(args []string) {
 	if *socket != "" {
 		_ = os.Remove(*socket)
 	}
+}
+
+func readCredentialFile(path string, secure bool) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("credential path is not a regular file")
+	}
+	if info.Mode().Perm()&0o007 != 0 {
+		return "", fmt.Errorf("credential file must not be accessible by other users")
+	}
+	if secure {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 {
+			return "", fmt.Errorf("credential file must be owned by root")
+		}
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	value := strings.TrimSpace(string(body))
+	if len(value) < 32 {
+		return "", fmt.Errorf("credential must contain at least 32 characters")
+	}
+	return value, nil
 }
 
 // sweepStaleConfigDirs removes orphaned per-session scoped-config dirs left in

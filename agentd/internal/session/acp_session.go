@@ -34,7 +34,7 @@ type acpState struct {
 	conn      *acp.Conn
 	mu        sync.Mutex
 	sessionID string
-	line      []byte // the in-progress input line (local echo + edit)
+	line      []byte      // the in-progress input line (local echo + edit)
 	pending   chan string // non-nil while an approval is awaiting an answer
 	options   []acp.PermissionOption
 	// Structured-chat forwarding: whole messages are POSTed to Flock's hook
@@ -92,8 +92,9 @@ func (s *Session) runACP(argv []string) {
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = s.spec.Cwd
-	if s.spec.Env != nil {
-		cmd.Env = s.spec.Env
+	cmd.Env = agentEnvironment(s.spec)
+	if s.spec.Identity != nil {
+		s.spec.Identity.Apply(cmd)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -135,7 +136,11 @@ func (s *Session) runACP(argv []string) {
 		return
 	}
 	// Give the ACP agent the flock orchestration tools (auto-discovered via MCP).
-	sid, err := conn.NewSession(ctx, s.spec.Cwd, acpFlockMcpServers(hookURL, hookToken))
+	sid, err := conn.NewSession(
+		ctx,
+		s.spec.Cwd,
+		acpFlockMcpServers(hookURL, hookToken, homeForSpec(s.spec), s.spec.Identity),
+	)
 	if err != nil {
 		s.acpFail(err)
 		return

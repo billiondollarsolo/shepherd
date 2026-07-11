@@ -59,7 +59,16 @@ var (
 	startOnce  sync.Once
 	agentMu    sync.Mutex
 	agentCache []AgentInfo
+	agentHome  string
 )
+
+// SetAgentHome points CLI detection at the fixed runtime identity rather than
+// the root daemon's home. Call once before Start.
+func SetAgentHome(home string) {
+	agentMu.Lock()
+	agentHome = home
+	agentMu.Unlock()
+}
 
 // knownAgents are the coding-agent CLIs we probe for on the node. T20: dropped
 // "aider" (not launchable/integrated — advertising it implied breadth we don't
@@ -312,7 +321,12 @@ func resolveAgent(name string) string {
 	// LookPath misses installs outside the daemon's (often minimal) $PATH — npm /
 	// version-manager dirs. Search the shared agent-install dirs (FIX: gemini
 	// detection; same source of truth the spawn PATH augments — see agentpath).
-	home, _ := os.UserHomeDir()
+	agentMu.Lock()
+	home := agentHome
+	agentMu.Unlock()
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
 	for _, dir := range agentpath.BinDirs(home) {
 		if c := filepath.Join(dir, name); isExecutable(c) {
 			return c

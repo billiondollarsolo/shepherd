@@ -258,9 +258,11 @@ ambiguous.
 
 **Priority:** Blocking for Phase 2
 
-**Implementation status:** Architecture accepted in
-`docs/decisions/agentd-privilege-separation.md`; required spike evidence remains
-incomplete
+**Implementation status:** In progress. Architecture accepted in
+`docs/decisions/agentd-privilege-separation.md`; the root/control/agent identity
+split, protected credential and socket, PTY privilege drop, Docker production
+smoke, and local adversarial boundary tests are implemented. Clean remote-VM,
+reboot, and failed-upgrade exercises remain before the spike is complete.
 
 **Why**
 
@@ -496,6 +498,12 @@ open authenticated WebSockets, and inject PTY input. CSP materially reduces that
 **Priority:** Critical
 
 **Depends on:** P0.3
+
+**Implementation status:** In progress. Secure deployments fail closed without a
+fixed non-root runtime identity and protected credential file. The local production
+image and remote system-service bootstrap use separate control and agent identities;
+same-UID execution requires an explicit development-only flag. Remote-VM lifecycle
+validation remains outstanding.
 
 **Why**
 

@@ -26,7 +26,8 @@ Flock will use three distinct roles:
 - **agent runtime:** an unprivileged node identity that owns workspaces and coding-tool
   credentials but cannot read agentd state or control credentials.
 
-There is no supported same-UID fallback.
+There is no supported production same-UID fallback. Local source development may opt
+in explicitly and emits a security warning; this mode provides no agent isolation.
 
 ### Remote Linux nodes
 

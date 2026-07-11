@@ -25,7 +25,7 @@ func dialServerWith(t *testing.T, layouts LayoutStore) (net.Conn, *session.Manag
 		t.Fatalf("listen: %v", err)
 	}
 	mgr := session.NewManager()
-	srv := New(mgr, "test", "", layouts)
+	srv := New(mgr, "test", "", layouts, nil)
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = ln.Close(); mgr.CloseAll() })
 

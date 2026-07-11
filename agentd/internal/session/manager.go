@@ -73,7 +73,7 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		// Pre-accept the agent's folder-trust gate for this cwd so the session starts
 		// READY — not blocked on an onboarding/trust prompt (which also eats the first
 		// piped input). Best-effort + non-destructive.
-		ensureFolderTrust(detectSetupAgent(spec.Command), spec.Cwd)
+		ensureFolderTrust(detectSetupAgent(spec.Command), spec.Cwd, spec.Identity)
 
 		var s *Session
 		var err error

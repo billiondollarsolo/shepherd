@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"flock-agentd/internal/agentpath"
+	"flock-agentd/internal/identity"
 	"flock-agentd/internal/status"
 
 	"github.com/creack/pty"
@@ -45,6 +46,10 @@ type Spec struct {
 	Mode string
 	Cols uint16
 	Rows uint16
+
+	// Identity is daemon-owned policy, never a control-protocol field. When set,
+	// every PTY/ACP process drops to this fixed non-root UID/GID/group set.
+	Identity *identity.Runtime
 
 	// --- scoped hook-config injection (US-19), seeded ON THE NODE ---
 	// When ConfigDirEnv is set, Open() creates a per-session scoped config dir on
@@ -156,6 +161,7 @@ func Open(spec Spec) (*Session, error) {
 		s.configDir = dir
 		s.spec.Env = append(s.spec.Env, env)
 	}
+	ensureConfigOwnership(s.spec, s.configDir)
 	if err := s.startProcess(); err != nil {
 		return nil, err
 	}
@@ -170,7 +176,7 @@ func Open(spec Spec) (*Session, error) {
 func (s *Session) startProcess() error {
 	argv := s.spec.Command
 	if len(argv) == 0 {
-		argv = []string{defaultShell(), "-l"}
+		argv = []string{defaultShell(s.spec), "-l"}
 	}
 	// T17: for an autonomous session on a sandbox-capable node, run the agent
 	// through the `flock-agentd sandbox-exec` helper so Landlock confines its
@@ -199,7 +205,8 @@ func (s *Session) startProcess() error {
 	// userland-installed agent (gemini/opencode), even though cmd.Env's PATH below
 	// is augmented. Resolving here (same dirs as the spawn PATH) is what actually
 	// lets those launch; claude/codex in /usr/bin resolve via LookPath as before.
-	cmd := exec.Command(resolveExecutable(argv[0]), argv[1:]...)
+	home := homeForSpec(s.spec)
+	cmd := exec.Command(resolveExecutable(argv[0], home), argv[1:]...)
 	if s.spec.Cwd != "" {
 		cmd.Dir = s.spec.Cwd
 	}
@@ -215,16 +222,10 @@ func (s *Session) startProcess() error {
 	// coding agent (and any tool/subprocess/code it runs) must never read
 	// FLOCK_AGENTD_SECRET from its own environment and impersonate the
 	// orchestrator to this daemon.
-	base := os.Environ()
-	filtered := make([]string, 0, len(base)+4)
-	for _, e := range base {
-		if strings.HasPrefix(e, "FLOCK_AGENTD_SECRET=") {
-			continue
-		}
-		filtered = append(filtered, e)
+	cmd.Env = agentEnvironment(s.spec)
+	if s.spec.Identity != nil {
+		s.spec.Identity.Apply(cmd)
 	}
-	cmd.Env = append(filtered, "PATH="+augmentedPath())
-	cmd.Env = append(cmd.Env, s.spec.Env...)
 	// The PTY's terminal type must match the CLIENT (the browser's xterm.js),
 	// NOT whatever the daemon inherited — so FORCE TERM=xterm-256color, overriding
 	// any daemon TERM (a later entry wins in exec env). Without a correct TERM,
@@ -743,9 +744,9 @@ func seedScopedConfig(spec Spec) (dir string, envEntry string, err error) {
 	// no env entry, nothing to clean up on close; the forwarder/plugin no-op
 	// without the per-session FLOCK_HOOK_* env, so non-Flock runs are unaffected.
 	if spec.ConfigDirEnv == "" {
-		home, herr := os.UserHomeDir()
-		if herr != nil {
-			return "", "", herr
+		home := homeForSpec(spec)
+		if home == "" {
+			return "", "", fmt.Errorf("runtime home is unavailable")
 		}
 		target := filepath.Join(home, spec.ConfigBaseSubdir)
 		if mderr := os.MkdirAll(target, 0o700); mderr != nil {
@@ -762,7 +763,7 @@ func seedScopedConfig(spec Spec) (dir string, envEntry string, err error) {
 		return "", "", err
 	}
 	if spec.ConfigBaseSubdir != "" {
-		if home, herr := os.UserHomeDir(); herr == nil {
+		if home := homeForSpec(spec); home != "" {
 			src := filepath.Join(home, spec.ConfigBaseSubdir)
 			if fi, serr := os.Stat(src); serr == nil && fi.IsDir() {
 				if cerr := copyDir(src, dir); cerr != nil {
@@ -907,7 +908,43 @@ func copyDir(src, dst string) error {
 	})
 }
 
-func defaultShell() string {
+func ensureConfigOwnership(spec Spec, scopedDir string) {
+	if spec.Identity == nil {
+		return
+	}
+	if scopedDir != "" {
+		_ = chownTree(scopedDir, spec.Identity)
+		return
+	}
+	if len(spec.ConfigFiles) == 0 {
+		return
+	}
+	target := filepath.Join(spec.Identity.Home, spec.ConfigBaseSubdir)
+	if spec.ConfigBaseSubdir != "" {
+		_ = chownTree(target, spec.Identity)
+		return
+	}
+	for rel := range spec.ConfigFiles {
+		_ = chownTree(filepath.Join(target, rel), spec.Identity)
+	}
+}
+
+func chownTree(root string, runtime *identity.Runtime) error {
+	if runtime == nil || root == "" {
+		return nil
+	}
+	return filepath.WalkDir(root, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Lchown(path, int(runtime.UID), int(runtime.GID))
+	})
+}
+
+func defaultShell(spec Spec) string {
+	if spec.Identity != nil && spec.Identity.Shell != "" {
+		return spec.Identity.Shell
+	}
 	if sh := os.Getenv("SHELL"); sh != "" {
 		return sh
 	}
@@ -925,9 +962,8 @@ func defaultShell() string {
 // that dir forever and the daemon would keep failing to launch the agent even
 // though detection (which rescans every 30s) shows it as present. The ~20
 // stat/glob syscalls per spawn are negligible — spawns are user-initiated + rare.
-func augmentedPath() string {
+func augmentedPath(home string) string {
 	path := os.Getenv("PATH")
-	home, _ := os.UserHomeDir()
 	for _, d := range agentpath.BinDirs(home) {
 		if !pathContains(path, d) {
 			path = path + string(os.PathListSeparator) + d
@@ -945,7 +981,7 @@ func augmentedPath() string {
 // found". A name that already contains a separator, or is on the daemon's own
 // PATH, is used as-is. Returns the input unchanged when nothing resolves, so the
 // caller still surfaces a clean exec error.
-func resolveExecutable(name string) string {
+func resolveExecutable(name, home string) string {
 	if name == "" || strings.ContainsRune(name, os.PathSeparator) {
 		return name
 	}
@@ -954,7 +990,6 @@ func resolveExecutable(name string) string {
 	// (e.g. claude via the official installer in ~/.local/bin) wins over a root-owned
 	// /usr/bin copy that the agent user can't self-update. Fall back to the daemon's
 	// own PATH (LookPath) for anything outside these dirs.
-	home, _ := os.UserHomeDir()
 	for _, dir := range agentpath.BinDirs(home) {
 		cand := filepath.Join(dir, name)
 		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
@@ -965,6 +1000,61 @@ func resolveExecutable(name string) string {
 		return p // outside the known bin dirs but on the daemon's $PATH
 	}
 	return name
+}
+
+func homeForSpec(spec Spec) string {
+	if spec.Identity != nil && spec.Identity.Home != "" {
+		return spec.Identity.Home
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// agentEnvironment builds the child environment while forcing identity fields
+// after all caller additions. Control credentials are always removed.
+func agentEnvironment(spec Spec) []string {
+	reserved := []string{
+		"FLOCK_AGENTD_SECRET=",
+		"FLOCK_AGENTD_CREDENTIAL=",
+		"FLOCK_AGENTD_CREDENTIAL_FILE=",
+		"HOME=",
+		"USER=",
+		"LOGNAME=",
+		"SHELL=",
+		"PATH=",
+	}
+	keep := func(entry string) bool {
+		for _, prefix := range reserved {
+			if strings.HasPrefix(entry, prefix) {
+				return false
+			}
+		}
+		return true
+	}
+	out := make([]string, 0, len(os.Environ())+len(spec.Env)+8)
+	for _, entry := range os.Environ() {
+		if keep(entry) {
+			out = append(out, entry)
+		}
+	}
+	for _, entry := range spec.Env {
+		if keep(entry) {
+			out = append(out, entry)
+		}
+	}
+	home := homeForSpec(spec)
+	out = append(out, "PATH="+augmentedPath(home))
+	if spec.Identity != nil {
+		out = append(out,
+			"HOME="+spec.Identity.Home,
+			"USER="+spec.Identity.Username,
+			"LOGNAME="+spec.Identity.Username,
+			"SHELL="+spec.Identity.Shell,
+		)
+	} else if home != "" {
+		out = append(out, "HOME="+home)
+	}
+	return out
 }
 
 func pathContains(path, dir string) bool {

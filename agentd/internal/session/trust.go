@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"flock-agentd/internal/identity"
 )
 
 // Per-path locks + atomic writes for the agent config files we mutate. Several
@@ -112,11 +114,17 @@ func detectSetupAgent(command []string) string {
 
 // ensureFolderTrust marks cwd trusted for the given agent + registers the flock MCP
 // server in its config. `agent` comes from detectSetupAgent.
-func ensureFolderTrust(agent, cwd string) {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || cwd == "" {
+func ensureFolderTrust(agent, cwd string, runtime *identity.Runtime) {
+	home := ""
+	if runtime != nil {
+		home = runtime.Home
+	} else {
+		home, _ = os.UserHomeDir()
+	}
+	if home == "" || cwd == "" {
 		return
 	}
+	defer ensureTrustOwnership(home, agent, runtime)
 	mcp := flockMcpServer(home) // nil unless ~/.flock/flock-mcp.mjs is present
 	switch agent {
 	case "claude":
@@ -222,15 +230,15 @@ func flockMcpServer(home string) map[string]any {
 // acpFlockMcpServers builds the ACP `session/new` mcpServers list for the flock
 // server (ships the script + passes the session's hook creds as explicit env so it
 // authenticates even if the agent doesn't forward its own env). Empty if unavailable.
-func acpFlockMcpServers(hookURL, hookToken string) []any {
+func acpFlockMcpServers(hookURL, hookToken, home string, runtime *identity.Runtime) []any {
 	if hookURL == "" {
 		return nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if home == "" {
 		return nil
 	}
 	entry := flockMcpServer(home) // ships the script; {command, args} or nil
+	_ = chownTree(filepath.Join(home, ".flock"), runtime)
 	if entry == nil {
 		return nil
 	}
@@ -243,6 +251,25 @@ func acpFlockMcpServers(hookURL, hookToken string) []any {
 			map[string]any{"name": "FLOCK_HOOK_TOKEN", "value": hookToken},
 		},
 	}}
+}
+
+func ensureTrustOwnership(home, agent string, runtime *identity.Runtime) {
+	if runtime == nil {
+		return
+	}
+	_ = chownTree(filepath.Join(home, ".flock"), runtime)
+	switch agent {
+	case "claude":
+		_ = os.Lchown(filepath.Join(home, ".claude.json"), int(runtime.UID), int(runtime.GID))
+	case "gemini":
+		_ = chownTree(filepath.Join(home, ".gemini"), runtime)
+	case "codex":
+		_ = chownTree(filepath.Join(home, ".codex"), runtime)
+	case "grok":
+		_ = chownTree(filepath.Join(home, ".grok"), runtime)
+	case "opencode":
+		_ = chownTree(filepath.Join(home, ".config", "opencode"), runtime)
+	}
 }
 
 // addMcpServer merges the flock entry into a config's top-level `mcpServers`.

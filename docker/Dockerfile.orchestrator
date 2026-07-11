@@ -94,7 +94,18 @@ RUN apt-get update \
         git \
         ca-certificates \
         curl \
+        gosu \
     && rm -rf /var/lib/apt/lists/*
+
+# Separate OS identities: the orchestrator is the trusted control client while
+# all coding agents run as flock-agent. Only flock-control joins the runtime
+# group (read-only operational access to workspaces); flock-agent never joins a
+# control or Docker-socket group.
+RUN groupadd --system flock-control \
+    && useradd --system --create-home --home-dir /home/flock-control --gid flock-control --shell /bin/bash flock-control \
+    && groupadd --system flock-agent \
+    && useradd --system --create-home --home-dir /home/flock-agent --gid flock-agent --shell /bin/bash flock-agent \
+    && usermod -aG flock-agent flock-control
 
 # Agent CLIs on PATH so a session on the LOCAL node (i.e. this container, when
 # Flock is deployed in Docker) can launch a real agent — same set the SSH node
@@ -137,7 +148,8 @@ RUN chmod +x /usr/local/bin/flock-agentd /usr/local/bin/flock-entrypoint.sh
 
 # The unix socket the daemon listens on and the orchestrator dials (must match;
 # the orchestrator reads FLOCK_AGENTD_SOCKET). /tmp is writable by the node user.
-ENV FLOCK_AGENTD_SOCKET=/tmp/flock-agentd.sock
+ENV FLOCK_AGENTD_SOCKET=/run/flock-agentd/control.sock
+ENV FLOCK_AGENTD_SECRET_FILE=/var/lib/flock-agentd/control.key
 
 # Default internal port (overridable via env). TLS is terminated upstream.
 ENV PORT=8080
@@ -146,12 +158,15 @@ EXPOSE 8080
 # A node-owned workspace for LOCAL-node session working dirs. A named volume
 # mounted here (see docker-compose.yml) initialises with this dir's ownership, so
 # the non-root `node` user can write — and local sessions survive restarts.
-RUN mkdir -p /home/node/workspace && chown -R node:node /home/node/workspace
+RUN mkdir -p /home/flock-agent/workspace /var/lib/flock-agentd /run/flock-agentd \
+    && chown -R flock-agent:flock-agent /home/flock-agent \
+    && chown root:flock-control /var/lib/flock-agentd /run/flock-agentd \
+    && chmod 0750 /var/lib/flock-agentd /run/flock-agentd
 
-# Run as the non-root `node` user shipped by the base image. Note: when the
-# Docker socket is mounted for dockerode (per-session browser containers),
-# socket group permissions must allow access; see docker-compose.yml.
-USER node
+# PID 1 starts as root solely to supervise the root agentd service and establish
+# socket/file ownership, then execs the orchestrator as flock-control. Agent
+# processes are always dropped again to flock-agent by agentd.
+USER root
 
 # Entrypoint (T10): supervises flock-agentd, runs idempotent migrations, then
 # installs the latest Claude Code for the local node (without redistributing its

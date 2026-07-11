@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"flock-agentd/internal/identity"
 	"flock-agentd/internal/metrics"
 	"flock-agentd/internal/proto"
 	"flock-agentd/internal/session"
@@ -30,6 +31,7 @@ type Server struct {
 	version string
 	secret  string // optional shared secret (defense-in-depth atop SSH); "" = off
 	layout  LayoutStore
+	runtime *identity.Runtime
 }
 
 // LayoutStore persists per-workspace pane layouts (implemented in task #22).
@@ -38,8 +40,8 @@ type LayoutStore interface {
 	Set(workspace string, tree []byte) error
 }
 
-func New(mgr *session.Manager, version, secret string, layout LayoutStore) *Server {
-	return &Server{mgr: mgr, version: version, secret: secret, layout: layout}
+func New(mgr *session.Manager, version, secret string, layout LayoutStore, runtime *identity.Runtime) *Server {
+	return &Server{mgr: mgr, version: version, secret: secret, layout: layout, runtime: runtime}
 }
 
 // conn is the per-connection state.
@@ -120,6 +122,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			Sandbox:          ctrl.Sandbox,
 			SandboxAllow:     ctrl.SandboxAllow,
 			ActivityStatus:   ctrl.ActivityStatus,
+			Identity:         c.s.runtime,
 		})
 		if err != nil {
 			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})

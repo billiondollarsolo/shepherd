@@ -124,7 +124,7 @@ if [[ -n "$AGENTD_BIN" ]]; then
   # sessions aren't permanently lost (T2 — the local-node equivalent of the SSH
   # nodes' systemd unit). 1s backoff avoids a tight crash loop.
   ( while true; do
-      FLOCK_AGENTD_SECRET="$AGENTD_SECRET" stdbuf -oL -eL "$AGENTD_BIN" serve
+      FLOCK_AGENTD_SECRET="$AGENTD_SECRET" stdbuf -oL -eL "$AGENTD_BIN" serve --allow-insecure-same-user
       echo "[agentd] exited — restarting in 1s"
       sleep 1
     done ) > >(tee -a /tmp/flock-agentd.log | sed $'s/^/\033[32m[agentd]\033[0m /') 2>&1 &
