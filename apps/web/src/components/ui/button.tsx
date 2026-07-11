@@ -12,7 +12,7 @@ export const buttonVariants = cva(
   'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ' +
     'transition-[background-color,color,box-shadow,opacity] duration-fast ease-standard ' +
     'focus-visible:outline-none focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-50 ' +
-    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
+    '[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4',
   {
     variants: {
       variant: {
@@ -22,7 +22,8 @@ export const buttonVariants = cva(
           'bg-flock-surface-2 text-flock-ink-primary border border-[var(--flock-border)] hover:bg-[var(--flock-surface-hover)]',
         outline:
           'border border-[var(--flock-border-strong)] bg-transparent text-flock-ink-primary hover:bg-[var(--flock-surface-hover)]',
-        ghost: 'bg-transparent text-flock-ink-muted hover:bg-[var(--flock-surface-hover)] hover:text-flock-ink-primary',
+        ghost:
+          'bg-transparent text-flock-ink-muted hover:bg-[var(--flock-surface-hover)] hover:text-flock-ink-primary',
         destructive: 'bg-status-error text-white shadow-sm hover:brightness-110',
         link: 'text-flock-accent underline-offset-4 hover:underline',
       },

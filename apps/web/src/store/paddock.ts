@@ -177,23 +177,6 @@ function saveLayoutPresets(p: LayoutPreset[]): void {
   }
 }
 
-const FOLLOW_KEY = 'flock.fleetSelectionFollow';
-function loadFollow(): boolean {
-  try {
-    const v = localStorage.getItem(FOLLOW_KEY);
-    return v !== '0'; // default on
-  } catch {
-    return true;
-  }
-}
-function saveFollow(v: boolean): void {
-  try {
-    localStorage.setItem(FOLLOW_KEY, v ? '1' : '0');
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 const ASSIST_KEY = 'flock.assistivePanels';
 function loadAssistive(): boolean {
   try {
@@ -224,8 +207,6 @@ export interface PaddockUiState {
   lens: ShellLens;
   /** stage = terminal-first (D5 default); tools = right panel open. */
   chrome: ShellChrome;
-  /** Multi-device selection follow (per-user, client preference). */
-  fleetSelectionFollow: boolean;
   /** Opt-in adaptive right-panel hijack (default off). */
   assistivePanels: boolean;
 
@@ -272,7 +253,6 @@ export interface PaddockUiState {
   setChrome: (chrome: ShellChrome) => void;
   openTools: (tab?: RightTab) => void;
   closeTools: () => void;
-  setFleetSelectionFollow: (v: boolean) => void;
   setAssistivePanels: (v: boolean) => void;
   setZoomLeafId: (id: string | null) => void;
 
@@ -311,14 +291,13 @@ export interface PaddockUiState {
 }
 
 export const usePaddock = create<PaddockUiState>((set) => ({
-  // D1: land on mission control conceptually; path `/` sets overview + mission.
+  // D1: land on the Paddock dashboard; path `/` sets overview + mission lens.
   view: 'overview',
   settingsSection: 'appearance',
   selectedSessionId: null,
   selectedProjectId: null,
   lens: 'mission',
   chrome: 'stage',
-  fleetSelectionFollow: loadFollow(),
   assistivePanels: loadAssistive(),
   dialog: null,
   dialogNodeId: null,
@@ -411,10 +390,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       rightTab: tab ?? s.rightTab,
     })),
   closeTools: () => set({ chrome: 'stage', rightOpen: false }),
-  setFleetSelectionFollow: (v) => {
-    saveFollow(v);
-    set({ fleetSelectionFollow: v });
-  },
   setAssistivePanels: (v) => {
     saveAssistive(v);
     set({ assistivePanels: v });

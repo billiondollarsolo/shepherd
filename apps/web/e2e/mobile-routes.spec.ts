@@ -154,7 +154,9 @@ async function expectMobilePage(page: Page, path: string, selector: string): Pro
   await expect(page.locator(selector)).toBeVisible();
   await expect
     .poll(() =>
-      page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
     )
     .toBe(true);
   const dimensions = await page.locator(selector).evaluate((element) => ({
@@ -169,7 +171,9 @@ async function expectMobilePage(page: Page, path: string, selector: string): Pro
   await expect(page.getByText('Something went wrong!', { exact: true })).toHaveCount(0);
 }
 
-test('all authenticated mobile pages fit the visual viewport without crashing', async ({ page }) => {
+test('all authenticated mobile pages fit the visual viewport without crashing', async ({
+  page,
+}) => {
   const errors = await installMobileMocks(page);
   await expectMobilePage(page, '/', '[data-testid="phone-view"]');
   await expectMobilePage(page, '/agents', '[data-testid="phone-view"]');

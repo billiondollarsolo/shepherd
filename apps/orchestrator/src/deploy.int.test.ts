@@ -149,8 +149,14 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
   it('supplies the master key + db creds at runtime via env/secret', () => {
     expect(compose).toMatch(/FLOCK_MASTER_KEY/);
     expect(compose).toMatch(/DATABASE_URL:/);
+    expect(compose).toMatch(/POSTGRES_PASSWORD_FILE:/);
     expect(env).toMatch(/FLOCK_MASTER_KEY/);
-    expect(env).toMatch(/POSTGRES_PASSWORD/);
+    expect(read(orchEntrypoint)).toMatch(/DB_PASSWORD_ENCODED/);
+  });
+
+  it('does not set conflicting Postgres password env and file variables', () => {
+    expect(compose).not.toMatch(/^\s+POSTGRES_PASSWORD:\s/m);
+    expect(compose).toMatch(/^\s+POSTGRES_PASSWORD_FILE:\s/m);
   });
 
   it('does not bake secret VALUES into the Dockerfiles', () => {
@@ -180,12 +186,27 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/\bgit\b/);
   });
 
+  it('bundles current open-source local-node agent CLIs and fails on installer errors', () => {
+    expect(orch).toMatch(/@openai\/codex@latest/);
+    expect(orch).toMatch(/opencode\.ai\/install/);
+    expect(orch).not.toMatch(/WARN: (codex|opencode) install skipped/);
+  });
+
+  it('installs latest Claude Code at first start without redistributing its binary', () => {
+    const entry = read(orchEntrypoint);
+    expect(orch).not.toMatch(/RUN[\s\S]*claude\.ai\/install\.sh/);
+    expect(entry).toMatch(/claude\.ai\/install\.sh[\s\S]*bash -s -- latest/);
+    expect(entry).toMatch(/FLOCK_INSTALL_CLAUDE_CODE:-1/);
+  });
+
   it('runs migrations before starting the server (via the entrypoint, T10)', () => {
     // T10 moved the boot sequence into orchestrator-entrypoint.sh (which also
     // supervises flock-agentd). Assert the entrypoint runs migrate before start.
     const entry = read(orchEntrypoint);
     expect(orch).toMatch(/flock-entrypoint\.sh/); // CMD invokes the entrypoint
-    expect(entry).toMatch(/migrate[\s\S]*start/);
+    expect(entry).toMatch(
+      /pnpm --filter @flock\/orchestrator run migrate[\s\S]*pnpm --filter @flock\/orchestrator run start/,
+    );
   });
 
   it('ships + supervises flock-agentd as the local-node PTY transport (T10)', () => {
@@ -197,6 +218,12 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/FLOCK_AGENTD_SOCKET/);
     const entry = read(orchEntrypoint);
     expect(entry).toMatch(/flock-agentd serve/);
+  });
+
+  it('ships both supported remote-node agentd architectures', () => {
+    expect(orch).toMatch(/for arch in amd64 arm64/);
+    expect(orch).toMatch(/flock-agentd-linux-\$arch/);
+    expect(orch).toMatch(/\/app\/agentd\/dist/);
   });
 });
 

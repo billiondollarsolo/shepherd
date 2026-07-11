@@ -31,10 +31,7 @@ import {
   createDrizzleEventWriter,
   type EventRecord,
 } from './events/index.js';
-import {
-  HookEndpointService,
-  type HookSessionAuth,
-} from './hooks/index.js';
+import { HookEndpointService, type HookSessionAuth } from './hooks/index.js';
 import { OscFallbackStatusSource } from './status/osc-fallback/index.js';
 import { contextPct, estimateCostUsd, lookupModel } from './sessions/model-info.js';
 import { attachWsHeartbeat } from './ws-heartbeat.js';
@@ -112,7 +109,10 @@ export interface LiveChannelsDeps {
    * session-scoped socket (sessionId given) that the user OWNS it or is admin. The
    * status stream passes no sessionId (any authed user). See makeWsAuthorizer.
    */
-  authorizeUpgrade(req: import('node:http').IncomingMessage, sessionId?: string | null): Promise<boolean>;
+  authorizeUpgrade(
+    req: import('node:http').IncomingMessage,
+    sessionId?: string | null,
+  ): Promise<boolean>;
   /**
    * flock-agentd PTY resolver — the only PTY transport. Returns a binding that
    * sources the PTY from the node daemon's raw PTY; returning null surfaces as a

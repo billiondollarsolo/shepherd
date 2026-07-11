@@ -101,8 +101,12 @@ export const SEARCH_SCRIPT =
   `grep $args -e "$q" . 2>/dev/null | head -n 500; fi`;
 export function searchArgv(dir: string, query: string, opts: SearchOptions): string[] {
   return [
-    'sh', '-c', SEARCH_SCRIPT, 'flock-ws',
-    dir, query,
+    'sh',
+    '-c',
+    SEARCH_SCRIPT,
+    'flock-ws',
+    dir,
+    query,
     opts.caseSensitive ? '0' : '1',
     opts.wholeWord ? '1' : '0',
     opts.regex ? '1' : '0',
@@ -129,7 +133,10 @@ export class NodeWorkspaceService {
     const r = await t.exec(stackArgv(path), { timeoutMs: this.timeoutMs }).catch((e) => {
       throw new NodePathError(nodeId, e instanceof Error ? e.message : 'stack detect failed');
     });
-    const lines = r.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     const abs = lines.shift() ?? '';
     if (r.exitCode !== 0 || abs === ERR || abs === '') {
       throw new NodePathError(nodeId, `cannot read "${path}".`);
@@ -150,7 +157,10 @@ export class NodeWorkspaceService {
     const r = await t.exec(filesArgv(path, cap), { timeoutMs: this.timeoutMs }).catch((e) => {
       throw new NodePathError(nodeId, e instanceof Error ? e.message : 'file list failed');
     });
-    const lines = r.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines[0] === ERR) throw new NodePathError(nodeId, `cannot read "${path}".`);
     return lines;
   }
@@ -163,11 +173,11 @@ export class NodeWorkspaceService {
   ): Promise<SearchResult> {
     if (!query) return { matches: [], truncated: false };
     const t = await this.transport(nodeId);
-    const r = await t.exec(searchArgv(path, query, opts), { timeoutMs: this.timeoutMs }).catch(
-      (e) => {
+    const r = await t
+      .exec(searchArgv(path, query, opts), { timeoutMs: this.timeoutMs })
+      .catch((e) => {
         throw new NodePathError(nodeId, e instanceof Error ? e.message : 'search failed');
-      },
-    );
+      });
     const lines = r.stdout.split('\n');
     if (lines[0]?.trim() === ERR) throw new NodePathError(nodeId, `cannot search "${path}".`);
     const matches: SearchMatch[] = [];

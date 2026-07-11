@@ -47,9 +47,7 @@ test('typing echoes into the terminal', async ({ page }) => {
   await page.keyboard.insertText('whoami');
 
   // Keystrokes were forwarded upstream (binary frames captured by the harness).
-  await expect
-    .poll(() => page.evaluate(() => window.__ptySent.join('')))
-    .toContain('whoami');
+  await expect.poll(() => page.evaluate(() => window.__ptySent.join(''))).toContain('whoami');
   // And the echo rendered.
   await expect(term.locator('.xterm-rows')).toContainText('whoami');
 });

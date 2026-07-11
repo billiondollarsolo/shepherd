@@ -55,12 +55,12 @@ Always-on. Stateless on the hot path; durable state in Postgres.
   the live path is in-memory.
 - **Agent hook endpoint.** `POST /api/hooks/:sessionId` (the only unauthenticated route,
   gated by a per-session bearer token) receives agent lifecycle events. Per-agent
-  *translators* map each agent's payload to the unified status (`status/translators/`).
+  _translators_ map each agent's payload to the unified status (`status/translators/`).
 - **Transport.** An agentd client (with SSH bootstrap for remote nodes, a reverse tunnel
   so node-side agents can reach the hook endpoint, and reconnect-with-backoff).
 - **Per-session browsers, auth, web push, secret store** (encryption at rest).
 - **Postgres** (via Drizzle) is the **system of record** — users, nodes, projects,
-  sessions, audit — and is *never* on the live status path (PRD §6.6). Migrations run
+  sessions, audit — and is _never_ on the live status path (PRD §6.6). Migrations run
   idempotently on boot.
 
 ### 3. `web` — the dashboard (`apps/web/`, React)
@@ -68,8 +68,9 @@ Always-on. Stateless on the hot path; durable state in Postgres.
 A PWA that renders the orchestrator's model. Internally the shell is the **paddock**.
 
 - `node → project → session` tree (sidebar, collapsible to an icon rail).
-- Live terminals via **xterm.js** — a **focus** view (one maximized) and a **grid/hive**
-  view (watch several at once); terminals persist across view switches.
+- Live terminals via **xterm.js on desktop** and **Ghostty Web on mobile** — a focused
+  view or project Pens that watch several agents at once; sessions persist across
+  view switches and network reconnects.
 - Status dots + a telemetry bottom bar (model · tool · context % · tokens · cost).
 - A **source-control** panel (live git diff + stage/commit/push), a **plan** artifact,
   an **activity** timeline, a node **file browser**, and the per-session **browser

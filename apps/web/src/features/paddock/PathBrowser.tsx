@@ -82,7 +82,9 @@ export function PathBrowser({
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="size-4 text-flock-accent" /> Choose a folder
           </DialogTitle>
-          <DialogDescription>Browse directories on the node and pick a working dir.</DialogDescription>
+          <DialogDescription>
+            Browse directories on the node and pick a working dir.
+          </DialogDescription>
         </DialogHeader>
 
         {/* Current path + nav controls */}
@@ -155,7 +157,11 @@ export function PathBrowser({
               disabled={!newName.trim() || !canCreate}
               onClick={submitNewFolder}
             >
-              {mkdir.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+              {mkdir.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
               Create
             </Button>
             <Button

@@ -20,9 +20,15 @@ describe('AgentEvent taxonomy (F5)', () => {
     const cases: Array<[Parameters<typeof agentEventToStatus>[0], string | null]> = [
       [{ kind: 'session.started', sessionId: 's' }, 'starting'],
       [{ kind: 'turn.started', sessionId: 's' }, 'running'],
-      [{ kind: 'content.delta', sessionId: 's', streamKind: 'assistant_text', text: 'x' }, 'running'],
+      [
+        { kind: 'content.delta', sessionId: 's', streamKind: 'assistant_text', text: 'x' },
+        'running',
+      ],
       [{ kind: 'tool.started', sessionId: 's', toolId: 't1' }, 'running'],
-      [{ kind: 'request.opened', sessionId: 's', requestId: 'r1', requestKind: 'permission' }, 'awaiting_input'],
+      [
+        { kind: 'request.opened', sessionId: 's', requestId: 'r1', requestKind: 'permission' },
+        'awaiting_input',
+      ],
       [{ kind: 'request.resolved', sessionId: 's', requestId: 'r1' }, 'running'],
       [{ kind: 'turn.completed', sessionId: 's' }, 'idle'],
       [{ kind: 'session.ended', sessionId: 's' }, 'done'],
@@ -34,8 +40,17 @@ describe('AgentEvent taxonomy (F5)', () => {
   });
 
   it('treats usage / plan / tool.updated as telemetry-only (no status change)', () => {
-    expect(agentEventToStatus({ kind: 'usage.updated', sessionId: 's', totalTokens: 10 })).toBeNull();
+    expect(
+      agentEventToStatus({ kind: 'usage.updated', sessionId: 's', totalTokens: 10 }),
+    ).toBeNull();
     expect(agentEventToStatus({ kind: 'plan.updated', sessionId: 's', items: [] })).toBeNull();
-    expect(agentEventToStatus({ kind: 'tool.updated', sessionId: 's', toolId: 't', status: 'completed' })).toBeNull();
+    expect(
+      agentEventToStatus({
+        kind: 'tool.updated',
+        sessionId: 's',
+        toolId: 't',
+        status: 'completed',
+      }),
+    ).toBeNull();
   });
 });

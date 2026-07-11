@@ -1,9 +1,15 @@
 {
   "name": "@flock/web",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Flock web cockpit: React + Vite + xterm.js terminal, zustand state, live status board over WebSocket.",
+  "description": "Flock web paddock: React, Ghostty Web/xterm terminals, live fleet status, and mobile supervision.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billiondollarsolo/flock.git",
+    "directory": "apps/web"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

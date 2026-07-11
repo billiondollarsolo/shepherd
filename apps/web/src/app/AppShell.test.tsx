@@ -66,9 +66,7 @@ describe('AppShell (US-30)', () => {
         activity={<div data-testid="activity-child">activity</div>}
       />,
     );
-    expect(screen.getByTestId('region-tree')).toContainElement(
-      screen.getByTestId('tree-child'),
-    );
+    expect(screen.getByTestId('region-tree')).toContainElement(screen.getByTestId('tree-child'));
     expect(screen.getByTestId('region-session')).toContainElement(
       screen.getByTestId('session-child'),
     );

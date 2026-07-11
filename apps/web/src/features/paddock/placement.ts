@@ -26,5 +26,7 @@ export function pickBestNode(
   const load = (id: string): number => open.reduce((n, s) => n + (s.nodeId === id ? 1 : 0), 0);
   const pickable = nodes.filter((n) => nodeReachable(n) && (pool == null || n.pool === pool));
   if (pickable.length === 0) return null;
-  return [...pickable].sort((a, b) => load(a.id) - load(b.id) || a.name.localeCompare(b.name))[0] ?? null;
+  return (
+    [...pickable].sort((a, b) => load(a.id) - load(b.id) || a.name.localeCompare(b.name))[0] ?? null
+  );
 }

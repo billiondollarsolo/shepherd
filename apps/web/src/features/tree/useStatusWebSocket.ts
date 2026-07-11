@@ -18,11 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Status, StatusUpdateMessage } from '@flock/shared';
 import { reconnectDelay } from '../../lib/utils';
-import {
-  encodeStatusSubscribe,
-  parseStatusFrame,
-  statusWebSocketUrl,
-} from './statusWsProtocol';
+import { encodeStatusSubscribe, parseStatusFrame, statusWebSocketUrl } from './statusWsProtocol';
 
 /** Minimal browser-WebSocket surface the hook depends on (eases faking in tests). */
 export interface StatusWsLike {

@@ -1,10 +1,5 @@
 export * from './tokens';
-export {
-  ThemeProvider,
-  getSystemTheme,
-  readStoredMode,
-  resolveTheme,
-} from './ThemeProvider';
+export { ThemeProvider, getSystemTheme, readStoredMode, resolveTheme } from './ThemeProvider';
 export type { ThemeProviderProps } from './ThemeProvider';
 export { useTheme } from './useTheme';
 export { THEME_STORAGE_KEY } from './themeContext';

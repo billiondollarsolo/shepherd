@@ -24,11 +24,7 @@
  * costs nothing. The daemon session itself is NOT killed on detach — only the
  * orchestrator's attachment is released; the daemon keeps the agent alive (NFR-AV1).
  */
-import type {
-  NodeTransport,
-  PtyExit,
-  PtyHandle,
-} from '../../nodes/transport/transport.js';
+import type { NodeTransport, PtyExit, PtyHandle } from '../../nodes/transport/transport.js';
 
 /** UTF-8 locale for the PTY so multibyte glyphs/box-drawing render correctly. */
 const PTY_UTF8_LOCALE: Readonly<Record<string, string>> = {
@@ -45,8 +41,12 @@ export const DEFAULT_RESUME_BUFFER_BYTES = 256 * 1024;
  * switch + clear); 47/1047 are legacy. The leading `\x1b[?` disambiguates 47 from
  * 1047/1049, so a plain substring search is safe. Mirrors agentd's session.go.
  */
-const ALT_ENTER_BUFS = ['\x1b[?1049h', '\x1b[?1047h', '\x1b[?47h'].map((s) => Buffer.from(s, 'latin1'));
-const ALT_EXIT_BUFS = ['\x1b[?1049l', '\x1b[?1047l', '\x1b[?47l'].map((s) => Buffer.from(s, 'latin1'));
+const ALT_ENTER_BUFS = ['\x1b[?1049h', '\x1b[?1047h', '\x1b[?47h'].map((s) =>
+  Buffer.from(s, 'latin1'),
+);
+const ALT_EXIT_BUFS = ['\x1b[?1049l', '\x1b[?1047l', '\x1b[?47l'].map((s) =>
+  Buffer.from(s, 'latin1'),
+);
 /** Put a (re)attaching client into a CLEAN alt buffer; the program then repaints. */
 const ALT_CLEAN_ENTER = Buffer.from('\x1b[?1049h\x1b[H\x1b[2J', 'latin1');
 /** Trailing bytes kept to catch a switch sequence split across two chunks (8-byte seq → 7). */
@@ -196,9 +196,7 @@ export class PtySession {
     this.workingDir = options.workingDir;
     this.onOutput = options.onOutput;
     this.onExitObserver = options.onExit;
-    this.resume = new ResumeRing(
-      options.resumeBufferBytes ?? DEFAULT_RESUME_BUFFER_BYTES,
-    );
+    this.resume = new ResumeRing(options.resumeBufferBytes ?? DEFAULT_RESUME_BUFFER_BYTES);
     this.cols = options.cols ?? DEFAULT_COLS;
     this.rows = options.rows ?? DEFAULT_ROWS;
   }

@@ -14,7 +14,12 @@ const login = vi.fn();
 const me = vi.fn();
 vi.mock('../../routes/api', async (orig) => {
   const actual = await orig<typeof import('../../routes/api')>();
-  return { ...actual, setupAdmin: (...a: unknown[]) => setupAdmin(...a), login: (...a: unknown[]) => login(...a), me: (...a: unknown[]) => me(...a) };
+  return {
+    ...actual,
+    setupAdmin: (...a: unknown[]) => setupAdmin(...a),
+    login: (...a: unknown[]) => login(...a),
+    me: (...a: unknown[]) => me(...a),
+  };
 });
 
 import { AuthScreen } from './AuthScreen';
@@ -45,9 +50,7 @@ describe('AuthScreen first-run confirmation', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /create admin/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/do not match/i),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/do not match/i));
     expect(setupAdmin).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
   });
@@ -59,9 +62,7 @@ describe('AuthScreen first-run confirmation', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
     fireEvent.click(screen.getByRole('button', { name: /create admin/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/at least 8/i),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/at least 8/i));
     expect(setupAdmin).not.toHaveBeenCalled();
   });
 });

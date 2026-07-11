@@ -10,8 +10,4 @@ export { ScreencastSettings } from './ScreencastSettings';
 export { useScreencastSettings } from './useScreencastSettings';
 export { AuditLogView } from './AuditLogView';
 export { useAuditLog } from './useAuditLog';
-export {
-  fetchAuditLog,
-  AuditApiError,
-  type FetchLike as AuditFetchLike,
-} from './auditApi';
+export { fetchAuditLog, AuditApiError, type FetchLike as AuditFetchLike } from './auditApi';

@@ -56,15 +56,17 @@ describe('fetchAuditLog (US-40)', () => {
     const fetchImpl = vi.fn(async () =>
       response({ error: { code: 'forbidden', message: 'Admin role required.' } }, false, 403),
     );
-    await expect(
-      fetchAuditLog({}, fetchImpl as unknown as typeof fetch),
-    ).rejects.toMatchObject({ name: 'AuditApiError', status: 403, code: 'forbidden' });
+    await expect(fetchAuditLog({}, fetchImpl as unknown as typeof fetch)).rejects.toMatchObject({
+      name: 'AuditApiError',
+      status: 403,
+      code: 'forbidden',
+    });
   });
 
   it('throws AuditApiError on a malformed (contract-violating) body', async () => {
     const fetchImpl = vi.fn(async () => response({ entries: [{ id: 'not-a-uuid' }] }));
-    await expect(
-      fetchAuditLog({}, fetchImpl as unknown as typeof fetch),
-    ).rejects.toBeInstanceOf(AuditApiError);
+    await expect(fetchAuditLog({}, fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(
+      AuditApiError,
+    );
   });
 });

@@ -90,11 +90,16 @@ export class EventReadService {
    * orchestration `read_output` tool, so an agent can inspect what a sibling
    * produced. Reads the session's `chat` events newest-first then reverses.
    */
-  async recentChats(sessionId: string, limit: number): Promise<Array<{ role: string; text: string }>> {
+  async recentChats(
+    sessionId: string,
+    limit: number,
+  ): Promise<Array<{ role: string; text: string }>> {
     const rows = await this.db
       .select({ raw: events.agentEventRaw })
       .from(events)
-      .where(and(eq(events.sessionId, sessionId), sql`jsonb_exists(${events.agentEventRaw}, 'chat')`))
+      .where(
+        and(eq(events.sessionId, sessionId), sql`jsonb_exists(${events.agentEventRaw}, 'chat')`),
+      )
       .orderBy(desc(events.seq))
       .limit(Math.min(Math.max(limit, 1), 50));
     const out: Array<{ role: string; text: string }> = [];

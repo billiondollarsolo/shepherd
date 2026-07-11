@@ -79,9 +79,7 @@ export interface CdpScreencastClient {
  * the manager is unit-testable without a real chrome; the orchestrator wires the
  * real `chrome-remote-interface` connection keyed off Layer A's `cdpEndpoint`.
  */
-export type CdpClientResolver = (
-  sessionId: string,
-) => Promise<CdpScreencastClient>;
+export type CdpClientResolver = (sessionId: string) => Promise<CdpScreencastClient>;
 
 /**
  * The sink Layer C forwards encoded frames to — one logical `screencast:<id>`

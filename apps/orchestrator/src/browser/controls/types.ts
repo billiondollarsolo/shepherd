@@ -1,7 +1,4 @@
-import type {
-  ScreencastBandwidthControls,
-  UnfocusedPolicy,
-} from '@flock/shared';
+import type { ScreencastBandwidthControls, UnfocusedPolicy } from '@flock/shared';
 
 /**
  * US-29 — Screencast bandwidth controls (NFR-PERF3) orchestrator-internal types.

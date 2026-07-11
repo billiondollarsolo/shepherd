@@ -8,7 +8,17 @@
  * Each context keeps its sub-views; the store's `rightTab` is still the active
  * leaf, so adaptive surfacing (SessionPane) just calls openRight(<leaf>).
  */
-import { Activity, ChevronRight, Code2, FolderTree, GitBranch, Globe, MessageSquare, Search, type LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  ChevronRight,
+  Code2,
+  FolderTree,
+  GitBranch,
+  Globe,
+  MessageSquare,
+  Search,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Session } from '@flock/shared';
 import { ChatPanel } from '../chat/ChatPanel';
 import BrowserPane from '../browser/BrowserPane';
@@ -54,7 +64,12 @@ const CONTEXTS: ReadonlyArray<Context> = [
       { id: 'search', label: 'Find', icon: Search },
     ],
   },
-  { id: 'web', label: 'Web', icon: Globe, tabs: [{ id: 'browser', label: 'Browser', icon: Globe }] },
+  {
+    id: 'web',
+    label: 'Web',
+    icon: Globe,
+    tabs: [{ id: 'browser', label: 'Browser', icon: Globe }],
+  },
 ];
 
 /** Leaf tab → its context. */

@@ -85,7 +85,12 @@ class FakeGitService {
   async push(id: string) {
     this.guard(id);
     this.pushCalls.push(id);
-    return { sessionId: id, pushed: true as const, detail: 'ok', generatedAt: '2026-05-29T01:00:00.000Z' };
+    return {
+      sessionId: id,
+      pushed: true as const,
+      detail: 'ok',
+      generatedAt: '2026-05-29T01:00:00.000Z',
+    };
   }
 }
 
@@ -105,7 +110,10 @@ describe('git source-control routes (US-33.1)', () => {
     const service = new FakeGitService();
     const app = buildApp(service);
     try {
-      const res = await app.inject({ method: 'GET', url: `/api/sessions/${SESSION_ID}/git/status` });
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${SESSION_ID}/git/status`,
+      });
       expect(res.statusCode).toBe(401);
     } finally {
       await app.close();

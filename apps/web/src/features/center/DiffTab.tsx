@@ -50,9 +50,7 @@ export default function DiffTab({ sessionId, fetchImpl }: DiffTabProps): JSX.Ele
       .catch((err: unknown) => {
         if (cancelled) return;
         const message =
-          err instanceof DiffApiError
-            ? err.message
-            : 'Could not load the diff for this session.';
+          err instanceof DiffApiError ? err.message : 'Could not load the diff for this session.';
         setState({ phase: 'error', message });
       });
     return () => {
@@ -91,8 +89,8 @@ export default function DiffTab({ sessionId, fetchImpl }: DiffTabProps): JSX.Ele
       >
         <p>No tracked changes in the working directory.</p>
         <p className="max-w-sm text-2xs text-flock-ink-muted/80">
-          Untracked files appear under Source Control. Use a git project with at
-          least one commit so agent edits show up as a real diff.
+          Untracked files appear under Source Control. Use a git project with at least one commit so
+          agent edits show up as a real diff.
         </p>
       </div>
     );

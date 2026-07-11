@@ -28,11 +28,7 @@ function readBlockVars(selectorMatch: RegExp): Record<string, string> {
 
 /** Normalize a CSS value for comparison: unify quotes, collapse whitespace, lowercase. */
 function normalize(v: string): string {
-  return v
-    .replace(/["']/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
+  return v.replace(/["']/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // Fonts are theme-invariant (same UI/code font in light and dark): declared once

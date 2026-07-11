@@ -133,9 +133,7 @@ export class StatusMap {
 
     const ts = this.clock();
     const statusChanged = !current || current.status !== status;
-    const lastStatusTransitionAt = statusChanged
-      ? ts
-      : (current?.lastStatusTransitionAt ?? ts);
+    const lastStatusTransitionAt = statusChanged ? ts : (current?.lastStatusTransitionAt ?? ts);
     const entry: StatusEntry = { status, detail, ts, lastStatusTransitionAt };
     this.map.set(sessionId, entry);
 

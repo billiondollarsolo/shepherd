@@ -14,6 +14,11 @@
 [Gemini](https://geminicli.com/) ·
 [Grok](https://x.ai/cli)
 
+[![CI](https://github.com/billiondollarsolo/flock/actions/workflows/ci.yml/badge.svg)](https://github.com/billiondollarsolo/flock/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/billiondollarsolo/flock/actions/workflows/codeql.yml/badge.svg)](https://github.com/billiondollarsolo/flock/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/billiondollarsolo/flock?display_name=tag)](https://github.com/billiondollarsolo/flock/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 </div>
 
 ---
@@ -94,7 +99,7 @@ Three components, one monorepo:
   brain. Authentication, the unified status model, the agent hook endpoint, SSH/agentd
   transport, per-session browser lifecycle, web push, and the REST + WebSocket API.
   Postgres is the durable record — **never** on the live status path.
-- **`apps/web`** (React · Vite · xterm.js · TanStack · Zustand) — the dashboard.
+- **`apps/web`** (React · Vite · Ghostty Web/xterm.js · TanStack · Zustand) — the dashboard.
   Paddock and Agents lenses, project Pens with persisted
   drag/drop membership and per-Pen layouts, live terminals, status dots +
   **Idle / Working / Needs you**, source control, browser screencast, and activity.
@@ -113,7 +118,7 @@ Three components, one monorepo:
 Everything runs natively on your host with hot reload; only Postgres stays in Docker.
 
 ```bash
-git clone git@github.com:billiondollarsolo/flock.git
+git clone https://github.com/billiondollarsolo/flock.git
 cd flock
 pnpm install
 
@@ -138,8 +143,8 @@ survive refresh. Clicking any agent focuses it without changing its Pen.
 
 - **Paddock** is the fleet-level supervision board; **Agents** is the project/node
   switcher and Pen organizer.
-- Use **Fleet scope** to view all hosts, a node, or a pool. Project and node pages
-  use their own context so counts in the sidebar and main content agree.
+- Select a node or project in the hierarchy to drill into its agents, metrics,
+  source control, and operational details.
 - Drag the grip beside an agent to move it between Pens. Drop it on **New Pen** to
   create another; a Pen may intentionally contain one, two, three, or four agents.
 - Use an agent's `…` menu to keep it at the top or delete the session with confirmation.
@@ -160,16 +165,17 @@ openssl rand -base64 32 > secrets/flock_master_key
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
-# Optional but required for the in-app Browser pane (agents still work without it)
-docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
+# Pull the pinned release images, including the on-demand browser image.
+docker compose pull
+docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
 
 docker compose up -d                          # caddy + web + orchestrator + postgres
 docker compose logs -f orchestrator
 ```
 
 Caddy terminates TLS on `443` (`80` redirects), migrations run automatically on boot,
-and per-session browser containers are launched on demand (when
-`flock/session-chrome` is present). Open `https://<host>` (or `https://localhost`) and
+and per-session browser containers are launched on demand. Open `https://<host>`
+(or `https://localhost`) and
 complete admin setup.
 
 > **Must set in `.env`:** `PUBLIC_BASE_URL` to the URL users open in the browser
@@ -185,7 +191,7 @@ flock/
 ├── agentd/              # flock-agentd — the Go node daemon (raw PTYs, status, metrics)
 ├── apps/
 │   ├── orchestrator/    # the brain — Fastify API/WS, status model, SSH/agentd, auth, push
-│   └── web/             # the dashboard — React + Vite + xterm.js PWA
+│   └── web/             # the dashboard — React + Vite + Ghostty/xterm PWA
 ├── packages/
 │   └── shared/          # shared TypeScript contracts (Zod schemas, the Status enum, …)
 ├── docker/              # Dockerfiles + Caddyfile for the production stack
@@ -243,6 +249,7 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 | [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Flock captures from each agent, and how                                                       |
 | [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md)           | The node daemon — why it exists and how it works                                                           |
 | [`docs/deployment.md`](docs/deployment.md)                             | The production Docker Compose stack, in depth                                                              |
+| [`docs/releasing.md`](docs/releasing.md)                               | Public release workflow, GHCR images, verification, and repository settings                                |
 | [`PRD.md`](PRD.md)                                                     | Product intent and the original requirements                                                               |
 
 ---
@@ -254,12 +261,24 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 - Node transport is SSH; the agentd control channel adds a shared secret on top, stored
   in a `0600` file and stripped from spawned agents' environments.
 - Secrets and SSH keys live outside the repo and outside image layers (runtime only).
+- Enabling browser containers grants the orchestrator access to the Docker socket;
+  treat Flock administrators as trusted operators of the Docker host and configured nodes.
+
+Please report vulnerabilities through [private vulnerability reporting](SECURITY.md),
+not public issues.
 
 ---
 
 ## Status
 
-Active development. The full suite is green (build · 1,200+ unit · integration · `go -race`)
-and the platform runs live across simulated multi-node SSH deployments.
+**Current release: v0.3.0.** Flock is actively developed pre-1.0 software. Review the
+[changelog](CHANGELOG.md), [security policy](SECURITY.md), and
+[contribution guide](CONTRIBUTING.md) before deploying or contributing.
+
+Released container images are published to GHCR as `flock-orchestrator`, `flock-web`,
+and `flock-session-chrome`. Pin a semantic version in production rather than `latest`.
+
+Flock is available under the [MIT License](LICENSE). Bundled font attribution is
+documented in [Third-party notices](THIRD_PARTY_NOTICES.md).
 
 Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).

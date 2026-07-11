@@ -70,18 +70,19 @@ class FakeDb {
         // or `.where().limit()` (project/node resolution) → first match.
         const whereThenable = Promise.resolve(store);
         return Object.assign(Promise.resolve(store), {
-          where: () =>
-            Object.assign(whereThenable, { limit: async () => store.slice(0, 1) }),
+          where: () => Object.assign(whereThenable, { limit: async () => store.slice(0, 1) }),
         });
       },
     };
   }
 }
 
-function makeService(opts: {
-  nodeKind?: 'local' | 'ssh';
-  agentdLaunch?: SessionRestServiceDeps['agentdLaunch'];
-} = {}) {
+function makeService(
+  opts: {
+    nodeKind?: 'local' | 'ssh';
+    agentdLaunch?: SessionRestServiceDeps['agentdLaunch'];
+  } = {},
+) {
   const nodeRows = [
     { id: NODE_ID, kind: opts.nodeKind ?? 'local', name: 'local', connectionStatus: 'connected' },
   ];

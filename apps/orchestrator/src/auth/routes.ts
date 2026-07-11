@@ -14,12 +14,7 @@
  * synchronous DB use through {@link AuthService} is correct.
  */
 import type { FastifyInstance } from 'fastify';
-import {
-  CreateUserRequest,
-  LoginRequest,
-  SetupRequest,
-  UpdateProfileRequest,
-} from '@flock/shared';
+import { CreateUserRequest, LoginRequest, SetupRequest, UpdateProfileRequest } from '@flock/shared';
 import { buildClearSessionCookie, buildSessionCookie, readSessionCookie } from './cookie.js';
 import { buildGuards } from './middleware.js';
 import { LoginThrottle } from './login-throttle.js';
@@ -62,14 +57,10 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       return reply.code(201).send({ user });
     } catch (err) {
       if (err instanceof AdminAlreadyExistsError) {
-        return reply
-          .code(409)
-          .send({ error: { code: 'admin_exists', message: err.message } });
+        return reply.code(409).send({ error: { code: 'admin_exists', message: err.message } });
       }
       if (err instanceof UsernameTakenError) {
-        return reply
-          .code(409)
-          .send({ error: { code: 'username_taken', message: err.message } });
+        return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
       }
       throw err;
     }
@@ -139,39 +130,37 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
     }
     const user = await service.updateProfile(request.authUser!.id, parsed.data);
     if (!user) {
-      return reply.code(404).send({ error: { code: 'user_not_found', message: 'User was not found.' } });
+      return reply
+        .code(404)
+        .send({ error: { code: 'user_not_found', message: 'User was not found.' } });
     }
     return reply.code(200).send({ user });
   });
 
   // --- change own password (self-serve) ----------------------------------
-  app.post(
-    '/api/auth/change-password',
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const body = (request.body ?? {}) as { currentPassword?: unknown; newPassword?: unknown };
-      const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
-      const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-      if (!currentPassword || newPassword.length < 8) {
-        return badRequest(reply, 'currentPassword and a newPassword (min 8 chars) are required.');
+  app.post('/api/auth/change-password', { preHandler: requireAuth }, async (request, reply) => {
+    const body = (request.body ?? {}) as { currentPassword?: unknown; newPassword?: unknown };
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+    if (!currentPassword || newPassword.length < 8) {
+      return badRequest(reply, 'currentPassword and a newPassword (min 8 chars) are required.');
+    }
+    try {
+      await service.changePassword(
+        request.authUser!.id,
+        { currentPassword, newPassword },
+        ctxOf(request),
+      );
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof InvalidCredentialsError) {
+        return reply.code(401).send({
+          error: { code: 'invalid_credentials', message: 'Current password is incorrect.' },
+        });
       }
-      try {
-        await service.changePassword(
-          request.authUser!.id,
-          { currentPassword, newPassword },
-          ctxOf(request),
-        );
-        return reply.code(204).send();
-      } catch (err) {
-        if (err instanceof InvalidCredentialsError) {
-          return reply
-            .code(401)
-            .send({ error: { code: 'invalid_credentials', message: 'Current password is incorrect.' } });
-        }
-        throw err;
-      }
-    },
-  );
+      throw err;
+    }
+  });
 
   // --- US-6: invite/create a user (admin) --------------------------------
   app.post('/api/users', { preHandler: requireAdmin }, async (request, reply) => {
@@ -191,9 +180,7 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       return reply.code(201).send({ user });
     } catch (err) {
       if (err instanceof UsernameTakenError) {
-        return reply
-          .code(409)
-          .send({ error: { code: 'username_taken', message: err.message } });
+        return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
       }
       throw err;
     }

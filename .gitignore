@@ -15,6 +15,7 @@ test-results/
 .env
 .env.*
 !.env.example
+!.env.dev.example
 *.log
 .DS_Store
 .vscode/
@@ -28,7 +29,7 @@ test-results/
 *_key
 *.key
 !*.pub
-.claude/settings.local.json
+.claude/
 
 # Vagrant machine state (contains generated private keys)
 vagrant/.vagrant/

@@ -20,9 +20,7 @@ export const CdpMouseEventParams = z.object({
   x: z.number(),
   /** Y relative to the top-left of the (screencast) viewport, CSS px. */
   y: z.number(),
-  button: z
-    .enum(['none', 'left', 'middle', 'right', 'back', 'forward'])
-    .optional(),
+  button: z.enum(['none', 'left', 'middle', 'right', 'back', 'forward']).optional(),
   clickCount: z.number().int().optional(),
   /** Modifier bitfield (Alt=1, Ctrl=2, Meta=4, Shift=8). */
   modifiers: z.number().int().optional(),

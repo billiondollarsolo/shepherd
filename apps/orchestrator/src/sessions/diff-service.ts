@@ -265,11 +265,7 @@ export class DiffService {
     // Untracked single-file previews: `git diff -- path` is empty because the
     // path isn't in the index. Fall back to --no-index against /dev/null so the
     // Source Control panel can still render the content.
-    if (
-      opts.path &&
-      opts.staged !== true &&
-      result.stdout.trim().length === 0
-    ) {
+    if (opts.path && opts.staged !== true && result.stdout.trim().length === 0) {
       try {
         const untracked = await transport.exec(
           gitUntrackedDiffArgv(session.workingDir, opts.path),

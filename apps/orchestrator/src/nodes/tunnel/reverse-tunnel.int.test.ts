@@ -49,7 +49,10 @@ function openClient(): Promise<Client> {
 }
 
 /** Run a command on the node over a one-shot exec channel; capture stdout/code. */
-function nodeExec(client: Client, command: string): Promise<{ stdout: string; code: number | null }> {
+function nodeExec(
+  client: Client,
+  command: string,
+): Promise<{ stdout: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     client.exec(command, (err, channel) => {
       if (err) {

@@ -51,9 +51,7 @@ export const CLAUDE_AGENT_TYPE: AgentType = 'claude-code';
  * matcher). Permission/approval phrasing -> the money state; "waiting for your
  * input" / idle phrasing -> soft idle; anything else -> ambiguous (null).
  */
-function classifyNotification(
-  message?: string | null,
-): 'permission_prompt' | 'idle_prompt' | null {
+function classifyNotification(message?: string | null): 'permission_prompt' | 'idle_prompt' | null {
   if (!message) return null;
   const m = message.toLowerCase();
   if (m.includes('permission') || m.includes('approve') || m.includes('wants to')) {

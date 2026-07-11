@@ -11,15 +11,15 @@
 > — `surface.{0,1,2}`, `accent`, `ink.{primary,muted}`,
 > `status.{starting,running,awaiting,idle,done,error,disconnected}`,
 > `diff.{add,remove,context}`, `font.ui`, `font.code` — light + dark
-> first-class, auto-following OS preference. Codex *structure, terminology and
-> keybindings* (Appendix A) are preserved; the *look and feel* is a distinctive
+> first-class, auto-following OS preference. Codex _structure, terminology and
+> keybindings_ (Appendix A) are preserved; the _look and feel_ is a distinctive
 > **Flock** identity (the flock-of-agents metaphor).
 
 ---
 
 ## 1. Design intent
 
-Flock supervises a *flock* of CLI coding agents. The interface is a calm control
+Flock supervises a _flock_ of CLI coding agents. The interface is a calm control
 tower: dense information, low chrome, one confident accent — feeling like the
 Codex desktop app (same spatial model, calm density, supervision-first emphasis,
 spec §12.3 / Appendix A.4) while reading as unmistakably Flock and avoiding the
@@ -74,17 +74,17 @@ explicit choice persisted (US-31).
 
 ### 3.1 Accent (single confident accent)
 
-| flock-theme | flat | Light | Dark |
-|---|---|---|---|
-| `accent` | `--flock-accent` | `#2563eb` | `#3b82f6` |
+| flock-theme | flat             | Light     | Dark      |
+| ----------- | ---------------- | --------- | --------- |
+| `accent`    | `--flock-accent` | `#2563eb` | `#3b82f6` |
 
 Tailwind: `text-flock-accent`, `bg-flock-accent`, plus `border-accent` and the
 `:focus-visible` outline (US-37) all reference `--flock-accent`.
 
 ### 3.2 Surfaces (quiet)
 
-| flock-theme | flat | Light | Dark |
-|---|---|---|---|
+| flock-theme | flat                | Light     | Dark      |
+| ----------- | ------------------- | --------- | --------- |
 | `surface.0` | `--flock-surface-0` | `#ffffff` | `#0f1115` |
 | `surface.1` | `--flock-surface-1` | `#f5f6f8` | `#171a21` |
 | `surface.2` | `--flock-surface-2` | `#eaecf0` | `#21262f` |
@@ -94,10 +94,10 @@ Legacy aliases mapped in `index.css`: `--flock-bg`→surface-0,
 
 ### 3.3 Ink (text)
 
-| flock-theme | flat | Light | Dark |
-|---|---|---|---|
+| flock-theme   | flat                  | Light     | Dark      |
+| ------------- | --------------------- | --------- | --------- |
 | `ink.primary` | `--flock-ink-primary` | `#1c2024` | `#e6e8eb` |
-| `ink.muted` | `--flock-ink-muted` | `#5b6470` | `#9aa3af` |
+| `ink.muted`   | `--flock-ink-muted`   | `#5b6470` | `#9aa3af` |
 
 ### 3.4 Status palette (`status.*` — the only warm/alert hues)
 
@@ -107,19 +107,19 @@ Keys mirror the shared `StatusEnum` (spec §7;
 `StatusEnum` value `awaiting_input` → `--flock-status-awaiting`. These drive the
 8px dot/ring (FR-ST6, FR-UI3); never whole-row fills.
 
-| StatusEnum | flat | Light | Dark | Sidebar (§7) |
-|---|---|---|---|---|
-| `starting` | `--flock-status-starting` | `#64748b` | `#94a3b8` | no |
-| `running` | `--flock-status-running` | `#2563eb` | `#3b82f6` | no (= accent) |
-| `awaiting_input` | `--flock-status-awaiting` | `#d97706` | `#f59e0b` | **ring + pulse** |
-| `idle` | `--flock-status-idle` | `#16a34a` | `#22c55e` | gentle (dimmed) dot |
-| `done` | `--flock-status-done` | `#0d9488` | `#2dd4bf` | no ring |
-| `error` | `--flock-status-error` | `#dc2626` | `#ef4444` | **ring** |
-| `disconnected` | `--flock-status-disconnected` | `#9aa3af` | `#6b7280` | stale (dimmed) dot |
+| StatusEnum       | flat                          | Light     | Dark      | Sidebar (§7)        |
+| ---------------- | ----------------------------- | --------- | --------- | ------------------- |
+| `starting`       | `--flock-status-starting`     | `#64748b` | `#94a3b8` | no                  |
+| `running`        | `--flock-status-running`      | `#2563eb` | `#3b82f6` | no (= accent)       |
+| `awaiting_input` | `--flock-status-awaiting`     | `#d97706` | `#f59e0b` | **ring + pulse**    |
+| `idle`           | `--flock-status-idle`         | `#16a34a` | `#22c55e` | gentle (dimmed) dot |
+| `done`           | `--flock-status-done`         | `#0d9488` | `#2dd4bf` | no ring             |
+| `error`          | `--flock-status-error`        | `#dc2626` | `#ef4444` | **ring**            |
+| `disconnected`   | `--flock-status-disconnected` | `#9aa3af` | `#6b7280` | stale (dimmed) dot  |
 
 Tailwind: `bg-status-<state>` / `ring-status-<state>` (the `StatusIndicator`
 component uses these). `awaiting_input` is the money state (spec §7) — it rings
-*and* emits the signature pulse so the "which agent needs me" scan is instant.
+_and_ emits the signature pulse so the "which agent needs me" scan is instant.
 
 > Invariant (enforced): `StatusIndicator.test.tsx` renders a dot for every
 > `STATUS_VALUES` member and asserts ring behavior matches the shared
@@ -127,19 +127,19 @@ component uses these). `awaiting_input` is the money state (spec §7) — it rin
 
 ### 3.5 Diff line tints (read-only Diff tab, US-33)
 
-| flock-theme | flat | Light | Dark |
-|---|---|---|---|
-| `diff.add` | `--flock-diff-add` | `#e6f4ea` | `#0e2a16` |
-| `diff.remove` | `--flock-diff-remove` | `#fce8e6` | `#3a1414` |
+| flock-theme    | flat                   | Light     | Dark      |
+| -------------- | ---------------------- | --------- | --------- |
+| `diff.add`     | `--flock-diff-add`     | `#e6f4ea` | `#0e2a16` |
+| `diff.remove`  | `--flock-diff-remove`  | `#fce8e6` | `#3a1414` |
 | `diff.context` | `--flock-diff-context` | `#f5f6f8` | `#171a21` |
 
 ### 3.6 Borders (US-37, derived; theme-independent formula)
 
-| flat | Value |
-|---|---|
-| `--flock-border` | `color-mix(in srgb, var(--flock-ink-primary) 12%, transparent)` |
+| flat                    | Value                                                           |
+| ----------------------- | --------------------------------------------------------------- |
+| `--flock-border`        | `color-mix(in srgb, var(--flock-ink-primary) 12%, transparent)` |
 | `--flock-border-strong` | `color-mix(in srgb, var(--flock-ink-primary) 22%, transparent)` |
-| `--flock-accent-soft` | `color-mix(in srgb, var(--flock-accent) 14%, transparent)` |
+| `--flock-accent-soft`   | `color-mix(in srgb, var(--flock-accent) 14%, transparent)`      |
 
 Tailwind: `border` (DEFAULT), `border-strong`, `border-accent`.
 
@@ -149,10 +149,10 @@ Tailwind: `border` (DEFAULT), `border-strong`, `border-accent`.
 
 ### 4.1 Families
 
-| flock-theme | flat | Stack |
-|---|---|---|
-| `font.ui` | `--flock-font-ui` | `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` |
-| `font.code` | `--flock-font-code` | `"JetBrains Mono", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace` |
+| flock-theme | flat                | Stack                                                                                        |
+| ----------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| `font.ui`   | `--flock-font-ui`   | `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` |
+| `font.code` | `--flock-font-code` | `"JetBrains Mono", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace`      |
 
 Tailwind `font-sans` → ui, `font-mono` → code. `font.code` is used for the
 terminal, the Diff tab, session ids/tokens, kbd chips, and tabular numerics
@@ -160,26 +160,26 @@ terminal, the Diff tab, session ids/tokens, kbd chips, and tabular numerics
 
 ### 4.2 Type scale (US-37; 1.20 minor third, 14px base)
 
-| flat (size / leading) | Size | Line-height | Tailwind |
-|---|---|---|---|
-| `--flock-text-3xs` / `--flock-leading-3xs` | 10px | 14px | `text-3xs` |
-| `--flock-text-2xs` / `--flock-leading-2xs` | 11px | 16px | `text-2xs` |
-| `--flock-text-xs` / `--flock-leading-xs` | 12px | 18px | `text-xs` |
-| `--flock-text-sm` / `--flock-leading-sm` | 13px | 20px | `text-sm` |
-| `--flock-text-md` / `--flock-leading-md` | 14px | 22px | `text-md` (body) |
-| `--flock-text-lg` / `--flock-leading-lg` | 17px | 26px | `text-lg` |
-| `--flock-text-xl` / `--flock-leading-xl` | 20px | 30px | `text-xl` |
-| `--flock-text-2xl` / `--flock-leading-2xl` | 24px | 34px | `text-2xl` |
+| flat (size / leading)                      | Size | Line-height | Tailwind         |
+| ------------------------------------------ | ---- | ----------- | ---------------- |
+| `--flock-text-3xs` / `--flock-leading-3xs` | 10px | 14px        | `text-3xs`       |
+| `--flock-text-2xs` / `--flock-leading-2xs` | 11px | 16px        | `text-2xs`       |
+| `--flock-text-xs` / `--flock-leading-xs`   | 12px | 18px        | `text-xs`        |
+| `--flock-text-sm` / `--flock-leading-sm`   | 13px | 20px        | `text-sm`        |
+| `--flock-text-md` / `--flock-leading-md`   | 14px | 22px        | `text-md` (body) |
+| `--flock-text-lg` / `--flock-leading-lg`   | 17px | 26px        | `text-lg`        |
+| `--flock-text-xl` / `--flock-leading-xl`   | 20px | 30px        | `text-xl`        |
+| `--flock-text-2xl` / `--flock-leading-2xl` | 24px | 34px        | `text-2xl`       |
 
 ### 4.3 Weights & tracking (US-37)
 
-| flat | Value | Tailwind |
-|---|---|---|
-| `--flock-weight-regular` | 400 | `font-regular` |
-| `--flock-weight-medium` | 500 | `font-medium` |
-| `--flock-weight-semibold` | 600 | `font-semibold` |
-| `--flock-tracking-label` | 0.06em | `tracking-label` (all-caps labels) |
-| `--flock-tracking-tight` | -0.01em | `tracking-tight` (>= 20px headings) |
+| flat                      | Value   | Tailwind                            |
+| ------------------------- | ------- | ----------------------------------- |
+| `--flock-weight-regular`  | 400     | `font-regular`                      |
+| `--flock-weight-medium`   | 500     | `font-medium`                       |
+| `--flock-weight-semibold` | 600     | `font-semibold`                     |
+| `--flock-tracking-label`  | 0.06em  | `tracking-label` (all-caps labels)  |
+| `--flock-tracking-tight`  | -0.01em | `tracking-tight` (>= 20px headings) |
 
 ---
 
@@ -192,37 +192,37 @@ terminal, the Diff tab, session ids/tokens, kbd chips, and tabular numerics
 
 ### 5.2 Radius
 
-| flat | px | Tailwind |
-|---|---|---|
-| `--flock-radius-xs` | 3 | `rounded-xs` (badges, kbd, chips) |
-| `--flock-radius-sm` | 6 | `rounded-sm` (buttons, inputs, rows) |
-| `--flock-radius-md` | 10 | `rounded-md` (panels, cards, tabs) |
-| `--flock-radius-lg` | 14 | `rounded-lg` (modals, palette) |
-| `--flock-radius-full` | 999 | `rounded-full` (the status dot) |
+| flat                  | px  | Tailwind                             |
+| --------------------- | --- | ------------------------------------ |
+| `--flock-radius-xs`   | 3   | `rounded-xs` (badges, kbd, chips)    |
+| `--flock-radius-sm`   | 6   | `rounded-sm` (buttons, inputs, rows) |
+| `--flock-radius-md`   | 10  | `rounded-md` (panels, cards, tabs)   |
+| `--flock-radius-lg`   | 14  | `rounded-lg` (modals, palette)       |
+| `--flock-radius-full` | 999 | `rounded-full` (the status dot)      |
 
 ### 5.3 Layout sizing (Codex three-region, FR-UI1)
 
-| flat | Value | Tailwind |
-|---|---|---|
-| `--flock-sidebar-w` | 264px | `w-sidebar` |
-| `--flock-rail-w` | 48px | `w-rail` |
-| `--flock-activity-w` | 320px | `w-activity` |
-| `--flock-topbar-h` | 44px | `h-topbar` |
-| `--flock-drawer-h` | 260px | `h-drawer` |
-| `--flock-row-h` | 36px | `h-row` |
-| `--flock-tab-h` | 38px | `h-tab` |
-| `--flock-indicator` | 8px | status dot diameter |
-| `--flock-max-content` | 1440px | max centered width |
+| flat                  | Value  | Tailwind            |
+| --------------------- | ------ | ------------------- |
+| `--flock-sidebar-w`   | 264px  | `w-sidebar`         |
+| `--flock-rail-w`      | 48px   | `w-rail`            |
+| `--flock-activity-w`  | 320px  | `w-activity`        |
+| `--flock-topbar-h`    | 44px   | `h-topbar`          |
+| `--flock-drawer-h`    | 260px  | `h-drawer`          |
+| `--flock-row-h`       | 36px   | `h-row`             |
+| `--flock-tab-h`       | 38px   | `h-tab`             |
+| `--flock-indicator`   | 8px    | status dot diameter |
+| `--flock-max-content` | 1440px | max centered width  |
 
 ---
 
 ## 6. Elevation (US-37)
 
-| flat | Light | Dark | Tailwind |
-|---|---|---|---|
-| `--flock-shadow-none` | none | none | — |
+| flat                     | Light                                                                | Dark                                                          | Tailwind         |
+| ------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------- |
+| `--flock-shadow-none`    | none                                                                 | none                                                          | —                |
 | `--flock-shadow-overlay` | `0 6px 24px -8px rgb(16 24 32 / .18), 0 1px 2px rgb(16 24 32 / .10)` | `0 8px 28px -10px rgb(0 0 0 / .6), 0 1px 2px rgb(0 0 0 / .5)` | `shadow-overlay` |
-| `--flock-shadow-focus` | `0 0 0 2px var(--flock-surface-0), 0 0 0 4px var(--flock-accent)` | same pattern | `shadow-focus` |
+| `--flock-shadow-focus`   | `0 0 0 2px var(--flock-surface-0), 0 0 0 4px var(--flock-accent)`    | same pattern                                                  | `shadow-focus`   |
 
 Panels/cards use `border` + `surface.1`, **not** shadow. Shadows only for true
 overlays.
@@ -231,15 +231,15 @@ overlays.
 
 ## 7. Motion (US-37 — tasteful micro-motion)
 
-| flat | Value | Tailwind |
-|---|---|---|
-| `--flock-ease-standard` | `cubic-bezier(.2,0,0,1)` | `ease-standard` |
-| `--flock-ease-out` | `cubic-bezier(0,0,.2,1)` | `ease-flock-out` |
-| `--flock-ease-in` | `cubic-bezier(.4,0,1,1)` | `ease-flock-in` |
-| `--flock-dur-fast` | 120ms | `duration-fast` |
-| `--flock-dur-base` | 180ms | `duration-base` |
-| `--flock-dur-slow` | 240ms | `duration-slow` |
-| `--flock-pulse-dur` | 2000ms | (drives the pulse) |
+| flat                    | Value                    | Tailwind           |
+| ----------------------- | ------------------------ | ------------------ |
+| `--flock-ease-standard` | `cubic-bezier(.2,0,0,1)` | `ease-standard`    |
+| `--flock-ease-out`      | `cubic-bezier(0,0,.2,1)` | `ease-flock-out`   |
+| `--flock-ease-in`       | `cubic-bezier(.4,0,1,1)` | `ease-flock-in`    |
+| `--flock-dur-fast`      | 120ms                    | `duration-fast`    |
+| `--flock-dur-base`      | 180ms                    | `duration-base`    |
+| `--flock-dur-slow`      | 240ms                    | `duration-slow`    |
+| `--flock-pulse-dur`     | 2000ms                   | (drives the pulse) |
 
 **Signature motion — the live pulse.** The status indicator of a session that
 needs you (`awaiting_input`; `error` also rings) emits a slow 2s ease ring pulse
@@ -332,6 +332,7 @@ indicator: --flock-indicator-size  --flock-indicator-color  (caller-supplied)
   `StatusIndicator.test.tsx` (unchanged). Full `apps/web` unit suite: 248 passed.
 
 ### Verification (Docker, host has only Docker)
+
 ```
 docker compose -f docker-compose.dev.yml run --rm web sh -c \
   "pnpm --filter @flock/web exec vitest run"   # 43 files, 248 tests pass

@@ -4,7 +4,6 @@ import type { User, ProjectLayoutV1, ProjectPensV1 } from '@flock/shared';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { registerMeRoutes } from './me-routes.js';
-import { FleetSelectionStore } from './fleet-selection.js';
 
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
@@ -21,14 +20,12 @@ const authStub: AuthGuardDeps = {
 };
 const COOKIE = { cookie: `${SESSION_COOKIE}=good-cookie` };
 
-describe('me routes — selection / presets / layout', () => {
-  let selection: FleetSelectionStore;
+describe('me routes — presets / layout / Pens', () => {
   const layouts = new Map<string, ProjectLayoutV1>();
   const pens = new Map<string, ProjectPensV1>();
   const presets = new Map<string, unknown[]>();
 
   beforeEach(() => {
-    selection = new FleetSelectionStore();
     layouts.clear();
     pens.clear();
     presets.clear();
@@ -38,7 +35,6 @@ describe('me routes — selection / presets / layout', () => {
     const f = Fastify({ logger: false });
     registerMeRoutes(f, {
       auth: authStub,
-      selection,
       getPresets: async (uid) => (presets.get(uid) as never) ?? [],
       putPresets: async (uid, p) => {
         presets.set(uid, p);
@@ -55,69 +51,11 @@ describe('me routes — selection / presets / layout', () => {
     return f;
   }
 
-  it('401 without auth', async () => {
+  it('requires authentication', async () => {
     const f = buildApp();
     try {
-      expect((await f.inject({ method: 'GET', url: '/api/me/selection' })).statusCode).toBe(401);
-    } finally {
-      await f.close();
-    }
-  });
-
-  it('GET/PUT /api/me/selection round-trips fields', async () => {
-    const f = buildApp();
-    try {
-      const empty = await f.inject({ method: 'GET', url: '/api/me/selection', headers: COOKIE });
-      expect(empty.statusCode).toBe(200);
-      expect(empty.json().selection).toBeNull();
-
-      const body = {
-        selectedSessionId: 'sess-1',
-        activeProjectId: 'proj-1',
-        lens: 'agents' as const,
-        updatedAt: '2026-07-09T00:00:00.000Z',
-      };
-      const put = await f.inject({
-        method: 'PUT',
-        url: '/api/me/selection',
-        headers: COOKIE,
-        payload: body,
-      });
-      expect(put.statusCode).toBe(200);
-      expect(put.json().selection.selectedSessionId).toBe('sess-1');
-      expect(put.json().selection.lens).toBe('agents');
-
-      const get = await f.inject({ method: 'GET', url: '/api/me/selection', headers: COOKIE });
-      expect(get.json().selection.selectedSessionId).toBe('sess-1');
-    } finally {
-      await f.close();
-    }
-  });
-
-  it('LWW: later updatedAt wins on PUT', async () => {
-    const f = buildApp();
-    try {
-      await f.inject({
-        method: 'PUT',
-        url: '/api/me/selection',
-        headers: COOKIE,
-        payload: {
-          selectedSessionId: 'old',
-          activeProjectId: null,
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      });
-      const put = await f.inject({
-        method: 'PUT',
-        url: '/api/me/selection',
-        headers: COOKIE,
-        payload: {
-          selectedSessionId: 'new',
-          activeProjectId: null,
-          updatedAt: '2026-06-01T00:00:00.000Z',
-        },
-      });
-      expect(put.json().selection.selectedSessionId).toBe('new');
+      const response = await f.inject({ method: 'GET', url: '/api/me/launcher-presets' });
+      expect(response.statusCode).toBe(401);
     } finally {
       await f.close();
     }

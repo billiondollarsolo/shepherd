@@ -17,9 +17,7 @@ import { users } from './schema.js';
 async function main(): Promise<void> {
   const [, , username, password] = process.argv;
   if (!username || !password) {
-    console.error(
-      'usage: tsx apps/orchestrator/src/db/reset-password.ts <username> <newPassword>',
-    );
+    console.error('usage: tsx apps/orchestrator/src/db/reset-password.ts <username> <newPassword>');
     process.exit(2);
   }
 

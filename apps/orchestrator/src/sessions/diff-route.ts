@@ -52,8 +52,7 @@ export function registerDiffRoute(
       if (!query.success) {
         return badRequest(reply, 'invalid diff query.');
       }
-      const staged =
-        query.data.staged === undefined ? undefined : query.data.staged === 'true';
+      const staged = query.data.staged === undefined ? undefined : query.data.staged === 'true';
 
       try {
         const result = await deps.service.getDiff(parsed.data.id, {
@@ -69,9 +68,7 @@ export function registerDiffRoute(
         }
         if (err instanceof DiffUnavailableError) {
           // Send the concise detail (not the session-id-prefixed message).
-          return reply
-            .code(422)
-            .send({ error: { code: 'diff_unavailable', message: err.detail } });
+          return reply.code(422).send({ error: { code: 'diff_unavailable', message: err.detail } });
         }
         throw err;
       }

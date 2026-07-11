@@ -14,7 +14,10 @@ export const SESSION_DND = 'application/x-flock-session';
  * last, oldest-first (so a new terminal appends to the right / bottom). Pure +
  * non-mutating.
  */
-export function orderSessions(list: Session[], orderedIds: readonly string[] | undefined): Session[] {
+export function orderSessions(
+  list: Session[],
+  orderedIds: readonly string[] | undefined,
+): Session[] {
   const idx = new Map((orderedIds ?? []).map((id, i) => [id, i]));
   return [...list].sort((a, b) => {
     const ai = idx.has(a.id) ? idx.get(a.id)! : Number.POSITIVE_INFINITY;

@@ -22,7 +22,9 @@ interface ChatMessage {
 }
 
 /** Pull chat messages out of the raw event log (events whose payload is a chat). */
-function chatMessages(events: ReadonlyArray<{ id: string; agentEventRaw?: unknown }>): ChatMessage[] {
+function chatMessages(
+  events: ReadonlyArray<{ id: string; agentEventRaw?: unknown }>,
+): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const e of events) {
     const raw = e.agentEventRaw as { chat?: { role?: string; text?: string } } | null;
@@ -47,7 +49,9 @@ function Bubble({ msg }: { msg: ChatMessage }): JSX.Element {
     <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
         className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${
-          isUser ? 'bg-flock-accent/15 text-flock-accent' : 'bg-flock-surface-2 text-flock-ink-muted'
+          isUser
+            ? 'bg-flock-accent/15 text-flock-accent'
+            : 'bg-flock-surface-2 text-flock-ink-muted'
         }`}
       >
         {isUser ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
@@ -83,8 +87,8 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
               </h3>
               <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-flock-ink-muted">
                 Send a prompt below to talk to the agent. Structured chat fills in for{' '}
-                <span className="text-flock-ink-primary">ACP</span> sessions; other agents stream in the
-                Terminal tab.
+                <span className="text-flock-ink-primary">ACP</span> sessions; other agents stream in
+                the Terminal tab.
               </p>
             </div>
           </div>

@@ -1,8 +1,24 @@
 {
   "name": "flock",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Flock \u2014 a web cockpit for supervising CLI coding agents (Claude Code, Codex, OpenCode) over SSH.",
+  "description": "Flock — shepherd your CLI coding agents across local and remote nodes from one web paddock.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billiondollarsolo/flock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/billiondollarsolo/flock/issues"
+  },
+  "homepage": "https://github.com/billiondollarsolo/flock#readme",
+  "keywords": [
+    "coding-agents",
+    "claude-code",
+    "codex",
+    "self-hosted",
+    "terminal"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22",
@@ -32,7 +48,8 @@
     "dev:migrate": "tsx --env-file=.env.dev.local apps/orchestrator/src/db/migrate.ts",
     "dev:api": "pnpm db:up && pnpm dev:migrate && tsx watch --env-file=.env.dev.local apps/orchestrator/src/index.ts",
     "dev:web": "pnpm --filter @flock/web dev",
-    "dev:native": "pnpm db:up && pnpm dev:migrate && concurrently -n api,web -c blue,magenta \"tsx watch --env-file=.env.dev.local apps/orchestrator/src/index.ts\" \"pnpm --filter @flock/web dev\""
+    "dev:native": "pnpm db:up && pnpm dev:migrate && concurrently -n api,web -c blue,magenta \"tsx watch --env-file=.env.dev.local apps/orchestrator/src/index.ts\" \"pnpm --filter @flock/web dev\"",
+    "release:check": "node scripts/check-release-version.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",

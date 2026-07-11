@@ -152,7 +152,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
         <div className="relative z-10 my-10 max-w-md">
           <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--flock-border)] bg-flock-surface-0/60 px-2.5 py-1 text-2xs font-medium text-flock-ink-muted backdrop-blur-sm">
             <Activity className="size-3 text-flock-accent" aria-hidden />
-            Mission control for coding agents
+            Shepherd your coding agents
           </p>
           <h1 className="font-display text-3xl font-semibold leading-[1.15] tracking-tight text-flock-ink-primary xl:text-4xl">
             Supervise a flock of agents

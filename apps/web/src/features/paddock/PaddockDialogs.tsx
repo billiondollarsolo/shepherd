@@ -555,7 +555,7 @@ function AddProjectDialog(): JSX.Element {
             className="flex-1"
             value={workingDir}
             onChange={(e) => setWorkingDir(e.target.value)}
-            placeholder="/home/mj/mjcode/flock"
+            placeholder="/home/user/projects/flock"
             required
           />
           <Button

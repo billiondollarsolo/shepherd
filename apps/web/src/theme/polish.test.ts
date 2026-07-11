@@ -2,12 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  POLISH_TOKENS,
-  ALL_POLISH_TOKENS,
-  TYPE_SCALE,
-  MOTION_TOKENS,
-} from './tokens';
+import { POLISH_TOKENS, ALL_POLISH_TOKENS, TYPE_SCALE, MOTION_TOKENS } from './tokens';
 
 /**
  * US-37 design-polish contract.

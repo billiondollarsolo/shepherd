@@ -78,7 +78,10 @@ describe('sendSubscriptionToServer', () => {
     const subscription = {
       toJSON: () => ({ endpoint: 'x', keys: { p256dh: 'p', auth: 'a' } }),
     } as unknown as PushSubscription;
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401 }) as Response));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 401 }) as Response),
+    );
 
     await expect(sendSubscriptionToServer(subscription)).rejects.toThrow();
   });
@@ -128,9 +131,7 @@ describe('enablePush (full enrollment flow)', () => {
 
     expect(result).toEqual({ ok: true });
     expect(register).toHaveBeenCalledWith(SERVICE_WORKER_URL, { scope: '/' });
-    expect(subscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ userVisibleOnly: true }),
-    );
+    expect(subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/push/subscribe',
       expect.objectContaining({ method: 'POST' }),

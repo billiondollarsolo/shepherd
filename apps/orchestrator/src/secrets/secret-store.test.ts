@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import {
-  EncryptedSecret,
-  SECRET_AUTH_TAG_BYTES,
-  SECRET_NONCE_BYTES,
-} from '@flock/shared';
+import { EncryptedSecret, SECRET_AUTH_TAG_BYTES, SECRET_NONCE_BYTES } from '@flock/shared';
 import { AuditEntry, AuditLogger, AuditSink } from '../audit/audit.js';
 import { Keyring } from './keyring.js';
 import { SecretDecryptError, SecretStore } from './secret-store.js';
@@ -99,9 +95,9 @@ describe('SecretStore (US-3 — encryption at rest, AES-256-GCM)', () => {
 
       const wrongStore = storeWithKeys({ FLOCK_MASTER_KEY: makeKeyB64() });
 
-      await expect(
-        wrongStore.decrypt(envelope, { secretId: 's1' }),
-      ).rejects.toBeInstanceOf(SecretDecryptError);
+      await expect(wrongStore.decrypt(envelope, { secretId: 's1' })).rejects.toBeInstanceOf(
+        SecretDecryptError,
+      );
     });
 
     it('tampered ciphertext fails authentication', async () => {
@@ -115,9 +111,9 @@ describe('SecretStore (US-3 — encryption at rest, AES-256-GCM)', () => {
       };
       tampered.ciphertext[0] ^= 0xff; // flip a bit
 
-      await expect(
-        store.decrypt(tampered, { secretId: 's1' }),
-      ).rejects.toBeInstanceOf(SecretDecryptError);
+      await expect(store.decrypt(tampered, { secretId: 's1' })).rejects.toBeInstanceOf(
+        SecretDecryptError,
+      );
     });
 
     it('tampered auth tag fails authentication', async () => {
@@ -131,9 +127,9 @@ describe('SecretStore (US-3 — encryption at rest, AES-256-GCM)', () => {
       };
       tampered.authTag[0] ^= 0xff;
 
-      await expect(
-        store.decrypt(tampered, { secretId: 's1' }),
-      ).rejects.toBeInstanceOf(SecretDecryptError);
+      await expect(store.decrypt(tampered, { secretId: 's1' })).rejects.toBeInstanceOf(
+        SecretDecryptError,
+      );
     });
   });
 
@@ -169,9 +165,9 @@ describe('SecretStore (US-3 — encryption at rest, AES-256-GCM)', () => {
       const envelope = store.encrypt('x');
 
       const orphan: EncryptedSecret = { ...envelope, keyVersion: 7 };
-      await expect(
-        store.decrypt(orphan, { secretId: 's1' }),
-      ).rejects.toBeInstanceOf(SecretDecryptError);
+      await expect(store.decrypt(orphan, { secretId: 's1' })).rejects.toBeInstanceOf(
+        SecretDecryptError,
+      );
     });
   });
 
@@ -203,23 +199,17 @@ describe('SecretStore (US-3 — encryption at rest, AES-256-GCM)', () => {
       const goodStore = storeWithKeys({ FLOCK_MASTER_KEY: makeKeyB64() });
       const envelope = goodStore.encrypt('x');
 
-      const wrongStore = storeWithKeys(
-        { FLOCK_MASTER_KEY: makeKeyB64() },
-        new AuditLogger(sink),
-      );
+      const wrongStore = storeWithKeys({ FLOCK_MASTER_KEY: makeKeyB64() }, new AuditLogger(sink));
 
-      await expect(
-        wrongStore.decrypt(envelope, { secretId: 's1' }),
-      ).rejects.toBeInstanceOf(SecretDecryptError);
+      await expect(wrongStore.decrypt(envelope, { secretId: 's1' })).rejects.toBeInstanceOf(
+        SecretDecryptError,
+      );
       expect(sink.rows).toHaveLength(0);
     });
 
     it('encrypt writes no audit row (only access/decrypt is audited)', async () => {
       const sink = new FakeAuditSink();
-      const store = storeWithKeys(
-        { FLOCK_MASTER_KEY: makeKeyB64() },
-        new AuditLogger(sink),
-      );
+      const store = storeWithKeys({ FLOCK_MASTER_KEY: makeKeyB64() }, new AuditLogger(sink));
       store.encrypt('x');
       expect(sink.rows).toHaveLength(0);
     });

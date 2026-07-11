@@ -38,10 +38,9 @@ export function ptyChannel(sessionId: string): string {
  */
 export function ptyWebSocketUrl(
   sessionId: string,
-  env: { VITE_WS_URL?: string } = (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env ?? {},
-  origin: string = typeof window !== 'undefined'
-    ? window.location.origin
-    : 'http://localhost',
+  env: { VITE_WS_URL?: string } = (import.meta as unknown as { env?: { VITE_WS_URL?: string } })
+    .env ?? {},
+  origin: string = typeof window !== 'undefined' ? window.location.origin : 'http://localhost',
   /**
    * Optional initial terminal size. Carried as `?cols=&rows=` so the orchestrator
    * opens the PTY at the right size FROM THE START — a fresh shell then prints its
@@ -50,9 +49,9 @@ export function ptyWebSocketUrl(
   size?: { cols: number; rows: number },
 ): string {
   const configured = (env.VITE_WS_URL ?? '').replace(/\/$/, '');
-  const base = configured || origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
-  const q =
-    size && size.cols > 0 && size.rows > 0 ? `?cols=${size.cols}&rows=${size.rows}` : '';
+  const base =
+    configured || origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
+  const q = size && size.cols > 0 && size.rows > 0 ? `?cols=${size.cols}&rows=${size.rows}` : '';
   return `${base}/ws/pty/${encodeURIComponent(sessionId)}${q}`;
 }
 

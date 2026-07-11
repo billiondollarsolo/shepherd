@@ -13,11 +13,7 @@
  * sees it.
  */
 
-import type {
-  CdpKeyEventParams,
-  CdpMouseEventParams,
-  InputIntent,
-} from '@flock/shared';
+import type { CdpKeyEventParams, CdpMouseEventParams, InputIntent } from '@flock/shared';
 
 /** The rendered element rect + the source frame's device size, for mapping. */
 export interface ViewportMapping {
@@ -45,12 +41,8 @@ export function mapPointToViewport(
   point: RenderedPoint,
   mapping: ViewportMapping,
 ): { x: number; y: number } {
-  const sx =
-    mapping.renderedWidth > 0 ? mapping.deviceWidth / mapping.renderedWidth : 1;
-  const sy =
-    mapping.renderedHeight > 0
-      ? mapping.deviceHeight / mapping.renderedHeight
-      : 1;
+  const sx = mapping.renderedWidth > 0 ? mapping.deviceWidth / mapping.renderedWidth : 1;
+  const sy = mapping.renderedHeight > 0 ? mapping.deviceHeight / mapping.renderedHeight : 1;
   return {
     x: Math.round(point.x * sx),
     y: Math.round(point.y * sy),
@@ -82,12 +74,7 @@ export function cdpModifiers(e: {
   metaKey?: boolean;
   shiftKey?: boolean;
 }): number {
-  return (
-    (e.altKey ? 1 : 0) |
-    (e.ctrlKey ? 2 : 0) |
-    (e.metaKey ? 4 : 0) |
-    (e.shiftKey ? 8 : 0)
-  );
+  return (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 }
 
 /** Build a click-down/up pair (or move) mouse intent at a mapped viewport point. */

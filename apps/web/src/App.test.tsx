@@ -8,7 +8,10 @@ import App from './App';
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 })),
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 }),
+    ),
   );
 });
 

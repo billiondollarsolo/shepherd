@@ -12,15 +12,11 @@ describe('statusWsProtocol (US-23)', () => {
   });
 
   it('derives a wss:// URL from an https origin (same-origin deploy)', () => {
-    expect(statusWebSocketUrl({}, 'https://flock.example')).toBe(
-      'wss://flock.example/ws/status',
-    );
+    expect(statusWebSocketUrl({}, 'https://flock.example')).toBe('wss://flock.example/ws/status');
   });
 
   it('derives a ws:// URL from an http origin', () => {
-    expect(statusWebSocketUrl({}, 'http://localhost:5173')).toBe(
-      'ws://localhost:5173/ws/status',
-    );
+    expect(statusWebSocketUrl({}, 'http://localhost:5173')).toBe('ws://localhost:5173/ws/status');
   });
 
   it('prefers an explicit VITE_WS_URL base when configured', () => {

@@ -97,10 +97,7 @@ class FakeDb {
   }
 }
 
-function makeService(
-  sink?: AuditSink,
-  hooks?: { onSshNodeUpdated?: (id: string) => void },
-) {
+function makeService(sink?: AuditSink, hooks?: { onSshNodeUpdated?: (id: string) => void }) {
   const audit = new AuditLogger(sink ?? { async write() {} });
   const db = new FakeDb();
   const store = makeSecretStore(audit);
@@ -130,7 +127,11 @@ async function decryptSecret(store: SecretStore, row: Record<string, unknown>): 
 describe('NodeService.createNode', () => {
   it('persists a local node as connected with no ssh fields and audits node_add', async () => {
     const writes: unknown[] = [];
-    const { service, db } = makeService({ async write(e) { writes.push(e); } });
+    const { service, db } = makeService({
+      async write(e) {
+        writes.push(e);
+      },
+    });
 
     const node = await service.createNode(
       { name: 'local', kind: 'local' } satisfies CreateNodeRequest,
@@ -148,7 +149,7 @@ describe('NodeService.createNode', () => {
 
   it('encrypts the ssh private key at rest, stores only the secret id, never the raw key', async () => {
     const { service, db } = makeService();
-    const RAW_KEY = '-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-bytes\n-----END-----';
+    const RAW_KEY = 'synthetic-private-key-secret-bytes';
 
     const node = await service.createNode(
       {
@@ -232,7 +233,11 @@ describe('NodeService.updateNode', () => {
 
   it('renames a node, audits node_update, and returns the updated node', async () => {
     const writes: unknown[] = [];
-    const { service } = makeService({ async write(e) { writes.push(e); } });
+    const { service } = makeService({
+      async write(e) {
+        writes.push(e);
+      },
+    });
     const created = await service.createNode(SSH_CREATE, { userId: USER_ID });
     writes.length = 0;
 
@@ -293,7 +298,11 @@ describe('NodeService.updateNode', () => {
 describe('NodeService.deleteNode', () => {
   it('removes a node and audits node_remove', async () => {
     const writes: unknown[] = [];
-    const { service } = makeService({ async write(e) { writes.push(e); } });
+    const { service } = makeService({
+      async write(e) {
+        writes.push(e);
+      },
+    });
     await service.createNode({ name: 'local', kind: 'local' }, { userId: USER_ID });
     writes.length = 0;
 
@@ -304,7 +313,11 @@ describe('NodeService.deleteNode', () => {
 
   it('returns false (no audit) for an unknown node', async () => {
     const writes: unknown[] = [];
-    const { service } = makeService({ async write(e) { writes.push(e); } });
+    const { service } = makeService({
+      async write(e) {
+        writes.push(e);
+      },
+    });
     const removed = await service.deleteNode('missing', { userId: USER_ID });
     expect(removed).toBe(false);
     expect(writes).toHaveLength(0);
@@ -345,11 +358,16 @@ describe('NodeService per-node env + pool (#3a/#3c)', () => {
     // The env is encrypted in a secrets row, never plaintext.
     expect(db.secrets).toHaveLength(1);
     // The stored ciphertext bytes are NOT the plaintext; decrypting recovers it.
-    expect(Buffer.from(db.secrets[0]!.ciphertext as Buffer).toString('utf8')).not.toContain('proxy:8080');
+    expect(Buffer.from(db.secrets[0]!.ciphertext as Buffer).toString('utf8')).not.toContain(
+      'proxy:8080',
+    );
     const plaintext = await decryptSecret(store, db.secrets[0]!);
     expect(JSON.parse(plaintext)).toEqual({ HTTPS_PROXY: 'http://proxy:8080', FOO: 'bar' });
     // envForNode decrypts it back for the launch merge.
-    expect(await service.envForNode(node.id)).toEqual({ HTTPS_PROXY: 'http://proxy:8080', FOO: 'bar' });
+    expect(await service.envForNode(node.id)).toEqual({
+      HTTPS_PROXY: 'http://proxy:8080',
+      FOO: 'bar',
+    });
   });
 
   it('updateNode clears env wholesale with {} and toggles the pool', async () => {
@@ -362,7 +380,11 @@ describe('NodeService per-node env + pool (#3a/#3c)', () => {
     const p2 = await service.updateNode(node.id, { pool: 'p2' }, { userId: USER_ID, ip: null });
     expect(p2?.pool).toBe('p2');
     // env: {} drops the secret ref → no env (no secret lookup involved).
-    const cleared = await service.updateNode(node.id, { env: {}, pool: null }, { userId: USER_ID, ip: null });
+    const cleared = await service.updateNode(
+      node.id,
+      { env: {}, pool: null },
+      { userId: USER_ID, ip: null },
+    );
     expect(cleared?.pool ?? null).toBeNull();
     expect(await service.envForNode(node.id)).toEqual({});
   });

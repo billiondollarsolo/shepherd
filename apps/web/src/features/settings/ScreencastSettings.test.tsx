@@ -13,9 +13,7 @@ const SID = '22222222-2222-4222-8222-222222222222';
 
 describe('ScreencastSettings (US-29)', () => {
   it('renders the quality slider and unfocused policy options', () => {
-    render(
-      <ScreencastSettings sessionId={SID} open={true} send={() => {}} />,
-    );
+    render(<ScreencastSettings sessionId={SID} open={true} send={() => {}} />);
     expect(screen.getByLabelText('JPEG quality')).toBeTruthy();
     expect(screen.getByRole('radio', { name: /pause/i })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /throttle/i })).toBeTruthy();
@@ -23,13 +21,7 @@ describe('ScreencastSettings (US-29)', () => {
 
   it('emits a quality control message when the slider moves (#3)', () => {
     const sent: ScreencastBandwidthControlMessage[] = [];
-    render(
-      <ScreencastSettings
-        sessionId={SID}
-        open={true}
-        send={(m) => sent.push(m)}
-      />,
-    );
+    render(<ScreencastSettings sessionId={SID} open={true} send={(m) => sent.push(m)} />);
     fireEvent.change(screen.getByLabelText('JPEG quality'), {
       target: { value: '30' },
     });
@@ -37,9 +29,7 @@ describe('ScreencastSettings (US-29)', () => {
   });
 
   it('switches the unfocused policy to throttle (#2)', () => {
-    render(
-      <ScreencastSettings sessionId={SID} open={true} send={() => {}} />,
-    );
+    render(<ScreencastSettings sessionId={SID} open={true} send={() => {}} />);
     const throttle = screen.getByRole('radio', {
       name: /throttle/i,
     }) as HTMLInputElement;

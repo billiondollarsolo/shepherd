@@ -68,7 +68,11 @@ export function parseCredential(plaintext: string): SshCredential {
     if (obj && typeof obj === 'object') {
       const pick = (k: string): string | undefined =>
         typeof obj[k] === 'string' && obj[k] ? (obj[k] as string) : undefined;
-      return { privateKey: pick('privateKey'), passphrase: pick('passphrase'), password: pick('password') };
+      return {
+        privateKey: pick('privateKey'),
+        passphrase: pick('passphrase'),
+        password: pick('password'),
+      };
     }
   } catch {
     /* not JSON → legacy raw-key string */
@@ -364,7 +368,8 @@ export class NodeService {
         input.sshPrivateKey !== undefined ||
         input.sshPassphrase !== undefined ||
         input.sshPassword !== undefined;
-      const methodChanged = input.sshAuthMethod !== undefined && input.sshAuthMethod !== currentMethod;
+      const methodChanged =
+        input.sshAuthMethod !== undefined && input.sshAuthMethod !== currentMethod;
 
       if (hasNewCred || methodChanged) {
         // Decrypt-merge-reencrypt: keep fields the user didn't resend (e.g. change
@@ -451,11 +456,7 @@ export class NodeService {
    * so the paddock tree is never empty but never accrues duplicates on restart.
    */
   async ensureLocalNode(): Promise<SharedNode> {
-    const existing = await this.db
-      .select()
-      .from(nodes)
-      .where(eq(nodes.kind, 'local'))
-      .limit(1);
+    const existing = await this.db.select().from(nodes).where(eq(nodes.kind, 'local')).limit(1);
     if (existing[0]) {
       return rowToNode(existing[0]);
     }

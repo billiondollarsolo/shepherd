@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  attachShellTerminal,
-  type ShellPtySink,
-  type TerminalLike,
-} from './attachShellTerminal';
+import { attachShellTerminal, type ShellPtySink, type TerminalLike } from './attachShellTerminal';
 
 function fakeTerminal(cols = 80, rows = 24) {
   const dataHandlers: Array<(d: string) => void> = [];
@@ -27,8 +23,7 @@ function fakeTerminal(cols = 80, rows = 24) {
     dataDispose,
     resizeDispose,
     typeText: (s: string) => dataHandlers.forEach((h) => h(s)),
-    resize: (c: number, r: number) =>
-      resizeHandlers.forEach((h) => h({ cols: c, rows: r })),
+    resize: (c: number, r: number) => resizeHandlers.forEach((h) => h({ cols: c, rows: r })),
   };
 }
 

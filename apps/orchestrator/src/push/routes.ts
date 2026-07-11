@@ -84,12 +84,9 @@ export function registerPushRoutes(app: FastifyInstance, deps: PushRouteDeps): v
     return { ok: true };
   });
 
-  app.get(
-    '/api/push/vapid-public-key',
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const userId = await resolveUserId(req.headers.cookie ?? null);
-      if (!userId) return unauthorized(reply);
-      return { publicKey: vapidPublicKey ?? '' };
-    },
-  );
+  app.get('/api/push/vapid-public-key', async (req: FastifyRequest, reply: FastifyReply) => {
+    const userId = await resolveUserId(req.headers.cookie ?? null);
+    if (!userId) return unauthorized(reply);
+    return { publicKey: vapidPublicKey ?? '' };
+  });
 }

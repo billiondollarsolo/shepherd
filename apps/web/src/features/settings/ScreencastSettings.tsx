@@ -1,7 +1,4 @@
-import type {
-  ScreencastBandwidthControlMessage,
-  UnfocusedPolicy,
-} from '@flock/shared';
+import type { ScreencastBandwidthControlMessage, UnfocusedPolicy } from '@flock/shared';
 import { useScreencastSettings } from './useScreencastSettings';
 
 /**

@@ -248,7 +248,8 @@ describe('PtyWsServer — streaming + binary framing (US-11)', () => {
     await Promise.all([a.open(), b.open()]);
     // Both attach to the ONE shared PTY.
     await waitUntil(
-      () => a.control.some((c) => c.op === 'attached') && b.control.some((c) => c.op === 'attached'),
+      () =>
+        a.control.some((c) => c.op === 'attached') && b.control.some((c) => c.op === 'attached'),
     );
     expect(h.transport.ptys).toHaveLength(1);
 
@@ -343,9 +344,7 @@ describe('PtyWsServer — shared zod control protocol', () => {
 describe('PtyWsServer — auth gate (NFR-SEC6)', () => {
   it('rejects the upgrade when authenticate returns false', async () => {
     const denied = await startHarness(false);
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${denied.port}${PTY_WS_PATH_PREFIX}${ID}`,
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:${denied.port}${PTY_WS_PATH_PREFIX}${ID}`);
     const result = await new Promise<'open' | 'rejected'>((resolve) => {
       ws.once('open', () => resolve('open'));
       ws.once('error', () => resolve('rejected'));

@@ -3,11 +3,51 @@ import { render, screen } from '@testing-library/react';
 import type { Session, Status } from '@flock/shared';
 
 const SESSIONS = [
-  { id: 's-run', agentType: 'claude-code', status: 'running', closedAt: null, nodeId: 'n1', projectId: 'p1', permissionMode: 'default' },
-  { id: 's-wait', agentType: 'codex', status: 'idle', closedAt: null, nodeId: 'n1', projectId: 'p1', permissionMode: 'default' },
-  { id: 's-plan', agentType: 'claude-code', status: 'idle', closedAt: null, nodeId: 'n1', projectId: 'p1', permissionMode: 'plan' },
-  { id: 's-err', agentType: 'gemini', status: 'idle', closedAt: null, nodeId: 'n2', projectId: 'p2', permissionMode: 'default' },
-  { id: 's-closed', agentType: 'amp', status: 'awaiting_input', closedAt: '2026-01-01', nodeId: 'n1', projectId: 'p1', permissionMode: 'default' },
+  {
+    id: 's-run',
+    agentType: 'claude-code',
+    status: 'running',
+    closedAt: null,
+    nodeId: 'n1',
+    projectId: 'p1',
+    permissionMode: 'default',
+  },
+  {
+    id: 's-wait',
+    agentType: 'codex',
+    status: 'idle',
+    closedAt: null,
+    nodeId: 'n1',
+    projectId: 'p1',
+    permissionMode: 'default',
+  },
+  {
+    id: 's-plan',
+    agentType: 'claude-code',
+    status: 'idle',
+    closedAt: null,
+    nodeId: 'n1',
+    projectId: 'p1',
+    permissionMode: 'plan',
+  },
+  {
+    id: 's-err',
+    agentType: 'gemini',
+    status: 'idle',
+    closedAt: null,
+    nodeId: 'n2',
+    projectId: 'p2',
+    permissionMode: 'default',
+  },
+  {
+    id: 's-closed',
+    agentType: 'amp',
+    status: 'awaiting_input',
+    closedAt: '2026-01-01',
+    nodeId: 'n1',
+    projectId: 'p1',
+    permissionMode: 'default',
+  },
 ] as unknown as Session[];
 // Live overrides: s-wait blocked, s-plan awaiting in plan mode, s-err errored. s-closed CLOSED → excluded.
 const mockStatuses = new Map<string, Status>([
@@ -19,8 +59,18 @@ const openAgent = vi.fn();
 
 vi.mock('../../data/queries', () => ({
   useSessions: () => ({ data: SESSIONS }),
-  useNodes: () => ({ data: [{ id: 'n1', name: 'vm-1' }, { id: 'n2', name: 'vm-2' }] }),
-  useProjects: () => ({ data: [{ id: 'p1', name: 'Apollo' }, { id: 'p2', name: 'Gemini' }] }),
+  useNodes: () => ({
+    data: [
+      { id: 'n1', name: 'vm-1' },
+      { id: 'n2', name: 'vm-2' },
+    ],
+  }),
+  useProjects: () => ({
+    data: [
+      { id: 'p1', name: 'Apollo' },
+      { id: 'p2', name: 'Gemini' },
+    ],
+  }),
 }));
 vi.mock('./liveData', () => ({ useLiveStatuses: () => mockStatuses }));
 vi.mock('../../store/paddock', () => ({

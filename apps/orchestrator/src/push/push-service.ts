@@ -22,10 +22,7 @@
 import type { Status, StatusUpdateMessage } from '@flock/shared';
 
 import { shouldSendPush } from './should-notify.js';
-import type {
-  PushSubscriptionStore,
-  StoredPushSubscription,
-} from './subscription-store.js';
+import type { PushSubscriptionStore, StoredPushSubscription } from './subscription-store.js';
 
 /** The JSON payload delivered to the service worker (`event.data.json()`). */
 export interface PushNotificationPayload {
@@ -78,7 +75,11 @@ const defaultDefer = (fn: () => void): void => {
 };
 
 /** Human-facing copy per push-worthy status (spec §7 table). */
-function describe(status: Status, sessionId: string, detail: string | null): {
+function describe(
+  status: Status,
+  sessionId: string,
+  detail: string | null,
+): {
   title: string;
   body: string;
 } {

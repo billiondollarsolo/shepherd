@@ -53,7 +53,9 @@ export function registerNodeRoutes(
       if (!params.success) return badRequest(reply, 'a valid node id is required.');
       const env = await deps.service.getEnv(params.data.id);
       if (env === null) {
-        return reply.code(404).send({ error: { code: 'node_not_found', message: 'Node was not found.' } });
+        return reply
+          .code(404)
+          .send({ error: { code: 'node_not_found', message: 'Node was not found.' } });
       }
       return reply.code(200).send({ env });
     },

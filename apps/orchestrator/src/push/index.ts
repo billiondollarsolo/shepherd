@@ -35,13 +35,5 @@ export {
   type PushSubscriptionStore,
   type StoredPushSubscription,
 } from './subscription-store.js';
-export {
-  createWebPushSender,
-  readVapidConfig,
-  type VapidConfig,
-} from './sender.js';
-export {
-  registerPushRoutes,
-  type PushRouteDeps,
-  type ResolveUserId,
-} from './routes.js';
+export { createWebPushSender, readVapidConfig, type VapidConfig } from './sender.js';
+export { registerPushRoutes, type PushRouteDeps, type ResolveUserId } from './routes.js';

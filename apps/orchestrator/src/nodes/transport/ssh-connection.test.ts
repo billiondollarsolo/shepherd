@@ -105,10 +105,11 @@ describe('host-key TOFU verifier (T7)', () => {
 });
 
 /** Builds a connector that hands out fresh fake clients, recording each. */
-function fakeConnector(opts?: {
-  failTimes?: number;
-  failWith?: Error;
-}): { connector: SshConnector; clients: FakeManagedClient[]; attempts: () => number } {
+function fakeConnector(opts?: { failTimes?: number; failWith?: Error }): {
+  connector: SshConnector;
+  clients: FakeManagedClient[];
+  attempts: () => number;
+} {
   const clients: FakeManagedClient[] = [];
   let attempts = 0;
   let remainingFailures = opts?.failTimes ?? 0;

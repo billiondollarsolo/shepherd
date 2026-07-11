@@ -23,7 +23,5 @@ export interface Command {
 export function filterCommands(commands: readonly Command[], query: string): Command[] {
   const q = query.trim().toLowerCase();
   if (q === '') return [...commands];
-  return commands.filter((c) =>
-    `${c.title} ${c.hint ?? ''}`.toLowerCase().includes(q),
-  );
+  return commands.filter((c) => `${c.title} ${c.hint ?? ''}`.toLowerCase().includes(q));
 }

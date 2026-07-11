@@ -32,9 +32,7 @@ describe('ProjectLayoutView', () => {
       <ProjectLayoutView
         layout={layout}
         onLayoutChange={() => {}}
-        renderLeaf={(id, sessionId) => (
-          <div data-testid={`content-${sessionId}`}>{id}</div>
-        )}
+        renderLeaf={(id, sessionId) => <div data-testid={`content-${sessionId}`}>{id}</div>}
       />,
     );
     expect(screen.getByTestId('content-s1')).toBeInTheDocument();
@@ -53,13 +51,7 @@ describe('ProjectLayoutView', () => {
       sessionId: 's2',
     });
     const onChange = vi.fn();
-    render(
-      <ProjectLayoutView
-        layout={layout}
-        onLayoutChange={onChange}
-        renderLeaf={() => null}
-      />,
-    );
+    render(<ProjectLayoutView layout={layout} onLayoutChange={onChange} renderLeaf={() => null} />);
     fireEvent.click(screen.getByTestId(`layout-tab-${leafA.id}`));
     expect(onChange).toHaveBeenCalled();
     expect(onChange.mock.calls[0]![0].focusedLeafId).toBe(leafA.id);
@@ -91,7 +83,9 @@ describe('ProjectLayoutView', () => {
     expect(document.querySelector('[data-keep-alive="1"]')).toBeTruthy();
     // No multi-agent tab strip while zoomed (header owns All agents).
     expect(screen.queryByTestId(`layout-tab-${leafA.id}`)).not.toBeInTheDocument();
-    expect(screen.getByTestId('project-layout-view').querySelector('[data-zoomed="1"]')).toBeTruthy();
+    expect(
+      screen.getByTestId('project-layout-view').querySelector('[data-zoomed="1"]'),
+    ).toBeTruthy();
     expect(screen.getByTestId(`layout-leaf-${leafA.id}`)).toHaveAttribute('data-zoomed', '1');
   });
 
@@ -108,11 +102,7 @@ describe('ProjectLayoutView', () => {
     const focused = { ...layout, focusedLeafId: 'leaf-b' };
     const onChange = vi.fn();
     render(
-      <ProjectLayoutView
-        layout={focused}
-        onLayoutChange={onChange}
-        renderLeaf={() => null}
-      />,
+      <ProjectLayoutView layout={focused} onLayoutChange={onChange} renderLeaf={() => null} />,
     );
     fireEvent.doubleClick(screen.getByTestId('layout-tab-leaf-b'));
     expect(onChange.mock.calls.at(-1)![0].zoomedLeafId).toBe('leaf-b');
@@ -179,13 +169,7 @@ describe('ProjectLayoutView', () => {
         };
       },
     });
-    render(
-      <ProjectLayoutView
-        layout={layout}
-        onLayoutChange={onChange}
-        renderLeaf={() => null}
-      />,
-    );
+    render(<ProjectLayoutView layout={layout} onLayoutChange={onChange} renderLeaf={() => null} />);
     const sep = screen.getByTestId(`layout-separator-${splitId}`);
     // Absolute mapping: clientX 100 / width 400 → ratio 0.25
     fireEvent.mouseDown(sep, { clientX: 100, clientY: 100 });
@@ -231,13 +215,7 @@ describe('ProjectLayoutView', () => {
         };
       },
     });
-    render(
-      <ProjectLayoutView
-        layout={layout}
-        onLayoutChange={onChange}
-        renderLeaf={() => null}
-      />,
-    );
+    render(<ProjectLayoutView layout={layout} onLayoutChange={onChange} renderLeaf={() => null} />);
     const sep = screen.getByTestId(`layout-separator-${splitId}`);
     // clientY 150 / height 200 → ratio 0.75
     fireEvent.mouseDown(sep, { clientX: 200, clientY: 150 });

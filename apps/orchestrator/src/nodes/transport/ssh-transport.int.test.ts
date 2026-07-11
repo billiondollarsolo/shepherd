@@ -60,9 +60,7 @@ function waitForStatus(
     }
     const timer = setTimeout(() => {
       off();
-      reject(
-        new Error(`Timed out waiting for status "${status}". Last: "${conn.status}".`),
-      );
+      reject(new Error(`Timed out waiting for status "${status}". Last: "${conn.status}".`));
     }, timeoutMs);
     const off = conn.onStatusChange((next) => {
       if (next === status) {

@@ -53,9 +53,7 @@ describe('cdpModifiers', () => {
     expect(cdpModifiers({})).toBe(0);
     expect(cdpModifiers({ shiftKey: true })).toBe(8);
     expect(cdpModifiers({ ctrlKey: true, metaKey: true })).toBe(6);
-    expect(
-      cdpModifiers({ altKey: true, ctrlKey: true, metaKey: true, shiftKey: true }),
-    ).toBe(15);
+    expect(cdpModifiers({ altKey: true, ctrlKey: true, metaKey: true, shiftKey: true })).toBe(15);
   });
 });
 

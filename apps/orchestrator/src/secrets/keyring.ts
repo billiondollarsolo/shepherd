@@ -51,9 +51,7 @@ export function envVarForVersion(
   version: number,
   currentVersion: number = CURRENT_KEY_VERSION,
 ): string {
-  return version === currentVersion
-    ? MASTER_KEY_ENV
-    : `${MASTER_KEY_ENV}_V${version}`;
+  return version === currentVersion ? MASTER_KEY_ENV : `${MASTER_KEY_ENV}_V${version}`;
 }
 
 /**

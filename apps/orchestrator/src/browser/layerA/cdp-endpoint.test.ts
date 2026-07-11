@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCdpEndpoint,
-  isOpaqueCdpEndpoint,
-  newBrowserGuid,
-} from './cdp-endpoint.js';
+import { buildCdpEndpoint, isOpaqueCdpEndpoint, newBrowserGuid } from './cdp-endpoint.js';
 
 describe('Layer A — opaque CDP endpoint (FR-B1, NFR-SEC5)', () => {
   it('mints unguessable, unique GUIDs', () => {
@@ -38,9 +34,9 @@ describe('Layer A — opaque CDP endpoint (FR-B1, NFR-SEC5)', () => {
 
   describe('isOpaqueCdpEndpoint', () => {
     it('accepts a full ws URL with an opaque path', () => {
-      expect(
-        isOpaqueCdpEndpoint('ws://127.0.0.1:49251/devtools/browser/' + newBrowserGuid()),
-      ).toBe(true);
+      expect(isOpaqueCdpEndpoint('ws://127.0.0.1:49251/devtools/browser/' + newBrowserGuid())).toBe(
+        true,
+      );
     });
 
     it('rejects a bare port', () => {

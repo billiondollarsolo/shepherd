@@ -17,11 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCw } from 'lucide-react';
 import type { BrowserControlResponse, InputIntent } from '@flock/shared';
-import {
-  useScreencast,
-  type ScreencastConnectionState,
-  type WsFactory,
-} from './useScreencast';
+import { useScreencast, type ScreencastConnectionState, type WsFactory } from './useScreencast';
 import { frameToDataUrl, type ScreencastFrameMessage } from './screencastProtocol';
 import { useBrowserControl, type BrowserControlTransport } from './useBrowserControl';
 import {
@@ -101,7 +97,10 @@ export default function BrowserPane({ sessionId, wsFactory }: BrowserPaneProps):
     },
     [sessionId, send],
   );
-  const reload = useCallback(() => send(JSON.stringify({ op: 'reload', sessionId })), [sessionId, send]);
+  const reload = useCallback(
+    () => send(JSON.stringify({ op: 'reload', sessionId })),
+    [sessionId, send],
+  );
 
   // Pause/throttle the stream when the whole tab is backgrounded (US-29 bandwidth
   // control) — focus on visible, blur on hidden.
@@ -131,7 +130,8 @@ export default function BrowserPane({ sessionId, wsFactory }: BrowserPaneProps):
       // Sharp mode supersamples (capture at pane × DPR, downscaled → crisp on
       // retina); otherwise capture at pane size (WYSIWYG, true content size).
       const dpr = sharp ? window.devicePixelRatio || 1 : 1;
-      if (w > 0 && h > 0) send(JSON.stringify({ op: 'resize', sessionId, width: w, height: h, dpr }));
+      if (w > 0 && h > 0)
+        send(JSON.stringify({ op: 'resize', sessionId, width: w, height: h, dpr }));
     };
     const debounced = (): void => {
       if (timer) clearTimeout(timer);

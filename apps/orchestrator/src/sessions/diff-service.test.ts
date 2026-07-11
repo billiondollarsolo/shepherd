@@ -91,8 +91,7 @@ describe('gitDiffArgv', () => {
 
 describe('DiffService.getDiff (US-33)', () => {
   it('runs git diff in the session working dir and returns the shared DiffResponse', async () => {
-    const diffText =
-      'diff --git a/src/x.ts b/src/x.ts\n@@ -1 +1 @@\n-old\n+new\n';
+    const diffText = 'diff --git a/src/x.ts b/src/x.ts\n@@ -1 +1 @@\n-old\n+new\n';
     const transport = new FakeTransport({ type: 'result', result: execOk(diffText) });
     const service = buildService({ transport });
 
@@ -188,9 +187,7 @@ describe('DiffService.getDiff (US-33)', () => {
 
   it('throws DiffSessionNotFoundError for an unknown session (route → 404)', async () => {
     const service = buildService({ session: null });
-    await expect(service.getDiff(SESSION_ID)).rejects.toBeInstanceOf(
-      DiffSessionNotFoundError,
-    );
+    await expect(service.getDiff(SESSION_ID)).rejects.toBeInstanceOf(DiffSessionNotFoundError);
   });
 
   it('throws DiffUnavailableError when the node has no live transport', async () => {

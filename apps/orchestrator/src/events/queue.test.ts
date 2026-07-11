@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  WriteBehindEventQueue,
-  type EventRecord,
-  type EventWriter,
-} from './queue.js';
+import { WriteBehindEventQueue, type EventRecord, type EventWriter } from './queue.js';
 
 /**
  * US-21 — Async write-behind event log (spec §6, §15; NFR-PERF1).

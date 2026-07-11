@@ -26,7 +26,7 @@ The product's defining properties:
   user's own machine is never in the data path — it is just a viewer.
 - **You always know which agent needs you.** A unified status model, fed by agent
   lifecycle hooks, drives live sidebar indicators and away-from-keyboard push
-  notifications. The key state is "an agent is blocked waiting for *you*."
+  notifications. The key state is "an agent is blocked waiting for _you_."
 - **Each session gets its own isolated browser.** A per-session browser stack lets the
   agent drive a real browser (agent-driving layer), and lets the user watch, comment, and
   take over (view/control layer) — both against the same Chrome instance, streamed into
@@ -121,7 +121,7 @@ A session record contains at minimum:
 - `working_dir`
 - `browser_cdp_endpoint` (nullable; opaque ws URL incl. unguessable GUID)
 - `hook_token` (per-session secret carried by hook callbacks)
-- `status` (current, see §7) — *runtime/in-memory authoritative; mirrored to DB*
+- `status` (current, see §7) — _runtime/in-memory authoritative; mirrored to DB_
 - `created_at`, `last_status_at`, `created_by`
 
 ### 4.3 Two independent persistence layers
@@ -165,12 +165,12 @@ return to find agents still running and fully tracked.
 
 ### 5.2 Component responsibilities
 
-| Component | Owns | Must NOT own |
-|---|---|---|
-| Browser client | Rendering, input, local notification display | Any source of truth |
-| Orchestrator | Status model, agent-contract translation, fan-out, supervisor logic, SSH/tunnel/browser lifecycle | — |
-| Postgres | Durable identity, history, config, subscriptions | The live status critical path |
-| Node | Dumb transport only (tmux, loopback hook forwarding) | **Any logic or decision-making** |
+| Component      | Owns                                                                                              | Must NOT own                     |
+| -------------- | ------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Browser client | Rendering, input, local notification display                                                      | Any source of truth              |
+| Orchestrator   | Status model, agent-contract translation, fan-out, supervisor logic, SSH/tunnel/browser lifecycle | —                                |
+| Postgres       | Durable identity, history, config, subscriptions                                                  | The live status critical path    |
+| Node           | Dumb transport only (tmux, loopback hook forwarding)                                              | **Any logic or decision-making** |
 
 ---
 
@@ -182,10 +182,10 @@ alternative so the decision is auditable.
 ### 6.1 Terminal + persistence: tmux + a web terminal emulator over WebSocket
 
 - **Decision:** PTYs live inside named tmux sessions on each node (`tmux new-session -A
-  -s <name>` attaches-or-creates). The browser renders via a web terminal emulator. The
+-s <name>` attaches-or-creates). The browser renders via a web terminal emulator. The
   orchestrator bridges PTY ⇄ WebSocket.
 - **Terminal emulator — primary: wterm; fallback: xterm.js.**
-  - *Primary — `wterm` (vercel-labs/wterm):* a DOM-rendering web terminal with a VT100/
+  - _Primary — `wterm` (vercel-labs/wterm):_ a DOM-rendering web terminal with a VT100/
     VT220/xterm escape-sequence parser written in Zig and compiled to a ~12 KB WASM binary.
     DOM rendering gives native text selection, clipboard, browser find, and screen-reader
     support for free. It ships exactly the transport we need — a WebSocket transport to a
@@ -193,7 +193,7 @@ alternative so the decision is auditable.
     `useTerminal` hook, alternate-screen support (vim/htop/less), dirty-row rendering, and
     24-bit color. Chosen for fit with the PTY⇄WebSocket bridge and for raw speed
     ("fast" is a launch goal). Apache-2.0.
-  - *Fallback — `xterm.js`:* the battle-proven default (VS Code, ttyd). Use it if wterm's
+  - _Fallback — `xterm.js`:_ the battle-proven default (VS Code, ttyd). Use it if wterm's
     maturity (currently v0.1.x) or its OSC-handler surface proves insufficient.
 - **De-risking spike (required):** confirm wterm exposes handlers for OSC 9/777 (needed
   for the status fallback in §6.3) before committing. If absent or awkward, fall back to
@@ -216,14 +216,14 @@ alternative so the decision is auditable.
 Three channels in descending reliability; the orchestrator translates all into one model.
 
 - **Primary — lifecycle hooks → orchestrator HTTP endpoint.**
-  - *Claude Code:* native **HTTP hooks** POST event JSON directly to the orchestrator.
+  - _Claude Code:_ native **HTTP hooks** POST event JSON directly to the orchestrator.
     Events: `SessionStart`, `PreToolUse`/`PostToolUse`, `Notification`
     (subtyped `permission_prompt`, `idle_prompt`), `Stop`/`StopFailure`. A per-session
     token rides an `Authorization` header.
-  - *Codex:* same event taxonomy (`PreToolUse`, `PermissionRequest`, `PostToolUse`,
+  - _Codex:_ same event taxonomy (`PreToolUse`, `PermissionRequest`, `PostToolUse`,
     `Stop`, etc.) via config-declared **command hooks**; the hook is a one-line `curl`
     to the orchestrator (Codex command hooks only — prompt/agent handlers are skipped).
-  - *OpenCode:* a small first-party **plugin** (`.opencode/plugin/`) subscribes to events
+  - _OpenCode:_ a small first-party **plugin** (`.opencode/plugin/`) subscribes to events
     (`session.idle`, permission/error/question events, subagent events) and POSTs to the
     orchestrator.
 - **Fallback — OSC escape sequences.** The web terminal emulator registers handlers for
@@ -242,13 +242,13 @@ Three channels in descending reliability; the orchestrator translates all into o
 - **Why this, despite the pull toward a premium node agent:**
   - The "works with any SSH box out of the box" property requires zero node install.
   - A node-side daemon is a second program that can disagree with the orchestrator about
-    state; sidebar-vs-reality disagreement is the fastest way to feel *un*-premium.
+    state; sidebar-vs-reality disagreement is the fastest way to feel _un_-premium.
     Centralizing truth removes that entire bug class.
   - Premium feel comes from instant, correct status and a smart central supervisor — none
     of which the user can attribute to where logic physically runs.
   - The contract-translation table grows as agents are added; central means one edit
     upgrades the whole fleet instantly, vs. a fleet-wide redeploy.
-- **Upgrade path (not v1):** a *thin relay* — a trivial node-side mailbox that buffers
+- **Upgrade path (not v1):** a _thin relay_ — a trivial node-side mailbox that buffers
   hook events across SSH gaps and replays them — is the first sanctioned escalation, and
   only if connection gaps prove painful in practice. It holds **no logic**, only buffered
   bytes. A "fat" node agent is justified later only by **data-residency / security**
@@ -269,27 +269,28 @@ like the Codex in-app browser, this isolated instance has no access to the user'
 profile, cookies, extensions, or signed-in sessions — a deliberate isolation boundary,
 not a gap.
 
-**Layer B — the agent-driving layer.** How the coding agent *operates* the browser. The
+**Layer B — the agent-driving layer.** How the coding agent _operates_ the browser. The
 agent connects via CDP to Layer A using the opaque endpoint injected at session creation
 (`SESSION_BROWSER_CDP`, full ws URL incl. unguessable GUID — never a bare port), and is
 instructed not to launch its own browser.
-- *Candidate (behind a spike): `browser-use/browser-harness`.* A thin (~1k-line, MIT,
+
+- _Candidate (behind a spike): `browser-use/browser-harness`._ A thin (~1k-line, MIT,
   Python) editable CDP harness — one websocket to Chrome — where the agent writes missing
   helper code at runtime and accumulates per-site "domain skills." Appealing because it is
   built for exactly this VPS/persistent-browser topology and would give agents strong,
   improving browser control. **Spike gates required before adoption:** (1) its documented
   setup attaches to a user's existing browser via `chrome://inspect` with an interactive
-  Allow popup — that is *not* our headless-per-session model, so we'd point it at our own
+  Allow popup — that is _not_ our headless-per-session model, so we'd point it at our own
   launched Chrome / cloud browsers instead; (2) it writes mutable skill state
   (`agent_helpers.py`, `domain-skills/`) on the node — decide where that state lives
   (per-session vs shared, central sync) so it does not violate the dumb-node principle
   (§6.4); (3) it is young and release-less — treat as an option, not a load-bearing v1
   dependency.
-- *Fallback:* agents drive the browser through their own native browser tooling / MCP
+- _Fallback:_ agents drive the browser through their own native browser tooling / MCP
   over the same CDP endpoint. v1 can ship with the fallback and adopt browser-harness once
   the spike clears.
 
-**Layer C — the human view/control layer.** How the *user* watches and takes over. The
+**Layer C — the human view/control layer.** How the _user_ watches and takes over. The
 orchestrator pulls frames from the **same** CDP target (Layer A) via
 `Page.startScreencast`, streams them to the web UI, and forwards user input (click/scroll/
 keys) back as CDP input events when the user takes control. Because B and C attach to the
@@ -332,30 +333,30 @@ same object — no syncing.
 A single, agent-agnostic status enum per session. Agent-specific events are translated
 into it centrally.
 
-| Status | Meaning | Rings sidebar? | Web Push? |
-|---|---|---|---|
-| `starting` | session/agent initializing | no | no |
-| `running` | agent actively working (tool calls in flight) | no | no |
-| `awaiting_input` | **blocked, needs the user** (permission/decision) | **yes** | **yes** |
-| `idle` | soft idle — quiet but not blocked | gentle dot | no |
-| `done` | agent finished its turn/task | no ring | yes |
-| `error` | tool/agent failure | yes | yes |
-| `disconnected` | node link down; last-known state stale | stale indicator | no |
+| Status           | Meaning                                           | Rings sidebar?  | Web Push? |
+| ---------------- | ------------------------------------------------- | --------------- | --------- |
+| `starting`       | session/agent initializing                        | no              | no        |
+| `running`        | agent actively working (tool calls in flight)     | no              | no        |
+| `awaiting_input` | **blocked, needs the user** (permission/decision) | **yes**         | **yes**   |
+| `idle`           | soft idle — quiet but not blocked                 | gentle dot      | no        |
+| `done`           | agent finished its turn/task                      | no ring         | yes       |
+| `error`          | tool/agent failure                                | yes             | yes       |
+| `disconnected`   | node link down; last-known state stale            | stale indicator | no        |
 
-`awaiting_input` is the money state: it means *the user is the bottleneck*. It is the
+`awaiting_input` is the money state: it means _the user is the bottleneck_. It is the
 primary driver of both the sidebar ring and push.
 
 ### 7.1 Source-to-status mapping
 
-| Status | Claude Code | Codex | OpenCode | Universal fallback |
-|---|---|---|---|---|
-| `starting` | `SessionStart` | `SessionStart` | session start event | pane created |
-| `running` | `PreToolUse`/`PostToolUse` | `PreToolUse`/`PostToolUse` | tool execute events | output activity |
-| `awaiting_input` | `Notification:permission_prompt` | `PermissionRequest` | permission/question event | OSC 9 / BEL |
-| `idle` | `Notification:idle_prompt` | turn-complete + quiet | `session.idle` | quiet timer |
-| `done` | `Stop` | `Stop` / agent-turn-complete | `session.idle` / completion | bell then quiet |
-| `error` | `StopFailure` / nonzero `PostToolUse` | `PostToolUse` failure | error event | — |
-| `disconnected` | (orchestrator-derived: SSH/tunnel down) | same | same | same |
+| Status           | Claude Code                             | Codex                        | OpenCode                    | Universal fallback |
+| ---------------- | --------------------------------------- | ---------------------------- | --------------------------- | ------------------ |
+| `starting`       | `SessionStart`                          | `SessionStart`               | session start event         | pane created       |
+| `running`        | `PreToolUse`/`PostToolUse`              | `PreToolUse`/`PostToolUse`   | tool execute events         | output activity    |
+| `awaiting_input` | `Notification:permission_prompt`        | `PermissionRequest`          | permission/question event   | OSC 9 / BEL        |
+| `idle`           | `Notification:idle_prompt`              | turn-complete + quiet        | `session.idle`              | quiet timer        |
+| `done`           | `Stop`                                  | `Stop` / agent-turn-complete | `session.idle` / completion | bell then quiet    |
+| `error`          | `StopFailure` / nonzero `PostToolUse`   | `PostToolUse` failure        | error event                 | —                  |
+| `disconnected`   | (orchestrator-derived: SSH/tunnel down) | same                         | same                        | same               |
 
 ### 7.2 Reconcile-on-reconnect
 
@@ -370,6 +371,7 @@ holds last-known state so a disconnected session still shows something meaningfu
 ## 8. Functional requirements
 
 ### 8.1 Node management
+
 - FR-N1: Add a node by SSH connection details (host, port, user, key reference).
 - FR-N2: Establish and supervise a persistent SSH connection per node; auto-reconnect.
 - FR-N3: Establish a loopback-bound reverse tunnel per node for hook callbacks.
@@ -379,10 +381,12 @@ holds last-known state so a disconnected session still shows something meaningfu
   the SSH hop.
 
 ### 8.2 Project management
+
 - FR-P1: Define a project as a working directory on a node.
 - FR-P2: List projects per node in the sidebar tree.
 
 ### 8.3 Session lifecycle
+
 - FR-S1: Create a session: pick node + project + agent type; orchestrator creates the
   tmux session in the working dir, writes per-session agent hook config / installs the
   OpenCode plugin, injects env (`SESSION_BROWSER_CDP`, hook token/URL), launches the agent.
@@ -394,6 +398,7 @@ holds last-known state so a disconnected session still shows something meaningfu
 - FR-S6: Multiple browser clients may view the same session concurrently.
 
 ### 8.4 Status & notifications
+
 - FR-ST1: Accept hook callbacks at a per-session-authenticated HTTP endpoint; translate to
   the status enum; update in-memory map.
 - FR-ST2: Parse OSC 9/777 and BEL from the PTY stream as fallback signals.
@@ -404,6 +409,7 @@ holds last-known state so a disconnected session still shows something meaningfu
   ordering.
 
 ### 8.5 Per-session browser (three layers, §6.5)
+
 - FR-B1: Optionally launch an isolated browser (Layer A) per session — prefer one
   container per session.
 - FR-B2: Inject the opaque CDP endpoint into the session env; instruct the agent to drive
@@ -415,6 +421,7 @@ holds last-known state so a disconnected session still shows something meaningfu
 - FR-B6: Tear down the entire browser stack on session termination.
 
 ### 8.6 Auth & audit (v1 scope)
+
 - FR-A1: Local username/password authentication; sessions/cookies; TLS required.
 - FR-A2: A minimal role set (e.g., `admin`, `member`) gating node/session management.
 - FR-A3: Append-only audit log of security-relevant actions (login, node add, session
@@ -431,6 +438,7 @@ UI, not in a hidden node daemon. It operates over the session graph and the even
 system already collects.
 
 Candidate capabilities (prioritize for post-core v1 / v1.x):
+
 - **Attention triage:** rank sessions by who needs the user most (e.g., a 4-minute-blocked
   permission prompt surfaces above a glance-only idle).
 - **Away summaries:** on reopening a session, greet with "ran the test suite, 2 failures,
@@ -446,6 +454,7 @@ never requires logic on a node.
 ## 10. Non-functional requirements
 
 ### 10.1 Security
+
 - NFR-SEC1: TLS termination in front of the orchestrator; no plaintext exposure.
 - NFR-SEC2: The orchestrator concentrates SSH keys to all nodes — treat as a high-value
   secret store; encrypt at rest, restrict access, log use.
@@ -455,6 +464,7 @@ never requires logic on a node.
 - NFR-SEC6: Authn required for all UI/API/WebSocket connections.
 
 ### 10.2 Performance / "fast"
+
 - NFR-PERF1: Sidebar status updates must not block on DB writes (in-memory + async log).
 - NFR-PERF2: Terminal input-to-echo latency target: imperceptible on LAN/datacenter links.
 - NFR-PERF3: Browser screencast is the known bottleneck; provide controls: cap concurrent
@@ -462,11 +472,13 @@ never requires logic on a node.
   and a documented WebRTC upgrade path for heavy use.
 
 ### 10.3 Availability / resilience
+
 - NFR-AV1: Orchestrator restart must not kill running agent work (tmux owns processes).
 - NFR-AV2: Node reboot or link drop degrades gracefully to `disconnected` + reconcile.
 - NFR-AV3: Postgres is the recovery anchor; back it up.
 
 ### 10.4 Deployability
+
 - NFR-DEP1: Single `docker compose up` brings up orchestrator + Postgres (+ per-session
   browser containers managed dynamically).
 - NFR-DEP2: Reproducible config; secrets via environment/secret files, not baked images.
@@ -497,7 +509,7 @@ never requires logic on a node.
    headless attach (vs. its `chrome://inspect` flow), where mutable skill state lives, and
    maturity risk. Until resolved, ship native/MCP browser-driving as the Layer B fallback.
 9. **Center-pane model.** Codex's center is a chat thread; ours is a live agent terminal.
-   Validate that a terminal-first center still delivers the Codex *feel* (it should, since
+   Validate that a terminal-first center still delivers the Codex _feel_ (it should, since
    the supervision value lives in the sidebars), or whether a light conversation/summary
    overlay above the terminal is worth adding for parity.
 
@@ -505,11 +517,11 @@ never requires logic on a node.
 
 ## 12. Visual design — match the Codex app
 
-> **Sourcing note (read this).** This section is built from OpenAI's *published descriptions*
+> **Sourcing note (read this).** This section is built from OpenAI's _published descriptions_
 > of the Codex desktop app — its docs pages at developers.openai.com/codex/app and
 > /codex/app/features, including screenshot alt-text and feature prose. It is **not** built
 > from pixel-level inspection of the rendered app; no actual screenshots were viewed. Treat
-> this as a high-fidelity *design intent* spec derived from authoritative descriptions, to
+> this as a high-fidelity _design intent_ spec derived from authoritative descriptions, to
 > be refined against real screenshots/the running app during design. Where Conductor must
 > diverge from Codex, it is called out explicitly.
 
@@ -538,16 +550,16 @@ pane." The reconstructed spatial model:
 
 ### 12.2 Conductor's mapping (and deliberate divergences)
 
-| Codex element | Conductor equivalent | Divergence |
-|---|---|---|
-| Project → **Thread** | Project → **Session** | We add a **Node** level above Project (multi-machine over SSH); Codex is single-machine with Local/Worktree/Cloud *modes* per thread. |
-| Center = chat thread | Center = **live terminal (the agent's TUI)** | **Primary divergence:** our agents are CLI TUIs, so the center is a real terminal (wterm), not a chat transcript. The agent's own UI *is* the conversation. |
-| Bottom terminal drawer (`Cmd+J`) | Secondary shell drawer (`Cmd+J`) | Optional: a second shell in the session's dir for the user, distinct from the agent's terminal. |
-| Right task sidebar (plan/sources/artifacts/summary) | Right **activity sidebar** | Strong fit — fed by hook events + the supervisor-agent (§9): status timeline, away-summary, plan/steps, artifacts. This is where our premium supervisor surfaces. |
-| Diff / review pane | Diff / review pane | Parity feature; can be v1.x. Reads `git diff` in the session working dir. |
-| In-app browser + "browser use" | Three-layer per-session browser (§6.5) | Direct parity; our Layer C ≈ in-app browser, Layer B ≈ "browser use." |
-| Local / Worktree / Cloud modes | Node selection (+ optional worktree) | Our "where it runs" axis is Node; worktree support is a v1.x parity add. |
-| Notifications when backgrounded | WebSocket + Web Push (§6.7) | We extend to true away-from-device push since we're web/always-on, not a local desktop app. |
+| Codex element                                       | Conductor equivalent                         | Divergence                                                                                                                                                        |
+| --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project → **Thread**                                | Project → **Session**                        | We add a **Node** level above Project (multi-machine over SSH); Codex is single-machine with Local/Worktree/Cloud _modes_ per thread.                             |
+| Center = chat thread                                | Center = **live terminal (the agent's TUI)** | **Primary divergence:** our agents are CLI TUIs, so the center is a real terminal (wterm), not a chat transcript. The agent's own UI _is_ the conversation.       |
+| Bottom terminal drawer (`Cmd+J`)                    | Secondary shell drawer (`Cmd+J`)             | Optional: a second shell in the session's dir for the user, distinct from the agent's terminal.                                                                   |
+| Right task sidebar (plan/sources/artifacts/summary) | Right **activity sidebar**                   | Strong fit — fed by hook events + the supervisor-agent (§9): status timeline, away-summary, plan/steps, artifacts. This is where our premium supervisor surfaces. |
+| Diff / review pane                                  | Diff / review pane                           | Parity feature; can be v1.x. Reads `git diff` in the session working dir.                                                                                         |
+| In-app browser + "browser use"                      | Three-layer per-session browser (§6.5)       | Direct parity; our Layer C ≈ in-app browser, Layer B ≈ "browser use."                                                                                             |
+| Local / Worktree / Cloud modes                      | Node selection (+ optional worktree)         | Our "where it runs" axis is Node; worktree support is a v1.x parity add.                                                                                          |
+| Notifications when backgrounded                     | WebSocket + Web Push (§6.7)                  | We extend to true away-from-device push since we're web/always-on, not a local desktop app.                                                                       |
 
 ### 12.3 Look-and-feel requirements
 
@@ -555,10 +567,10 @@ pane." The reconstructed spatial model:
   activity sidebar — with a toggleable bottom terminal drawer (`Cmd+J`) and a command
   palette (`Cmd+K`). Match Codex's spatial proportions and calm density.
 - **FR-UI2:** First-class light and dark themes.
-- **FR-UI3:** The left sidebar is both navigation *and* the supervision dashboard: every
+- **FR-UI3:** The left sidebar is both navigation _and_ the supervision dashboard: every
   session shows a status indicator (§7) and a "needs attention" ordering, so the tree
   doubles as the "which agent needs me" view. This is the single most important
-  Codex-parity behavior — the status-bearing list is what makes it *feel* like Codex
+  Codex-parity behavior — the status-bearing list is what makes it _feel_ like Codex
   rather than a file tree with terminals.
 - **FR-UI4:** Center pane defaults to the session's live terminal; tabs/segments switch to
   the session's browser view (Layer C) and the diff/review pane.
@@ -572,7 +584,7 @@ pane." The reconstructed spatial model:
 ### 12.4 Honest gap
 
 The closest pixel match requires the real app in front of the designer. This section gets
-the *structure, regions, terminology, interactions, and theming* right from authoritative
+the _structure, regions, terminology, interactions, and theming_ right from authoritative
 descriptions; final spacing, type scale, color, and motion should be tuned against the
 actual Codex app during the design phase. Do not treat 12.3 as a finished visual spec —
 treat it as the correct skeleton to dress.

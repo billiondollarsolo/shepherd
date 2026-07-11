@@ -51,22 +51,16 @@ export interface UseScreencastSettings extends ScreencastSettingsState {
 }
 
 function clampQuality(q: number): number {
-  return Math.max(
-    SCREENCAST_QUALITY_MIN,
-    Math.min(SCREENCAST_QUALITY_MAX, Math.round(q)),
-  );
+  return Math.max(SCREENCAST_QUALITY_MIN, Math.min(SCREENCAST_QUALITY_MAX, Math.round(q)));
 }
 
-export function useScreencastSettings(
-  opts: UseScreencastSettingsOptions,
-): UseScreencastSettings {
+export function useScreencastSettings(opts: UseScreencastSettingsOptions): UseScreencastSettings {
   const { sessionId, send, open, initial } = opts;
   const [quality, setQualityState] = useState<number>(
     initial?.quality ?? DEFAULT_SCREENCAST_BANDWIDTH_CONTROLS.quality,
   );
   const [unfocusedPolicy, setUnfocusedPolicyState] = useState<UnfocusedPolicy>(
-    initial?.unfocusedPolicy ??
-      DEFAULT_SCREENCAST_BANDWIDTH_CONTROLS.unfocusedPolicy,
+    initial?.unfocusedPolicy ?? DEFAULT_SCREENCAST_BANDWIDTH_CONTROLS.unfocusedPolicy,
   );
   const [focused, setFocused] = useState<boolean>(
     typeof document === 'undefined' ? true : !document.hidden,

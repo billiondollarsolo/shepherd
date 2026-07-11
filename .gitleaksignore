@@ -1,0 +1,4 @@
+# Synthetic private-key fixture introduced in edd9da9. The matched body is the
+# literal string "secret-bytes", not usable key material. Keep the fingerprint
+# narrow so any new finding in the same test file still fails the scan.
+edd9da97b301d968bfa4f48d49e184e3674acaa7:apps/orchestrator/src/nodes/node-service.test.ts:private-key:151

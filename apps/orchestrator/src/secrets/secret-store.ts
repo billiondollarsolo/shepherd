@@ -1,14 +1,5 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  timingSafeEqual,
-} from 'node:crypto';
-import {
-  EncryptedSecret,
-  SECRET_AUTH_TAG_BYTES,
-  SECRET_NONCE_BYTES,
-} from '@flock/shared';
+import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
+import { EncryptedSecret, SECRET_AUTH_TAG_BYTES, SECRET_NONCE_BYTES } from '@flock/shared';
 import type { AuditLogger } from '../audit/audit.js';
 import { CURRENT_KEY_VERSION, Keyring } from './keyring.js';
 
@@ -120,11 +111,7 @@ export class SecretStore {
 
     let plaintext: Buffer;
     try {
-      const decipher = createDecipheriv(
-        'aes-256-gcm',
-        key,
-        Buffer.from(parsed.nonce),
-      );
+      const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(parsed.nonce));
       decipher.setAuthTag(Buffer.from(parsed.authTag));
       plaintext = Buffer.concat([
         decipher.update(Buffer.from(parsed.ciphertext)),
@@ -132,10 +119,9 @@ export class SecretStore {
       ]);
     } catch (cause) {
       // GCM auth failure: wrong key or tampered ciphertext. Fail closed; no audit.
-      throw new SecretDecryptError(
-        'Secret decryption failed: wrong key or corrupted ciphertext.',
-        { cause },
-      );
+      throw new SecretDecryptError('Secret decryption failed: wrong key or corrupted ciphertext.', {
+        cause,
+      });
     }
 
     // Successful access → append-only audit row (FR-A3).

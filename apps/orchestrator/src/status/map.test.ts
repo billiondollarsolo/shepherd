@@ -31,7 +31,12 @@ describe('StatusMap — in-memory authoritative status (US-14)', () => {
   it('records a transition into the in-memory map', () => {
     const map = new StatusMap({ clock: fixedClock() });
     map.set('s1', 'running');
-    expect(map.get('s1')).toEqual({ status: 'running', detail: null, ts: TS, lastStatusTransitionAt: TS });
+    expect(map.get('s1')).toEqual({
+      status: 'running',
+      detail: null,
+      ts: TS,
+      lastStatusTransitionAt: TS,
+    });
   });
 
   it('carries an optional detail string', () => {
@@ -69,7 +74,12 @@ describe('StatusMap — in-memory authoritative status (US-14)', () => {
     map.seed('s1', 'idle', 'osc:output-quiet');
 
     // In-memory state restored…
-    expect(map.get('s1')).toEqual({ status: 'idle', detail: 'osc:output-quiet', ts: TS, lastStatusTransitionAt: TS });
+    expect(map.get('s1')).toEqual({
+      status: 'idle',
+      detail: 'osc:output-quiet',
+      ts: TS,
+      lastStatusTransitionAt: TS,
+    });
     // …but NO write-behind event and NO fan-out (a restart adds no timeline row).
     expect(writes).toEqual([]);
     expect(received).toEqual([]);
@@ -93,8 +103,22 @@ describe('StatusMap — in-memory authoritative status (US-14)', () => {
     map.set('s1', 'running');
 
     expect(received).toEqual<StatusUpdateMessage[]>([
-      { channel: 'status', sessionId: 's1', status: 'starting', detail: null, ts: TS, lastStatusTransitionAt: TS },
-      { channel: 'status', sessionId: 's1', status: 'running', detail: null, ts: TS, lastStatusTransitionAt: TS },
+      {
+        channel: 'status',
+        sessionId: 's1',
+        status: 'starting',
+        detail: null,
+        ts: TS,
+        lastStatusTransitionAt: TS,
+      },
+      {
+        channel: 'status',
+        sessionId: 's1',
+        status: 'running',
+        detail: null,
+        ts: TS,
+        lastStatusTransitionAt: TS,
+      },
     ]);
   });
 
@@ -194,11 +218,7 @@ describe('StatusMap — in-memory authoritative status (US-14)', () => {
     insideSet = false;
 
     // It MAY be scheduled, but never invoked synchronously.
-    expect(sink).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(sink).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything());
   });
 
   it('schedules the write-behind sink AFTER fan-out (eventually, async)', async () => {

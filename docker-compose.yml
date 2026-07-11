@@ -1,6 +1,7 @@
 # =============================================================================
 # Flock — PRODUCTION Docker Compose deploy (US-38/US-39, NFR-DEP1/DEP2/SEC1)
 #
+#   docker compose pull         # pull the selected Flock release from GHCR
 #   docker compose up -d        # caddy(TLS) + orchestrator + postgres + web
 #
 # US-39: Caddy terminates TLS in front (NFR-SEC1) and is the ONLY service that
@@ -46,8 +47,8 @@ services:
       FLOCK_DOMAIN: ${FLOCK_DOMAIN:-localhost}
       ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
-      - "${HTTP_HOST_PORT:-80}:80"
-      - "${HTTPS_HOST_PORT:-443}:443"
+      - '${HTTP_HOST_PORT:-80}:80'
+      - '${HTTPS_HOST_PORT:-443}:443'
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -65,9 +66,8 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-flock}
       POSTGRES_DB: ${POSTGRES_DB:-flock}
-      # Prefer the secret-file form in production (NFR-DEP2); falls back to the
-      # plain env var for simple deploys.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flock}
+      # The official image rejects setting both POSTGRES_PASSWORD and
+      # POSTGRES_PASSWORD_FILE. Production uses the mounted secret exclusively.
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
@@ -75,11 +75,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     # Bind to host loopback only (debugging); remove entirely in hardened prod.
     ports:
-      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
     networks:
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flock} -d ${POSTGRES_DB:-flock}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-flock} -d ${POSTGRES_DB:-flock}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -95,7 +95,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: flock-orchestrator:latest
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-orchestrator:${FLOCK_VERSION:-0.3.0}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -107,7 +107,14 @@ services:
       # orchestrator:8080 (the app default is loopback-only). The published port is
       # still gated by the compose `ports:`/reverse proxy, not this bind.
       HOST: ${HOST:-0.0.0.0}
-      DATABASE_URL: ${DATABASE_URL:-postgres://flock:flock@postgres:5432/flock}
+      # Optional explicit override. When empty, the entrypoint safely constructs
+      # DATABASE_URL from these fields + the mounted password secret.
+      DATABASE_URL: ${DATABASE_URL:-}
+      POSTGRES_USER: ${POSTGRES_USER:-flock}
+      POSTGRES_DB: ${POSTGRES_DB:-flock}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       # Public URL users open in the browser (Caddy HTTPS), NOT the internal
       # orchestrator:8080 address. Used for hook callbacks, cookies, and push.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
@@ -123,6 +130,9 @@ services:
       # binary's version → ensureRunning re-ships+relaunches the daemon on every
       # connect (kills live sessions). Leave empty unless intentionally overriding.
       FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-}
+      # Installs the latest Claude Code from Anthropic on first container start.
+      # Set to 0 when a custom image/volume supplies a user-managed version.
+      FLOCK_INSTALL_CLAUDE_CODE: ${FLOCK_INSTALL_CLAUDE_CODE:-1}
       # Orchestrator sits behind Caddy (one hop) → trust it so request.ip is the
       # real client (correct login-throttle keying + audit actor IP).
       FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}
@@ -130,11 +140,10 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
       # Per-session browser containers managed dynamically (PRD §6.5, US-25): the
-      # user's screencast browser pane. MUST be the Flock session-chrome image —
-      # it bridges CDP to the published port (plain Chrome binds the debugger to
-      # loopback only). Build once on the host:
-      #   docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-flock/session-chrome:latest}
+      # user's screencast browser pane. MUST be the matching Flock
+      # session-chrome release image; it bridges CDP to the published port
+      # (plain Chrome binds the debugger to loopback only).
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
       DOCKER_SOCKET: /var/run/docker.sock
       # Attach per-session browser containers to this compose network so the
@@ -142,25 +151,26 @@ services:
       BROWSER_NETWORK: flock_internal
     secrets:
       - flock_master_key
+      - postgres_password
     volumes:
       # dockerode needs the host Docker socket to manage browser containers.
       # Read-write is required to create/destroy containers (NFR-DEP1).
-      - "${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
+      - '${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock'
       # Persistent working dir for LOCAL-node sessions (agents run inside this
       # container). Point a local project's working dir under /home/node/workspace
       # so its files survive orchestrator restarts/redeploys.
-      - "flock_workdir:/home/node/workspace"
+      - 'flock_workdir:/home/node/workspace'
     # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
     # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
     # network. `expose` documents the internal port without publishing it.
     expose:
-      - "8080"
+      - '8080'
     networks:
       - internal
     healthcheck:
       test:
-        - "CMD-SHELL"
-        - "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        - 'CMD-SHELL'
+        - 'node -e "fetch(''http://127.0.0.1:''+(process.env.PORT||8080)+''/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
       interval: 10s
       timeout: 5s
       retries: 6
@@ -175,12 +185,12 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: flock-web:latest
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-web:${FLOCK_VERSION:-0.3.0}
     restart: unless-stopped
     depends_on:
       - orchestrator
     expose:
-      - "80"
+      - '80'
     networks:
       - internal
 

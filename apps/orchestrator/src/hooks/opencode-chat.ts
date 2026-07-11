@@ -46,9 +46,12 @@ export class OpenCodeChatAssembler {
     const props = (e.properties ?? {}) as Record<string, unknown>;
     if (e.type === 'message.updated') {
       const info = props.info as { id?: string; role?: string } | undefined;
-      if (info?.id && typeof info.role === 'string') this.state(sessionId).roles.set(info.id, info.role);
+      if (info?.id && typeof info.role === 'string')
+        this.state(sessionId).roles.set(info.id, info.role);
     } else if (e.type === 'message.part.updated') {
-      const part = props.part as { id?: string; type?: string; text?: string; messageID?: string } | undefined;
+      const part = props.part as
+        | { id?: string; type?: string; text?: string; messageID?: string }
+        | undefined;
       if (part?.id && part.type === 'text' && typeof part.text === 'string') {
         const st = this.state(sessionId);
         const prev = st.parts.get(part.id);

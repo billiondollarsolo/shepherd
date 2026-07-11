@@ -124,7 +124,9 @@ export class AgentdBootstrap {
     const os = rawOs.trim().toLowerCase(); // 'linux'
     const arch = normalizeArch(rawArch.trim());
     if (!os || !arch) {
-      throw new Error(`agentd: could not detect node platform (uname: ${JSON.stringify(res.stdout)})`);
+      throw new Error(
+        `agentd: could not detect node platform (uname: ${JSON.stringify(res.stdout)})`,
+      );
     }
     return { os, arch };
   }
@@ -151,7 +153,10 @@ export class AgentdBootstrap {
     const remoteFinal = `${home}/${this.remoteDir}/flock-agentd`;
     const remoteTmp = `${remoteFinal}.new`;
     await host.uploadFile(localPath, remoteTmp, 0o700);
-    await this.run(host, `mv -f ${shq(remoteTmp)} ${shq(remoteFinal)} && chmod 0700 ${shq(remoteFinal)}`);
+    await this.run(
+      host,
+      `mv -f ${shq(remoteTmp)} ${shq(remoteFinal)} && chmod 0700 ${shq(remoteFinal)}`,
+    );
   }
 
   /**
@@ -175,7 +180,9 @@ export class AgentdBootstrap {
     const script = this.launchScript();
     const res = await host.exec(script);
     if (res.code !== 0) {
-      this.logger.warn(`launch script exited ${res.code}: ${res.stderr.trim() || res.stdout.trim()}`);
+      this.logger.warn(
+        `launch script exited ${res.code}: ${res.stderr.trim() || res.stdout.trim()}`,
+      );
       throw new Error(`agentd: failed to launch daemon on node (code ${res.code})`);
     }
   }
@@ -246,7 +253,9 @@ export class AgentdBootstrap {
   private async run(host: AgentdHost, command: string): Promise<void> {
     const res = await host.exec(command);
     if (res.code !== 0) {
-      throw new Error(`agentd: remote command failed (code ${res.code}): ${command}\n${res.stderr.trim()}`);
+      throw new Error(
+        `agentd: remote command failed (code ${res.code}): ${command}\n${res.stderr.trim()}`,
+      );
     }
   }
 }

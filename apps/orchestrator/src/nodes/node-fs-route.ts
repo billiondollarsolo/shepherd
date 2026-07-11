@@ -18,11 +18,7 @@ import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAdmin, makeRequireAuth } from '../auth/middleware.js';
-import {
-  NodePathError,
-  NodeUnreachableError,
-  type NodeFsService,
-} from './node-fs-service.js';
+import { NodePathError, NodeUnreachableError, type NodeFsService } from './node-fs-service.js';
 
 const NodeIdParams = z.object({ id: Uuid });
 

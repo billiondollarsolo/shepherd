@@ -106,9 +106,7 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
       ...(process.env.BROWSER_MEMORY_BYTES
         ? { memoryBytes: Number(process.env.BROWSER_MEMORY_BYTES) }
         : {}),
-      ...(process.env.BROWSER_NANO_CPUS
-        ? { nanoCpus: Number(process.env.BROWSER_NANO_CPUS) }
-        : {}),
+      ...(process.env.BROWSER_NANO_CPUS ? { nanoCpus: Number(process.env.BROWSER_NANO_CPUS) } : {}),
       ...(process.env.BROWSER_PIDS_LIMIT
         ? { pidsLimit: Number(process.env.BROWSER_PIDS_LIMIT) }
         : {}),

@@ -2,11 +2,16 @@ node_modules
 **/node_modules
 dist
 **/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
 build
 **/build
 coverage
 **/coverage
 .git
+**/.git
+codex
+**/.vagrant
 .gitignore
 .pnpm-store
 pnpm-store
@@ -18,3 +23,8 @@ test-results
 .idea
 .env
 .env.*
+secrets
+.claude
+*.pem
+*_key
+*.key

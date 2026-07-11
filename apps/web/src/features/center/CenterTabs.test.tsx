@@ -48,10 +48,7 @@ describe('CenterTabs (US-33)', () => {
   it('defaults to the Terminal tab and mounts ONLY the terminal panel', () => {
     render(<CenterTabs sessionId={SESSION_ID} components={stubs()} />);
 
-    expect(screen.getByTestId('center-tab-terminal')).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByTestId('center-tab-terminal')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-terminal')).toHaveTextContent(`terminal:${SESSION_ID}`);
     // The other panels are NOT mounted until selected.
     expect(screen.queryByTestId('stub-browser')).toBeNull();
@@ -63,10 +60,7 @@ describe('CenterTabs (US-33)', () => {
 
     fireEvent.click(screen.getByTestId('center-tab-browser'));
 
-    expect(screen.getByTestId('center-tab-browser')).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByTestId('center-tab-browser')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-browser')).toHaveTextContent(`browser:${SESSION_ID}`);
     // Switching away from Terminal unmounts it.
     expect(screen.queryByTestId('stub-terminal')).toBeNull();

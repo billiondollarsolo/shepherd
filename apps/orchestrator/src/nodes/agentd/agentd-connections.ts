@@ -22,11 +22,7 @@ export interface AgentdConnectionsDeps {
    * transcript). Wired into every client before the handshake so the daemon's
    * snapshot replay is captured. The caller feeds this into the live status map.
    */
-  onStatus?: (
-    sessionId: string,
-    state: string,
-    meta: { tokens?: number; tool?: string },
-  ) => void;
+  onStatus?: (sessionId: string, state: string, meta: { tokens?: number; tool?: string }) => void;
 }
 
 /** The daemon's default socket path (mirrors agentd/main.go defaultSocket). */

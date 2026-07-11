@@ -30,10 +30,7 @@ export interface ShellPtySink {
  * sends an initial resize so the remote shell matches the drawer on attach.
  * Returns a disposer that detaches the subscriptions.
  */
-export function attachShellTerminal(
-  term: TerminalLike,
-  pty: ShellPtySink,
-): () => void {
+export function attachShellTerminal(term: TerminalLike, pty: ShellPtySink): () => void {
   const dataSub = term.onData((input) => {
     pty.sendInput(input);
   });

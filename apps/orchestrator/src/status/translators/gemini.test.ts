@@ -16,9 +16,21 @@ describe('Gemini CLI translator (spec §7.1)', () => {
   const cases: ReadonlyArray<[string, unknown, string | null]> = [
     ['SessionStart -> idle (ready)', { hook_event_name: 'SessionStart' }, 'idle'],
     ['BeforeAgent -> running', { hook_event_name: 'BeforeAgent' }, 'running'],
-    ['BeforeTool -> running', { hook_event_name: 'BeforeTool', tool_name: 'run_shell_command' }, 'running'],
-    ['AfterTool -> running', { hook_event_name: 'AfterTool', tool_name: 'run_shell_command' }, 'running'],
-    ['Notification -> awaiting_input', { hook_event_name: 'Notification', message: 'allow?' }, 'awaiting_input'],
+    [
+      'BeforeTool -> running',
+      { hook_event_name: 'BeforeTool', tool_name: 'run_shell_command' },
+      'running',
+    ],
+    [
+      'AfterTool -> running',
+      { hook_event_name: 'AfterTool', tool_name: 'run_shell_command' },
+      'running',
+    ],
+    [
+      'Notification -> awaiting_input',
+      { hook_event_name: 'Notification', message: 'allow?' },
+      'awaiting_input',
+    ],
     ['AfterAgent -> idle (turn complete)', { hook_event_name: 'AfterAgent' }, 'idle'],
     ['SessionEnd -> done', { hook_event_name: 'SessionEnd' }, 'done'],
     // camelCase field tolerated:
@@ -46,9 +58,11 @@ describe('Gemini CLI translator (spec §7.1)', () => {
   });
 
   it('carries the tool name as detail on BeforeTool', () => {
-    expect(translateGeminiHook({ hook_event_name: 'BeforeTool', tool_name: 'write_file' })).toEqual({
-      status: 'running',
-      detail: 'write_file',
-    });
+    expect(translateGeminiHook({ hook_event_name: 'BeforeTool', tool_name: 'write_file' })).toEqual(
+      {
+        status: 'running',
+        detail: 'write_file',
+      },
+    );
   });
 });

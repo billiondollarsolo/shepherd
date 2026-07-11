@@ -1,6 +1,6 @@
 /**
- * Structural tests: shipped production modules import the selection / layout /
- * preset clients (prevents “test-only” dead wiring regressions).
+ * Structural tests: shipped production modules import the layout and preset
+ * clients (prevents “test-only” dead wiring regressions).
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -13,20 +13,6 @@ function read(rel: string): string {
 }
 
 describe('production wiring (herdr-aligned shell)', () => {
-  it('Paddock mounts FleetSelectionSync', () => {
-    const src = read('app/Paddock.tsx');
-    expect(src).toMatch(/FleetSelectionSync/);
-    expect(src).toMatch(/from ['"].*FleetSelectionSync['"]/);
-  });
-
-  it('FleetSelectionSync uses runFleetSelectionTick (PUT/GET path)', () => {
-    const src = read('features/shell/FleetSelectionSync.tsx');
-    expect(src).toMatch(/runFleetSelectionTick/);
-    const sync = read('features/shell/fleetSelectionSync.ts');
-    expect(sync).toMatch(/putFleetSelection/);
-    expect(sync).toMatch(/fetchFleetSelection/);
-  });
-
   it('SessionPane mounts StageLayout (not only GridView)', () => {
     const src = read('features/paddock/SessionPane.tsx');
     expect(src).toMatch(/StageLayout/);

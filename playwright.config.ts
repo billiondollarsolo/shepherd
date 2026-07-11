@@ -17,9 +17,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     headless: true,
     // Use the system chromium installed in the dev image when present.
-    launchOptions: process.env.CHROME_BIN
-      ? { executablePath: process.env.CHROME_BIN }
-      : {},
+    launchOptions: process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : {},
   },
   projects: [
     {

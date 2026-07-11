@@ -20,7 +20,10 @@ import type { NodeWorkspaceService } from './node-workspace-service.js';
 
 const NodeIdParams = z.object({ id: Uuid });
 const PathQuery = z.object({ path: z.string().min(1) });
-const FilesQuery = z.object({ path: z.string().min(1), cap: z.coerce.number().int().positive().max(20000).optional() });
+const FilesQuery = z.object({
+  path: z.string().min(1),
+  cap: z.coerce.number().int().positive().max(20000).optional(),
+});
 const SearchBody = z.object({
   path: z.string().min(1),
   query: z.string().min(1).max(500),
@@ -44,7 +47,9 @@ export function registerNodeWorkspaceRoutes(
       const query = PathQuery.safeParse(request.query);
       if (!query.success) return badRequest(reply, 'a path is required.');
       try {
-        return reply.code(200).send(await deps.service.detectStack(params.data.id, query.data.path));
+        return reply
+          .code(200)
+          .send(await deps.service.detectStack(params.data.id, query.data.path));
       } catch (err) {
         return mapErr(reply, err);
       }

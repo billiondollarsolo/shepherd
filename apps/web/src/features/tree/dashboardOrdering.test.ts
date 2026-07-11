@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Status } from '@flock/shared';
-import {
-  groupAttentionRank,
-  sortGroupsByAttention,
-  type OrderableSession,
-} from './ordering';
+import { groupAttentionRank, sortGroupsByAttention, type OrderableSession } from './ordering';
 
 const s = (id: string, status: Status): OrderableSession => ({ id, status });
 
@@ -23,11 +19,7 @@ const s = (id: string, status: Status): OrderableSession => ({ id, status });
 describe('groupAttentionRank (US-32, FR-UI3)', () => {
   it('is the BEST (lowest) attention rank among the branch sessions', () => {
     // awaiting_input (rank 0) beats running (rank 5) and idle (rank 3).
-    const rank = groupAttentionRank([
-      s('a', 'running'),
-      s('b', 'awaiting_input'),
-      s('c', 'idle'),
-    ]);
+    const rank = groupAttentionRank([s('a', 'running'), s('b', 'awaiting_input'), s('c', 'idle')]);
     const onlyRunning = groupAttentionRank([s('a', 'running')]);
     expect(rank).toBeLessThan(onlyRunning);
   });
@@ -45,9 +37,7 @@ describe('groupAttentionRank (US-32, FR-UI3)', () => {
   });
 
   it('sinks an empty branch to the bottom (nothing to supervise)', () => {
-    expect(groupAttentionRank([])).toBeGreaterThan(
-      groupAttentionRank([s('a', 'disconnected')]),
-    );
+    expect(groupAttentionRank([])).toBeGreaterThan(groupAttentionRank([s('a', 'disconnected')]));
   });
 });
 

@@ -18,6 +18,30 @@ set -eu
 SOCKET="${FLOCK_AGENTD_SOCKET:-/tmp/flock-agentd.sock}"
 export FLOCK_AGENTD_SOCKET="$SOCKET"
 
+# Claude Code is commercially licensed rather than open source. Install its
+# latest release from Anthropic on first container start instead of
+# redistributing the binary inside Flock's public image. A transient installer
+# outage must not prevent the orchestrator, terminal, Codex, or OpenCode from
+# starting; a later container restart retries automatically.
+CLAUDE_BIN="${HOME:-/home/node}/.local/bin/claude"
+if [ "${FLOCK_INSTALL_CLAUDE_CODE:-1}" != "0" ] && [ ! -x "$CLAUDE_BIN" ]; then
+  echo "[entrypoint] installing latest Claude Code for the local node"
+  if ! curl -fsSL https://claude.ai/install.sh | bash -s -- latest; then
+    echo "[entrypoint] WARN: Claude Code installation failed; retry on restart or install it manually" >&2
+  fi
+fi
+
+# Build the internal Postgres URL from the same password secret consumed by the
+# official Postgres image. encodeURIComponent keeps arbitrary generated
+# passwords safe inside a URI. An explicit DATABASE_URL still takes precedence.
+if [ -z "${DATABASE_URL:-}" ] && [ -f "${POSTGRES_PASSWORD_FILE:-}" ]; then
+  DB_PASSWORD_ENCODED="$(node -e '
+    const fs = require("node:fs");
+    process.stdout.write(encodeURIComponent(fs.readFileSync(process.argv[1], "utf8").trim()));
+  ' "$POSTGRES_PASSWORD_FILE")"
+  export DATABASE_URL="postgres://${POSTGRES_USER:-flock}:$DB_PASSWORD_ENCODED@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-flock}"
+fi
+
 # Docker-secret bridge: the app reads plain env vars, but compose mounts secrets
 # as files and points VAR_FILE at them (e.g. FLOCK_MASTER_KEY_FILE=/run/secrets/...).
 # Load each *_FILE into its base VAR so the keyring (boot assertReady) + secret

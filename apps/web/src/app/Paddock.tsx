@@ -1,8 +1,8 @@
 /**
  * Paddock — herdr-aligned shell assembly.
  *
- * One shell always: host/lens chrome via TopBar + Sidebar, stage or Mission
- * Control in center. No zen rebuild of the tree. Tools are opt-in (chrome).
+ * One shell always: host/lens chrome via TopBar + Sidebar, stage or Paddock
+ * dashboard in center. No zen rebuild of the tree. Tools are opt-in (chrome).
  */
 import { AppShell } from './AppShell';
 import { KeyboardProvider } from './KeyboardProvider';
@@ -22,7 +22,6 @@ import { SettingsPage } from '../features/settings/SettingsPage';
 import { ShellDrawer } from '../features/shell-drawer/ShellDrawer';
 import { useSessions } from '../data/queries';
 import { usePaddock } from '../store/paddock';
-import { FleetSelectionSync } from '../features/shell/FleetSelectionSync';
 import { ProjectGitPage } from '../features/paddock/ProjectGitPage';
 
 /** The currently-selected session record (from the Query cache), or null. */
@@ -71,7 +70,6 @@ export function Paddock(): JSX.Element {
           <SettingsPage />
         ) : (
           <LiveDataProvider>
-            <FleetSelectionSync />
             {/* One shell always — no zen tree rebuild (plan Phase 0). */}
             <div className="h-screen w-screen overflow-hidden" data-chrome={chrome}>
               <AppShell

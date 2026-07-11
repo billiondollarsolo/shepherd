@@ -44,9 +44,9 @@ describe('translateHookEvent — Claude Code (spec §7.1)', () => {
   });
 
   it('PostToolUse with nonzero exit code -> error', () => {
-    expect(
-      claude({ hook_event_name: 'PostToolUse', tool_response_exit_code: 1 })?.status,
-    ).toBe('error');
+    expect(claude({ hook_event_name: 'PostToolUse', tool_response_exit_code: 1 })?.status).toBe(
+      'error',
+    );
   });
 });
 

@@ -204,7 +204,9 @@ export class ReverseTunnel {
       });
       if (!ok) {
         reject(
-          new Error('Reverse tunnel forwardIn failed: global request could not be sent (backpressure).'),
+          new Error(
+            'Reverse tunnel forwardIn failed: global request could not be sent (backpressure).',
+          ),
         );
       }
     });
@@ -216,7 +218,8 @@ export class ReverseTunnel {
     }
 
     this._remotePort = port;
-    this.connectionListener = (info, accept, reject) => this.handleForwardedConnection(info, accept, reject);
+    this.connectionListener = (info, accept, reject) =>
+      this.handleForwardedConnection(info, accept, reject);
     this.host.on('tcp connection', this.connectionListener);
     this.started = true;
     return port;

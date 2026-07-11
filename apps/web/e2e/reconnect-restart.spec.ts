@@ -112,7 +112,10 @@ async function bootstrapAdmin(page: Page): Promise<void> {
     await fillField(page, ['username', 'admin-username'], ADMIN_USERNAME);
     await fillField(page, ['password', 'admin-password'], ADMIN_PASSWORD);
     if ((await page.getByLabel(/confirm/i).count()) > 0) {
-      await page.getByLabel(/confirm/i).first().fill(ADMIN_PASSWORD);
+      await page
+        .getByLabel(/confirm/i)
+        .first()
+        .fill(ADMIN_PASSWORD);
     }
     await clickFirst(page, ['setup-submit', /create admin|set ?up|continue/i]);
     await expect(page.getByTestId('login-form')).toBeVisible();
@@ -202,9 +205,7 @@ test.describe('US-42 — reconnect / restart resilience', () => {
     const projectRow = page.getByTestId('project-row').filter({ hasText: PROJECT_NAME });
     await expect(projectRow.or(page.getByText(PROJECT_NAME))).toBeVisible();
 
-    await (
-      await firstAttached([projectRow.getByTestId('project-disclosure'), projectRow])
-    ).click();
+    await (await firstAttached([projectRow.getByTestId('project-disclosure'), projectRow])).click();
     await clickFirst(page, [
       'add-session',
       'new-session',
@@ -284,9 +285,7 @@ test.describe('US-42 — reconnect / restart resilience', () => {
     // Re-select the session; the pane re-binds to the SAME authoritative id
     // (§4.2 thread-through preserved across the restart).
     await sessionRowFor(page).click();
-    const sessionPaneAfter = page
-      .getByTestId('session-pane')
-      .or(page.getByTestId('center-pane'));
+    const sessionPaneAfter = page.getByTestId('session-pane').or(page.getByTestId('center-pane'));
     await expect(sessionPaneAfter).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(async () => sessionPaneAfter.getAttribute('data-session-id'), { timeout: 30_000 })
@@ -335,9 +334,7 @@ test.describe('US-42 — reconnect / restart resilience', () => {
           message: 'post-restart permission prompt',
         },
       });
-      expect(hookResp.status(), 'hook token must still be valid after restart').toBeLessThan(
-        300,
-      );
+      expect(hookResp.status(), 'hook token must still be valid after restart').toBeLessThan(300);
       await expect
         .poll(async () => readStatus(sessionRowFor(page)), { timeout: 30_000 })
         .toMatch(/awaiting_input|awaiting|ring/);

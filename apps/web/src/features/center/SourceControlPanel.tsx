@@ -15,7 +15,15 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUp, GitBranchPlus, GitPullRequest, Minus, Plus, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUp,
+  GitBranchPlus,
+  GitPullRequest,
+  Minus,
+  Plus,
+  RefreshCw,
+} from 'lucide-react';
 import type { GitFileStatus } from '@flock/shared';
 
 import { usePaddock } from '../../store/paddock';
@@ -124,10 +132,7 @@ export default function SourceControlPanel({ sessionId }: SourceControlPanelProp
           group="changes"
         />
         {staged.length === 0 && changes.length === 0 ? (
-          <p
-            data-testid="sc-clean"
-            className="px-3 py-6 text-center text-sm text-flock-muted"
-          >
+          <p data-testid="sc-clean" className="px-3 py-6 text-center text-sm text-flock-muted">
             No changes in the working directory.
           </p>
         ) : null}
@@ -156,7 +161,15 @@ function BranchHeader({
   const submit = (): void => {
     const n = name.trim();
     if (!n) return;
-    createBranch.mutate({ name: n }, { onSuccess: () => { setName(''); setCreating(false); } });
+    createBranch.mutate(
+      { name: n },
+      {
+        onSuccess: () => {
+          setName('');
+          setCreating(false);
+        },
+      },
+    );
   };
   return (
     <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 text-xs">
@@ -271,7 +284,11 @@ function FileGroup({
                 }
                 className="shrink-0 rounded p-0.5 text-flock-ink-muted opacity-0 hover:bg-flock-surface-1 hover:text-flock-ink-primary group-hover:opacity-100"
               >
-                {group === 'staged' ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
+                {group === 'staged' ? (
+                  <Minus className="size-3.5" />
+                ) : (
+                  <Plus className="size-3.5" />
+                )}
               </button>
             </li>
           );
@@ -390,8 +407,7 @@ function FileDiffPreview({
 }): JSX.Element {
   const preview = useQuery({
     queryKey: ['file-diff', sessionId, path, staged],
-    queryFn: () =>
-      fetchSessionDiff(sessionId, fetch, { path, staged: staged ?? undefined }),
+    queryFn: () => fetchSessionDiff(sessionId, fetch, { path, staged: staged ?? undefined }),
     retry: false,
   });
 

@@ -38,7 +38,11 @@ describe('agentLaunchCommand', () => {
   });
 
   it('maps Codex permission modes to its sandbox/approval flags', () => {
-    expect(agentLaunchCommand('codex', 'acceptEdits')).toEqual(['codex', '--sandbox', 'workspace-write']);
+    expect(agentLaunchCommand('codex', 'acceptEdits')).toEqual([
+      'codex',
+      '--sandbox',
+      'workspace-write',
+    ]);
     expect(agentLaunchCommand('codex', 'plan')).toEqual([
       'codex',
       '--sandbox',

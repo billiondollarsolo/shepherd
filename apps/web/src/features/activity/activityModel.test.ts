@@ -90,9 +90,24 @@ describe('buildStatusTimeline (US-34, status timeline from events)', () => {
   it('drops internal OSC-fallback heuristic transitions (osc:* detail)', () => {
     const events: Event[] = [
       evt({ id: 'real', ts: '2026-05-29T09:01:00.000Z', mappedStatus: 'running', detail: null }),
-      evt({ id: 'osc1', ts: '2026-05-29T09:02:00.000Z', mappedStatus: 'idle', detail: 'osc:output-quiet' }),
-      evt({ id: 'osc2', ts: '2026-05-29T09:03:00.000Z', mappedStatus: 'running', detail: 'osc:output-resumed' }),
-      evt({ id: 'real2', ts: '2026-05-29T09:04:00.000Z', mappedStatus: 'awaiting_input', detail: 'Approve edit?' }),
+      evt({
+        id: 'osc1',
+        ts: '2026-05-29T09:02:00.000Z',
+        mappedStatus: 'idle',
+        detail: 'osc:output-quiet',
+      }),
+      evt({
+        id: 'osc2',
+        ts: '2026-05-29T09:03:00.000Z',
+        mappedStatus: 'running',
+        detail: 'osc:output-resumed',
+      }),
+      evt({
+        id: 'real2',
+        ts: '2026-05-29T09:04:00.000Z',
+        mappedStatus: 'awaiting_input',
+        detail: 'Approve edit?',
+      }),
     ];
     // Only the genuine (hook/transcript) transitions survive — no osc:* noise.
     expect(buildStatusTimeline(events).map((e) => e.id)).toEqual(['real2', 'real']);
@@ -122,13 +137,41 @@ describe('buildStatusTimeline (US-34, status timeline from events)', () => {
     // derived orchestrator transition, repeated PreToolUse/PostToolUse, and the
     // transcript watcher's echoes. A status timeline keeps one row per transition.
     const events: Event[] = [
-      evt({ id: 's1', ts: '2026-05-29T09:00:01.000Z', mappedStatus: 'starting', source: 'orchestrator' }),
+      evt({
+        id: 's1',
+        ts: '2026-05-29T09:00:01.000Z',
+        mappedStatus: 'starting',
+        source: 'orchestrator',
+      }),
       evt({ id: 's2', ts: '2026-05-29T09:00:02.000Z', mappedStatus: 'starting', source: 'hook' }),
-      evt({ id: 'r1', ts: '2026-05-29T09:00:03.000Z', mappedStatus: 'running', source: 'hook', detail: 'Bash' }),
-      evt({ id: 'r2', ts: '2026-05-29T09:00:04.000Z', mappedStatus: 'running', source: 'orchestrator', detail: 'Bash' }),
-      evt({ id: 'r3', ts: '2026-05-29T09:00:05.000Z', mappedStatus: 'running', source: 'orchestrator', detail: 'Bash: echo hi' }),
+      evt({
+        id: 'r1',
+        ts: '2026-05-29T09:00:03.000Z',
+        mappedStatus: 'running',
+        source: 'hook',
+        detail: 'Bash',
+      }),
+      evt({
+        id: 'r2',
+        ts: '2026-05-29T09:00:04.000Z',
+        mappedStatus: 'running',
+        source: 'orchestrator',
+        detail: 'Bash',
+      }),
+      evt({
+        id: 'r3',
+        ts: '2026-05-29T09:00:05.000Z',
+        mappedStatus: 'running',
+        source: 'orchestrator',
+        detail: 'Bash: echo hi',
+      }),
       evt({ id: 'd1', ts: '2026-05-29T09:00:06.000Z', mappedStatus: 'done', source: 'hook' }),
-      evt({ id: 'd2', ts: '2026-05-29T09:00:07.000Z', mappedStatus: 'done', source: 'orchestrator' }),
+      evt({
+        id: 'd2',
+        ts: '2026-05-29T09:00:07.000Z',
+        mappedStatus: 'done',
+        source: 'orchestrator',
+      }),
     ];
     const timeline = buildStatusTimeline(events);
     // One entry per transition, newest-first.
@@ -143,7 +186,12 @@ describe('buildStatusTimeline (US-34, status timeline from events)', () => {
     const events: Event[] = [
       evt({ id: 'r1', ts: '2026-05-29T09:00:00.000Z', mappedStatus: 'running', detail: 'Bash' }),
       evt({ id: 'i1', ts: '2026-05-29T09:00:02.000Z', mappedStatus: 'idle' }), // 2s blip → flap
-      evt({ id: 'r2', ts: '2026-05-29T09:00:03.000Z', mappedStatus: 'running', detail: 'Edit file' }),
+      evt({
+        id: 'r2',
+        ts: '2026-05-29T09:00:03.000Z',
+        mappedStatus: 'running',
+        detail: 'Edit file',
+      }),
     ];
     const timeline = buildStatusTimeline(events);
     expect(timeline.map((e) => e.status)).toEqual(['running']); // one continuous run
@@ -157,7 +205,11 @@ describe('buildStatusTimeline (US-34, status timeline from events)', () => {
       evt({ id: 'i1', ts: '2026-05-29T09:00:10.000Z', mappedStatus: 'idle' }), // 10s ≥ 4s window
       evt({ id: 'r2', ts: '2026-05-29T09:00:20.000Z', mappedStatus: 'running' }),
     ];
-    expect(buildStatusTimeline(events).map((e) => e.status)).toEqual(['running', 'idle', 'running']);
+    expect(buildStatusTimeline(events).map((e) => e.status)).toEqual([
+      'running',
+      'idle',
+      'running',
+    ]);
   });
 
   it('never suppresses a brief awaiting_input (the money state)', () => {

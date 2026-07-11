@@ -149,7 +149,7 @@ export interface BuildServerDeps {
    */
   projects?: ProjectService;
   /**
-   * Per-user shell APIs (selection, launcher presets, project layouts).
+   * Per-user launcher presets and project layout/Pen APIs.
    * When provided ALONGSIDE `auth`, registers `/api/me/*` and project layout routes.
    */
   me?: import('./me/me-routes.js').MeRouteDeps;
@@ -196,8 +196,13 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // actor. FLOCK_TRUST_PROXY: "1" (hop count), a CIDR/IP, or "true"; unset = off
   // (dev, no proxy). Defaults conservative.
   const tpEnv = process.env.FLOCK_TRUST_PROXY?.trim();
-  const trustProxy: boolean | number | string =
-    !tpEnv ? false : tpEnv === 'true' ? true : /^\d+$/.test(tpEnv) ? Number(tpEnv) : tpEnv;
+  const trustProxy: boolean | number | string = !tpEnv
+    ? false
+    : tpEnv === 'true'
+      ? true
+      : /^\d+$/.test(tpEnv)
+        ? Number(tpEnv)
+        : tpEnv;
   const app = Fastify({
     logger: underTest ? false : { level: process.env.LOG_LEVEL ?? 'info' },
     trustProxy,
@@ -209,13 +214,23 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // detail is logged instead. Schema-validation failures map to `bad_request`.
   app.setErrorHandler((err, req, reply) => {
     const e = err as { validation?: unknown; statusCode?: number; message?: string };
-    const status =
-      e.validation ? 400 : typeof e.statusCode === 'number' && e.statusCode >= 400 ? e.statusCode : 500;
+    const status = e.validation
+      ? 400
+      : typeof e.statusCode === 'number' && e.statusCode >= 400
+        ? e.statusCode
+        : 500;
     if (status >= 500) {
       req.log?.error?.({ err }, 'unhandled request error');
       return reply.code(500).send(errorEnvelope('internal', 'Internal server error'));
     }
-    const code = status === 400 ? 'bad_request' : status === 401 ? 'unauthorized' : status === 404 ? 'not_found' : 'error';
+    const code =
+      status === 400
+        ? 'bad_request'
+        : status === 401
+          ? 'unauthorized'
+          : status === 404
+            ? 'not_found'
+            : 'error';
     return reply.code(status).send(errorEnvelope(code, e.message ?? 'Request failed'));
   });
   app.setNotFoundHandler((req, reply) =>
@@ -314,7 +329,7 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
       registerProjectRoutes(app, { service: deps.projects, auth: deps.auth });
     }
 
-    // Per-user shell: fleet selection, launcher presets, project layouts.
+    // Per-user launcher presets and project layout/Pen state.
     if (deps.me) {
       registerMeRoutes(app, deps.me);
     }

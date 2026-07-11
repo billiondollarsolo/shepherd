@@ -85,11 +85,7 @@ describe('OscBelParser (US-20: OSC 9/777 + BEL)', () => {
     });
 
     it('ignores other OSC 133 markers (A/B/C)', () => {
-      const signals = feed(
-        `${ESC}]133;A${BEL}`,
-        `${ESC}]133;B${BEL}`,
-        `${ESC}]133;C${BEL}`,
-      );
+      const signals = feed(`${ESC}]133;A${BEL}`, `${ESC}]133;B${BEL}`, `${ESC}]133;C${BEL}`);
       expect(signals).toEqual([]);
     });
   });

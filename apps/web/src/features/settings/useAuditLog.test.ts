@@ -45,7 +45,9 @@ describe('useAuditLog (US-40)', () => {
 
   it('re-fetches with the action filter when setAction is called', async () => {
     const fetchImpl = vi.fn(async (url: string) =>
-      response({ entries: url.includes('action=node_add') ? [entry('node_add')] : [entry('login')] }),
+      response({
+        entries: url.includes('action=node_add') ? [entry('node_add')] : [entry('login')],
+      }),
     );
     const { result } = renderHook(() =>
       useAuditLog({ fetchImpl: fetchImpl as unknown as typeof fetch }),

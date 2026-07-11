@@ -66,7 +66,7 @@ with the TS orchestrator.
 Alternative: **Node** (matches the codebase, lets us share `@flock/shared` types)
 — but `node-pty` is a native module needing per-arch prebuilds, and shipping a
 Node runtime to every node is exactly the distribution pain we want to avoid
-(SEA/pkg helps but is fiddly). 
+(SEA/pkg helps but is fiddly).
 
 → **DECISION TO CONFIRM.** Default to Go unless we value type-sharing over deploy
 simplicity. The protocol contract is defined once (see §6) and mirrored on both
@@ -102,7 +102,7 @@ sides regardless.
 - **Probe:** on node connect, orchestrator opens the loopback channel; if it
   fails → daemon not running.
 - **Install:** push the arch-matched binary over SSH (`sftp`/`cat > ~/.flock/bin/
-  flock-agentd-<ver>`), `chmod +x`. The orchestrator carries binaries for each
+flock-agentd-<ver>`), `chmod +x`. The orchestrator carries binaries for each
   supported `os/arch` (built in CI).
 - **Launch + supervise:** prefer `systemd --user` (with `loginctl enable-linger`
   so it survives logout/reboot) → `Restart=always`. Fallback: `launchd` (macOS),
@@ -118,7 +118,7 @@ sides regardless.
     re-assert would close the gap (future work; pairs with the local-daemon
     supervisor from T2/T10). See `agentd-bootstrap.ts launch()`.
 - **Version negotiation:** every connection starts with `hello{protocolVersion,
-  daemonVersion}`. On mismatch the orchestrator pushes the new binary and restarts
+daemonVersion}`. On mismatch the orchestrator pushes the new binary and restarts
   the unit (graceful: drain → re-exec; sessions' metadata persisted, PTYs
   respawned only if the re-exec can't hand off fds — v1 accepts a restart blip,
   documented).
@@ -140,7 +140,7 @@ Framed, multiplexed, one channel. Frame = `uint32 length | uint8 type | payload`
 The **contract is the single source of truth**: the TS side is
 `apps/orchestrator/src/nodes/agentd/protocol.ts` and the Go side mirrors it in
 `agentd/internal/proto/proto.go` (hand-written structs). This is the one artifact
-that is *never* throwaway. (The original design proposed a `@flock/shared` module;
+that is _never_ throwaway. (The original design proposed a `@flock/shared` module;
 as-built it lives in the orchestrator's agentd client package.)
 
 ## 7. Session + scrollback + resize
@@ -167,12 +167,12 @@ as-built it lives in the orchestrator's agentd client package.)
 
 ## 9. What it absorbs (migration order)
 
-| Today | Becomes |
-|---|---|
-| tmux PTYs + capture-pane resume | daemon raw PTYs + scrollback ring |
-| reverse SSH tunnel for hooks | agent hooks `curl` daemon loopback → `hook` event frames |
-| `transport.exec` fs/git/path-browser | daemon `fs.*`/`git.*` ops (streaming, `fs.watch`) |
-| OSC/PTY status scraping + reconcile | daemon parses PTY, pushes `status`; reconcile = `listSessions` |
+| Today                                | Becomes                                                        |
+| ------------------------------------ | -------------------------------------------------------------- |
+| tmux PTYs + capture-pane resume      | daemon raw PTYs + scrollback ring                              |
+| reverse SSH tunnel for hooks         | agent hooks `curl` daemon loopback → `hook` event frames       |
+| `transport.exec` fs/git/path-browser | daemon `fs.*`/`git.*` ops (streaming, `fs.watch`)              |
+| OSC/PTY status scraping + reconcile  | daemon parses PTY, pushes `status`; reconcile = `listSessions` |
 
 ## 10. v1 scope (tight: replace the broken thing + lay the foundation)
 

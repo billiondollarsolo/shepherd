@@ -4,12 +4,27 @@ import { pickBestNode, nodeReachable } from './placement';
 
 const node = (over: Partial<Node>): Node =>
   ({
-    id: 'n', name: 'n', kind: 'local', host: null, port: null, sshUser: null, sshKeyRef: null,
-    sshAuthMethod: null, pool: null, connectionStatus: 'connected', lastSeenAt: null,
-    createdBy: '', createdAt: '2026-01-01T00:00:00.000Z', ...over,
+    id: 'n',
+    name: 'n',
+    kind: 'local',
+    host: null,
+    port: null,
+    sshUser: null,
+    sshKeyRef: null,
+    sshAuthMethod: null,
+    pool: null,
+    connectionStatus: 'connected',
+    lastSeenAt: null,
+    createdBy: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over,
   }) as Node;
 const sess = (nodeId: string, closed = false): Session =>
-  ({ id: Math.random().toString(36), nodeId, closedAt: closed ? '2026-01-01' : null }) as unknown as Session;
+  ({
+    id: Math.random().toString(36),
+    nodeId,
+    closedAt: closed ? '2026-01-01' : null,
+  }) as unknown as Session;
 
 describe('nodeReachable', () => {
   it('local always; ssh only when connected', () => {

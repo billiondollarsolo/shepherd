@@ -7,10 +7,7 @@ import {
   SESSION_BROWSER_NO_LAUNCH_ENV,
   SESSION_BROWSER_NO_LAUNCH_VALUE,
 } from '@flock/shared';
-import {
-  buildLayerBSessionEnv,
-  opaqueCdpEndpointForSession,
-} from './inject-cdp-endpoint.js';
+import { buildLayerBSessionEnv, opaqueCdpEndpointForSession } from './inject-cdp-endpoint.js';
 
 /**
  * US-26 — Layer B agent-driving via injected endpoint (FR-B2, spec §6.5).

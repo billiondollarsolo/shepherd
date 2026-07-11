@@ -25,7 +25,11 @@ import { useState } from 'react';
 import type { Event, PlanItem, Session, SessionPlan } from '@flock/shared';
 
 import StatusIndicator from '../tree/StatusIndicator.js';
-import { buildSessionMetadata, buildStatusTimeline, formatTimelineTimestamp } from './activityModel';
+import {
+  buildSessionMetadata,
+  buildStatusTimeline,
+  formatTimelineTimestamp,
+} from './activityModel';
 
 export interface ActivitySidebarProps {
   /** The selected session (the single authoritative record), or null. */
@@ -209,7 +213,9 @@ function PlanSection({ plan }: { plan: SessionPlan | null }): JSX.Element {
       <SectionHeading>Plan</SectionHeading>
       <div data-testid="activity-plan">
         {planItems.length === 0 ? (
-          <p className="text-xs text-flock-muted">The agent’s task list appears here as it works.</p>
+          <p className="text-xs text-flock-muted">
+            The agent’s task list appears here as it works.
+          </p>
         ) : (
           <ul className="flex flex-col gap-0.5 text-xs">
             {planItems.map((item) => {
@@ -228,7 +234,9 @@ function PlanSection({ plan }: { plan: SessionPlan | null }): JSX.Element {
                   </span>
                   <span
                     className={`min-w-0 flex-1 ${
-                      item.status === 'completed' ? 'text-flock-muted line-through' : 'text-flock-fg'
+                      item.status === 'completed'
+                        ? 'text-flock-muted line-through'
+                        : 'text-flock-fg'
                     }`}
                   >
                     {item.content}

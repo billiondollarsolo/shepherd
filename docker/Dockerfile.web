@@ -18,10 +18,10 @@ WORKDIR /app
 FROM base AS deps
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
 COPY packages/shared/package.json packages/shared/package.json
-COPY apps/orchestrator/package.json apps/orchestrator/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --store-dir /pnpm/store
+    pnpm install --frozen-lockfile --store-dir /pnpm/store \
+    --filter "@flock/web..."
 
 # ---- Stage 3: build shared, then the web bundle -----------------------------
 FROM deps AS build
@@ -31,6 +31,13 @@ RUN pnpm --filter "@flock/shared" run build \
 
 # ---- Stage 4: static serve via nginx ----------------------------------------
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/flock" \
+      org.opencontainers.image.licenses="MIT"
+
+# Keep Flock and bundled-font notices inside the distributed image.
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/licenses/flock/
+COPY apps/web/src/styles/fonts/OFL.txt /usr/share/licenses/flock/OFL-1.1.txt
 
 # SPA + service-worker friendly nginx config. The PWA service worker
 # (sw.js / manifest) must be served from root and never long-cached.

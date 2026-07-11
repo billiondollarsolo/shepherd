@@ -49,11 +49,7 @@ export function ShellDrawer({
     >
       <header className="flock-shell-drawer__bar">
         <span className="flock-shell-drawer__title">Shell</span>
-        <span
-          className="flock-shell-drawer__cwd"
-          title={workingDir}
-          aria-label="working directory"
-        >
+        <span className="flock-shell-drawer__cwd" title={workingDir} aria-label="working directory">
           {workingDir}
         </span>
         <span className="flock-shell-drawer__spacer" />

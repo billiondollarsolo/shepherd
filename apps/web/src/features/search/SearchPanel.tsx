@@ -66,7 +66,9 @@ function Toggle({
         onClick={onClick}
         aria-pressed={on}
         className={`flex size-6 items-center justify-center rounded ${
-          on ? 'bg-flock-accent/20 text-flock-accent' : 'text-flock-ink-muted hover:bg-flock-surface-2'
+          on
+            ? 'bg-flock-accent/20 text-flock-accent'
+            : 'text-flock-ink-muted hover:bg-flock-surface-2'
         }`}
       >
         <Icon className="size-3.5" />
@@ -111,14 +113,24 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm text-flock-ink-primary outline-none placeholder:text-flock-ink-muted/60"
           />
-          <Toggle on={caseSensitive} onClick={() => setCaseSensitive((v) => !v)} label="Match case" icon={CaseSensitive} />
-          <Toggle on={wholeWord} onClick={() => setWholeWord((v) => !v)} label="Whole word" icon={WholeWord} />
+          <Toggle
+            on={caseSensitive}
+            onClick={() => setCaseSensitive((v) => !v)}
+            label="Match case"
+            icon={CaseSensitive}
+          />
+          <Toggle
+            on={wholeWord}
+            onClick={() => setWholeWord((v) => !v)}
+            label="Whole word"
+            icon={WholeWord}
+          />
           <Toggle on={regex} onClick={() => setRegex((v) => !v)} label="Regex" icon={Regex} />
         </div>
         {result ? (
           <p className="mt-1.5 px-1 text-2xs text-flock-ink-muted">
-            {result.matches.length} {result.matches.length === 1 ? 'result' : 'results'} in {fileCount}{' '}
-            {fileCount === 1 ? 'file' : 'files'}
+            {result.matches.length} {result.matches.length === 1 ? 'result' : 'results'} in{' '}
+            {fileCount} {fileCount === 1 ? 'file' : 'files'}
             {result.truncated ? ' (truncated)' : ''}
           </p>
         ) : null}
@@ -131,7 +143,9 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
           <p className="p-3 text-sm text-status-error">{run.error.message}</p>
         ) : !result ? (
           <p className="p-3 text-xs text-flock-ink-muted">
-            {query.trim() ? 'Press Enter to search.' : 'Type a query, then press Enter to search the working dir.'}
+            {query.trim()
+              ? 'Press Enter to search.'
+              : 'Type a query, then press Enter to search the working dir.'}
           </p>
         ) : result.matches.length === 0 ? (
           <p className="p-3 text-sm text-flock-ink-muted">No matches.</p>
@@ -142,7 +156,9 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
                 {/* file header — group all matches in a file under one collapsible-style row */}
                 <div className="flex items-center gap-1.5 px-2 py-1 text-2xs font-medium text-flock-ink-muted">
                   <span className="truncate font-mono text-flock-ink-primary/90">{file}</span>
-                  <span className="shrink-0 rounded-full bg-flock-surface-2 px-1.5 tabular-nums">{hits.length}</span>
+                  <span className="shrink-0 rounded-full bg-flock-surface-2 px-1.5 tabular-nums">
+                    {hits.length}
+                  </span>
                 </div>
                 {hits.map((m, i) => (
                   <button

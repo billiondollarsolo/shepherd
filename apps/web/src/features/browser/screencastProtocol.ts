@@ -57,15 +57,13 @@ export function screencastChannel(sessionId: string): string {
  */
 export function screencastWebSocketUrl(
   sessionId: string,
-  env: { VITE_WS_URL?: string } = (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env ?? {},
-  origin: string = typeof window !== 'undefined'
-    ? window.location.origin
-    : 'http://localhost',
+  env: { VITE_WS_URL?: string } = (import.meta as unknown as { env?: { VITE_WS_URL?: string } })
+    .env ?? {},
+  origin: string = typeof window !== 'undefined' ? window.location.origin : 'http://localhost',
 ): string {
   const configured = (env.VITE_WS_URL ?? '').replace(/\/$/, '');
   const base =
-    configured ||
-    origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
+    configured || origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
   return `${base}/ws/screencast/${encodeURIComponent(sessionId)}`;
 }
 
@@ -104,9 +102,7 @@ function parseMetadata(raw: unknown): ScreencastFrameMetadata | null {
  * any non-frame / malformed message so the hook can ignore control echoes and
  * never crashes the render loop on an unexpected payload.
  */
-export function decodeScreencastFrame(
-  data: string,
-): ScreencastFrameMessage | null {
+export function decodeScreencastFrame(data: string): ScreencastFrameMessage | null {
   let json: unknown;
   try {
     json = JSON.parse(data);

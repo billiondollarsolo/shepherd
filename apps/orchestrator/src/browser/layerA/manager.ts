@@ -7,11 +7,7 @@ import {
   type LayerAConfig,
   type SessionBrowser,
 } from './types.js';
-import {
-  buildCdpEndpoint,
-  newBrowserGuid,
-  type OpaqueCdpEndpoint,
-} from './cdp-endpoint.js';
+import { buildCdpEndpoint, newBrowserGuid, type OpaqueCdpEndpoint } from './cdp-endpoint.js';
 
 /**
  * Resolves the host port docker mapped a container's CDP port to, plus chrome's own
@@ -58,9 +54,7 @@ export class LayerABrowserManager {
     this.config = { ...DEFAULT_LAYER_A_CONFIG, ...deps.config };
     if (this.config.bindHost !== '127.0.0.1' && this.config.bindHost !== 'localhost') {
       // Loopback-only is a hard security invariant (NFR-SEC5). Refuse to misconfigure.
-      throw new Error(
-        `LayerA bindHost must be loopback (got "${this.config.bindHost}")`,
-      );
+      throw new Error(`LayerA bindHost must be loopback (got "${this.config.bindHost}")`);
     }
   }
 
@@ -170,9 +164,7 @@ export class LayerABrowserManager {
     } catch (err) {
       // Resolution failed — do not leak the container (no-orphan guarantee, FR-B6).
       await this.forceRemove(containerId);
-      throw new BrowserLaunchError(
-        `failed to resolve CDP endpoint: ${(err as Error).message}`,
-      );
+      throw new BrowserLaunchError(`failed to resolve CDP endpoint: ${(err as Error).message}`);
     }
 
     return {
@@ -205,9 +197,7 @@ export class LayerABrowserManager {
    * Used at boot and as a safety net for the no-orphans guarantee (FR-B6).
    */
   async reap(): Promise<string[]> {
-    const live = new Set(
-      [...this.browsers.values()].map((b) => b.containerId),
-    );
+    const live = new Set([...this.browsers.values()].map((b) => b.containerId));
     let containers: Array<{ Id: string; Labels?: Record<string, string> }>;
     try {
       containers = await this.docker.listContainers({

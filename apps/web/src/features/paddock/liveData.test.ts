@@ -37,7 +37,11 @@ describe('applyTelemetry (status-WS telemetry → agentd-health cache)', () => {
   });
 
   it('does not overwrite an existing value with an absent (undefined) meta field', () => {
-    const prev: AgentdHealth = { enabled: true, nodes: {}, sessions: { s1: { live: true, model: 'gpt-5' } } };
+    const prev: AgentdHealth = {
+      enabled: true,
+      nodes: {},
+      sessions: { s1: { live: true, model: 'gpt-5' } },
+    };
     const out = applyTelemetry(prev, 's1', { tokens: 5 }); // no model in meta
     expect(out.sessions.s1.model).toBe('gpt-5');
     expect(out.sessions.s1.tokens).toBe(5);

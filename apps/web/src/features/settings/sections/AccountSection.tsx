@@ -10,7 +10,9 @@ import { SectionHeader, SettingCard, SettingRow } from '../SettingsSection';
 function initialsOf(s: string): string {
   const base = (s.split('@')[0] || s).trim();
   const parts = base.split(/[.\-_+\s]+/).filter(Boolean);
-  return (parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : base.slice(0, 2)).toUpperCase() || '?';
+  return (
+    (parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : base.slice(0, 2)).toUpperCase() || '?'
+  );
 }
 
 function DisplayNameForm(): JSX.Element {
@@ -156,7 +158,10 @@ export function AccountSection(): JSX.Element {
         </SettingRow>
         <DisplayNameForm />
         <ChangePasswordForm />
-        <SettingRow title="Sign out" desc="End this browser session and return to the login screen.">
+        <SettingRow
+          title="Sign out"
+          desc="End this browser session and return to the login screen."
+        >
           <Button size="sm" variant="outline" onClick={() => void logout()}>
             <LogOut /> Sign out
           </Button>

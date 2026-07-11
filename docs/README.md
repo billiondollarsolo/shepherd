@@ -17,6 +17,8 @@ New here? Read in this order:
    (the tmux replacement) and how the raw-PTY + status + metrics model works.
 4. **[Deployment](deployment.md)** — the production Docker Compose stack in depth
    (services, TLS, secrets, per-session browsers, verifying a deploy).
+5. **[Releasing](releasing.md)** — public-repository setup, versioning, GHCR
+   publication, verification, and operational follow-through.
 
 ## Reference
 
@@ -26,6 +28,7 @@ New here? Read in this order:
 | [agent-integration-matrix.md](agent-integration-matrix.md)       | Per-agent capability matrix + the hook/transcript mechanism for each                                                                     |
 | [flock-agentd-design.md](flock-agentd-design.md)                 | Node daemon design + protocol rationale                                                                                                  |
 | [deployment.md](deployment.md)                                   | Docker Compose production deploy, TLS, secrets, ops                                                                                      |
+| [releasing.md](releasing.md)                                     | Release gates, GitHub/GHCR publication, verification, and public-repository checklist                                                    |
 | [design-tokens.md](design-tokens.md)                             | The web UI design system — color, type, spacing tokens                                                                                   |
 | [premium-single-user-roadmap.md](premium-single-user-roadmap.md) | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
 | [decisions/](decisions/)                                         | Architecture Decision Records (e.g. terminal renderer, browser-driving)                                                                  |

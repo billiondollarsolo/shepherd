@@ -38,15 +38,15 @@ const MODEL_TABLE: Record<string, ModelInfo> = {
   // OpenAI / Codex family (approximate public pricing).
   'gpt-5': { contextLimit: 400 * K, inputPer1M: 1.25, outputPer1M: 10 },
   'gpt-4o': { contextLimit: 128 * K, inputPer1M: 2.5, outputPer1M: 10 },
-  'o4': { contextLimit: 200 * K, inputPer1M: 1.1, outputPer1M: 4.4 },
-  'o3': { contextLimit: 200 * K, inputPer1M: 2, outputPer1M: 8 },
-  'codex': { contextLimit: 400 * K, inputPer1M: 1.25, outputPer1M: 10 },
+  o4: { contextLimit: 200 * K, inputPer1M: 1.1, outputPer1M: 4.4 },
+  o3: { contextLimit: 200 * K, inputPer1M: 2, outputPer1M: 8 },
+  codex: { contextLimit: 400 * K, inputPer1M: 1.25, outputPer1M: 10 },
   // Google Gemini 2.5 Pro: $1.25 in / $10 out (≤200k prompt; rises above). We use
   // the ≤200k tier as the estimate.
   'gemini-2': { contextLimit: 1000 * K, inputPer1M: 1.25, outputPer1M: 10 },
   // xAI Grok (grok-build-0.1 / grok-4 / grok-code-*) — ~256k context. grok-build-0.1
   // is ~$1 in / $2 out. Prefix-matched so version suffixes resolve.
-  'grok': { contextLimit: 256 * K, inputPer1M: 1, outputPer1M: 2 },
+  grok: { contextLimit: 256 * K, inputPer1M: 1, outputPer1M: 2 },
 };
 
 /** Fallback for an unknown model — a conservative 200k window + mid pricing. */
@@ -70,11 +70,18 @@ function table(): Record<string, ModelInfo> {
     try {
       const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, Partial<ModelInfo>>;
       for (const [prefix, info] of Object.entries(raw)) {
-        effectiveTable[prefix.toLowerCase()] = { ...DEFAULT_INFO, ...effectiveTable[prefix.toLowerCase()], ...info };
+        effectiveTable[prefix.toLowerCase()] = {
+          ...DEFAULT_INFO,
+          ...effectiveTable[prefix.toLowerCase()],
+          ...info,
+        };
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn(`[flock] FLOCK_MODEL_INFO_FILE could not be loaded (${file}); using built-in model table.`, err);
+      console.warn(
+        `[flock] FLOCK_MODEL_INFO_FILE could not be loaded (${file}); using built-in model table.`,
+        err,
+      );
     }
   }
   return effectiveTable;
@@ -111,7 +118,8 @@ export function contextPct(
   reportedLimit?: number,
 ): number | undefined {
   if (!contextTokens || contextTokens <= 0) return undefined;
-  const limit = reportedLimit && reportedLimit > 0 ? reportedLimit : lookupModel(model).contextLimit;
+  const limit =
+    reportedLimit && reportedLimit > 0 ? reportedLimit : lookupModel(model).contextLimit;
   if (limit <= 0) return undefined;
   return Math.min(100, Math.round((contextTokens / limit) * 100));
 }
@@ -121,7 +129,10 @@ export function contextPct(
  * so we apply a blended rate weighted toward input (coding sessions are heavily
  * input/cache dominated): 80% input price + 20% output price.
  */
-export function estimateCostUsd(model: string | undefined, totalTokens: number | undefined): number | undefined {
+export function estimateCostUsd(
+  model: string | undefined,
+  totalTokens: number | undefined,
+): number | undefined {
   if (!totalTokens || totalTokens <= 0) return undefined;
   const { inputPer1M, outputPer1M } = lookupModel(model);
   const blendedPer1M = inputPer1M * 0.8 + outputPer1M * 0.2;

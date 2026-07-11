@@ -94,7 +94,11 @@ function FsDir({
         className="flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs text-flock-fg hover:bg-flock-surface-2"
         data-testid={`fs-dir-${path}`}
       >
-        {open ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />}
+        {open ? (
+          <ChevronDown className="size-3 shrink-0" />
+        ) : (
+          <ChevronRight className="size-3 shrink-0" />
+        )}
         {open ? (
           <FolderOpen className="size-3.5 shrink-0 text-flock-accent" />
         ) : (
@@ -104,7 +108,10 @@ function FsDir({
       </button>
       {open ? (
         tree.isLoading ? (
-          <p style={{ paddingLeft: `${(depth + 1) * 12 + 20}px` }} className="py-0.5 text-2xs text-flock-muted">
+          <p
+            style={{ paddingLeft: `${(depth + 1) * 12 + 20}px` }}
+            className="py-0.5 text-2xs text-flock-muted"
+          >
             loading…
           </p>
         ) : tree.isError ? (
@@ -126,7 +133,13 @@ function FsDir({
                 onSelectFile={onSelectFile}
               />
             ) : (
-              <FsFile key={e.path} path={e.path} name={e.name} depth={depth + 1} onSelect={onSelectFile} />
+              <FsFile
+                key={e.path}
+                path={e.path}
+                name={e.name}
+                depth={depth + 1}
+                onSelect={onSelectFile}
+              />
             ),
           )
         )
@@ -275,13 +288,7 @@ function FileViewer({
   );
 }
 
-function Centered({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: 'error';
-}): JSX.Element {
+function Centered({ children, tone }: { children: React.ReactNode; tone?: 'error' }): JSX.Element {
   return (
     <div
       className={`flex h-full w-full items-center justify-center px-4 text-center text-sm ${

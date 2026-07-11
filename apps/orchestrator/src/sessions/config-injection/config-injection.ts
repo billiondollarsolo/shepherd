@@ -61,7 +61,7 @@ export interface RenderedScopedConfig {
 const HOOK_FORWARDER_SH = [
   '#!/bin/sh',
   '# Flock hook forwarder (US-19): reads the agent event JSON on stdin, POSTs it.',
-  '# No-op outside a Flock session: this file is installed in the agent\'s NATIVE',
+  "# No-op outside a Flock session: this file is installed in the agent's NATIVE",
   '# config dir, so a plain (non-Flock) run of the agent must not error on it.',
   '[ -n "$FLOCK_HOOK_URL" ] && [ -n "$FLOCK_HOOK_TOKEN" ] || exit 0',
   'exec curl -sS -m 5 -X POST "$FLOCK_HOOK_URL" \\',

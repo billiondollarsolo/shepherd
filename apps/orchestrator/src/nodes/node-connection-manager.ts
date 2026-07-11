@@ -24,10 +24,7 @@ import { nodes, secrets } from '../db/schema.js';
 import type { SecretStore } from '../secrets/secret-store.js';
 import { LocalTransport } from './transport/local-transport.js';
 import type { NodeTransport } from './transport/transport.js';
-import {
-  SupervisedSshConnection,
-  type SshConnectionConfig,
-} from './transport/ssh-connection.js';
+import { SupervisedSshConnection, type SshConnectionConfig } from './transport/ssh-connection.js';
 import type { HookEndpointTarget } from './tunnel/reverse-tunnel.js';
 import type { AgentdHost } from './agentd/ssh-agentd-host.js';
 import { DEFAULT_SSH_PORT, parseCredential } from './node-service.js';
@@ -163,10 +160,7 @@ export class NodeConnectionManager {
       if (!pinned) {
         pinned = fingerprint;
         try {
-          await this.db
-            .update(nodes)
-            .set({ sshHostKey: fingerprint })
-            .where(eq(nodes.id, nodeId));
+          await this.db.update(nodes).set({ sshHostKey: fingerprint }).where(eq(nodes.id, nodeId));
         } catch (err) {
           this.logger.warn(`Failed to persist SSH host key for node ${nodeId}`, err);
         }

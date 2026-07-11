@@ -42,10 +42,7 @@ test.describe('installable PWA', () => {
   test('links the manifest and a theme-color from the document', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
-      'content',
-      '#0f1115',
-    );
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
   });
 
   test('registers a service worker (Web Push + offline shell)', async ({ page }) => {

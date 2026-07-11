@@ -75,12 +75,8 @@ export function translateCodexHook(body: unknown): CodexTransition | null {
       // A PostToolUse is a failure when the agent reports `success: false` or a
       // nonzero exit code (spec §7.1: PostToolUse failure -> error). Otherwise
       // it is normal tool progress.
-      const failed =
-        e.success === false ||
-        (typeof e.exit_code === 'number' && e.exit_code !== 0);
-      return failed
-        ? { status: 'error', detail: tool }
-        : { status: 'running', detail: tool };
+      const failed = e.success === false || (typeof e.exit_code === 'number' && e.exit_code !== 0);
+      return failed ? { status: 'error', detail: tool } : { status: 'running', detail: tool };
     }
 
     case 'PostToolUseFailure':

@@ -5,8 +5,8 @@ import { singleSessionLayout } from '@flock/shared';
 describe('projectLayoutApi', () => {
   it('fetchProjectLayout parses layout', async () => {
     const layout = singleSessionLayout('p1', 's1');
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ layout }), { status: 200 }),
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ layout }), { status: 200 }),
     ) as unknown as typeof fetch;
     const got = await fetchProjectLayout('p1', fetchImpl);
     expect(got?.projectId).toBe('p1');

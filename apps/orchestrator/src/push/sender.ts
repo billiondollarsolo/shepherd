@@ -15,11 +15,7 @@
  */
 import webpush from 'web-push';
 
-import type {
-  PushNotificationPayload,
-  PushSender,
-  PushSendResult,
-} from './push-service.js';
+import type { PushNotificationPayload, PushSender, PushSendResult } from './push-service.js';
 import type { StoredPushSubscription } from './subscription-store.js';
 
 /** Resolved VAPID configuration for the push sender. */

@@ -2,7 +2,11 @@ import type { FastifyReply } from 'fastify';
 import type { FlockErrorEnvelope } from '@flock/shared';
 
 /** Build the shared error envelope `{ error: { code, message, details? } }` (F2). */
-export function errorEnvelope(code: string, message: string, details?: unknown): FlockErrorEnvelope {
+export function errorEnvelope(
+  code: string,
+  message: string,
+  details?: unknown,
+): FlockErrorEnvelope {
   return { error: details === undefined ? { code, message } : { code, message, details } };
 }
 

@@ -11,11 +11,7 @@
  */
 import type { Client } from 'ssh2';
 
-import type {
-  ForwardedChannel,
-  ForwardedConnectionInfo,
-  TunnelHost,
-} from './reverse-tunnel.js';
+import type { ForwardedChannel, ForwardedConnectionInfo, TunnelHost } from './reverse-tunnel.js';
 
 type TcpConnectionListener = (
   info: ForwardedConnectionInfo,

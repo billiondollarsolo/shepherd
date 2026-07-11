@@ -42,7 +42,10 @@ class ScriptedTransport implements NodeTransport {
   async dispose(): Promise<void> {}
 }
 
-function buildService(transport: NodeTransport, session: DiffSessionInfo = { id: SESSION_ID, nodeId: NODE_ID, workingDir: WORKING_DIR }) {
+function buildService(
+  transport: NodeTransport,
+  session: DiffSessionInfo = { id: SESSION_ID, nodeId: NODE_ID, workingDir: WORKING_DIR },
+) {
   return new GitService({
     sessions: { getSession: async () => session },
     transports: { transportForNode: () => transport },
@@ -56,29 +59,85 @@ function statusOn(name: string): string {
 
 describe('argv builders (P5)', () => {
   it('gitCreateBranchArgv with and without a start point', () => {
-    expect(gitCreateBranchArgv(WORKING_DIR, 'feat/x')).toEqual(['git', '-C', WORKING_DIR, 'switch', '-c', 'feat/x']);
-    expect(gitCreateBranchArgv(WORKING_DIR, 'feat/x', 'main')).toEqual(['git', '-C', WORKING_DIR, 'switch', '-c', 'feat/x', 'main']);
+    expect(gitCreateBranchArgv(WORKING_DIR, 'feat/x')).toEqual([
+      'git',
+      '-C',
+      WORKING_DIR,
+      'switch',
+      '-c',
+      'feat/x',
+    ]);
+    expect(gitCreateBranchArgv(WORKING_DIR, 'feat/x', 'main')).toEqual([
+      'git',
+      '-C',
+      WORKING_DIR,
+      'switch',
+      '-c',
+      'feat/x',
+      'main',
+    ]);
   });
   it('gitSwitchBranchArgv / gitListBranchesArgv', () => {
-    expect(gitSwitchBranchArgv(WORKING_DIR, 'main')).toEqual(['git', '-C', WORKING_DIR, 'switch', 'main']);
+    expect(gitSwitchBranchArgv(WORKING_DIR, 'main')).toEqual([
+      'git',
+      '-C',
+      WORKING_DIR,
+      'switch',
+      'main',
+    ]);
     expect(gitListBranchesArgv(WORKING_DIR)).toContain('--format=%(refname:short)');
   });
   it('ghPrListArgv targets the head branch + open state', () => {
-    expect(ghPrListArgv('feat/x')).toEqual(['gh', 'pr', 'list', '--head', 'feat/x', '--state', 'open', '--limit', '1', '--json', 'url,number,title']);
+    expect(ghPrListArgv('feat/x')).toEqual([
+      'gh',
+      'pr',
+      'list',
+      '--head',
+      'feat/x',
+      '--state',
+      'open',
+      '--limit',
+      '1',
+      '--json',
+      'url,number,title',
+    ]);
   });
   it('ghPrCreateArgv includes base + draft when given', () => {
-    expect(ghPrCreateArgv({ title: 'T', body: 'B' })).toEqual(['gh', 'pr', 'create', '--title', 'T', '--body', 'B']);
-    expect(ghPrCreateArgv({ title: 'T', base: 'main', draft: true })).toEqual(['gh', 'pr', 'create', '--title', 'T', '--body', '', '--base', 'main', '--draft']);
+    expect(ghPrCreateArgv({ title: 'T', body: 'B' })).toEqual([
+      'gh',
+      'pr',
+      'create',
+      '--title',
+      'T',
+      '--body',
+      'B',
+    ]);
+    expect(ghPrCreateArgv({ title: 'T', base: 'main', draft: true })).toEqual([
+      'gh',
+      'pr',
+      'create',
+      '--title',
+      'T',
+      '--body',
+      '',
+      '--base',
+      'main',
+      '--draft',
+    ]);
   });
 });
 
 describe('gh output helpers (P5)', () => {
   it('extractPrUrl picks the last URL line', () => {
-    expect(extractPrUrl('Warning: ...\nhttps://github.com/o/r/pull/42\n')).toBe('https://github.com/o/r/pull/42');
+    expect(extractPrUrl('Warning: ...\nhttps://github.com/o/r/pull/42\n')).toBe(
+      'https://github.com/o/r/pull/42',
+    );
     expect(extractPrUrl('no url here')).toBeNull();
   });
   it('firstOpenPrUrl parses the gh json list', () => {
-    expect(firstOpenPrUrl('[{"url":"https://github.com/o/r/pull/7","number":7}]')).toBe('https://github.com/o/r/pull/7');
+    expect(firstOpenPrUrl('[{"url":"https://github.com/o/r/pull/7","number":7}]')).toBe(
+      'https://github.com/o/r/pull/7',
+    );
     expect(firstOpenPrUrl('[]')).toBeNull();
     expect(firstOpenPrUrl('not json')).toBeNull();
   });
@@ -137,7 +196,9 @@ describe('GitService.createPr (P5)', () => {
       if (cmd[2] === 'create') return ok('', 'bash: gh: command not found', 127);
       return ok();
     });
-    await expect(buildService(t).createPr(SESSION_ID, { title: 'T' })).rejects.toBeInstanceOf(GitOperationError);
+    await expect(buildService(t).createPr(SESSION_ID, { title: 'T' })).rejects.toBeInstanceOf(
+      GitOperationError,
+    );
   });
 
   it('refuses on a detached HEAD', async () => {

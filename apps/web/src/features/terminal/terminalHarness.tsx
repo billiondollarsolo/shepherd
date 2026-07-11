@@ -53,11 +53,13 @@ class HarnessWs implements WsLike {
   send(data: string | ArrayBufferView | ArrayBuffer): void {
     if (typeof data === 'string') return; // resize envelope; ignore
     const bytes =
-      data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(
-        (data as ArrayBufferView).buffer,
-        (data as ArrayBufferView).byteOffset,
-        (data as ArrayBufferView).byteLength,
-      );
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     const text = new TextDecoder().decode(bytes);
     window.__ptySent.push(text);
     // Echo back like a real PTY so typing appears in the terminal.

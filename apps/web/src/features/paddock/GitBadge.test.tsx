@@ -24,7 +24,9 @@ describe('GitBadge', () => {
   });
 
   it('shows the changed-file count when there are changes', () => {
-    render(<GitBadge git={git({ branch: 'feat', files: [{}, {}, {}] as GitStatusResponse['files'] })} />);
+    render(
+      <GitBadge git={git({ branch: 'feat', files: [{}, {}, {}] as GitStatusResponse['files'] })} />,
+    );
     expect(screen.getByText('3')).toBeTruthy();
   });
 });

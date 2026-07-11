@@ -53,7 +53,10 @@ class ScriptedTransport implements NodeTransport {
   async dispose(): Promise<void> {}
 }
 
-function buildService(transport: NodeTransport | null, session: DiffSessionInfo | null = sessionInfo()) {
+function buildService(
+  transport: NodeTransport | null,
+  session: DiffSessionInfo | null = sessionInfo(),
+) {
   return new GitService({
     sessions: { getSession: async () => session },
     transports: { transportForNode: () => transport },
@@ -62,7 +65,8 @@ function buildService(transport: NodeTransport | null, session: DiffSessionInfo 
 
 describe('parseGitStatusV2', () => {
   it('parses branch, upstream, ahead/behind from the header lines', () => {
-    const out = '# branch.oid abc123\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +13 -2\0';
+    const out =
+      '# branch.oid abc123\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +13 -2\0';
     const p = parseGitStatusV2(out);
     expect(p.branch).toBe('main');
     expect(p.upstream).toBe('origin/main');
@@ -279,9 +283,9 @@ describe('GitService.commit', () => {
 
   it('throws GitOperationError on a real commit failure', async () => {
     const transport = new ScriptedTransport(() => ok('', 'fatal: bad thing', 128));
-    await expect(buildService(transport).commit(SESSION_ID, 'msg', IDENTITY)).rejects.toBeInstanceOf(
-      GitOperationError,
-    );
+    await expect(
+      buildService(transport).commit(SESSION_ID, 'msg', IDENTITY),
+    ).rejects.toBeInstanceOf(GitOperationError);
   });
 });
 
@@ -305,7 +309,9 @@ describe('GitService.push', () => {
   });
 
   it('throws GitOperationError with git output on a rejected push', async () => {
-    const transport = new ScriptedTransport(() => ok('', 'error: failed to push (non-fast-forward)', 1));
+    const transport = new ScriptedTransport(() =>
+      ok('', 'error: failed to push (non-fast-forward)', 1),
+    );
     await expect(buildService(transport).push(SESSION_ID)).rejects.toThrow(/non-fast-forward/);
   });
 });

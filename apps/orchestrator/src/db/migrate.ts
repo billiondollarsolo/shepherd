@@ -40,9 +40,7 @@ export async function runMigrations(handle?: DbHandle): Promise<void> {
 }
 
 // Allow `tsx src/db/migrate.ts` / `node dist/db/migrate.js` to run directly.
-const isMain = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
-  : false;
+const isMain = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
 
 if (isMain) {
   runMigrations()

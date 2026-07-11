@@ -1,4 +1,4 @@
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ShellDrawer } from './ShellDrawer';
 import type { WsLike } from '../terminal/usePtyWebSocket';
@@ -29,14 +29,16 @@ class FakeWs implements WsLike {
 const baseProps = { sessionId: 'sess-alpha', workingDir: '/srv/api' };
 
 describe('US-35 ShellDrawer component (spec §12.2, PRD §12.2)', () => {
-  it('opens a PTY on the DERIVED shell id, DISTINCT from the agent terminal (the money assertion)', () => {
+  it('opens a PTY on the DERIVED shell id, DISTINCT from the agent terminal (the money assertion)', async () => {
     let socket: FakeWs | undefined;
     const { getByTestId } = render(
       <ShellDrawer {...baseProps} wsFactory={(url) => (socket = new FakeWs(url))} />,
     );
-    // The drawer's PTY is the derived shell id, never the agent's bare id.
-    expect(socket!.url).toContain('/ws/pty/sess-alpha%3Ashell');
-    expect(socket!.url).not.toContain('/ws/pty/sess-alpha?');
+    // Terminal initialization is asynchronous; once attached, the drawer's PTY
+    // is the derived shell id, never the agent's bare id.
+    await waitFor(() => expect(socket).toBeDefined());
+    expect(socket?.url).toContain('/ws/pty/sess-alpha%3Ashell');
+    expect(socket?.url).not.toContain('/ws/pty/sess-alpha?');
     const drawer = getByTestId('shell-drawer');
     expect(drawer).toHaveAttribute('data-shell-session', shellSessionId('sess-alpha'));
     expect(drawer.getAttribute('data-shell-session')).not.toBe(

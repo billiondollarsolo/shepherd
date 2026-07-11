@@ -110,7 +110,11 @@ function makeSession(transport: NodeTransport, resumeBufferBytes?: number): PtyS
 }
 
 /** Collects bytes a subscriber receives, joined as utf-8. */
-function collector(): { sub: { onData(c: Buffer): void; onExit(e: PtyExit): void }; text(): string; exits: PtyExit[] } {
+function collector(): {
+  sub: { onData(c: Buffer): void; onExit(e: PtyExit): void };
+  text(): string;
+  exits: PtyExit[];
+} {
   const chunks: Buffer[] = [];
   const exits: PtyExit[] = [];
   return {

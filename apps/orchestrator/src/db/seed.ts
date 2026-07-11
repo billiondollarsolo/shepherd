@@ -62,9 +62,7 @@ export async function seed(db: Database): Promise<void> {
   });
 }
 
-const isMain = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
-  : false;
+const isMain = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
 
 if (isMain) {
   const { db, pool } = createDb();

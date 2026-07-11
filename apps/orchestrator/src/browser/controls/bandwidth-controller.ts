@@ -4,11 +4,7 @@ import {
   type ScreencastBandwidthControlMessage,
 } from '@flock/shared';
 import { ScreencastConcurrencyError } from '../layerC/types.js';
-import {
-  type EffectiveStreamParams,
-  type PaneFocus,
-  type ScreencastEngine,
-} from './types.js';
+import { type EffectiveStreamParams, type PaneFocus, type ScreencastEngine } from './types.js';
 
 const Q_MIN = 1;
 const Q_MAX = 100;
@@ -30,11 +26,7 @@ function clampQuality(q: number): number {
 export function computeEffectiveParams(
   controls: Pick<
     ScreencastBandwidthControls,
-    | 'quality'
-    | 'everyNthFrame'
-    | 'unfocusedPolicy'
-    | 'unfocusedQuality'
-    | 'unfocusedEveryNthFrame'
+    'quality' | 'everyNthFrame' | 'unfocusedPolicy' | 'unfocusedQuality' | 'unfocusedEveryNthFrame'
   > &
     Partial<ScreencastBandwidthControls>,
   focus: PaneFocus,
@@ -142,8 +134,11 @@ export class BandwidthController {
       throw new ScreencastConcurrencyError(this.controls.maxConcurrentStreams);
     }
 
-    const pane: PaneState =
-      existing ?? { focus: 'focused', open: true, quality: this.controls.quality };
+    const pane: PaneState = existing ?? {
+      focus: 'focused',
+      open: true,
+      quality: this.controls.quality,
+    };
     pane.open = true;
     pane.focus = 'focused';
     this.panes.set(sessionId, pane);
@@ -170,10 +165,7 @@ export class BandwidthController {
     if (!pane) return;
     const wasPaused = !this.engine.isStreaming(sessionId);
     pane.focus = 'focused';
-    if (
-      wasPaused &&
-      this.engine.activeCount() >= this.controls.maxConcurrentStreams
-    ) {
+    if (wasPaused && this.engine.activeCount() >= this.controls.maxConcurrentStreams) {
       throw new ScreencastConcurrencyError(this.controls.maxConcurrentStreams);
     }
     await this.apply(sessionId);
@@ -215,10 +207,7 @@ export class BandwidthController {
     const pane = this.panes.get(sessionId);
     if (!pane || !pane.open) return;
 
-    const params = computeEffectiveParams(
-      { ...this.controls, quality: pane.quality },
-      pane.focus,
-    );
+    const params = computeEffectiveParams({ ...this.controls, quality: pane.quality }, pane.focus);
 
     if (!params.streaming) {
       // Pause: stop the stream entirely — zero frames, zero bandwidth.
@@ -238,9 +227,7 @@ export class BandwidthController {
    * Browser tab over the `screencast:<id>` channel) to the matching control. The
    * single entry point the WS layer calls so the four controls share one dispatcher.
    */
-  async handleControlMessage(
-    msg: ScreencastBandwidthControlMessage,
-  ): Promise<void> {
+  async handleControlMessage(msg: ScreencastBandwidthControlMessage): Promise<void> {
     switch (msg.action) {
       case 'start':
         await this.open(msg.sessionId);

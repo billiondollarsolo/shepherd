@@ -24,13 +24,7 @@ import type { StatusSignal } from './types.js';
 
 export { OscBelParser } from './osc-parser.js';
 export { OutputQuietHeuristic, DEFAULT_QUIET_MS } from './quiet-heuristic.js';
-export type {
-  FallbackReason,
-  FallbackStatus,
-  Status,
-  StatusSignal,
-  StatusSink,
-} from './types.js';
+export type { FallbackReason, FallbackStatus, Status, StatusSignal, StatusSink } from './types.js';
 
 export interface OscFallbackStatusSourceOptions {
   /** Sink for every derived status signal (OSC/BEL and quiet-heuristic alike). */

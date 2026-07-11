@@ -12,11 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { shouldSendPush } from './should-notify.js';
 
 /** The exact set of push-worthy statuses per the spec §7 table (FR-ST4). */
-const PUSH_STATES: ReadonlySet<Status> = new Set<Status>([
-  'awaiting_input',
-  'done',
-  'error',
-]);
+const PUSH_STATES: ReadonlySet<Status> = new Set<Status>(['awaiting_input', 'done', 'error']);
 
 describe('shouldSendPush (US-22 trigger predicate, FR-ST4)', () => {
   it('returns true for awaiting_input, done, and error', () => {

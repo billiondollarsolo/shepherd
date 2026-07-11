@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AuditLogger, type AuditEntry } from '../../audit/index.js';
 import { InputTakeoverController } from './input-controller.js';
-import {
-  NotInControlError,
-  TakeoverConflictError,
-  type CdpInputClient,
-} from './input-types.js';
+import { NotInControlError, TakeoverConflictError, type CdpInputClient } from './input-types.js';
 
 /**
  * US-28 — Layer C input takeover/release (FR-B4, FR-A3).
@@ -56,10 +52,7 @@ const SID = '33333333-3333-4333-8333-333333333333';
 const USER_A = 'aaaaaaaa-0000-4000-8000-000000000001';
 const USER_B = 'bbbbbbbb-0000-4000-8000-000000000002';
 
-function ctl(overrides?: {
-  client?: FakeInputClient;
-  audit?: AuditLogger;
-}) {
+function ctl(overrides?: { client?: FakeInputClient; audit?: AuditLogger }) {
   const client = overrides?.client ?? makeFakeInputClient();
   const audit = overrides?.audit ?? makeAudit().logger;
   const controller = new InputTakeoverController({
@@ -132,9 +125,7 @@ describe('InputTakeoverController — takeover/release (US-28)', () => {
       event: { type: 'mouseWheel', x: 5, y: 6, deltaX: 0, deltaY: 120 },
     });
 
-    expect(client.mouse).toEqual([
-      { type: 'mouseWheel', x: 5, y: 6, deltaX: 0, deltaY: 120 },
-    ]);
+    expect(client.mouse).toEqual([{ type: 'mouseWheel', x: 5, y: 6, deltaX: 0, deltaY: 120 }]);
   });
 
   it('forwards keys as CDP Input.dispatchKeyEvent while in control', async () => {
@@ -147,18 +138,16 @@ describe('InputTakeoverController — takeover/release (US-28)', () => {
       event: { type: 'keyDown', key: 'a', code: 'KeyA', text: 'a' },
     });
 
-    expect(client.keys).toEqual([
-      { type: 'keyDown', key: 'a', code: 'KeyA', text: 'a' },
-    ]);
+    expect(client.keys).toEqual([{ type: 'keyDown', key: 'a', code: 'KeyA', text: 'a' }]);
   });
 
   it('single-controller: a second takeover by a different client is REJECTED', async () => {
     const { controller } = ctl();
     await controller.takeover(SID, { controllerId: USER_A });
 
-    await expect(
-      controller.takeover(SID, { controllerId: USER_B }),
-    ).rejects.toBeInstanceOf(TakeoverConflictError);
+    await expect(controller.takeover(SID, { controllerId: USER_B })).rejects.toBeInstanceOf(
+      TakeoverConflictError,
+    );
 
     // The original controller still holds the lock.
     expect(controller.controllerOf(SID)).toBe(USER_A);

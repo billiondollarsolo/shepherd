@@ -57,10 +57,7 @@ export interface OpenCodeTransition {
 export const OPENCODE_AGENT_TYPE: AgentType = 'opencode';
 
 /** Reads a string field out of the event's free-form `properties` bag. */
-function prop(
-  e: { properties?: Record<string, unknown> },
-  key: string,
-): string | null {
+function prop(e: { properties?: Record<string, unknown> }, key: string): string | null {
   const v = e.properties?.[key];
   return typeof v === 'string' ? v : null;
 }

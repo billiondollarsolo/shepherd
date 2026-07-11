@@ -30,12 +30,7 @@ export function BuiltBy({ className = '', stacked = false }: BuiltByProps): JSX.
         {PROFILES.map((p, i) => (
           <span key={p.handle}>
             {i > 0 && !stacked ? <span className="mx-1 text-flock-ink-muted/50">·</span> : null}
-            <a
-              href={p.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={linkClass}
-            >
+            <a href={p.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
               @{p.handle}
             </a>
           </span>

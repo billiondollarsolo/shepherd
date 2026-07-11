@@ -28,24 +28,16 @@ describe('ScreencastBandwidthControls (US-29)', () => {
   });
 
   it('rejects an out-of-range quality', () => {
-    expect(() =>
-      ScreencastBandwidthControls.parse({ quality: 0 }),
-    ).toThrow();
-    expect(() =>
-      ScreencastBandwidthControls.parse({ quality: 101 }),
-    ).toThrow();
+    expect(() => ScreencastBandwidthControls.parse({ quality: 0 })).toThrow();
+    expect(() => ScreencastBandwidthControls.parse({ quality: 101 })).toThrow();
   });
 
   it('rejects a zero/negative concurrency cap', () => {
-    expect(() =>
-      ScreencastBandwidthControls.parse({ maxConcurrentStreams: 0 }),
-    ).toThrow();
+    expect(() => ScreencastBandwidthControls.parse({ maxConcurrentStreams: 0 })).toThrow();
   });
 
   it('rejects unknown keys (strict contract)', () => {
-    expect(() =>
-      ScreencastBandwidthControls.parse({ bogus: true }),
-    ).toThrow();
+    expect(() => ScreencastBandwidthControls.parse({ bogus: true })).toThrow();
   });
 
   it('accepts a throttle policy with reduced unfocused quality + frame skip', () => {

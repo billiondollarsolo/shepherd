@@ -28,24 +28,33 @@ run inside containers or are built there; nothing is installed on the host itsel
 
 `docker compose up` brings up four services:
 
-| Service | Image | Role |
-|---|---|---|
-| `caddy` | `caddy:2-alpine` (digest-pinned) | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
-| `postgres` | `postgres:16-bookworm` (digest-pinned) | Durable system of record. **Never** on the live status path. |
-| `orchestrator` | built from `docker/Dockerfile.orchestrator` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node. |
-| `web` | built from `docker/Dockerfile.web` | The static React/Vite PWA, served by nginx. |
+| Service        | Image                                                    | Role                                                                                                                                                  |
+| -------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`        | `caddy:2-alpine` (digest-pinned)                         | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
+| `postgres`     | `postgres:16-bookworm` (digest-pinned)                   | Durable system of record. **Never** on the live status path.                                                                                          |
+| `orchestrator` | `ghcr.io/billiondollarsolo/flock-orchestrator:<version>` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node.                       |
+| `web`          | `ghcr.io/billiondollarsolo/flock-web:<version>`          | The static React/Vite PWA, served by nginx.                                                                                                           |
+
+The orchestrator image includes the latest available Codex and OpenCode releases when
+the image is built. On first container start, the entrypoint installs the latest Claude
+Code directly from Anthropic for the bundled local node; Flock does not redistribute
+Anthropic's commercially licensed binary. Agent tools on SSH nodes remain user-managed,
+including any deliberate version pins. Set `FLOCK_INSTALL_CLAUDE_CODE=0` when a custom
+image or mounted home directory supplies a user-managed Claude Code version.
 
 **Per-session browser containers are not Compose services.** One isolated Chrome
 container is launched **per session at runtime** by the orchestrator (via `dockerode`
 against the mounted Docker socket) and destroyed on teardown. This keeps isolation at the
 container boundary while keeping the static topology minimal.
 
-> **Prerequisite:** browser panes need the **`flock/session-chrome`** image (a custom
+> **Prerequisite:** browser panes need the **`flock-session-chrome`** image (a custom
 > Chrome that bridges CDP to a published port; stock Chrome images bind the debugger to
-> loopback only). Build it before using browser panes — it is NOT pulled automatically:
+> loopback only). Pull the version matching the Flock stack before using browser panes:
+>
 > ```
-> docker build -f docker/Dockerfile.session-chrome -t flock/session-chrome:latest .
+> docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
 > ```
+>
 > Override the name with `BROWSER_IMAGE`. Without it, sessions still work but the
 > Browser pane fails to start.
 
@@ -62,7 +71,9 @@ openssl rand -base64 32 > secrets/flock_master_key      # secret-store master ke
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
-# 3. Bring it up
+# 3. Pull the pinned release images (FLOCK_VERSION in .env), then bring it up
+docker compose pull
+docker pull "${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}"
 docker compose up -d
 
 # 4. Watch it boot
@@ -85,7 +96,9 @@ ways, in order of preference:
    - `flock_master_key` → secret-store master key for encryption at rest.
    - `postgres_password` → Postgres password.
 2. **Environment** via `.env` (read automatically by Compose) for everything else
-   (`DATABASE_URL`, VAPID keys, browser config, `FLOCK_DOMAIN`, …). The agentd
+   (optional `DATABASE_URL` override, VAPID keys, browser config, `FLOCK_DOMAIN`, …).
+   By default the orchestrator constructs its internal database URL from the same
+   mounted Postgres password secret. The agentd
    version is single-sourced from the shipped `agentd/VERSION` file — leave
    `FLOCK_AGENTD_VERSION` unset unless you are intentionally pinning an override
    (a stale value forces the daemon to re-ship/relaunch on every connect).
@@ -107,8 +120,11 @@ sole exception (authorized by a per-session token).
 
 ## Dev vs prod stacks
 
-- **Production:** `docker-compose.yml` + `docker/Dockerfile.orchestrator` +
-  `docker/Dockerfile.web` (multi-stage, pruned, non-root).
+- **Production:** `docker-compose.yml` pulls versioned GHCR images. Pin
+  `FLOCK_VERSION`; do not deploy the mutable `latest` tag.
+- **Build release images locally:** use `docker compose build` for orchestrator/web
+  and `docker build -f docker/Dockerfile.session-chrome -t flock-session-chrome:local .`
+  for the on-demand browser image.
 - **Local iteration in Docker:** `docker-compose.dev.yml` + `docker/Dockerfile.dev`
   (source-mounted, hot reload) — `docker compose -f docker-compose.dev.yml up`.
 - **Native local dev (fastest):** `./run-dev.sh` — see the root [README](../README.md).
@@ -128,9 +144,10 @@ docker compose config >/dev/null && echo "compose OK"
 
 ## Upgrading the node daemon
 
-`flock-agentd` is versioned (`agentd/VERSION` — the single source of truth). The
+`flock-agentd` is versioned (`agentd/VERSION` — the single source of truth). Release
+orchestrator images include Linux amd64 and arm64 daemon binaries. The
 orchestrator ships the expected version to each node and, on a version mismatch,
 re-ships + restarts the daemon automatically. To roll out a new daemon: bump
-`agentd/VERSION`, rebuild the dist binary (`cd agentd && make dist`), and redeploy —
+the synchronized Flock version, rebuild the image (or pull the new release), and redeploy —
 the rollout happens on next connect. (Keep `FLOCK_AGENTD_VERSION` unset so it
 resolves from the shipped `agentd/VERSION`; only set it to pin an explicit override.)

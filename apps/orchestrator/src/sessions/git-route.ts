@@ -167,7 +167,9 @@ export function registerGitRoutes(
       const body = CreateBranchRequest.safeParse(request.body ?? {});
       if (!body.success) return badRequest(reply, 'a non-empty branch name is required.');
       try {
-        return reply.code(200).send(await deps.service.createBranch(id, body.data.name, body.data.from));
+        return reply
+          .code(200)
+          .send(await deps.service.createBranch(id, body.data.name, body.data.from));
       } catch (err) {
         return mapError(reply, err);
       }

@@ -73,7 +73,10 @@ export class ConfigService {
   constructor(private readonly deps: ConfigServiceDeps) {}
 
   /** Parse + apply a flock.yml, creating missing projects/sessions. */
-  async apply(yamlText: string, ctx: { userId: string; ip: string | null }): Promise<ConfigApplySummary> {
+  async apply(
+    yamlText: string,
+    ctx: { userId: string; ip: string | null },
+  ): Promise<ConfigApplySummary> {
     let cfg: FlockConfig;
     try {
       cfg = (parse(yamlText) ?? {}) as FlockConfig;
@@ -103,10 +106,14 @@ export class ConfigService {
         projectId = existing.id;
       } else {
         try {
-          projectId = (await this.deps.createProject({ nodeId: node.id, name: pc.name, workingDir: pc.path })).id;
+          projectId = (
+            await this.deps.createProject({ nodeId: node.id, name: pc.name, workingDir: pc.path })
+          ).id;
           summary.projectsCreated.push(`${pc.name} @ ${pc.node}`);
         } catch (e) {
-          summary.warnings.push(`project ${pc.name}: ${e instanceof Error ? e.message : String(e)}`);
+          summary.warnings.push(
+            `project ${pc.name}: ${e instanceof Error ? e.message : String(e)}`,
+          );
           continue;
         }
       }
@@ -130,7 +137,9 @@ export class ConfigService {
           await this.deps.createSession(parsed.data, ctx);
           summary.sessionsCreated.push(`${ac.type} in ${pc.name}`);
         } catch (e) {
-          summary.warnings.push(`agent ${ac.type} in ${pc.name}: ${e instanceof Error ? e.message : String(e)}`);
+          summary.warnings.push(
+            `agent ${ac.type} in ${pc.name}: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     }

@@ -29,12 +29,7 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   } as unknown as Response;
 }
 
-const SAMPLE_DIFF = [
-  'diff --git a/x b/x',
-  '@@ -1 +1 @@',
-  '-old',
-  '+new',
-].join('\n');
+const SAMPLE_DIFF = ['diff --git a/x b/x', '@@ -1 +1 @@', '-old', '+new'].join('\n');
 
 describe('DiffTab (US-33)', () => {
   it('fetches the diff for the session and renders it read-only', async () => {
@@ -53,9 +48,7 @@ describe('DiffTab (US-33)', () => {
 
     // The request targeted the session-scoped diff endpoint.
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect((fetchImpl.mock.calls[0]![0] as string)).toContain(
-      `/api/sessions/${SESSION_ID}/diff`,
-    );
+    expect(fetchImpl.mock.calls[0]![0] as string).toContain(`/api/sessions/${SESSION_ID}/diff`);
 
     // Lines are classified for theme-driven colouring.
     expect(view.querySelector('[data-diff-kind="add"]')).toHaveTextContent('+new');

@@ -45,13 +45,13 @@
   --flock-diff-add: #e6f4ea;
   --flock-diff-remove: #fce8e6;
   --flock-diff-context: #f5f6f8;
-  --flock-font-ui: 'Inter Variable', 'Inter', 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --flock-font-ui: 'Inter Variable', 'Inter', 'Geist Variable', system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* Display face for headings/branding. Linear-clean: the same Inter family as the
      body (tight tracking via the .font-display utility), not a separate display font. */
   --flock-font-display: var(--flock-font-ui);
-  --flock-font-code: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
-    'Liberation Mono', ui-monospace, monospace;
+  --flock-font-code: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono',
+    ui-monospace, monospace;
 
   color-scheme: light;
 }

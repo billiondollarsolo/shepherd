@@ -15,7 +15,11 @@ export interface CommandPaletteProps {
   readonly onClose: () => void;
 }
 
-export function CommandPalette({ open, commands, onClose }: CommandPaletteProps): JSX.Element | null {
+export function CommandPalette({
+  open,
+  commands,
+  onClose,
+}: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

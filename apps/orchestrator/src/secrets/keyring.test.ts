@@ -29,26 +29,19 @@ describe('Keyring / master-key resolution (US-3, NFR-SEC2)', () => {
   });
 
   it('throws a clear MasterKeyError when the key is missing', () => {
-    expect(() => decodeMasterKey(undefined, 'FLOCK_MASTER_KEY')).toThrow(
-      MasterKeyError,
-    );
+    expect(() => decodeMasterKey(undefined, 'FLOCK_MASTER_KEY')).toThrow(MasterKeyError);
     expect(() => decodeMasterKey('', 'FLOCK_MASTER_KEY')).toThrow(MasterKeyError);
   });
 
   it('throws MasterKeyError when the key is the wrong length', () => {
     const tooShort = randomBytes(16).toString('base64');
-    expect(() => decodeMasterKey(tooShort, 'FLOCK_MASTER_KEY')).toThrow(
-      MasterKeyError,
-    );
+    expect(() => decodeMasterKey(tooShort, 'FLOCK_MASTER_KEY')).toThrow(MasterKeyError);
   });
 
   it('resolves and caches keys by version from the provided source', () => {
     const v0 = randomBytes(32).toString('base64');
     const v1 = randomBytes(32).toString('hex');
-    const ring = new Keyring(
-      { FLOCK_MASTER_KEY: v1, FLOCK_MASTER_KEY_V0: v0 },
-      1,
-    );
+    const ring = new Keyring({ FLOCK_MASTER_KEY: v1, FLOCK_MASTER_KEY_V0: v0 }, 1);
     expect(ring.currentVersion).toBe(1);
     expect(ring.currentKey().equals(ring.keyForVersion(1))).toBe(true);
     expect(ring.keyForVersion(0).length).toBe(32);
@@ -63,10 +56,7 @@ describe('Keyring / master-key resolution (US-3, NFR-SEC2)', () => {
   });
 
   it('missing key for a requested version throws MasterKeyError', () => {
-    const ring = new Keyring(
-      { FLOCK_MASTER_KEY: randomBytes(32).toString('hex') },
-      0,
-    );
+    const ring = new Keyring({ FLOCK_MASTER_KEY: randomBytes(32).toString('hex') }, 0);
     expect(() => ring.keyForVersion(5)).toThrow(MasterKeyError);
   });
 

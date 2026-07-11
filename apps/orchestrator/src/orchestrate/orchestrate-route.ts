@@ -20,7 +20,9 @@ function fail(reply: FastifyReply, e: unknown): FastifyReply {
     const status = e.code === 'unauthorized' ? 401 : e.code === 'not_found' ? 404 : 400;
     return reply.code(status).send({ error: { code: e.code, message: e.message } });
   }
-  return reply.code(500).send({ error: { code: 'internal', message: 'orchestration request failed' } });
+  return reply
+    .code(500)
+    .send({ error: { code: 'internal', message: 'orchestration request failed' } });
 }
 
 export function registerOrchestrateRoute(app: FastifyInstance, svc: OrchestrationService): void {
@@ -33,22 +35,25 @@ export function registerOrchestrateRoute(app: FastifyInstance, svc: Orchestratio
     }
   });
 
-  app.get('/api/orchestrate/:callerId/wait/:targetId', async (req: FastifyRequest, reply: FastifyReply) => {
-    const { callerId, targetId } = req.params as { callerId: string; targetId: string };
-    const q = req.query as { status?: string; timeoutMs?: string };
-    try {
-      const out = await svc.wait(
-        callerId,
-        bearer(req),
-        targetId,
-        q.status ?? 'idle',
-        Number(q.timeoutMs) || 30_000,
-      );
-      return reply.code(200).send(out);
-    } catch (e) {
-      return fail(reply, e);
-    }
-  });
+  app.get(
+    '/api/orchestrate/:callerId/wait/:targetId',
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const { callerId, targetId } = req.params as { callerId: string; targetId: string };
+      const q = req.query as { status?: string; timeoutMs?: string };
+      try {
+        const out = await svc.wait(
+          callerId,
+          bearer(req),
+          targetId,
+          q.status ?? 'idle',
+          Number(q.timeoutMs) || 30_000,
+        );
+        return reply.code(200).send(out);
+      } catch (e) {
+        return fail(reply, e);
+      }
+    },
+  );
 
   // Launch a sibling agent in the caller's project (capped). Body: { agentType }.
   app.post('/api/orchestrate/:callerId/spawn', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -66,22 +71,29 @@ export function registerOrchestrateRoute(app: FastifyInstance, svc: Orchestratio
     const { callerId } = req.params as { callerId: string };
     const body = (req.body ?? {}) as { targetId?: string; text?: string };
     try {
-      return reply.code(200).send(await svc.send(callerId, bearer(req), body.targetId ?? '', body.text ?? ''));
+      return reply
+        .code(200)
+        .send(await svc.send(callerId, bearer(req), body.targetId ?? '', body.text ?? ''));
     } catch (e) {
       return fail(reply, e);
     }
   });
 
   // Read a sibling's recent output. GET .../read/:targetId?limit=
-  app.get('/api/orchestrate/:callerId/read/:targetId', async (req: FastifyRequest, reply: FastifyReply) => {
-    const { callerId, targetId } = req.params as { callerId: string; targetId: string };
-    const q = req.query as { limit?: string };
-    try {
-      return reply.code(200).send(await svc.readOutput(callerId, bearer(req), targetId, Number(q.limit) || 10));
-    } catch (e) {
-      return fail(reply, e);
-    }
-  });
+  app.get(
+    '/api/orchestrate/:callerId/read/:targetId',
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const { callerId, targetId } = req.params as { callerId: string; targetId: string };
+      const q = req.query as { limit?: string };
+      try {
+        return reply
+          .code(200)
+          .send(await svc.readOutput(callerId, bearer(req), targetId, Number(q.limit) || 10));
+      } catch (e) {
+        return fail(reply, e);
+      }
+    },
+  );
 
   // Terminate a sibling agent. Body: { targetId }.
   app.post('/api/orchestrate/:callerId/kill', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -95,13 +107,16 @@ export function registerOrchestrateRoute(app: FastifyInstance, svc: Orchestratio
   });
 
   // Restart a sibling (kill + respawn same type). Body: { targetId }.
-  app.post('/api/orchestrate/:callerId/restart', async (req: FastifyRequest, reply: FastifyReply) => {
-    const { callerId } = req.params as { callerId: string };
-    const body = (req.body ?? {}) as { targetId?: string };
-    try {
-      return reply.code(201).send(await svc.restart(callerId, bearer(req), body.targetId ?? ''));
-    } catch (e) {
-      return fail(reply, e);
-    }
-  });
+  app.post(
+    '/api/orchestrate/:callerId/restart',
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const { callerId } = req.params as { callerId: string };
+      const body = (req.body ?? {}) as { targetId?: string };
+      try {
+        return reply.code(201).send(await svc.restart(callerId, bearer(req), body.targetId ?? ''));
+      } catch (e) {
+        return fail(reply, e);
+      }
+    },
+  );
 }

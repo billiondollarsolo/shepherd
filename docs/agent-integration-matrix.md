@@ -19,6 +19,7 @@ Three additions supersede parts of the older matrix below:
 
 **Transport is auto-selected per agent (no user toggle).** Flock picks the path
 that yields a structured **Chat** log while preserving the best interaction:
+
 - **claude / codex / opencode → native PTY.** Native TUI; Flock tails the
   transcript (claude/codex) or hook stream (opencode) for status/telemetry.
 - **gemini → ACP** (`gemini --experimental-acp`) over stdio for **both chat and
@@ -27,12 +28,13 @@ that yields a structured **Chat** log while preserving the best interaction:
   Gemini v0.26 hooks. (A hooks translator + `renderScopedConfig('gemini')` remain
   for a hypothetical PTY path, but live launches always use ACP.)
 - **grok → native PTY.** VERIFIED 2026-06-08: grok does NOT speak ACP — `grok agent
-  stdio` is a JSON line protocol but ignores ACP's `initialize` (no response;
+stdio` is a JSON line protocol but ignores ACP's `initialize` (no response;
   gemini answers it). So grok runs native PTY with status from its Claude-compatible
   hooks. It has no transcript either → **no Chat source** (status works, chat is a
   gap until grok exposes a transcript or real ACP).
 
 **Chat tab** (per-session structured conversation) fills from:
+
 - transcript → chat for **claude** (`claudeLineToChat`) and **codex**
   (`codexLineToChat`, `event_msg.agent_message`); whole messages POSTed to the
   hook endpoint → event log → web.
@@ -72,6 +74,7 @@ chat**. So Chat is proven for claude/codex/gemini/opencode; grok has status only
 
 > Note: the columns below describe each agent's **status** path. Transports differ
 > by SIGNAL and don't all ride the same channel:
+>
 > - **Gemini**: **chat + status** both ride **ACP** (see above). Tokens/model
 >   only fill when the Gemini ACP stream emits usage (`EventUsageUpdated`) — not
 >   always observed → ⚠️. Plan fills if ACP sends plan updates.
@@ -80,20 +83,20 @@ chat**. So Chat is proven for claude/codex/gemini/opencode; grok has status only
 >
 > The **Chat** capability is summarized in the section above.
 
-| Signal | Claude Code | Codex | Gemini | OpenCode | Grok |
-|---|---|---|---|---|---|
-| **Detection** (node-info) | ✅ PATH + npm/nvm scan | ✅ | ✅ | ✅ | ✅ |
-| **Launch** + permission modes | ✅ `--permission-mode` / skip | ✅ `--sandbox workspace-write`/`read-only`/bypass | ✅ `--approval-mode plan`/`auto_edit` / `--yolo` (ACP + PTY) | ✅ (in-app perms) | ✅ (Plan Mode is built-in; no mode picker) |
-| running / idle | ✅ transcript + hooks | ✅ transcript | ✅ ACP turn/tool events⁵ | ✅ hooks | ✅ hooks |
-| **awaiting_input** | ✅ hook `Notification`⁶ | ⚠️ hook `PermissionRequest` (schema+translator ready; seeding deferred)¹ | ✅ ACP permission request⁵ | ✅ hook `permission.updated` | ❌ no approval event² |
-| error | ✅ | ✅ transcript | ✅ ACP error / failed tool⁵ | ✅ | ✅ hook `PostToolUseFailure` |
-| turn complete | ✅ `idle` (Stop)³ | ✅ `idle` | ✅ `idle` (ACP turn complete) | ✅ `idle` (session.idle) | ✅ `idle` (stop) |
-| done / session-end | ✅ `SessionEnd` + PTY exit³ | ✅ PTY exit (`SessionEnd` ready) | ✅ ACP session end + process exit | ✅ PTY exit | ✅ `SessionEnd` + PTY exit |
-| **tokens** (cumulative) | ✅ transcript usage | ✅ `total_token_usage` | ⚠️ ACP usage when emitted⁵ | ✅ `message.updated`⁴ | ❌ |
-| **model** name | ✅ `message.model` | ✅ `turn_context.model` | ⚠️ ACP usage when emitted⁵ | ✅⁴ | ❌ |
-| **context %** | ✅ tokens ÷ model-info table | ✅ EXACT (`model_context_window`) | ⚠️ ACP input tokens when emitted⁵ | ✅⁴ | ❌ |
-| **tasks / plan** | ✅ `TodoWrite` hook → plan | ✅ `update_plan` → plan | ⚠️ ACP plan when emitted | ✅ `todo.updated` → plan | ❌ |
-| current tool | ✅ | ✅ (`exec`/`patch_apply`/…) | ✅ ACP tool started⁵ | ✅ (`tool` prop) | ✅ (`pre_tool_use` toolName) |
+| Signal                        | Claude Code                   | Codex                                                                    | Gemini                                                       | OpenCode                     | Grok                                       |
+| ----------------------------- | ----------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------- | ------------------------------------------ |
+| **Detection** (node-info)     | ✅ PATH + npm/nvm scan        | ✅                                                                       | ✅                                                           | ✅                           | ✅                                         |
+| **Launch** + permission modes | ✅ `--permission-mode` / skip | ✅ `--sandbox workspace-write`/`read-only`/bypass                        | ✅ `--approval-mode plan`/`auto_edit` / `--yolo` (ACP + PTY) | ✅ (in-app perms)            | ✅ (Plan Mode is built-in; no mode picker) |
+| running / idle                | ✅ transcript + hooks         | ✅ transcript                                                            | ✅ ACP turn/tool events⁵                                     | ✅ hooks                     | ✅ hooks                                   |
+| **awaiting_input**            | ✅ hook `Notification`⁶       | ⚠️ hook `PermissionRequest` (schema+translator ready; seeding deferred)¹ | ✅ ACP permission request⁵                                   | ✅ hook `permission.updated` | ❌ no approval event²                      |
+| error                         | ✅                            | ✅ transcript                                                            | ✅ ACP error / failed tool⁵                                  | ✅                           | ✅ hook `PostToolUseFailure`               |
+| turn complete                 | ✅ `idle` (Stop)³             | ✅ `idle`                                                                | ✅ `idle` (ACP turn complete)                                | ✅ `idle` (session.idle)     | ✅ `idle` (stop)                           |
+| done / session-end            | ✅ `SessionEnd` + PTY exit³   | ✅ PTY exit (`SessionEnd` ready)                                         | ✅ ACP session end + process exit                            | ✅ PTY exit                  | ✅ `SessionEnd` + PTY exit                 |
+| **tokens** (cumulative)       | ✅ transcript usage           | ✅ `total_token_usage`                                                   | ⚠️ ACP usage when emitted⁵                                   | ✅ `message.updated`⁴        | ❌                                         |
+| **model** name                | ✅ `message.model`            | ✅ `turn_context.model`                                                  | ⚠️ ACP usage when emitted⁵                                   | ✅⁴                          | ❌                                         |
+| **context %**                 | ✅ tokens ÷ model-info table  | ✅ EXACT (`model_context_window`)                                        | ⚠️ ACP input tokens when emitted⁵                            | ✅⁴                          | ❌                                         |
+| **tasks / plan**              | ✅ `TodoWrite` hook → plan    | ✅ `update_plan` → plan                                                  | ⚠️ ACP plan when emitted                                     | ✅ `todo.updated` → plan     | ❌                                         |
+| current tool                  | ✅                            | ✅ (`exec`/`patch_apply`/…)                                              | ✅ ACP tool started⁵                                         | ✅ (`tool` prop)             | ✅ (`pre_tool_use` toolName)               |
 
 ¹ Codex now ships Claude-style hooks incl. a `PermissionRequest` event (→
 awaiting_input). Flock's shared schema + `codex.ts` translator are READY (tolerant
@@ -127,6 +130,7 @@ delivers the subtype as the hook matcher, not always a body field).
 ## Mechanism per agent
 
 ### Claude Code — most complete (hooks + transcript)
+
 - **Hooks** (`$CLAUDE_CONFIG_DIR/settings.json`, Flock-seeded): `SessionStart`,
   `Pre/PostToolUse`, `Notification`, `Stop` → `status/translators/claude.ts`.
   `Notification:permission_prompt` → **awaiting_input** (the money state).
@@ -137,6 +141,7 @@ delivers the subtype as the hook matcher, not always a body field).
 - **Tasks**: `TodoWrite` `PostToolUse` → `hooks/plan.ts` → `plan` event.
 
 ### Codex — transcript-authoritative (hooks inert)
+
 - **Transcript** (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, `status/codex.go`):
   state from `event_msg` lifecycle; `model` from `turn_context.model`; tokens from
   `token_count`→`info.total_token_usage`; **exact context limit** from
@@ -145,6 +150,7 @@ delivers the subtype as the hook matcher, not always a body field).
   `notify`, not per-tool hooks) — NOT a working awaiting_input source.
 
 ### Gemini — ACP for status + chat
+
 - **Live path:** `agentSupportsAcp('gemini')` → `gemini --experimental-acp`. ACP
   bridge drives status (running / awaiting_input / idle / error) + optional
   usage/plan. Chat from ACP messages. **Hooks are not seeded on ACP launches.**
@@ -152,6 +158,7 @@ delivers the subtype as the hook matcher, not always a body field).
   for a hypothetical PTY path; not used by `SessionRestService` today.
 
 ### OpenCode — hooks (per-session)
+
 - **Plugin** (`$XDG_CONFIG_HOME/opencode/plugin/flock.js`, Flock-seeded): forwards
   `session.start`, `tool.execute.before/after`, `permission.request`,
   `question.ask`, `session.idle/error/complete` → `status/translators/opencode.ts`.
@@ -160,6 +167,7 @@ delivers the subtype as the hook matcher, not always a body field).
   `session.updated`, the server extracts model/tokens/cost (see ⁴).
 
 ### Grok (xAI Grok Build CLI) — hook-driven (NOT activity)
+
 - **Native hooks** (`~/.grok/hooks/flock.json`, Flock-seeded — global + always
   trusted, no `/hooks-trust` prompt): `session_start`/`pre_tool_use`/
   `post_tool_use`/`post_tool_use_failure`/`stop` → `status/translators/grok.ts`.

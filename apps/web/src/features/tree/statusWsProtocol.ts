@@ -12,10 +12,7 @@
  * is used as the WS base; otherwise we derive `ws(s)://` from the page origin so
  * a same-origin, TLS-terminated deploy (NFR-SEC1) works with no configuration.
  */
-import {
-  StatusUpdateMessage,
-  type StatusUpdateMessage as StatusUpdate,
-} from '@flock/shared';
+import { StatusUpdateMessage, type StatusUpdateMessage as StatusUpdate } from '@flock/shared';
 
 /** WS channel name for the live status fan-out, per spec §8.2 (`status`). */
 export const STATUS_CHANNEL = 'status' as const;
@@ -36,8 +33,7 @@ export function statusWebSocketUrl(
 ): string {
   const configured = (env.VITE_WS_URL ?? '').replace(/\/$/, '');
   const base =
-    configured ||
-    origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
+    configured || origin.replace(/^http(s?):/i, (_m, s: string) => `ws${s}:`).replace(/\/$/, '');
   return `${base}/ws/${STATUS_CHANNEL}`;
 }
 

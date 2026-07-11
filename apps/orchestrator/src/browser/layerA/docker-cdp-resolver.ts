@@ -23,10 +23,7 @@ export function createDockerCdpResolver(docker: DockerLike): CdpResolver {
 
 interface InspectShape {
   NetworkSettings?: {
-    Ports?: Record<
-      string,
-      Array<{ HostIp?: string; HostPort?: string }> | null
-    >;
+    Ports?: Record<string, Array<{ HostIp?: string; HostPort?: string }> | null>;
   };
 }
 
@@ -44,9 +41,7 @@ async function resolveHostPort(params: {
     const info = (await container.inspect()) as unknown as InspectShape;
     const bindings = info.NetworkSettings?.Ports?.[key];
     // Prefer a loopback binding; never accept a 0.0.0.0 binding (NFR-SEC5).
-    const loopback = bindings?.find(
-      (b) => b.HostIp === '127.0.0.1' || b.HostIp === 'localhost',
-    );
+    const loopback = bindings?.find((b) => b.HostIp === '127.0.0.1' || b.HostIp === 'localhost');
     const hostPortStr = loopback?.HostPort;
     if (hostPortStr) {
       const port = Number.parseInt(hostPortStr, 10);

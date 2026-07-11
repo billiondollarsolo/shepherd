@@ -39,11 +39,7 @@ function fakeSource(): {
       return () => subs.delete(fn);
     },
   };
-  const fire = (
-    status: Status,
-    sessionId = 'sess-1',
-    detail: string | null = null,
-  ): void => {
+  const fire = (status: Status, sessionId = 'sess-1', detail: string | null = null): void => {
     for (const fn of subs) {
       fn({ channel: 'status', sessionId, status, detail, ts: ISO });
     }

@@ -24,7 +24,11 @@ import readline from 'node:readline';
 const ENV = (() => {
   const url = process.env.FLOCK_HOOK_URL || '';
   const m = url.match(/^(https?:\/\/[^/]+)\/api\/hooks\/([^/?]+)/);
-  return { origin: m ? m[1] : '', callerId: m ? m[2] : '', token: process.env.FLOCK_HOOK_TOKEN || '' };
+  return {
+    origin: m ? m[1] : '',
+    callerId: m ? m[2] : '',
+    token: process.env.FLOCK_HOOK_TOKEN || '',
+  };
 })();
 
 async function api(method, path, body) {
@@ -47,21 +51,29 @@ async function api(method, path, body) {
 const TOOLS = [
   {
     name: 'flock_list_agents',
-    description: 'List the other agents in this project — their id, type, live status, and latest message. Use this to see who is working on what.',
+    description:
+      'List the other agents in this project — their id, type, live status, and latest message. Use this to see who is working on what.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'flock_spawn',
-    description: 'Launch another agent in this project to work in parallel (returns its id). Then flock_wait for it to be idle, flock_send it a task, and flock_wait again.',
+    description:
+      'Launch another agent in this project to work in parallel (returns its id). Then flock_wait for it to be idle, flock_send it a task, and flock_wait again.',
     inputSchema: {
       type: 'object',
-      properties: { agentType: { type: 'string', description: 'claude-code | codex | gemini | grok | opencode | terminal' } },
+      properties: {
+        agentType: {
+          type: 'string',
+          description: 'claude-code | codex | gemini | grok | opencode | terminal',
+        },
+      },
       required: ['agentType'],
     },
   },
   {
     name: 'flock_send',
-    description: "Send a task or reply (as terminal input) to another agent in this project. Wait until it is idle first.",
+    description:
+      'Send a task or reply (as terminal input) to another agent in this project. Wait until it is idle first.',
     inputSchema: {
       type: 'object',
       properties: { targetId: { type: 'string' }, text: { type: 'string' } },
@@ -70,7 +82,8 @@ const TOOLS = [
   },
   {
     name: 'flock_wait',
-    description: 'Block until another agent reaches a status (idle | awaiting_input | done | error | running), then return. Use after spawn/send to coordinate.',
+    description:
+      'Block until another agent reaches a status (idle | awaiting_input | done | error | running), then return. Use after spawn/send to coordinate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -83,7 +96,8 @@ const TOOLS = [
   },
   {
     name: 'flock_read_output',
-    description: "Read another agent's recent output (its latest assistant messages, oldest→newest) so you can inspect what it produced before acting. Use after flock_wait.",
+    description:
+      "Read another agent's recent output (its latest assistant messages, oldest→newest) so you can inspect what it produced before acting. Use after flock_wait.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -95,13 +109,23 @@ const TOOLS = [
   },
   {
     name: 'flock_kill',
-    description: 'Terminate another agent in this project (clean up a finished worker). Cannot be undone.',
-    inputSchema: { type: 'object', properties: { targetId: { type: 'string' } }, required: ['targetId'] },
+    description:
+      'Terminate another agent in this project (clean up a finished worker). Cannot be undone.',
+    inputSchema: {
+      type: 'object',
+      properties: { targetId: { type: 'string' } },
+      required: ['targetId'],
+    },
   },
   {
     name: 'flock_restart',
-    description: 'Restart another agent: terminate it and launch a fresh agent of the SAME type (returns the new id). Use when a worker is stuck or errored.',
-    inputSchema: { type: 'object', properties: { targetId: { type: 'string' } }, required: ['targetId'] },
+    description:
+      'Restart another agent: terminate it and launch a fresh agent of the SAME type (returns the new id). Use when a worker is stuck or errored.',
+    inputSchema: {
+      type: 'object',
+      properties: { targetId: { type: 'string' } },
+      required: ['targetId'],
+    },
   },
 ];
 
@@ -121,7 +145,10 @@ async function callTool(name, a) {
       );
     case 'flock_read_output':
       return (
-        await api('GET', `/api/orchestrate/${c}/read/${encodeURIComponent(a.targetId)}?limit=${Number(a.limit) || 10}`)
+        await api(
+          'GET',
+          `/api/orchestrate/${c}/read/${encodeURIComponent(a.targetId)}?limit=${Number(a.limit) || 10}`,
+        )
       ).messages;
     case 'flock_kill':
       return api('POST', `/api/orchestrate/${c}/kill`, { targetId: a.targetId });
@@ -152,7 +179,7 @@ rl.on('line', async (line) => {
       result: {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'flock', version: '0.1.0' },
+        serverInfo: { name: 'flock', version: '0.3.0' },
       },
     });
   }
@@ -160,14 +187,35 @@ rl.on('line', async (line) => {
   if (method === 'tools/list') return reply({ jsonrpc: '2.0', id, result: { tools: TOOLS } });
   if (method === 'tools/call') {
     if (!ENV.origin || !ENV.callerId || !ENV.token) {
-      return reply({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'flock orchestration unavailable (missing session env)' }], isError: true } });
+      return reply({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            { type: 'text', text: 'flock orchestration unavailable (missing session env)' },
+          ],
+          isError: true,
+        },
+      });
     }
     try {
       const out = await callTool(params?.name, params?.arguments || {});
-      return reply({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(out) }] } });
+      return reply({
+        jsonrpc: '2.0',
+        id,
+        result: { content: [{ type: 'text', text: JSON.stringify(out) }] },
+      });
     } catch (e) {
-      return reply({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: `error: ${e?.message || String(e)}` }], isError: true } });
+      return reply({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [{ type: 'text', text: `error: ${e?.message || String(e)}` }],
+          isError: true,
+        },
+      });
     }
   }
-  if (id != null) reply({ jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method}` } });
+  if (id != null)
+    reply({ jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method}` } });
 });

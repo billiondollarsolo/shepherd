@@ -131,11 +131,7 @@ export function planSessionTruth(
     // Unknown / never-seeded: only correct if we can prove the claim is false.
     // If status is undefined we still correct (UI would otherwise fall back to a
     // stale REST mirror claiming work).
-    if (
-      current !== undefined &&
-      current !== 'disconnected' &&
-      !ACTIVE_CLAIM.has(current)
-    ) {
+    if (current !== undefined && current !== 'disconnected' && !ACTIVE_CLAIM.has(current)) {
       continue;
     }
 

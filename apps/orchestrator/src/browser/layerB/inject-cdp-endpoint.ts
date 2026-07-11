@@ -70,9 +70,7 @@ export function opaqueCdpEndpointForSession(sessionId: string): string {
  * Throws if the bound endpoint is not opaque (e.g. leaks a bare port) — that is
  * a programming error upstream and must never be handed to an agent.
  */
-export function buildLayerBSessionEnv(
-  session: LayerBSession,
-): Partial<Record<string, string>> {
+export function buildLayerBSessionEnv(session: LayerBSession): Partial<Record<string, string>> {
   const endpoint = session.browserCdpEndpoint;
   if (!endpoint) {
     return {};

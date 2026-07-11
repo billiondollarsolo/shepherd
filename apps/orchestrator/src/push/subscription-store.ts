@@ -77,9 +77,7 @@ export class DrizzlePushSubscriptionStore implements PushSubscriptionStore {
   }
 
   async removeByEndpoint(endpoint: string): Promise<void> {
-    await this.db
-      .delete(pushSubscriptions)
-      .where(eq(pushSubscriptions.endpoint, endpoint));
+    await this.db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
   }
 
   async listByUser(userId: string): Promise<StoredPushSubscription[]> {
@@ -99,12 +97,7 @@ export class DrizzlePushSubscriptionStore implements PushSubscriptionStore {
   async removeOwned(userId: string, endpoint: string): Promise<void> {
     await this.db
       .delete(pushSubscriptions)
-      .where(
-        and(
-          eq(pushSubscriptions.userId, userId),
-          eq(pushSubscriptions.endpoint, endpoint),
-        ),
-      );
+      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
   }
 }
 

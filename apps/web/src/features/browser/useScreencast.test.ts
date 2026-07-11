@@ -66,9 +66,7 @@ describe('useScreencast', () => {
 
   it('opens the channel ON MOUNT and sends the on-demand start directive', () => {
     const ws = new FakeWs();
-    renderHook(() =>
-      useScreencast(SID, { onFrame: () => {}, wsFactory: () => ws }),
-    );
+    renderHook(() => useScreencast(SID, { onFrame: () => {}, wsFactory: () => ws }));
     act(() => ws.open());
     // The very first upstream message is the open/start directive.
     expect(ws.sent).toHaveLength(1);

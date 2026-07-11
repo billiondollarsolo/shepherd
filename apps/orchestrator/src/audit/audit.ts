@@ -86,8 +86,7 @@ export class AuditLogger {
       targetId: opts.secretId,
       userId: opts.userId ?? null,
       ip: opts.ip ?? null,
-      detail:
-        opts.keyVersion === undefined ? null : { keyVersion: opts.keyVersion },
+      detail: opts.keyVersion === undefined ? null : { keyVersion: opts.keyVersion },
     });
   }
 

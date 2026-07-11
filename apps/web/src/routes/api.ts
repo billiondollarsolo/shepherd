@@ -7,12 +7,7 @@
  * orchestrator origin (VITE_API_URL); empty by default so a same-origin deploy
  * (TLS-terminated in front, NFR-SEC1) works without configuration.
  */
-import type {
-  CreateUserRequest,
-  LoginRequest,
-  SetupRequest,
-  User,
-} from '@flock/shared';
+import type { CreateUserRequest, LoginRequest, SetupRequest, User } from '@flock/shared';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 

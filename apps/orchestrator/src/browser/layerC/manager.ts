@@ -137,11 +137,7 @@ export class ScreencastManager {
    * frame already in flight); we guard on the live registry so a stopped stream
    * never forwards (US-27 "no further frames after switch").
    */
-  private onFrame(
-    sessionId: string,
-    client: CdpScreencastClient,
-    frame: CdpScreencastFrame,
-  ): void {
+  private onFrame(sessionId: string, client: CdpScreencastClient, frame: CdpScreencastFrame): void {
     if (!this.active.has(sessionId)) return;
     this.sink.send(sessionId, encodeScreencastFrame(sessionId, frame));
     // Ack back-pressure: chrome will not send the next frame until acked.

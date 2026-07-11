@@ -50,7 +50,13 @@ describe('renderScopedConfig (agentd-seeded scoped hook config)', () => {
     const hooks = JSON.parse(r!.files['hooks/flock.json']!) as { hooks: Record<string, unknown> };
     // Lifecycle events registered (PascalCase grok names); Notification is skipped (meta noise).
     expect(Object.keys(hooks.hooks)).toEqual(
-      expect.arrayContaining(['SessionStart', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop']),
+      expect.arrayContaining([
+        'SessionStart',
+        'PreToolUse',
+        'PostToolUse',
+        'PostToolUseFailure',
+        'Stop',
+      ]),
     );
     expect(Object.keys(hooks.hooks)).not.toContain('Notification');
     expect(r!.files['hooks/flock.json']).toContain('flock-hook.sh');
@@ -62,7 +68,14 @@ describe('renderScopedConfig (agentd-seeded scoped hook config)', () => {
     expect(r!.configBaseSubdir).toBe('.gemini');
     const hooks = JSON.parse(r!.files['settings.json']) as { hooks: Record<string, unknown> };
     expect(Object.keys(hooks.hooks)).toEqual(
-      expect.arrayContaining(['SessionStart', 'BeforeTool', 'AfterTool', 'Notification', 'AfterAgent', 'SessionEnd']),
+      expect.arrayContaining([
+        'SessionStart',
+        'BeforeTool',
+        'AfterTool',
+        'Notification',
+        'AfterAgent',
+        'SessionEnd',
+      ]),
     );
     expect(r!.files['flock-hook.sh']).toBeTruthy();
   });

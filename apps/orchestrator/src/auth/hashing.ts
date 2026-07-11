@@ -33,10 +33,7 @@ export async function hashPassword(plaintext: string): Promise<string> {
  * Verify a plaintext password against a stored argon2id hash. Returns `false`
  * (never throws) on mismatch OR on a malformed stored hash.
  */
-export async function verifyPassword(
-  storedHash: string,
-  plaintext: string,
-): Promise<boolean> {
+export async function verifyPassword(storedHash: string, plaintext: string): Promise<boolean> {
   try {
     return await argon2.verify(storedHash, plaintext);
   } catch {

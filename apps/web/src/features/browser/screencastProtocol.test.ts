@@ -38,9 +38,9 @@ describe('screencastChannel', () => {
 
 describe('screencastWebSocketUrl', () => {
   it('uses VITE_WS_URL when configured', () => {
-    expect(
-      screencastWebSocketUrl(SID, { VITE_WS_URL: 'wss://flock.example' }, 'http://x'),
-    ).toBe(`wss://flock.example/ws/screencast/${SID}`);
+    expect(screencastWebSocketUrl(SID, { VITE_WS_URL: 'wss://flock.example' }, 'http://x')).toBe(
+      `wss://flock.example/ws/screencast/${SID}`,
+    );
   });
 
   it('derives ws(s):// from the page origin when not configured', () => {

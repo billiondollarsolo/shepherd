@@ -41,9 +41,7 @@ describe('ptyProtocol', () => {
     });
 
     it('omits the size query for a zero/invalid size', () => {
-      expect(ptyWebSocketUrl('s1', {}, 'http://h', { cols: 0, rows: 0 })).toBe(
-        'ws://h/ws/pty/s1',
-      );
+      expect(ptyWebSocketUrl('s1', {}, 'http://h', { cols: 0, rows: 0 })).toBe('ws://h/ws/pty/s1');
     });
   });
 

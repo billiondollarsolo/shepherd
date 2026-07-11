@@ -74,7 +74,12 @@ export function RespondBar({ session }: { session: Session }): JSX.Element | nul
       <Button size="sm" variant="secondary" data-testid="respond-send" onClick={sendReply}>
         Send
       </Button>
-      <Button size="sm" variant="ghost" title="Send Enter (accept default)" onClick={() => send('\r')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        title="Send Enter (accept default)"
+        onClick={() => send('\r')}
+      >
         ⏎
       </Button>
       <Button size="sm" variant="ghost" title="Send Escape" onClick={() => send('\x1b')}>

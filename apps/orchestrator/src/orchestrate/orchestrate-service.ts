@@ -40,7 +40,13 @@ export interface AgentSummary {
 }
 
 /** Statuses an agent may wait on (the meaningful coordination points). */
-const WAITABLE: ReadonlySet<string> = new Set(['idle', 'awaiting_input', 'done', 'error', 'running']);
+const WAITABLE: ReadonlySet<string> = new Set([
+  'idle',
+  'awaiting_input',
+  'done',
+  'error',
+  'running',
+]);
 
 export class OrchestrationService {
   /** Spawn/handoff edges (parent → child) for the collaboration graph. Backed by
@@ -71,13 +77,20 @@ export class OrchestrationService {
     private readonly verifyToken: (hash: string, token: string) => Promise<boolean>,
     private readonly latestChats: () => Promise<Record<string, { role: string; text: string }>>,
     /** Launch a new agent in the project; returns the new session id. */
-    private readonly spawnFn: (projectId: string, createdBy: string | null, agentType: string) => Promise<string>,
+    private readonly spawnFn: (
+      projectId: string,
+      createdBy: string | null,
+      agentType: string,
+    ) => Promise<string>,
     /** Deliver text (as input) to a session; returns whether it was sent. */
     private readonly sendFn: (targetId: string, text: string) => Promise<boolean>,
     /** Terminate a session; returns whether it was terminated. */
     private readonly killFn: (targetId: string) => Promise<boolean>,
     /** Recent chat/assistant output for a session (oldest→newest). */
-    private readonly readOutputFn: (targetId: string, limit: number) => Promise<Array<{ role: string; text: string }>>,
+    private readonly readOutputFn: (
+      targetId: string,
+      limit: number,
+    ) => Promise<Array<{ role: string; text: string }>>,
     /** Runaway guard: max OPEN agents per project (spawn rejects beyond this). */
     private readonly maxPerProject = 12,
     /** Anti-runaway: max spawns per project within `spawnRateWindowMs`. */
@@ -105,7 +118,10 @@ export class OrchestrationService {
   }
 
   /** Look up a target that MUST be in the caller's project; returns its row. */
-  private async requireTargetInProject(projectId: string, targetId: string): Promise<{ agentType: string }> {
+  private async requireTargetInProject(
+    projectId: string,
+    targetId: string,
+  ): Promise<{ agentType: string }> {
     const [tgt] = await this.db
       .select({ projectId: agentSessions.projectId, agentType: agentSessions.agentType })
       .from(agentSessions)
@@ -118,7 +134,10 @@ export class OrchestrationService {
   }
 
   /** Verify the caller's hook token and return its project scope + owner. */
-  private async authCaller(callerId: string, token: string): Promise<{ projectId: string; createdBy: string | null }> {
+  private async authCaller(
+    callerId: string,
+    token: string,
+  ): Promise<{ projectId: string; createdBy: string | null }> {
     const [row] = await this.db
       .select({
         projectId: agentSessions.projectId,
@@ -129,7 +148,8 @@ export class OrchestrationService {
       .from(agentSessions)
       .where(eq(agentSessions.id, callerId))
       .limit(1);
-    if (!row || row.closedAt) throw new OrchestrationError('unauthorized', 'unknown or closed caller session');
+    if (!row || row.closedAt)
+      throw new OrchestrationError('unauthorized', 'unknown or closed caller session');
     if (!token || !(await this.verifyToken(row.hash, token))) {
       throw new OrchestrationError('unauthorized', 'invalid session token');
     }
@@ -161,7 +181,8 @@ export class OrchestrationService {
     timeoutMs: number,
   ): Promise<{ status: Status | null; reached: boolean }> {
     const { projectId } = await this.authCaller(callerId, token);
-    if (!WAITABLE.has(status)) throw new OrchestrationError('bad_request', `cannot wait on status: ${status}`);
+    if (!WAITABLE.has(status))
+      throw new OrchestrationError('bad_request', `cannot wait on status: ${status}`);
     const [tgt] = await this.db
       .select({ projectId: agentSessions.projectId })
       .from(agentSessions)
@@ -198,7 +219,10 @@ export class OrchestrationService {
       .from(agentSessions)
       .where(and(eq(agentSessions.projectId, projectId), isNull(agentSessions.closedAt)));
     if (Number(row?.n ?? 0) >= this.maxPerProject) {
-      throw new OrchestrationError('bad_request', `project is at the spawn cap (${this.maxPerProject} open agents)`);
+      throw new OrchestrationError(
+        'bad_request',
+        `project is at the spawn cap (${this.maxPerProject} open agents)`,
+      );
     }
     try {
       const id = await this.spawnFn(projectId, createdBy, agentType);
@@ -211,7 +235,12 @@ export class OrchestrationService {
   }
 
   /** Deliver text (a task / reply) to a sibling agent in the caller's project. */
-  async send(callerId: string, token: string, targetId: string, text: string): Promise<{ delivered: boolean }> {
+  async send(
+    callerId: string,
+    token: string,
+    targetId: string,
+    text: string,
+  ): Promise<{ delivered: boolean }> {
     const { projectId } = await this.authCaller(callerId, token);
     if (typeof text !== 'string' || text.length === 0) {
       throw new OrchestrationError('bad_request', 'text is required');

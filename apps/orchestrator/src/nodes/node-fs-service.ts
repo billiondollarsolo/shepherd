@@ -112,8 +112,7 @@ export function fsReadArgv(path: string, cap: number): string[] {
  * already exist (we don't `mkdir -p` — writes are scoped to an existing tree).
  * Serves both the editor save and drag-and-drop upload.
  */
-export const FS_WRITE_SCRIPT =
-  `f="$1"; d=$(dirname "$f"); [ -d "$d" ] || { echo ${ERR_MARKER}; exit 1; }; base64 -d > "$f"`;
+export const FS_WRITE_SCRIPT = `f="$1"; d=$(dirname "$f"); [ -d "$d" ] || { echo ${ERR_MARKER}; exit 1; }; base64 -d > "$f"`;
 
 export function fsWriteArgv(path: string): string[] {
   return ['sh', '-c', FS_WRITE_SCRIPT, 'flock-fs', path];
@@ -191,7 +190,10 @@ export class NodeFsService {
     const lines = stdout.split('\n');
     const first = (lines.shift() ?? '').trim();
     if (exitCode !== 0 || first === ERR_MARKER || first === '') {
-      throw new NodePathError(nodeId, path ? `cannot open "${path}".` : 'cannot open home directory.');
+      throw new NodePathError(
+        nodeId,
+        path ? `cannot open "${path}".` : 'cannot open home directory.',
+      );
     }
 
     const resolved = first; // absolute path from `pwd`
@@ -228,7 +230,10 @@ export class NodeFsService {
     const lines = stdout.split('\n');
     const first = (lines.shift() ?? '').trim();
     if (exitCode !== 0 || first === ERR_MARKER || first === '') {
-      throw new NodePathError(nodeId, path ? `cannot open "${path}".` : 'cannot open home directory.');
+      throw new NodePathError(
+        nodeId,
+        path ? `cannot open "${path}".` : 'cannot open home directory.',
+      );
     }
     const resolved = first;
     const base = resolved === '/' ? '' : resolved.replace(/\/+$/, '');
@@ -337,7 +342,10 @@ export class NodeFsService {
 
     const resolved = (stdout.split('\n').shift() ?? '').trim();
     if (exitCode !== 0 || resolved === ERR_MARKER || resolved === '') {
-      throw new NodePathError(nodeId, `cannot create "${clean}" in "${parent}" (exists or no permission?).`);
+      throw new NodePathError(
+        nodeId,
+        `cannot create "${clean}" in "${parent}" (exists or no permission?).`,
+      );
     }
     return { path: resolved };
   }

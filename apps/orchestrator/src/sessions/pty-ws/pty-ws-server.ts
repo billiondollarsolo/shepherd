@@ -25,10 +25,7 @@
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-import {
-  ClientMessage,
-  type PtyControlMessage,
-} from '@flock/shared';
+import { ClientMessage, type PtyControlMessage } from '@flock/shared';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import { attachWsHeartbeat } from '../../ws-heartbeat.js';
@@ -119,11 +116,7 @@ export class PtyWsServer {
   }
 
   /** Handle one HTTP upgrade for the pty path; ignores non-pty paths. */
-  async handleUpgrade(
-    req: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-  ): Promise<void> {
+  async handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     const sessionId = parseSessionIdFromUrl(req.url);
     if (sessionId === null) {
       // Not our path — leave it for another upgrade handler. Do NOT destroy the
@@ -175,10 +168,7 @@ export class PtyWsServer {
       }
     };
 
-    const ensureSubscribed = async (
-      cols?: number,
-      rows?: number,
-    ): Promise<void> => {
+    const ensureSubscribed = async (cols?: number, rows?: number): Promise<void> => {
       if (subscription || subscribing) return;
       subscribing = true;
       try {
@@ -187,36 +177,40 @@ export class PtyWsServer {
           // NOT-yet-created PtySession opens its PTY at this size from the start.
           await this.registry.resize(sessionId, cols, rows);
         }
-        subscription = await this.registry.subscribe(sessionId, {
-          onData: (chunk) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              // Binary framing: raw PTY bytes, no envelope (US-11).
-              ws.send(chunk);
-            }
-          },
-          onExit: (event) => {
-            if (event?.transient) {
-              // The node LINK dropped, not the process — the daemon persisted the
-              // session. Drop our (now-dead) PtySession so a reconnect rebuilds a
-              // fresh transport, and close the socket WITHOUT 'exited' so the
-              // browser reconnects + resumes (scrollback replays). No SIGWINCH /
-              // prompt churn because resize is deduped on both ends.
-              this.registry.closeSession(sessionId);
+        subscription = await this.registry.subscribe(
+          sessionId,
+          {
+            onData: (chunk) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                // Binary framing: raw PTY bytes, no envelope (US-11).
+                ws.send(chunk);
+              }
+            },
+            onExit: (event) => {
+              if (event?.transient) {
+                // The node LINK dropped, not the process — the daemon persisted the
+                // session. Drop our (now-dead) PtySession so a reconnect rebuilds a
+                // fresh transport, and close the socket WITHOUT 'exited' so the
+                // browser reconnects + resumes (scrollback replays). No SIGWINCH /
+                // prompt churn because resize is deduped on both ends.
+                this.registry.closeSession(sessionId);
+                ws.close();
+                return;
+              }
+              // A genuine terminal exit: tell the client so it shows "exited" and
+              // does NOT reconnect (re-attaching a dead session loops "exited").
+              sendControl({
+                channel: 'pty',
+                sessionId,
+                op: 'exited',
+                exitCode: event?.exitCode ?? null,
+                signal: event?.signal ?? null,
+              });
               ws.close();
-              return;
-            }
-            // A genuine terminal exit: tell the client so it shows "exited" and
-            // does NOT reconnect (re-attaching a dead session loops "exited").
-            sendControl({
-              channel: 'pty',
-              sessionId,
-              op: 'exited',
-              exitCode: event?.exitCode ?? null,
-              signal: event?.signal ?? null,
-            });
-            ws.close();
+            },
           },
-        }, cols && rows ? { cols, rows } : undefined);
+          cols && rows ? { cols, rows } : undefined,
+        );
         sendControl({ channel: 'pty', sessionId, op: 'attached', cols, rows });
       } catch (err) {
         sendControl({ channel: 'pty', sessionId, op: 'detached' });

@@ -52,7 +52,12 @@ afterAll(async () => {
       filters: { label: [LABEL] },
     });
     await Promise.all(
-      leftovers.map((c) => docker!.getContainer(c.Id).remove({ force: true }).catch(() => {})),
+      leftovers.map((c) =>
+        docker!
+          .getContainer(c.Id)
+          .remove({ force: true })
+          .catch(() => {}),
+      ),
     );
   } catch {
     /* ignore */
@@ -62,50 +67,57 @@ afterAll(async () => {
 // The gate is runtime: skip each test if docker isn't reachable so the suite passes
 // cleanly on a host with no docker-in-docker.
 const maybe = (name: string, fn: () => Promise<void>) =>
-  it(name, async () => {
-    if (!dockerAvailable || !docker) {
-      // Mark as skipped at runtime rather than failing on docker-less hosts.
-      return;
-    }
-    await fn();
-  }, 120_000);
+  it(
+    name,
+    async () => {
+      if (!dockerAvailable || !docker) {
+        // Mark as skipped at runtime rather than failing on docker-less hosts.
+        return;
+      }
+      await fn();
+    },
+    120_000,
+  );
 
 describe('Layer A integration — real Chrome container (US-25, int-only)', () => {
-  maybe('launches a container, exposes a loopback opaque CDP endpoint, then tears down', async () => {
-    const d = docker as unknown as DockerLike;
-    const manager = new LayerABrowserManager({
-      docker: d,
-      resolveCdp: createDockerCdpResolver(d),
-      config: {
-        image: CHROME_IMAGE,
-        labelKey: LABEL,
-        maxConcurrent: 2,
-        containerCdpPort: 9222,
-      },
-    });
+  maybe(
+    'launches a container, exposes a loopback opaque CDP endpoint, then tears down',
+    async () => {
+      const d = docker as unknown as DockerLike;
+      const manager = new LayerABrowserManager({
+        docker: d,
+        resolveCdp: createDockerCdpResolver(d),
+        config: {
+          image: CHROME_IMAGE,
+          labelKey: LABEL,
+          maxConcurrent: 2,
+          containerCdpPort: 9222,
+        },
+      });
 
-    const sessionId = `int-${Date.now()}`;
-    const browser = await manager.launch(sessionId);
+      const sessionId = `int-${Date.now()}`;
+      const browser = await manager.launch(sessionId);
 
-    // Opaque endpoint, full ws URL, not a bare port (FR-B1).
-    expect(isOpaqueCdpEndpoint(browser.cdpEndpoint)).toBe(true);
-    expect(browser.cdpEndpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\//);
+      // Opaque endpoint, full ws URL, not a bare port (FR-B1).
+      expect(isOpaqueCdpEndpoint(browser.cdpEndpoint)).toBe(true);
+      expect(browser.cdpEndpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\//);
 
-    // Container is actually running.
-    const info = await docker!.getContainer(browser.containerId).inspect();
-    expect(info.State?.Running).toBe(true);
+      // Container is actually running.
+      const info = await docker!.getContainer(browser.containerId).inspect();
+      expect(info.State?.Running).toBe(true);
 
-    // Teardown removes it — no orphan (FR-B6).
-    await manager.stop(sessionId);
-    await expect(docker!.getContainer(browser.containerId).inspect()).rejects.toBeTruthy();
+      // Teardown removes it — no orphan (FR-B6).
+      await manager.stop(sessionId);
+      await expect(docker!.getContainer(browser.containerId).inspect()).rejects.toBeTruthy();
 
-    // No Flock-labelled container remains for this session.
-    const remaining = await docker!.listContainers({
-      all: true,
-      filters: { label: [`${LABEL}=${sessionId}`] },
-    });
-    expect(remaining).toHaveLength(0);
-  });
+      // No Flock-labelled container remains for this session.
+      const remaining = await docker!.listContainers({
+        all: true,
+        filters: { label: [`${LABEL}=${sessionId}`] },
+      });
+      expect(remaining).toHaveLength(0);
+    },
+  );
 
   maybe('enforces the concurrency cap against real containers', async () => {
     const d = docker as unknown as DockerLike;

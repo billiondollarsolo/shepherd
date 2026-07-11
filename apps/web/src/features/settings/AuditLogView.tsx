@@ -35,11 +35,7 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
   });
 
   return (
-    <section
-      className="flex h-full flex-col"
-      aria-label="Audit log"
-      data-testid="audit-log-view"
-    >
+    <section className="flex h-full flex-col" aria-label="Audit log" data-testid="audit-log-view">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-flock-muted/15 px-4 py-3">
         <h2 className="text-sm font-semibold tracking-tight">Audit log</h2>
         <div className="flex items-center gap-2">
@@ -130,7 +126,9 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
                     {e.targetType ? `${e.targetType}:${e.targetId ?? '—'}` : '—'}
                   </td>
                   <td className="px-2 py-1 font-mono text-xs text-flock-muted">{e.ip ?? '—'}</td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">{e.detail ?? '—'}</td>
+                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">
+                    {e.detail ?? '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

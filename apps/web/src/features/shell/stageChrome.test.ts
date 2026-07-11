@@ -27,9 +27,9 @@ describe('stage tools chrome (paddock terminal-first)', () => {
   it('default stage chrome keeps tools closed', () => {
     const s = usePaddock.getState();
     expect(s.chrome).toBe('stage');
-    expect(isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true })).toBe(
-      false,
-    );
+    expect(
+      isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true }),
+    ).toBe(false);
   });
 
   it('openTools opens tools chrome; closeTools returns terminal-first', () => {
@@ -37,9 +37,9 @@ describe('stage tools chrome (paddock terminal-first)', () => {
     let s = usePaddock.getState();
     expect(s.chrome).toBe('tools');
     expect(s.rightOpen).toBe(true);
-    expect(isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true })).toBe(
-      true,
-    );
+    expect(
+      isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true }),
+    ).toBe(true);
     // No staged session → no tools surface
     expect(
       isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: false }),
@@ -48,9 +48,9 @@ describe('stage tools chrome (paddock terminal-first)', () => {
     usePaddock.getState().closeTools();
     s = usePaddock.getState();
     expect(s.chrome).toBe('stage');
-    expect(isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true })).toBe(
-      false,
-    );
+    expect(
+      isToolsChromeOpen({ chrome: s.chrome, rightOpen: s.rightOpen, hasStagedSession: true }),
+    ).toBe(false);
   });
 
   it('never uses GridView as layout loading fallback', () => {

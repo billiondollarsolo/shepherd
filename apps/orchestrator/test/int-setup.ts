@@ -24,8 +24,7 @@ function toTestUrl(url: string): { testUrl: string; adminUrl: string; testDb: st
 }
 
 export async function setup(): Promise<void> {
-  const current =
-    process.env.DATABASE_URL ?? 'postgres://flock:flock@localhost:5432/flock';
+  const current = process.env.DATABASE_URL ?? 'postgres://flock:flock@localhost:5432/flock';
   const { testUrl, adminUrl, testDb } = toTestUrl(current);
 
   // Create the test database if it does not exist (idempotent).

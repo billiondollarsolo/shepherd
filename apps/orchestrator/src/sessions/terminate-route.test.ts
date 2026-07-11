@@ -18,10 +18,7 @@ import type { User } from '@flock/shared';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import { registerTerminateSessionRoute } from './terminate-route.js';
-import {
-  SessionNotFoundError,
-  type TerminateContext,
-} from './terminate-session-service.js';
+import { SessionNotFoundError, type TerminateContext } from './terminate-session-service.js';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const USER_ID = '44444444-4444-4444-8444-444444444444';

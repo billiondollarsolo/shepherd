@@ -128,11 +128,7 @@ export class InputTakeoverController {
    * no CDP call. Mouse intents map to `Input.dispatchMouseEvent` (click + scroll
    * via `mouseWheel`); key intents map to `Input.dispatchKeyEvent`.
    */
-  async forward(
-    sessionId: string,
-    controllerId: string,
-    intent: InputIntent,
-  ): Promise<void> {
+  async forward(sessionId: string, controllerId: string, intent: InputIntent): Promise<void> {
     const held = this.controlled.get(sessionId);
     if (!held || held.controllerId !== controllerId) {
       throw new NotInControlError(sessionId, controllerId);

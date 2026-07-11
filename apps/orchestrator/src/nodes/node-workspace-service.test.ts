@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  NodeWorkspaceService,
-  searchArgv,
-  stackArgv,
-} from './node-workspace-service.js';
+import { NodeWorkspaceService, searchArgv, stackArgv } from './node-workspace-service.js';
 import type { ExecResult, NodeTransport } from './transport/transport.js';
 
 function fakeTransport(out: string, exitCode = 0): NodeTransport {
@@ -21,7 +17,9 @@ function fakeTransport(out: string, exitCode = 0): NodeTransport {
 }
 
 const svc = (out: string, code = 0) =>
-  new NodeWorkspaceService({ transports: { transportForNode: async () => fakeTransport(out, code) } });
+  new NodeWorkspaceService({
+    transports: { transportForNode: async () => fakeTransport(out, code) },
+  });
 
 describe('workspace argv (the contract)', () => {
   it('stackArgv passes the path positionally', () => {
@@ -38,7 +36,10 @@ describe('workspace argv (the contract)', () => {
 
 describe('detectStack', () => {
   it('parses the abs path + unique stack ids (non-git dir → gitRepo false)', async () => {
-    const r = await svc('/home/flock/repo\nnode\ndocker\nnode\n').detectStack('n', '/home/flock/repo');
+    const r = await svc('/home/flock/repo\nnode\ndocker\nnode\n').detectStack(
+      'n',
+      '/home/flock/repo',
+    );
     expect(r.path).toBe('/home/flock/repo');
     expect(r.stacks).toEqual(['node', 'docker']);
     expect(r.gitRepo).toBe(false);
@@ -52,7 +53,10 @@ describe('detectStack', () => {
   });
 
   it('reports gitHasCommits true on __git_commits__ (repo with a commit) and strips both markers', async () => {
-    const r = await svc('/home/flock/repo\n__git__\n__git_commits__\nnode\n').detectStack('n', '/home/flock/repo');
+    const r = await svc('/home/flock/repo\n__git__\n__git_commits__\nnode\n').detectStack(
+      'n',
+      '/home/flock/repo',
+    );
     expect(r.gitRepo).toBe(true);
     expect(r.gitHasCommits).toBe(true);
     expect(r.stacks).toEqual(['node']);

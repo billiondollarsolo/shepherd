@@ -5,6 +5,9 @@
 # scope here and run separately.
 name: CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -20,21 +23,38 @@ jobs:
     name: typecheck · lint · build · unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro"
+          zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --no-banner --redact
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 9.12.3
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate synchronized version
+        run: pnpm release:check
+
+      - name: Validate production Compose
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Check formatting
+        run: pnpm format:check
 
       # Shared contracts must be built before the apps typecheck against its dist.
       - name: Build
@@ -61,10 +81,10 @@ jobs:
       run:
         working-directory: agentd
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.25'
           cache-dependency-path: agentd/go.sum

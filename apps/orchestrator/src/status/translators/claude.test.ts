@@ -72,7 +72,11 @@ const CASES: ReadonlyArray<{
   },
   { name: 'Stop -> idle (turn complete; done = session end)', fixture: 'stop', expected: 'idle' },
   { name: 'StopFailure -> error', fixture: 'stop-failure', expected: 'error' },
-  { name: 'PostToolUseFailure -> error', fixture: 'post-tool-use-failure-event', expected: 'error' },
+  {
+    name: 'PostToolUseFailure -> error',
+    fixture: 'post-tool-use-failure-event',
+    expected: 'error',
+  },
   { name: 'SessionEnd -> done (genuine session end)', fixture: 'session-end', expected: 'done' },
 ];
 

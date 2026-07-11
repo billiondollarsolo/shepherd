@@ -63,7 +63,6 @@ import {
   type PushRouteDeps,
 } from './push/index.js';
 import { buildServer } from './server.js';
-import { FleetSelectionStore } from './me/fleet-selection.js';
 import type { LauncherPreset, ProjectLayoutV1 } from '@flock/shared';
 import { parseProjectPens } from '@flock/shared';
 
@@ -933,9 +932,8 @@ export async function main(): Promise<void> {
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
   // exception (spec §8.1). The AuthService satisfies the `getUserBySession`
   // seam directly. TLS is terminated by the upstream Caddy proxy (NFR-SEC1).
-  // Per-user shell state (selection / presets / layouts) — in-process store for
-  // multi-device follow; durable enough for a single orchestrator instance.
-  const fleetSelection = new FleetSelectionStore();
+  // Per-user launcher presets and project layouts. Presets/layouts remain
+  // in-process; Pen membership is persisted below.
   const userPresets = new Map<string, LauncherPreset[]>();
   const projectLayouts = new Map<string, ProjectLayoutV1>();
 
@@ -949,7 +947,6 @@ export async function main(): Promise<void> {
     projects,
     me: {
       auth,
-      selection: fleetSelection,
       getPresets: async (uid) => userPresets.get(uid) ?? [],
       putPresets: async (uid, p) => {
         userPresets.set(uid, p);

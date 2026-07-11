@@ -4,7 +4,12 @@ import { LoginThrottle } from './login-throttle.js';
 describe('LoginThrottle (T6)', () => {
   it('allows until the failure threshold, then locks out', () => {
     const now = 1_000;
-    const t = new LoginThrottle({ maxFailures: 3, windowMs: 60_000, lockoutMs: 10_000, now: () => now });
+    const t = new LoginThrottle({
+      maxFailures: 3,
+      windowMs: 60_000,
+      lockoutMs: 10_000,
+      now: () => now,
+    });
     const k = LoginThrottle.key('1.2.3.4', 'admin');
 
     expect(t.check(k).allowed).toBe(true);
@@ -19,7 +24,12 @@ describe('LoginThrottle (T6)', () => {
 
   it('unlocks after the lockout window elapses', () => {
     let now = 0;
-    const t = new LoginThrottle({ maxFailures: 1, windowMs: 60_000, lockoutMs: 5_000, now: () => now });
+    const t = new LoginThrottle({
+      maxFailures: 1,
+      windowMs: 60_000,
+      lockoutMs: 5_000,
+      now: () => now,
+    });
     const k = LoginThrottle.key('ip', 'u');
     t.recordFailure(k); // locks immediately (max=1)
     expect(t.check(k).allowed).toBe(false);

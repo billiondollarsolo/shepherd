@@ -177,7 +177,12 @@ describe('HookEndpointService.handle (US-15)', () => {
   it('on a valid hook, ENQUEUES an async event (write-behind, off the live path)', async () => {
     const { service, enqueueEvent } = build();
     const body = { hook_event_name: 'SessionStart' };
-    await service.handle({ sessionId: SESSION_ID, token: GOOD_TOKEN, body, agentType: 'claude-code' });
+    await service.handle({
+      sessionId: SESSION_ID,
+      token: GOOD_TOKEN,
+      body,
+      agentType: 'claude-code',
+    });
     expect(enqueueEvent).toHaveBeenCalledTimes(1);
     const evt = enqueueEvent.mock.calls[0]![0] as {
       sessionId: string;
@@ -208,7 +213,11 @@ describe('HookEndpointService.handle (US-15)', () => {
     const enqueueEvent = vi.fn(() => Promise.reject(new Error('db down')));
     const { service } = build({ enqueueEvent });
     await expect(
-      service.handle({ sessionId: SESSION_ID, token: GOOD_TOKEN, body: { hook_event_name: 'Stop' } }),
+      service.handle({
+        sessionId: SESSION_ID,
+        token: GOOD_TOKEN,
+        body: { hook_event_name: 'Stop' },
+      }),
     ).resolves.toEqual({ ok: true });
     // Drain so an unhandled rejection (if any) would surface in the run.
     await new Promise((r) => setTimeout(r, 0));

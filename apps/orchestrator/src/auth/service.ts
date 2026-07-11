@@ -25,8 +25,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
  * — Postgres would raise `22P02 invalid input syntax for type uuid` and surface
  * as a 500. We pre-validate so a bad cookie resolves to "no session" → 401.
  */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import type { AuditAction, Role, User } from '@flock/shared';
 import type { Database } from '../db/client.js';
 import { sessionsAuth, users, type UserRow } from '../db/schema.js';
@@ -246,10 +245,7 @@ export class AuthService {
       userAgent: ctx.userAgent ?? null,
     });
 
-    await this.db
-      .update(users)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(users.id, row.id));
+    await this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, row.id));
 
     await this.audit.record({
       action: 'login',
@@ -353,10 +349,7 @@ export class AuthService {
    * (stored null → the UI falls back to the username). Returns the updated user,
    * or null when the id is unknown/inactive. Not security-sensitive, so unaudited.
    */
-  async updateProfile(
-    userId: string,
-    input: { displayName: string | null },
-  ): Promise<User | null> {
+  async updateProfile(userId: string, input: { displayName: string | null }): Promise<User | null> {
     const trimmed = input.displayName?.trim();
     const displayName = trimmed && trimmed.length > 0 ? trimmed : null;
     const [row] = await this.db

@@ -42,13 +42,7 @@ export function Sheep({ className, ...props }: SVGProps<SVGSVGElement>) {
  */
 export function FlockMark({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
-    <svg
-      viewBox="0 0 28 28"
-      role="img"
-      aria-label="Flock"
-      className={className}
-      {...props}
-    >
+    <svg viewBox="0 0 28 28" role="img" aria-label="Flock" className={className} {...props}>
       <rect width="28" height="28" rx="8" fill={FLOCK_BLUE} />
       <path transform="translate(2 2)" fill="#ffffff" d={SHEEP_PATH} />
     </svg>

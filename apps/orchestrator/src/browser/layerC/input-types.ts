@@ -18,11 +18,7 @@
  *
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Input/
  */
-import type {
-  CdpKeyEventParams,
-  CdpMouseEventParams,
-  InputIntent,
-} from '@flock/shared';
+import type { CdpKeyEventParams, CdpMouseEventParams, InputIntent } from '@flock/shared';
 
 export type { CdpKeyEventParams, CdpMouseEventParams, InputIntent };
 
@@ -48,9 +44,7 @@ export interface CdpInputClient {
  * orchestrator wires the real `chrome-remote-interface` connection keyed off
  * Layer A's `cdpEndpoint` (the SAME chrome Layer B drives and Layer C streams).
  */
-export type CdpInputClientResolver = (
-  sessionId: string,
-) => Promise<CdpInputClient>;
+export type CdpInputClientResolver = (sessionId: string) => Promise<CdpInputClient>;
 
 /** Raised when a takeover is requested but another controller already holds it. */
 export class TakeoverConflictError extends Error {
@@ -58,9 +52,7 @@ export class TakeoverConflictError extends Error {
     public readonly sessionId: string,
     public readonly currentControllerId: string,
   ) {
-    super(
-      `session ${sessionId} is already controlled by ${currentControllerId}`,
-    );
+    super(`session ${sessionId} is already controlled by ${currentControllerId}`);
     this.name = 'TakeoverConflictError';
   }
 }
@@ -71,9 +63,7 @@ export class NotInControlError extends Error {
     public readonly sessionId: string,
     public readonly controllerId: string,
   ) {
-    super(
-      `client ${controllerId} does not hold control of session ${sessionId}`,
-    );
+    super(`client ${controllerId} does not hold control of session ${sessionId}`);
     this.name = 'NotInControlError';
   }
 }

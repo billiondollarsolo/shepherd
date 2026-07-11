@@ -63,8 +63,7 @@ const WS_OPEN = 1;
 const MAX_BACKOFF_MS = 5_000;
 const BASE_BACKOFF_MS = 250;
 
-const defaultFactory: WsFactory = (url) =>
-  new WebSocket(url) as unknown as WsLike;
+const defaultFactory: WsFactory = (url) => new WebSocket(url) as unknown as WsLike;
 
 export function useScreencast(
   sessionId: string,

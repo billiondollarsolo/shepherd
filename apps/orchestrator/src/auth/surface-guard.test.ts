@@ -57,11 +57,12 @@ function makeReply(): ReplyStub {
   return reply;
 }
 
-function makeRequest(opts: {
-  method?: string;
+function makeRequest(opts: { method?: string; url: string; cookie?: string }): {
+  method: string;
   url: string;
-  cookie?: string;
-}): { method: string; url: string; raw: { url: string }; headers: Record<string, string> } {
+  raw: { url: string };
+  headers: Record<string, string>;
+} {
   return {
     method: opts.method ?? 'GET',
     url: opts.url,

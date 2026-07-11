@@ -76,8 +76,7 @@ export const DO_NOT_LAUNCH_BROWSER_INSTRUCTION: string =
  * A v4-style GUID as it appears in a CDP DevTools ws path
  * (e.g. `/devtools/browser/<guid>`). Hyphenated 8-4-4-4-12 hex.
  */
-export const CDP_GUID_RE =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+export const CDP_GUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /**
  * Matches a "bare port" leak: a `:<digits>` authority component, e.g.

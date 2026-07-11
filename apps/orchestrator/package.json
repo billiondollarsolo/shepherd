@@ -1,9 +1,15 @@
 {
   "name": "@flock/orchestrator",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Flock orchestrator: holds the brains. SSH/tmux orchestration, in-memory status fan-out over WS, async write-behind event log, per-session browser isolation.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billiondollarsolo/flock.git",
+    "directory": "apps/orchestrator"
+  },
   "main": "./dist/index.js",
   "exports": {
     ".": {
@@ -16,6 +22,7 @@
     "start": "node dist/index.js",
     "build": "tsc -b",
     "typecheck": "tsc -b",
+    "migrate": "node dist/db/migrate.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",

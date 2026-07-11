@@ -94,9 +94,7 @@ describe('BandwidthController — control #1: concurrent-stream cap', () => {
     });
 
     await ctrl.open(A);
-    await expect(ctrl.open(B)).rejects.toBeInstanceOf(
-      ScreencastConcurrencyError,
-    );
+    await expect(ctrl.open(B)).rejects.toBeInstanceOf(ScreencastConcurrencyError);
     expect(engine.isStreaming(B)).toBe(false);
   });
 

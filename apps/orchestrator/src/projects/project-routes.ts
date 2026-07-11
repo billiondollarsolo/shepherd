@@ -55,9 +55,7 @@ export function registerProjectRoutes(
         return reply.code(201).send({ project });
       } catch (err) {
         if (err instanceof ProjectNodeNotFoundError) {
-          return reply
-            .code(404)
-            .send({ error: { code: 'node_not_found', message: err.message } });
+          return reply.code(404).send({ error: { code: 'node_not_found', message: err.message } });
         }
         throw err;
       }

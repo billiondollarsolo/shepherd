@@ -1,7 +1,7 @@
-# Decision: Terminal rendering (xterm.js)
+# Decision: Terminal rendering (xterm.js desktop, Ghostty Web mobile)
 
-Status: Accepted (Phase-0 spike US-0a deferred)
-Date: 2026-05-29
+Status: Accepted, amended for mobile
+Date: 2026-05-29; amended 2026-07-11
 
 ## Context
 
@@ -12,21 +12,19 @@ performance under high-throughput agent output.
 
 ## Decision
 
-Per the spec, **spikes US-0a/US-0b are optional and can be deferred; the v1
-defaults are safe.** v1 uses **xterm.js (`@xterm/xterm` + `@xterm/addon-fit`)**
-as the default terminal renderer. The orchestrator side uses `node-pty`/`tmux`.
-
-This decision stands unless a future US-0a spike produces evidence that an
-alternative is clearly better.
+Desktop uses **xterm.js (`@xterm/xterm` + `@xterm/addon-fit`)**. Mobile uses
+**Ghostty Web** for its canvas renderer and touch-oriented terminal lifecycle.
+Both consume the same PTY WebSocket protocol; changing the renderer does not
+change session ownership or transport semantics.
 
 ## Consequences
 
 - `@xterm/xterm` is a declared dependency of `apps/web`.
-- Terminal streaming is bidirectional over WebSocket; xterm in the browser,
-  node-pty/tmux on the orchestrator.
+- `ghostty-web` is loaded only by the mobile terminal chunk.
+- Terminal streaming is bidirectional over WebSocket; the renderer is a client detail.
 - Nodes stay dumb couriers — no node-side terminal logic.
 
 ## Revisit when
 
-- Output throughput causes visible jank, or
-- A US-0a spike is run and clears an alternative.
+- Desktop Ghostty Web validation demonstrates a material improvement over xterm.js, or
+- either renderer cannot preserve terminal fidelity for supported agent TUIs.

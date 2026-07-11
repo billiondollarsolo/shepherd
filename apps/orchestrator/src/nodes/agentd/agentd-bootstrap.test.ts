@@ -11,7 +11,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PassThrough, type Duplex } from 'node:stream';
 
-import { AgentdBootstrap, type AgentdBinaryProvider, type AgentdPlatform } from './agentd-bootstrap.js';
+import {
+  AgentdBootstrap,
+  type AgentdBinaryProvider,
+  type AgentdPlatform,
+} from './agentd-bootstrap.js';
 import type { AgentdExecResult, AgentdHost } from './ssh-agentd-host.js';
 
 interface ExecRule {
@@ -125,7 +129,10 @@ describe('AgentdBootstrap', () => {
   it('throws if the launch script fails', async () => {
     const host = new FakeHost([
       { match: /version/, result: { stdout: '1.2.3\n' } },
-      { match: /systemctl|setsid|flock-agentd\.service|set -e/, result: { code: 1, stderr: 'boom' } },
+      {
+        match: /systemctl|setsid|flock-agentd\.service|set -e/,
+        result: { code: 1, stderr: 'boom' },
+      },
     ]);
     const warn = vi.fn();
     const boot = new AgentdBootstrap({ version: '1.2.3', port: 48222, binaries, logger: { warn } });

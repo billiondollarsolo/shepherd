@@ -104,7 +104,9 @@ describe('CRUD integration — node → project → session round-trip', () => {
       .from(secrets)
       .where(eq(secrets.id, node.sshKeyRef!));
     expect(secretRow).toBeDefined();
-    expect(Buffer.from(secretRow!.ciphertext).toString('utf8')).not.toContain('int-secret-material');
+    expect(Buffer.from(secretRow!.ciphertext).toString('utf8')).not.toContain(
+      'int-secret-material',
+    );
   });
 
   it('creates a project on the node and lists it (optionally filtered)', async () => {

@@ -46,48 +46,40 @@ function unauthorized(reply: FastifyReply, message: string): void {
  * auto-loaded plugin) so `buildServer` wires the concrete service, and so tests
  * can register it on an isolated Fastify app. Deliberately has no cookie guard.
  */
-export function registerHookRoute(
-  app: FastifyInstance,
-  deps: { service: HookRouteService },
-): void {
-  app.post(
-    '/api/hooks/:sessionId',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      // The path param uses `:sessionId`; the shared contract validates `id`.
-      const params = request.params as { sessionId?: string };
-      const parsed = SessionIdParams.safeParse({ id: params.sessionId });
-      if (!parsed.success) {
-        return badRequest(reply, 'a valid session id is required.');
-      }
+export function registerHookRoute(app: FastifyInstance, deps: { service: HookRouteService }): void {
+  app.post('/api/hooks/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
+    // The path param uses `:sessionId`; the shared contract validates `id`.
+    const params = request.params as { sessionId?: string };
+    const parsed = SessionIdParams.safeParse({ id: params.sessionId });
+    if (!parsed.success) {
+      return badRequest(reply, 'a valid session id is required.');
+    }
 
-      // Per-session token auth (NFR-SEC3): a MISSING Authorization token is
-      // rejected at the edge with 401 — no work is done for an unauthenticated
-      // caller, and a session cookie never authorizes this route (spec §8.1).
-      const token = extractBearerToken(request.headers.authorization);
-      if (token === null) {
-        return unauthorized(reply, 'Hook token is required.');
-      }
+    // Per-session token auth (NFR-SEC3): a MISSING Authorization token is
+    // rejected at the edge with 401 — no work is done for an unauthenticated
+    // caller, and a session cookie never authorizes this route (spec §8.1).
+    const token = extractBearerToken(request.headers.authorization);
+    if (token === null) {
+      return unauthorized(reply, 'Hook token is required.');
+    }
 
-      try {
-        const ack = await deps.service.handle({
-          sessionId: parsed.data.id,
-          token,
-          body: request.body,
-        });
-        // Fast 202 ack: accepted for async processing; never returns derived
-        // status (spec §8.1 — the endpoint acks, the WS fans out the status).
-        return reply.code(202).send(ack);
-      } catch (err) {
-        if (err instanceof HookUnauthorizedError) {
-          return unauthorized(reply, err.message);
-        }
-        if (err instanceof HookSessionNotFoundError) {
-          return reply
-            .code(404)
-            .send({ error: { code: 'session_not_found', message: err.message } });
-        }
-        throw err;
+    try {
+      const ack = await deps.service.handle({
+        sessionId: parsed.data.id,
+        token,
+        body: request.body,
+      });
+      // Fast 202 ack: accepted for async processing; never returns derived
+      // status (spec §8.1 — the endpoint acks, the WS fans out the status).
+      return reply.code(202).send(ack);
+    } catch (err) {
+      if (err instanceof HookUnauthorizedError) {
+        return unauthorized(reply, err.message);
       }
-    },
-  );
+      if (err instanceof HookSessionNotFoundError) {
+        return reply.code(404).send({ error: { code: 'session_not_found', message: err.message } });
+      }
+      throw err;
+    }
+  });
 }

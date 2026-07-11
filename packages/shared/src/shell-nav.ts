@@ -52,7 +52,7 @@ export function openAgent(state: ShellNavState, opts: OpenAgentOpts): ShellNavSt
   };
 }
 
-/** D1 home: Mission Control, all hosts — preserves selection/stage. */
+/** D1 home: Paddock dashboard — preserves selection/stage. */
 export function openMission(state: ShellNavState): ShellNavState {
   return {
     ...state,

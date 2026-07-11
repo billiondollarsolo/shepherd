@@ -84,9 +84,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() =>
-        caches.open(SHELL_CACHE).then((cache) =>
-          cache.match('/').then((cached) => cached || cache.match('/index.html')),
-        ),
+        caches
+          .open(SHELL_CACHE)
+          .then((cache) => cache.match('/').then((cached) => cached || cache.match('/index.html'))),
       ),
     );
     return;
@@ -108,7 +108,11 @@ self.addEventListener('fetch', (event) => {
           cached ||
           fetch(request).then((response) => {
             // Cache successful same-origin static responses for next time.
-            if (response && response.ok && url.origin === (self.location ? self.location.origin : url.origin)) {
+            if (
+              response &&
+              response.ok &&
+              url.origin === (self.location ? self.location.origin : url.origin)
+            ) {
               cache.put(request, response.clone());
             }
             return response;
@@ -158,19 +162,17 @@ self.addEventListener('notificationclick', (event) => {
   const targetUrl = (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if ('focus' in client) {
-            client.focus();
-            if ('navigate' in client && targetUrl !== '/') {
-              client.navigate(targetUrl);
-            }
-            return undefined;
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
           }
+          return undefined;
         }
-        return self.clients.openWindow(targetUrl);
-      }),
+      }
+      return self.clients.openWindow(targetUrl);
+    }),
   );
 });

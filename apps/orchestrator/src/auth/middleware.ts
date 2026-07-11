@@ -65,20 +65,14 @@ async function authenticate(
 
 /** Build a `requireAuth` preHandler bound to an {@link AuthService}. */
 export function makeRequireAuth(deps: AuthGuardDeps) {
-  return async function requireAuth(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
+  return async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     await authenticate(deps, request, reply);
   };
 }
 
 /** Build a `requireAdmin` preHandler bound to an {@link AuthService}. */
 export function makeRequireAdmin(deps: AuthGuardDeps) {
-  return async function requireAdmin(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
+  return async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const user = await authenticate(deps, request, reply);
     if (!user) return; // 401 already sent
     if (user.role !== 'admin') {

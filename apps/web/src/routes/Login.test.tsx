@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Login from './Login';
 
 function mockFetch(impl: (url: string, init: RequestInit) => Partial<Response>) {
-  return vi.fn(async (url: unknown, init: unknown) =>
-    impl(String(url), (init ?? {}) as RequestInit) as Response,
+  return vi.fn(
+    async (url: unknown, init: unknown) =>
+      impl(String(url), (init ?? {}) as RequestInit) as Response,
   );
 }
 

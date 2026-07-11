@@ -21,18 +21,17 @@ export function BottomBar(): JSX.Element {
   const statuses = useLiveStatuses();
   const health = useAgentdHealth();
 
-  const session = selectedId ? sessions.find((x) => x.id === selectedId) ?? null : null;
-  const nodeId = session?.nodeId ?? nodes.find((n) => n.kind === 'local')?.id ?? nodes[0]?.id ?? null;
+  const session = selectedId ? (sessions.find((x) => x.id === selectedId) ?? null) : null;
+  const nodeId =
+    session?.nodeId ?? nodes.find((n) => n.kind === 'local')?.id ?? nodes[0]?.id ?? null;
   const node = nodes.find((n) => n.id === nodeId) ?? null;
   const { data: info } = useNodeInfo(nodeId);
 
-  const status: Status | null = session ? statuses.get(session.id) ?? session.status : null;
+  const status: Status | null = session ? (statuses.get(session.id) ?? session.status) : null;
   const usage = session ? health?.sessions[session.id] : undefined;
 
   return (
-    <footer
-      className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-3 text-2xs text-flock-ink-muted"
-    >
+    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-3 text-2xs text-flock-ink-muted">
       {node ? (
         <button
           type="button"
@@ -81,7 +80,11 @@ export function BottomBar(): JSX.Element {
             <span className="max-w-[18rem] truncate">{usage.tool}</span>
           ) : null}
           {usage?.contextPct != null ? (
-            <ContextMeter pct={usage.contextPct} tokens={usage.contextTokens} limit={usage.contextLimit} />
+            <ContextMeter
+              pct={usage.contextPct}
+              tokens={usage.contextTokens}
+              limit={usage.contextLimit}
+            />
           ) : null}
           {usage?.tokens ? (
             <span className="tabular-nums">{formatTokens(usage.tokens)} tok</span>

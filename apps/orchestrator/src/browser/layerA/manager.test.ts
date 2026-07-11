@@ -155,10 +155,7 @@ describe('LayerABrowserManager (US-25)', () => {
   });
 
   it('does not race-duplicate when launched concurrently for one session', async () => {
-    const [a, b] = await Promise.all([
-      manager.launch('sess-1'),
-      manager.launch('sess-1'),
-    ]);
+    const [a, b] = await Promise.all([manager.launch('sess-1'), manager.launch('sess-1')]);
     expect(a.containerId).toBe(b.containerId);
     expect(docker.created).toHaveLength(1);
   });

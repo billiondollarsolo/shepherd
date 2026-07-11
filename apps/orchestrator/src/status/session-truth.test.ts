@@ -90,13 +90,8 @@ describe('planSessionTruth', () => {
   });
 
   it('disconnects sessions whose node row is missing', () => {
-    const plan = planSessionTruth(
-      [{ id: 'orphan', nodeId: 'gone', status: 'running' }],
-      nodes({}),
-    );
-    expect(plan).toEqual([
-      { id: 'orphan', status: 'disconnected', detail: 'node missing' },
-    ]);
+    const plan = planSessionTruth([{ id: 'orphan', nodeId: 'gone', status: 'running' }], nodes({}));
+    expect(plan).toEqual([{ id: 'orphan', status: 'disconnected', detail: 'node missing' }]);
   });
 
   it('is a no-op when everything matches ground truth', () => {

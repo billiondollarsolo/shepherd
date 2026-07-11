@@ -61,7 +61,10 @@ function makeFakeClient(): FakeClient {
   return client;
 }
 
-function makeFakeSink(): { send: ReturnType<typeof vi.fn>; sent: Array<{ sessionId: string; payload: string }> } {
+function makeFakeSink(): {
+  send: ReturnType<typeof vi.fn>;
+  sent: Array<{ sessionId: string; payload: string }>;
+} {
   const sent: Array<{ sessionId: string; payload: string }> = [];
   const send = vi.fn((sessionId: string, payload: string) => {
     sent.push({ sessionId, payload });
@@ -187,9 +190,7 @@ describe('ScreencastManager — on-demand start/stop (US-27)', () => {
 
     await mgr.start(SID);
 
-    expect(startSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ format: 'jpeg', quality: 42 }),
-    );
+    expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({ format: 'jpeg', quality: 42 }));
   });
 
   it('lets quality be adjusted live and applies it on the next (re)start (NFR-PERF3)', async () => {
@@ -203,9 +204,7 @@ describe('ScreencastManager — on-demand start/stop (US-27)', () => {
     await mgr.stop(SID);
     await mgr.start(SID);
 
-    expect(startSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ quality: 10 }),
-    );
+    expect(startSpy).toHaveBeenLastCalledWith(expect.objectContaining({ quality: 10 }));
   });
 
   it('enforces a concurrent active-stream cap (NFR-PERF3, spec §10)', async () => {
@@ -217,9 +216,9 @@ describe('ScreencastManager — on-demand start/stop (US-27)', () => {
     });
 
     await mgr.start('aaaaaaaa-1111-4111-8111-111111111111');
-    await expect(
-      mgr.start('bbbbbbbb-2222-4222-8222-222222222222'),
-    ).rejects.toBeInstanceOf(ScreencastConcurrencyError);
+    await expect(mgr.start('bbbbbbbb-2222-4222-8222-222222222222')).rejects.toBeInstanceOf(
+      ScreencastConcurrencyError,
+    );
   });
 
   it('stopAll() stops every active stream (orchestrator shutdown)', async () => {

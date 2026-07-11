@@ -3,13 +3,14 @@ import { fetchLauncherPresets, putLauncherPresets } from './launcherPresetsApi';
 
 describe('launcherPresetsApi', () => {
   it('fetchLauncherPresets returns presets array', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          presets: [{ id: 'builtin-claude', name: 'Claude Code', agentType: 'claude-code' }],
-        }),
-        { status: 200 },
-      ),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            presets: [{ id: 'builtin-claude', name: 'Claude Code', agentType: 'claude-code' }],
+          }),
+          { status: 200 },
+        ),
     ) as unknown as typeof fetch;
     const presets = await fetchLauncherPresets(fetchImpl);
     expect(presets[0]?.agentType).toBe('claude-code');

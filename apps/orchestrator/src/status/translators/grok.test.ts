@@ -22,24 +22,31 @@ describe('translateGrokHook (Grok lifecycle hooks)', () => {
   });
 
   it('post_tool_use (success) -> running', () => {
-    expect(
-      translateGrokHook({ hookEventName: 'post_tool_use', toolName: 'edit_file' }),
-    ).toEqual({ status: 'running', detail: 'edit_file' });
+    expect(translateGrokHook({ hookEventName: 'post_tool_use', toolName: 'edit_file' })).toEqual({
+      status: 'running',
+      detail: 'edit_file',
+    });
   });
 
   it('post_tool_use (failure) -> error', () => {
     expect(
-      translateGrokHook({ hookEventName: 'post_tool_use', toolName: 'run_terminal_command', exitCode: 2 })
-        ?.status,
+      translateGrokHook({
+        hookEventName: 'post_tool_use',
+        toolName: 'run_terminal_command',
+        exitCode: 2,
+      })?.status,
     ).toBe('error');
-    expect(
-      translateGrokHook({ hookEventName: 'post_tool_use', success: false })?.status,
-    ).toBe('error');
+    expect(translateGrokHook({ hookEventName: 'post_tool_use', success: false })?.status).toBe(
+      'error',
+    );
   });
 
   it('post_tool_use_failure -> error', () => {
     expect(
-      translateGrokHook({ hookEventName: 'post_tool_use_failure', toolName: 'run_terminal_command' }),
+      translateGrokHook({
+        hookEventName: 'post_tool_use_failure',
+        toolName: 'run_terminal_command',
+      }),
     ).toEqual({ status: 'error', detail: 'run_terminal_command' });
   });
 

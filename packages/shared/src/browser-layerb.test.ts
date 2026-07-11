@@ -81,9 +81,7 @@ describe('Layer B mechanism (v1 = native/MCP; browser-harness deferred)', () => 
 
 describe('do-not-launch directive (FR-B2)', () => {
   it('instructs the agent not to launch its own browser and names the env var', () => {
-    expect(DO_NOT_LAUNCH_BROWSER_INSTRUCTION.toLowerCase()).toContain(
-      'do not launch',
-    );
+    expect(DO_NOT_LAUNCH_BROWSER_INSTRUCTION.toLowerCase()).toContain('do not launch');
     expect(DO_NOT_LAUNCH_BROWSER_INSTRUCTION).toContain(SESSION_BROWSER_CDP_ENV);
   });
 });

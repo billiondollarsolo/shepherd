@@ -22,11 +22,7 @@ export function isServiceWorkerSupported(): boolean {
 
 /** True when the browser supports the Push API (implies SW support). */
 export function isPushSupported(): boolean {
-  return (
-    isServiceWorkerSupported() &&
-    typeof window !== 'undefined' &&
-    'PushManager' in window
-  );
+  return isServiceWorkerSupported() && typeof window !== 'undefined' && 'PushManager' in window;
 }
 
 /** The path the service worker is served from (root scope). */
@@ -68,9 +64,7 @@ export async function fetchVapidPublicKey(): Promise<string> {
 }
 
 /** POST a browser PushSubscription to the orchestrator (`/api/push/subscribe`). */
-export async function sendSubscriptionToServer(
-  subscription: PushSubscription,
-): Promise<void> {
+export async function sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
   const res = await fetch('/api/push/subscribe', {
     method: 'POST',
     credentials: 'include',

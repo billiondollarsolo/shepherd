@@ -111,7 +111,13 @@ describe('useStatusWebSocket (US-23)', () => {
 
     act(() => {
       socket!.open();
-      socket!.emit({ channel: 'nodes', nodeId: A, connectionStatus: 'connected', lastSeenAt: null, ts: '2026-05-29T06:30:00.000Z' });
+      socket!.emit({
+        channel: 'nodes',
+        nodeId: A,
+        connectionStatus: 'connected',
+        lastSeenAt: null,
+        ts: '2026-05-29T06:30:00.000Z',
+      });
       socket!.emit('garbage');
       socket!.emit(statusFrame(A, 'idle')); // a real one still lands
     });

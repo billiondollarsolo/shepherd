@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Status } from '@flock/shared';
-import {
-  sortSessionsByAttention,
-  groupNeedsAttention,
-  type OrderableSession,
-} from './ordering';
+import { sortSessionsByAttention, groupNeedsAttention, type OrderableSession } from './ordering';
 
 const s = (id: string, status: Status): OrderableSession => ({ id, status });
 
@@ -27,10 +23,9 @@ describe('sortSessionsByAttention (US-23, FR-ST6/FR-UI3)', () => {
   });
 
   it('orders awaiting_input strictly before error', () => {
-    const ordered = sortSessionsByAttention([
-      s('e', 'error'),
-      s('a', 'awaiting_input'),
-    ]).map((x) => x.id);
+    const ordered = sortSessionsByAttention([s('e', 'error'), s('a', 'awaiting_input')]).map(
+      (x) => x.id,
+    );
     expect(ordered).toEqual(['a', 'e']);
   });
 
@@ -57,11 +52,7 @@ describe('sortSessionsByAttention (US-23, FR-ST6/FR-UI3)', () => {
   });
 
   it('is a stable sort: ties preserve input order', () => {
-    const input = [
-      s('r1', 'running'),
-      s('r2', 'running'),
-      s('r3', 'running'),
-    ];
+    const input = [s('r1', 'running'), s('r2', 'running'), s('r3', 'running')];
     const ordered = sortSessionsByAttention(input).map((x) => x.id);
     expect(ordered).toEqual(['r1', 'r2', 'r3']);
   });

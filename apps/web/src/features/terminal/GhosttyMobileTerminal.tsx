@@ -341,10 +341,7 @@ export function installMobileTextSymbolRendering(terminal: TerminalWithCanvasRen
 }
 
 /** Constrain Ghostty to the visible viewport before deriving rows and columns. */
-export function fitMobileTerminal(
-  terminal: FittableTerminal,
-  fit: { fit(): void },
-): void {
+export function fitMobileTerminal(terminal: FittableTerminal, fit: { fit(): void }): void {
   const element = terminal.element;
   if (!element) return;
   const parent = element.parentElement;

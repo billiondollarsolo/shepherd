@@ -34,9 +34,7 @@ export function NodesSection(): JSX.Element {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-flock-ink-primary">{n.name}</p>
               <p className="truncate text-2xs text-flock-ink-muted">
-                {n.kind === 'ssh'
-                  ? `${n.sshUser}@${n.host}:${n.port ?? 22}`
-                  : 'local orchestrator'}
+                {n.kind === 'ssh' ? `${n.sshUser}@${n.host}:${n.port ?? 22}` : 'local orchestrator'}
               </p>
             </div>
             <div className="flex items-center gap-2">

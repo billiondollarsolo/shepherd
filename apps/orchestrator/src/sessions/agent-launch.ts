@@ -117,14 +117,38 @@ interface AgentCaps {
 }
 
 const AGENT_CAPS: Record<AgentType, AgentCaps> = {
-  'claude-code': { command: ['claude'], permissionFlags: claudePermissionFlags, systemPromptFlag: '--append-system-prompt', kind: 'agent', initialStatus: 'starting', activityStatus: false },
-  codex: { command: ['codex'], permissionFlags: codexPermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
+  'claude-code': {
+    command: ['claude'],
+    permissionFlags: claudePermissionFlags,
+    systemPromptFlag: '--append-system-prompt',
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: false,
+  },
+  codex: {
+    command: ['codex'],
+    permissionFlags: codexPermissionFlags,
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: false,
+  },
   // OpenCode has its own in-app permission config, so it takes no launch flag.
-  opencode: { command: ['opencode'], kind: 'agent', initialStatus: 'starting', activityStatus: false },
+  opencode: {
+    command: ['opencode'],
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: false,
+  },
   // Gemini launches over ACP (`acpLaunchCommand`) for status + chat. activityStatus
   // is false so a PTY path wouldn't fight hooks; the live ACP path also sets
   // activityStatus:false at open. Permission flags apply to both PTY and ACP argv.
-  gemini: { command: ['gemini'], permissionFlags: geminiPermissionFlags, kind: 'agent', initialStatus: 'starting', activityStatus: false },
+  gemini: {
+    command: ['gemini'],
+    permissionFlags: geminiPermissionFlags,
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: false,
+  },
   // xAI Grok Build CLI (binary `grok`). No documented autonomy flags (Plan Mode is
   // its built-in safety gate). Grok fires Claude-Code-compatible lifecycle hooks
   // (session_start/pre_tool_use/post_tool_use/stop) that reach Flock's hook
@@ -144,7 +168,12 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
   // Additional CLI agents — launchable if installed on the node; status via PTY
   // activity (no transcript/hook integration yet, like gemini/grok historically).
   aider: { command: ['aider'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
-  'cursor-agent': { command: ['cursor-agent'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
+  'cursor-agent': {
+    command: ['cursor-agent'],
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: true,
+  },
   amp: { command: ['amp'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
   // generic: bare shell, status via PTY activity (no transcript/hook).
   generic: { kind: 'agent', initialStatus: 'starting', activityStatus: true },

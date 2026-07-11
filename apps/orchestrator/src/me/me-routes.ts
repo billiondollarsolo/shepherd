@@ -1,15 +1,11 @@
-/**
- * Per-user shell APIs: fleet selection, launcher presets, project layout mirror.
- */
+/** Per-user launcher presets and project layout/Pen APIs. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  FleetSelectionPayloadSchema,
   LauncherPresetsPayloadSchema,
   ProjectLayoutV1Schema,
   ProjectPensV1Schema,
   BUILTIN_LAUNCHER_PRESETS,
   mergePresetsWithBuiltins,
-  type FleetSelectionPayload,
   type LauncherPreset,
   type ProjectLayoutV1,
   type ProjectPensV1,
@@ -17,11 +13,9 @@ import {
 import { badRequest } from '../http/reply.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAuth } from '../auth/middleware.js';
-import type { FleetSelectionStore } from './fleet-selection.js';
 
 export interface MeRouteDeps {
   auth: AuthGuardDeps;
-  selection: FleetSelectionStore;
   /** Optional persistent preset map userId → presets */
   getPresets?: (userId: string) => Promise<LauncherPreset[]>;
   putPresets?: (userId: string, presets: LauncherPreset[]) => Promise<void>;
@@ -33,30 +27,6 @@ export interface MeRouteDeps {
 
 export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void {
   const requireAuth = makeRequireAuth(deps.auth);
-
-  app.get(
-    '/api/me/selection',
-    { preHandler: requireAuth },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.authUser!.id;
-      const selection = deps.selection.get(userId);
-      return reply.code(200).send({ selection });
-    },
-  );
-
-  app.put(
-    '/api/me/selection',
-    { preHandler: requireAuth },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const parsed = FleetSelectionPayloadSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return badRequest(reply, 'invalid fleet selection payload');
-      }
-      const userId = request.authUser!.id;
-      const selection = deps.selection.put(userId, parsed.data);
-      return reply.code(200).send({ selection });
-    },
-  );
 
   app.get(
     '/api/me/launcher-presets',
@@ -143,5 +113,3 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     },
   );
 }
-
-export type { FleetSelectionPayload };

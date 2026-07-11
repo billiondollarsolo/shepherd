@@ -25,7 +25,11 @@ import { createHash } from 'node:crypto';
 
 import { Client, type ConnectConfig } from 'ssh2';
 
-import { ReverseTunnel, type HookEndpointTarget, type TunnelHost } from '../tunnel/reverse-tunnel.js';
+import {
+  ReverseTunnel,
+  type HookEndpointTarget,
+  type TunnelHost,
+} from '../tunnel/reverse-tunnel.js';
 import { sshTunnelHost } from '../tunnel/ssh-tunnel-host.js';
 import { sshAgentdHost, type AgentdHost } from '../agentd/ssh-agentd-host.js';
 import type { ConnectionStatus } from '@flock/shared';

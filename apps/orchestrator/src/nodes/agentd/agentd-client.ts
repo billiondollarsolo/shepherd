@@ -72,33 +72,33 @@ export class NodeAgentdClient {
   private onChunk(chunk: Buffer): void {
     try {
       this.decoder.push(chunk, (type, payload) => {
-      if (type === FrameType.PtyOutput) {
-        const { sid, data } = decodeDataPayload(payload);
-        this.dataHandlers.get(sid)?.(data);
-        return;
-      }
-      if (type === FrameType.Control) {
-        let ctrl: AgentdControl;
-        try {
-          ctrl = JSON.parse(payload.toString('utf8')) as AgentdControl;
-        } catch {
+        if (type === FrameType.PtyOutput) {
+          const { sid, data } = decodeDataPayload(payload);
+          this.dataHandlers.get(sid)?.(data);
           return;
         }
-        if (ctrl.op === 'exit' && ctrl.id) {
-          this.exitHandlers.get(ctrl.id)?.(ctrl.code ?? 0, 'exit');
-        }
-        // Unsolicited derived-status push (daemon tails the agent transcript).
-        // `ctrl` structurally satisfies AgentdStatusMeta (the handler reads only
-        // the telemetry fields), so pass it through directly.
-        if (ctrl.op === 'status' && ctrl.id) {
-          this.statusHandler?.(ctrl.id, ctrl.state ?? '', ctrl);
-        }
-        for (let i = this.waiters.length - 1; i >= 0; i--) {
-          if (this.waiters[i]!.match(ctrl)) {
-            this.waiters.splice(i, 1)[0]!.resolve(ctrl);
+        if (type === FrameType.Control) {
+          let ctrl: AgentdControl;
+          try {
+            ctrl = JSON.parse(payload.toString('utf8')) as AgentdControl;
+          } catch {
+            return;
+          }
+          if (ctrl.op === 'exit' && ctrl.id) {
+            this.exitHandlers.get(ctrl.id)?.(ctrl.code ?? 0, 'exit');
+          }
+          // Unsolicited derived-status push (daemon tails the agent transcript).
+          // `ctrl` structurally satisfies AgentdStatusMeta (the handler reads only
+          // the telemetry fields), so pass it through directly.
+          if (ctrl.op === 'status' && ctrl.id) {
+            this.statusHandler?.(ctrl.id, ctrl.state ?? '', ctrl);
+          }
+          for (let i = this.waiters.length - 1; i >= 0; i--) {
+            if (this.waiters[i]!.match(ctrl)) {
+              this.waiters.splice(i, 1)[0]!.resolve(ctrl);
+            }
           }
         }
-      }
       });
     } catch (err) {
       // T25: an over-cap frame (FrameTooLargeError) means the stream is corrupt

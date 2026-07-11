@@ -1,10 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserControlResponse, InputIntent } from '@flock/shared';
-import {
-  useBrowserControl,
-  type BrowserControlTransport,
-} from './useBrowserControl.js';
+import { useBrowserControl, type BrowserControlTransport } from './useBrowserControl.js';
 
 /**
  * US-28 — web control hook: takeover grants control + forwards input; release
@@ -21,9 +18,7 @@ function controlResponse(
   return { sessionId: SID, action, browserCdpEndpoint: CDP, inControl };
 }
 
-function makeTransport(
-  overrides?: Partial<BrowserControlTransport>,
-): BrowserControlTransport & {
+function makeTransport(overrides?: Partial<BrowserControlTransport>): BrowserControlTransport & {
   sendInput: ReturnType<typeof vi.fn>;
 } {
   const sendInput = vi.fn();

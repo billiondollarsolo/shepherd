@@ -131,13 +131,16 @@
 
 @keyframes flock-pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--flock-indicator-color, currentColor) 55%, transparent);
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--flock-indicator-color, currentColor) 55%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
   }
 }
 
