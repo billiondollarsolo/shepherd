@@ -77,9 +77,9 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/onSendInput/);
   });
 
-  it('MissionControl filters by hostScope', () => {
-    const src = read('features/overview/MissionControl.tsx');
-    expect(src).toMatch(/filterSessionsByHostScope/);
+  it('FleetView filters nodes by hostScope', () => {
+    const src = read('features/overview/FleetView.tsx');
+    expect(src).toMatch(/nodeInHostScope/);
     expect(src).toMatch(/hostScope/);
   });
 
@@ -89,8 +89,8 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/launcher-presets|launcher-preset-/);
   });
 
-  it('MissionControl openSession passes projectId', () => {
-    const src = read('features/overview/MissionControl.tsx');
-    expect(src).toMatch(/openAgent\(s\.id,\s*s\.projectId\)/);
+  it('FleetView opens an agent in its project', () => {
+    const src = read('features/overview/FleetView.tsx');
+    expect(src).toMatch(/openAgent\(session\.id,\s*project\.id\)/);
   });
 });

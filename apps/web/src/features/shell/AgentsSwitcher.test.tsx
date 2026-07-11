@@ -5,6 +5,7 @@ import { TooltipProvider } from '../../components/ui';
 import { usePaddock } from '../../store/paddock';
 
 const mutate = vi.fn();
+const penAction = vi.fn();
 const sessions: Session[] = [
   makeSession('pinned-idle', 'idle', true),
   makeSession('working', 'running'),
@@ -90,7 +91,6 @@ function makeSession(
     hookTokenHash: 'hash',
     status,
     statusDetail: null,
-    worktreeBranch: null,
     pinned,
     note: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -111,48 +111,58 @@ function renderSwitcher(): void {
 describe('AgentsSwitcher controls', () => {
   beforeEach(() => {
     mutate.mockReset();
+    penAction.mockReset();
     usePaddock.setState({
       hostScope: 'all',
       selectedSessionId: null,
       selectedProjectId: null,
       nodeInfoNodeId: null,
+      projectView: 'agents',
     });
   });
 
-  it('condenses sort, group, and filters into one view menu', async () => {
+  it('keeps Pen layout choices inside the kebab menu', async () => {
+    usePaddock.setState({
+      selectedProjectId: 'project-1',
+      penProjectId: 'project-1',
+      activePenId: 'pen-1',
+      penGroups: [
+        {
+          id: 'pen-1',
+          name: 'Pen 1',
+          sessionIds: ['working', 'waiting'],
+          arrange: 'row',
+        },
+      ],
+      penActionHandler: penAction,
+    });
     renderSwitcher();
 
-    const trigger = screen.getByRole('button', { name: 'Agent list view options' });
-    expect(trigger).toHaveTextContent('View');
-    expect(trigger).toHaveTextContent('Needs attention');
+    expect(screen.queryByRole('button', { name: 'Side by side' })).toBeNull();
+    const actions = screen.getByRole('button', { name: /Pen 1 .* actions/ });
+    fireEvent.keyDown(actions, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stacked' }));
+    expect(penAction).toHaveBeenCalledWith({
+      type: 'arrange',
+      penId: 'pen-1',
+      mode: 'col',
+    });
+  });
+
+  it('uses Pens and drag order without competing view controls', () => {
+    renderSwitcher();
+
+    expect(screen.queryByRole('button', { name: 'Agent list view options' })).toBeNull();
     expect(screen.queryByText('Sort by')).toBeNull();
-
-    fireEvent.keyDown(trigger, { key: 'Enter', code: 'Enter' });
-    expect(await screen.findByText('Sort by')).toBeVisible();
-    expect(screen.getByRole('menuitemradio', { name: 'Needs attention' })).toBeChecked();
-    expect(screen.getByRole('menuitemradio', { name: 'No grouping' })).toBeChecked();
-  });
-
-  it('keeps filters out of the header and filters to currently working sessions', async () => {
-    renderSwitcher();
+    expect(screen.queryByText('Group by')).toBeNull();
+    expect(screen.queryByText('Pinned sessions')).toBeNull();
     expect(screen.queryByText('Currently working')).toBeNull();
-
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Agent list view options' }), {
-      key: 'Enter',
-      code: 'Enter',
-    });
-    const workingOnly = await screen.findByRole('menuitemcheckbox', {
-      name: 'Currently working',
-    });
-    fireEvent.click(workingOnly);
-
     expect(screen.getByTestId('agent-row-working')).toBeInTheDocument();
-    expect(screen.queryByTestId('agent-row-pinned-idle')).toBeNull();
-    expect(screen.queryByTestId('agent-row-waiting')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Agent list view options' })).toHaveTextContent('1');
+    expect(screen.getByTestId('agent-row-pinned-idle')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-row-waiting')).toBeInTheDocument();
   });
 
-  it('puts pinning and confirmed deletion in an agent actions menu', async () => {
+  it('keeps confirmed deletion in the agent actions menu without pinning', async () => {
     renderSwitcher();
 
     const workingRow = screen.getByTestId('agent-row-working').closest('li')!;
@@ -160,13 +170,7 @@ describe('AgentsSwitcher controls', () => {
       name: /Agent actions for codex · workin/i,
     });
     fireEvent.keyDown(actions, { key: 'Enter', code: 'Enter' });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Keep at top' }));
-    expect(mutate).toHaveBeenCalledWith({
-      id: 'working',
-      patch: { pinned: true },
-    });
-
-    fireEvent.keyDown(actions, { key: 'Enter', code: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: 'Keep at top' })).toBeNull();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete session…' }));
     expect(usePaddock.getState()).toMatchObject({
       dialog: 'terminate-session',
@@ -187,6 +191,19 @@ describe('AgentsSwitcher controls', () => {
     expect(screen.getByTestId('agent-row-pinned-idle')).toBeInTheDocument();
     expect(screen.queryByTestId('agent-row-other-project')).toBeNull();
     expect(screen.getByTestId('agent-list-context')).toHaveTextContent('Project:Flock');
+  });
+
+  it('opens project Source Control from the sidebar', () => {
+    usePaddock.setState({ selectedProjectId: 'project-1' });
+    renderSwitcher();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source Control' }));
+    expect(usePaddock.getState()).toMatchObject({
+      selectedProjectId: 'project-1',
+      selectedSessionId: null,
+      projectView: 'git',
+      rightOpen: false,
+    });
   });
 
   it('shows only agents on the selected node', () => {

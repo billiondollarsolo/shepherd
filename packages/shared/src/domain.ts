@@ -28,12 +28,7 @@ export type NodeKind = z.infer<typeof NodeKindEnum>;
 export const SshAuthMethodEnum = z.enum(['key', 'password']);
 export type SshAuthMethod = z.infer<typeof SshAuthMethodEnum>;
 
-export const ConnectionStatusEnum = z.enum([
-  'connected',
-  'connecting',
-  'disconnected',
-  'error',
-]);
+export const ConnectionStatusEnum = z.enum(['connected', 'connecting', 'disconnected', 'error']);
 export type ConnectionStatus = z.infer<typeof ConnectionStatusEnum>;
 
 export const AgentTypeEnum = z.enum([
@@ -74,12 +69,7 @@ export type AgentType = z.infer<typeof AgentTypeEnum>;
  *                   / Codex bypass) — only sane on an isolated/sandboxed node.
  * Irrelevant for `generic`/`terminal` (no agent program → no flags).
  */
-export const SessionPermissionModeEnum = z.enum([
-  'default',
-  'acceptEdits',
-  'plan',
-  'autonomous',
-]);
+export const SessionPermissionModeEnum = z.enum(['default', 'acceptEdits', 'plan', 'autonomous']);
 export type SessionPermissionMode = z.infer<typeof SessionPermissionModeEnum>;
 
 export const EventSourceEnum = z.enum(['hook', 'osc', 'pty', 'orchestrator']);
@@ -179,13 +169,6 @@ export const SessionSchema = z.object({
   hookTokenHash: z.string().min(1),
   status: StatusEnum,
   statusDetail: z.string().nullable(),
-  /**
-   * When set, this session runs in a dedicated git WORKTREE on this branch
-   * (isolated parallel work, US-worktree). `workingDir` is the worktree path. The
-   * branch is cleaned up on terminate; null = the session works in the project
-   * dir directly.
-   */
-  worktreeBranch: z.string().nullable(),
   /** Pinned sessions sort to the top of the paddock tree (supervisor focus). */
   pinned: z.boolean(),
   /** Free-text supervisor note about this session (what it's working on); null = none. */

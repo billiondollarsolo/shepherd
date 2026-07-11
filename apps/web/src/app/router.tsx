@@ -4,12 +4,7 @@
  * See docs/herdr-aligned-shell-plan.md §0.8 and @flock/shared shell-nav.
  */
 import { useEffect } from 'react';
-import {
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-} from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 import {
   pathToShellNav,
   shellNavToPath,
@@ -43,6 +38,7 @@ export type NavPatch = Partial<
     | 'lens'
     | 'chrome'
     | 'hostScope'
+    | 'projectView'
   >
 >;
 
@@ -55,7 +51,10 @@ export function pathToNav(pathname: string): NavPatch {
 
   if (shell.settings) {
     patch.view = 'settings';
-    if (shell.settingsSection && (SETTINGS_SECTIONS as readonly string[]).includes(shell.settingsSection)) {
+    if (
+      shell.settingsSection &&
+      (SETTINGS_SECTIONS as readonly string[]).includes(shell.settingsSection)
+    ) {
       patch.settingsSection = shell.settingsSection as SettingsSection;
     }
     return patch;
@@ -73,6 +72,7 @@ export function pathToNav(pathname: string): NavPatch {
   if (shell.selectedSessionId !== undefined) patch.selectedSessionId = shell.selectedSessionId;
   if (shell.activeProjectId !== undefined) patch.selectedProjectId = shell.activeProjectId;
   if (shell.nodeInfoNodeId !== undefined) patch.nodeInfoNodeId = shell.nodeInfoNodeId;
+  patch.projectView = /^\/p\/[^/]+\/git\/?$/.test(pathname) ? 'git' : 'agents';
 
   return patch;
 }
@@ -87,6 +87,7 @@ export interface NavToPathInput {
   gridProjectId: string | null;
   lens: ShellLens;
   hostScope: HostScope;
+  projectView: PaddockUiState['projectView'];
 }
 
 /** store → canonical path. */
@@ -102,6 +103,7 @@ export function navToPath(n: NavToPathInput): string {
       hostScope: n.hostScope,
     });
   }
+  if (n.projectView === 'git' && n.gridProjectId) return `/p/${n.gridProjectId}/git`;
   return shellNavToPath({
     settings: false,
     settingsSection: n.settingsSection,
@@ -123,6 +125,7 @@ function applyNavPatch(patch: NavPatch): void {
   if (diff.selectedSessionId && typeof diff.selectedSessionId === 'string') {
     diff.chrome = 'stage';
     diff.rightOpen = false;
+    diff.projectView = 'agents';
   }
   if (Object.keys(diff).length > 0) usePaddock.setState(diff as Partial<PaddockUiState>);
 }
@@ -150,6 +153,7 @@ function UrlStoreSync(): null {
         gridProjectId: s.selectedProjectId ?? sessionProjectId,
         lens: s.lens,
         hostScope: s.hostScope,
+        projectView: s.projectView,
       });
       if (path !== router.state.location.pathname) router.history.push(path);
     };
@@ -177,7 +181,11 @@ const nullComponent = (): null => null;
 const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: '/', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/agents', component: nullComponent }),
-  createRoute({ getParentRoute: () => rootRoute, path: '/agents/$sessionId', component: nullComponent }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/agents/$sessionId',
+    component: nullComponent,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: '/s/$sessionId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/p/$projectId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/n/$nodeId', component: nullComponent }),

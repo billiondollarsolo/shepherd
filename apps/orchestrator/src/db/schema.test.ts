@@ -129,7 +129,6 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     hookTokenHash: 'argon2id$hash$abc',
     status: 'running',
     statusDetail: null,
-    worktreeBranch: null,
     pinned: false,
     note: null,
     parentSessionId: null,

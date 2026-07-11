@@ -333,14 +333,6 @@ export const CreateSessionRequest = z
      *  `--append-system-prompt`); ignored by agents without one. */
     systemPrompt: z.string().min(1).max(8000).optional(),
     /**
-     * Run this session in a dedicated git worktree (isolated branch) so multiple
-     * agents can work the same repo in parallel without colliding. Requires the
-     * project dir to be a git repo. Optional branch name override (sanitized;
-     * defaults to `flock/<session-short>`).
-     */
-    worktree: z.boolean().optional(),
-    worktreeBranch: z.string().min(1).max(120).optional(),
-    /**
      * For an agentType of `dev` ONLY: the shell command to run as a supervised,
      * auto-restarting dev process (e.g. `npm run dev`). Required when agentType is
      * `dev`, ignored otherwise. Run via the node's shell (`sh -lc`).

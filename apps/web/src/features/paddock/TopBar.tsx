@@ -78,6 +78,7 @@ export function TopBar(): JSX.Element {
   const selectedProjectId = usePaddock((s) => s.selectedProjectId);
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
   const activePenId = usePaddock((s) => s.activePenId);
+  const projectView = usePaddock((s) => s.projectView);
   const penGroups = usePaddock((s) => s.penGroups);
   const { data: projects = [] } = useProjects();
   const { data: sessions = [] } = useSessions();
@@ -102,7 +103,12 @@ export function TopBar(): JSX.Element {
             <span className="truncate font-medium text-flock-ink-primary">
               {contextProject?.name ?? contextNode?.name ?? 'Agents'}
             </span>
-            {contextProject && activePen ? (
+            {contextProject && projectView === 'git' ? (
+              <>
+                <span aria-hidden>/</span>
+                <span className="truncate">Source Control</span>
+              </>
+            ) : contextProject && activePen ? (
               <>
                 <span aria-hidden>/</span>
                 <span className="truncate">{activePen.name}</span>

@@ -105,8 +105,8 @@ const STATUS_LIGHT = {
 } as const;
 
 const STATUS_DARK = {
-  starting: '#8a93a3', // muted slate (spinning up)
-  running: '#4f7cc4', // tied to the refined-blue accent (agent working)
+  starting: '#8a8a8a', // muted grey (spinning up)
+  running: '#4f7cc4', // active state uses the deliberate interaction blue
   awaiting: '#f59e0b', // amber stays punchy — the "needs me" alert
   idle: '#3fb950', // calmer green (sits in the graphite palette, not neon)
   done: '#2bb6a3', // calmer teal
@@ -143,22 +143,22 @@ export const lightTheme: ThemeTokens = {
 };
 
 /**
- * Dark theme — Flock's default surface. Linear-style "refined graphite": a
- * de-blued near-black ramp (neutral, faintly cool) with a single calm-blue
- * accent. Hierarchy comes from hairline borders (polish.css) + small surface
+ * Dark theme — Flock's default surface. A true black-to-graphite neutral ramp
+ * with a light-grey interaction accent. Hierarchy comes from hairline borders
+ * (polish.css) + small surface
  * steps, not loud fills. Inter UI + JetBrains Mono.
  */
 export const darkTheme: ThemeTokens = {
   surface: {
-    0: '#0a0b0d', // app background — neutral graphite (de-blued)
-    1: '#101216', // panels / cards
-    2: '#181b20', // raised / hover
-    3: '#202329', // highest — chips / nested raised
+    0: '#080808', // app background — true near-black
+    1: '#111111', // panels / cards
+    2: '#191919', // raised / hover
+    3: '#222222', // highest — chips / nested raised
   },
-  accent: '#5b8cff', // vivid signature blue (energetic, premium)
+  accent: '#5b8cff', // deliberate highlight on otherwise neutral surfaces
   ink: {
-    primary: '#e7e9ec', // near-white, neutral
-    muted: '#888f9a', // cool grey secondary text
+    primary: '#ededed', // near-white, neutral
+    muted: '#8c8c8c', // neutral grey secondary text
   },
   status: {
     ...STATUS_DARK,
@@ -167,7 +167,7 @@ export const darkTheme: ThemeTokens = {
   diff: {
     add: '#11261a', // muted green wash, sits on graphite
     remove: '#2f1518', // muted red wash
-    context: '#101216', // = surface-1
+    context: '#111111', // = surface-1
   },
   font: {
     ui: FONT_UI,

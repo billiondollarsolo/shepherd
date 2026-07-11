@@ -136,24 +136,6 @@ function saveGridLayout(v: GridLayout): void {
   }
 }
 
-export type FleetMode = 'command' | 'terminal' | 'spatial';
-const FLEET_MODE_KEY = 'flock.fleetMode';
-function loadFleetMode(): FleetMode {
-  try {
-    const v = localStorage.getItem(FLEET_MODE_KEY);
-    return v === 'terminal' || v === 'spatial' ? v : 'command';
-  } catch {
-    return 'command';
-  }
-}
-function saveFleetMode(v: FleetMode): void {
-  try {
-    localStorage.setItem(FLEET_MODE_KEY, v);
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 const REVIEWED_KEY = 'flock.reviewedSessions';
 function loadReviewed(): string[] {
   try {
@@ -287,11 +269,11 @@ export interface PaddockUiState {
   gridLayout: GridLayout;
   layoutPresets: LayoutPreset[];
   reviewedSessions: string[];
-  fleetMode: FleetMode;
   race: ActiveRace | null;
 
   rightTab: RightTab;
   rightOpen: boolean;
+  projectView: 'agents' | 'git';
 
   diffSelectedPath: string | null;
   diffSelectedStaged: boolean | null;
@@ -328,7 +310,6 @@ export interface PaddockUiState {
   applyLayoutPreset: (id: string) => void;
   deleteLayoutPreset: (id: string) => void;
   setReviewed: (id: string, reviewed: boolean) => void;
-  setFleetMode: (m: FleetMode) => void;
   setRace: (race: ActiveRace) => void;
   endRace: () => void;
   openNodeInfo: (nodeId: string) => void;
@@ -336,6 +317,7 @@ export interface PaddockUiState {
   toggleSidebar: () => void;
   toggleGridLayout: () => void;
   openRight: (tab: RightTab) => void;
+  openProjectGit: (projectId: string) => void;
   toggleRight: () => void;
   selectDiffFile: (path: string | null, staged?: boolean | null) => void;
   openFileInViewer: (path: string) => void;
@@ -373,11 +355,11 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   gridLayout: loadGridLayout(),
   layoutPresets: loadLayoutPresets(),
   reviewedSessions: loadReviewed(),
-  fleetMode: loadFleetMode(),
   race: null,
   rightTab: 'chat',
   // D5: tools closed by default (terminal-first stage)
   rightOpen: false,
+  projectView: 'agents',
   diffSelectedPath: null,
   diffSelectedStaged: null,
   viewerFile: null,
@@ -411,6 +393,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       lens: 'agents',
       chrome: 'stage',
       rightOpen: false,
+      projectView: 'agents',
       view: 'paddock',
       zoomLeafId: null,
     }),
@@ -424,6 +407,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       lens: 'agents',
       chrome: 'stage',
       rightOpen: false,
+      projectView: 'agents',
       diffSelectedPath: null,
       viewerFile: null,
       zoomLeafId: null,
@@ -434,10 +418,17 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     set({ hostScope: scope });
   },
   setLens: (lens) =>
-    set({
+    set((s) => ({
       lens,
-      view: lens === 'mission' && !usePaddock.getState().selectedSessionId ? 'overview' : 'paddock',
-    }),
+      view: lens === 'mission' ? 'overview' : 'paddock',
+      // Returning to Agents restores the last Pen's project when Paddock has no
+      // staged selection. This keeps workspace switching useful without letting
+      // the old selection prevent Paddock from rendering.
+      selectedProjectId:
+        lens === 'agents' && !s.selectedSessionId
+          ? (s.selectedProjectId ?? s.penProjectId)
+          : s.selectedProjectId,
+    })),
   setChrome: (chrome) =>
     set({
       chrome,
@@ -521,10 +512,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       saveReviewed(next);
       return { reviewedSessions: next };
     }),
-  setFleetMode: (m) => {
-    saveFleetMode(m);
-    set({ fleetMode: m });
-  },
   setRace: (race) => set({ race, dialog: null }),
   endRace: () => set({ race: null }),
   openNodeInfo: (nodeId) =>
@@ -547,6 +534,18 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       return { gridLayout: v };
     }),
   openRight: (tab) => set({ rightTab: tab, rightOpen: true, chrome: 'tools' }),
+  openProjectGit: (projectId) =>
+    set({
+      selectedSessionId: null,
+      selectedProjectId: projectId,
+      nodeInfoNodeId: null,
+      lens: 'agents',
+      view: 'paddock',
+      projectView: 'git',
+      rightOpen: false,
+      chrome: 'stage',
+      zoomLeafId: null,
+    }),
   toggleRight: () =>
     set((s) => {
       const open = !s.rightOpen;
@@ -559,13 +558,22 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   closeFileViewer: () => set({ viewerFile: null }),
   setTerminalInput: (fn) => set({ terminalInput: fn }),
 
-  openMission: () =>
+  openMission: () => {
+    // Paddock is the fleet home. A node-only scope left behind by /n/:id would
+    // otherwise make the overview look empty and the router would immediately
+    // canonicalize back to that node route.
+    saveHostScope('all');
     set({
       view: 'overview',
       lens: 'mission',
+      hostScope: 'all',
       nodeInfoNodeId: null,
-      // preserve selectedSessionId / selectedProjectId (plan §3.3)
-    }),
+      selectedSessionId: null,
+      selectedProjectId: null,
+      projectView: 'agents',
+      zoomLeafId: null,
+    });
+  },
 
   openSettings: (section) =>
     set((s) => ({ view: 'settings', settingsSection: section ?? s.settingsSection })),

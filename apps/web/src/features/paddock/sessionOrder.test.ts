@@ -4,10 +4,22 @@ import { orderSessions, moveBefore } from './sessionOrder';
 
 function mk(id: string, createdAt: string): Session {
   return {
-    id, nodeId: 'n', projectId: 'P', agentType: 'claude-code', tmuxSessionName: id,
-    workingDir: '/w', browserCdpEndpoint: null, hookTokenHash: 'h', status: 'running',
-    statusDetail: null, worktreeBranch: null, pinned: false, note: null,
-    createdAt, lastStatusAt: createdAt, createdBy: 'u', closedAt: null,
+    id,
+    nodeId: 'n',
+    projectId: 'P',
+    agentType: 'claude-code',
+    tmuxSessionName: id,
+    workingDir: '/w',
+    browserCdpEndpoint: null,
+    hookTokenHash: 'h',
+    status: 'running',
+    statusDetail: null,
+    pinned: false,
+    note: null,
+    createdAt,
+    lastStatusAt: createdAt,
+    createdBy: 'u',
+    closedAt: null,
   };
 }
 

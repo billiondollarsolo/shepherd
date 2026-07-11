@@ -59,17 +59,17 @@
 /* OS prefers dark and the user has not made an explicit choice yet. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --flock-surface-0: #0a0b0d;
-    --flock-surface-1: #101216;
-    --flock-surface-2: #181b20;
-    --flock-surface-3: #202329;
+    --flock-surface-0: #080808;
+    --flock-surface-1: #111111;
+    --flock-surface-2: #191919;
+    --flock-surface-3: #222222;
     --flock-accent: #5b8cff;
-    --flock-ink-primary: #e7e9ec;
-    --flock-ink-muted: #888f9a;
+    --flock-ink-primary: #ededed;
+    --flock-ink-muted: #8c8c8c;
     --flock-accent-rgb: 91 140 255;
-    --flock-ink-primary-rgb: 231 233 236;
-    --flock-ink-muted-rgb: 136 143 154;
-    --flock-status-starting: #8a93a3;
+    --flock-ink-primary-rgb: 237 237 237;
+    --flock-ink-muted-rgb: 140 140 140;
+    --flock-status-starting: #8a8a8a;
     --flock-status-running: #4f7cc4;
     --flock-status-awaiting: #f59e0b;
     --flock-status-idle: #3fb950;
@@ -78,26 +78,26 @@
     --flock-status-disconnected: #6b7280;
     --flock-diff-add: #11261a;
     --flock-diff-remove: #2f1518;
-    --flock-diff-context: #101216;
+    --flock-diff-context: #111111;
 
     color-scheme: dark;
   }
 }
 
 /* Explicit dark choice (persisted) — always wins over the media query.
- * Linear-style refined graphite + calm blue (mirrors darkTheme in tokens.ts). */
+ * Neutral black + graphite (mirrors darkTheme in tokens.ts). */
 :root[data-theme='dark'] {
-  --flock-surface-0: #0a0b0d;
-  --flock-surface-1: #101216;
-  --flock-surface-2: #181b20;
-  --flock-surface-3: #202329;
+  --flock-surface-0: #080808;
+  --flock-surface-1: #111111;
+  --flock-surface-2: #191919;
+  --flock-surface-3: #222222;
   --flock-accent: #5b8cff;
-  --flock-ink-primary: #e7e9ec;
-  --flock-ink-muted: #888f9a;
+  --flock-ink-primary: #ededed;
+  --flock-ink-muted: #8c8c8c;
   --flock-accent-rgb: 91 140 255;
-  --flock-ink-primary-rgb: 231 233 236;
-  --flock-ink-muted-rgb: 136 143 154;
-  --flock-status-starting: #8a93a3;
+  --flock-ink-primary-rgb: 237 237 237;
+  --flock-ink-muted-rgb: 140 140 140;
+  --flock-status-starting: #8a8a8a;
   --flock-status-running: #4f7cc4;
   --flock-status-awaiting: #f59e0b;
   --flock-status-idle: #3fb950;
@@ -106,7 +106,7 @@
   --flock-status-disconnected: #6b7280;
   --flock-diff-add: #11261a;
   --flock-diff-remove: #2f1518;
-  --flock-diff-context: #101216;
+  --flock-diff-context: #111111;
 
   color-scheme: dark;
 }

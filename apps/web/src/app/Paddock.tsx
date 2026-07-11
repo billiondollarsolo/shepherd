@@ -23,6 +23,7 @@ import { ShellDrawer } from '../features/shell-drawer/ShellDrawer';
 import { useSessions } from '../data/queries';
 import { usePaddock } from '../store/paddock';
 import { FleetSelectionSync } from '../features/shell/FleetSelectionSync';
+import { ProjectGitPage } from '../features/paddock/ProjectGitPage';
 
 /** The currently-selected session record (from the Query cache), or null. */
 function useSelectedSession() {
@@ -31,22 +32,16 @@ function useSelectedSession() {
   return selectedId ? (sessions.find((x) => x.id === selectedId) ?? null) : null;
 }
 
-/** The center region: node details, stage, or mission board. */
+/** The center region follows the selected top-level workspace. */
 function CenterPane(): JSX.Element {
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
-  const view = usePaddock((s) => s.view);
-  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
-  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
   const lens = usePaddock((s) => s.lens);
+  const projectView = usePaddock((s) => s.projectView);
 
+  // Paddock is a real fleet workspace, never an overlay on the staged agent.
+  if (lens === 'mission') return <FleetView />;
   if (nodeInfoNodeId) return <NodePage />;
-
-  // Paddock board when lens is mission and nothing is on stage
-  // (D1 home). Opening an agent switches lens to agents and shows stage (D2).
-  const showMission =
-    (view === 'overview' || lens === 'mission') && !selectedSessionId && !selectedProjectId;
-
-  if (showMission) return <FleetView />;
+  if (projectView === 'git') return <ProjectGitPage />;
   return <SessionPane />;
 }
 

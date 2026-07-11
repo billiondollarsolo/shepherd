@@ -78,6 +78,13 @@
       "when": 1783742400000,
       "tag": "0010_project_pens",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783746000000,
+      "tag": "0011_drop_managed_worktrees",
+      "breakpoints": true
     }
   ]
 }

@@ -28,7 +28,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Switch,
   Textarea,
 } from '../../components/ui';
 import { usePaddock } from '../../store/paddock';
@@ -41,7 +40,6 @@ import {
   useNodes,
   useProjects,
   useSessions,
-  useStack,
   useTerminateSession,
 } from '../../data/queries';
 import {
@@ -608,7 +606,6 @@ function AddSessionDialog(): JSX.Element {
   );
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [permissionMode, setPermissionMode] = useState<SessionPermissionMode>('default');
-  const [worktree, setWorktree] = useState(false);
   const [devCommand, setDevCommand] = useState('');
   const [presets, setPresets] = useState<LauncherPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
@@ -625,7 +622,6 @@ function AddSessionDialog(): JSX.Element {
     setSelectedPresetId(p.id);
     setAgentType(p.agentType);
     if (p.permissionMode) setPermissionMode(p.permissionMode);
-    if (p.worktreeDefault !== undefined) setWorktree(p.worktreeDefault);
   }
   // Only the modes THIS agent supports; if the current selection isn't valid for
   // the chosen agent (e.g. switched to Gemini while "plan" was picked), fall back
@@ -637,26 +633,7 @@ function AddSessionDialog(): JSX.Element {
     : 'default';
   const isDev = agentType === 'dev';
 
-  // Gate the isolated-worktree toggle on whether the project dir is a git repo:
-  // worktrees REQUIRE git, so a non-git dir disables the switch (and we never send
-  // worktree:true for one). While the check is in flight we leave it enabled.
   const project = projects.find((p) => p.id === projectId);
-  const stackQuery = useStack(project?.nodeId ?? '', project?.workingDir ?? '');
-  const gitKnown = stackQuery.isSuccess;
-  const isGitRepo = stackQuery.data?.gitRepo ?? false;
-  // Worktrees branch off HEAD, so they need ≥1 commit — a freshly `git init`'d
-  // repo (unborn HEAD) is a repo but can't host a worktree (git errors on HEAD).
-  const hasCommits = stackQuery.data?.gitHasCommits ?? false;
-  const worktreeBlocked = gitKnown && (!isGitRepo || !hasCommits);
-  const effectiveWorktree = worktree && !worktreeBlocked;
-  // useStack is 5-min-stale (badges rarely change), but the worktree gate must
-  // reflect the dir RIGHT NOW — a fresh `git init` after a prior "not a repo"
-  // check would otherwise stay blocked for minutes. Re-check on open / project
-  // switch so the toggle is accurate without waiting out the cache.
-  const refetchStack = stackQuery.refetch;
-  useEffect(() => {
-    if (project?.nodeId && project?.workingDir) void refetchStack();
-  }, [project?.id, project?.nodeId, project?.workingDir, refetchStack]);
 
   // Grey out agents whose CLI isn't installed on this project's node (flock-agentd
   // detection, NodeInfo.agents) so you can't pick one that would fail at launch
@@ -696,9 +673,6 @@ function AddSessionDialog(): JSX.Element {
         ...(showMode && effectiveMode !== 'default' ? { permissionMode: effectiveMode } : {}),
         // Dev session: the supervised, auto-restarting command (sh -lc on the node).
         ...(isDev ? { devCommand: devCommand.trim() } : {}),
-        // Isolated git worktree (parallel-safe); orchestrator derives the branch.
-        // Only sent when the project dir is actually a git repo.
-        ...(effectiveWorktree ? { worktree: true } : {}),
       });
       // Open on stage (agents lens + terminal-first chrome).
       openAgent(session.id, session.projectId);
@@ -821,39 +795,6 @@ function AddSessionDialog(): JSX.Element {
           />
         </Field>
       ) : null}
-
-      <div className="flex items-start justify-between gap-3 rounded-md border border-[var(--flock-border)] px-3 py-2.5">
-        <div className="min-w-0">
-          <Label
-            htmlFor="sess-worktree"
-            className={
-              worktreeBlocked ? 'cursor-not-allowed text-flock-ink-muted' : 'cursor-pointer'
-            }
-          >
-            Isolated worktree
-          </Label>
-          <p className="mt-0.5 text-2xs text-flock-ink-muted/80">
-            {worktreeBlocked ? (
-              <span className="text-status-awaiting">
-                {!isGitRepo
-                  ? 'This project’s directory isn’t a git repository, so worktrees aren’t available.'
-                  : 'This repository has no commits yet — make an initial commit to enable worktrees.'}
-              </span>
-            ) : (
-              <>
-                Run in a dedicated git branch (<code>flock/&lt;id&gt;</code>) so parallel agents
-                don’t collide. Requires a git repo; review &amp; merge its branch when done.
-              </>
-            )}
-          </p>
-        </div>
-        <Switch
-          id="sess-worktree"
-          checked={effectiveWorktree}
-          disabled={worktreeBlocked}
-          onCheckedChange={setWorktree}
-        />
-      </div>
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={closeDialog}>
@@ -996,7 +937,7 @@ function ConfigDialog(): JSX.Element {
   );
 }
 
-/** Race a task across N agents (each in its own worktree), then compare + keep the winner. */
+/** Race a task across N agents, then compare their results. */
 const RACE_AGENTS: AgentType[] = ['claude-code', 'codex', 'gemini', 'grok', 'opencode'];
 function RaceDialog(): JSX.Element {
   const setRace = usePaddock((s) => s.setRace);
@@ -1022,8 +963,8 @@ function RaceDialog(): JSX.Element {
       <DialogHeader>
         <DialogTitle>Race a task</DialogTitle>
         <DialogDescription>
-          Run the same task across several agents — each in its own git worktree — then compare
-          their changes side by side and keep the winner.
+          Run the same task across several agents, then compare their changes side by side. Flock
+          observes Git state but does not isolate or manage it.
         </DialogDescription>
       </DialogHeader>
       <Field label="Project" htmlFor="race-project">

@@ -25,7 +25,6 @@ function sampleSession(overrides: Partial<Session> = {}): Session {
     hookTokenHash: 'argon2id$hash$for$session$token',
     status: 'running',
     statusDetail: null,
-    worktreeBranch: null,
     pinned: false,
     note: null,
     reviewedAt: null,

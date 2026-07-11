@@ -253,8 +253,6 @@ export const agentSessions = pgTable(
     /** Write-behind mirror of the in-memory authoritative status (§6.6). */
     status: text('status', { enum: STATUS_VALUES }).notNull(),
     statusDetail: text('status_detail'),
-    /** Dedicated git worktree branch for this session (isolated work); null = none. */
-    worktreeBranch: text('worktree_branch'),
     /** Supervisor pinned this session to the top of the paddock tree. */
     pinned: boolean('pinned').notNull().default(false),
     /** Free-text supervisor note about this session; null = none. */

@@ -26,7 +26,6 @@ function sampleSession(): Session {
     hookTokenHash: 'hash',
     status: 'starting',
     statusDetail: null,
-    worktreeBranch: null,
     pinned: false,
     note: null,
     reviewedAt: null,

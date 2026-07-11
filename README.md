@@ -34,15 +34,15 @@ the session is exactly where you left it.
 
 ### Why it's different
 
-|                                           |                                                                                                                                                                                                                     |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔌 **Sessions never die when you leave**  | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues.                                                |
-| 🔔 **Status you can trust at a glance**   | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked. |
-| 🐑 **Pens for focused supervision**       | Organize any number of project agents into **Pen 1, Pen 2, …**, with 1–4 agents per Pen. Drag agents between Pens, reorder them, resize panes, and choose columns, rows, or **2×2** independently for every Pen.    |
-| 🌐 **Real fleet scope**                   | Supervise all hosts or narrow the Paddock to a node or pool. Opening a project or node gives the sidebar and main content the same explicit context.                                                                |
-| ⌨️ **Fast navigation**                    | Press **⌘K / Ctrl+K** to search and jump to any node, project, or running agent. The Agents sidebar adds status-first sorting, grouping, filters, pinning, and confirmed session deletion.                          |
-| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI.                                                                                                 |
-| 🤖 **Works with any agent**               | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else.                                                                                            |
+|                                           |                                                                                                                                                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔌 **Sessions never die when you leave**  | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues.                                                   |
+| 🔔 **Status you can trust at a glance**   | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked.    |
+| 🐑 **Pens for focused supervision**       | Organize any number of project agents into **Pen 1, Pen 2, …**, with 1–4 agents per Pen. Drag agents between Pens, reorder them, resize panes, and choose columns, rows, or **2×2** independently for every Pen.       |
+| 🌐 **Real fleet scope**                   | Supervise all hosts or narrow the Paddock to a node or pool. Opening a project or node gives the sidebar and main content the same explicit context.                                                                   |
+| ⌨️ **Fast navigation**                    | Press **⌘K / Ctrl+K** to search and jump to any node, project, or running agent. The Agents sidebar uses Pens and drag-and-drop as one clear organization model, with status awareness and confirmed session deletion. |
+| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI.                                                                                                    |
+| 🤖 **Works with any agent**               | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else.                                                                                               |
 
 ---
 

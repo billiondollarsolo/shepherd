@@ -356,7 +356,6 @@ export function SessionPane(): JSX.Element {
 
   const open = sessions.filter((s) => s.closedAt === null);
   if (open.length === 0) return <EmptyState />;
-  // Tools only attach to the staged session — never an arbitrary open[0].
   const panelSession = stageSession;
   const toolsOpen = chrome === 'tools' && rightOpen && panelSession != null;
 

@@ -25,11 +25,7 @@ import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAuth } from '../auth/middleware.js';
-import {
-  SessionProjectNotFoundError,
-  type SessionRestService,
-} from './session-rest-service.js';
-import { WorktreeError } from './worktree-service.js';
+import { SessionProjectNotFoundError, type SessionRestService } from './session-rest-service.js';
 
 /**
  * Register `GET`/`POST /api/sessions` against a {@link SessionRestService}. Plain
@@ -78,14 +74,6 @@ export function registerSessionRestRoutes(
             .code(404)
             .send({ error: { code: 'project_not_found', message: err.message } });
         }
-        // Worktree opt-in failed (e.g. the project dir isn't a git repo): surface a
-        // clean 422 with the reason, never a 500. The UI also gates the toggle on
-        // gitRepo so this is a backstop.
-        if (err instanceof WorktreeError) {
-          return reply
-            .code(422)
-            .send({ error: { code: 'worktree_failed', message: err.message } });
-        }
         throw err;
       }
     },
@@ -99,7 +87,8 @@ export function registerSessionRestRoutes(
       const params = SessionIdParams.safeParse(request.params);
       if (!params.success) return badRequest(reply, 'a valid session id is required.');
       const body = UpdateSessionRequest.safeParse(request.body);
-      if (!body.success) return badRequest(reply, 'provide pinned, note, and/or reviewed to update.');
+      if (!body.success)
+        return badRequest(reply, 'provide pinned, note, and/or reviewed to update.');
       const session = await deps.service.updateSession(params.data.id, body.data, {
         userId: request.authUser?.id ?? null,
       });

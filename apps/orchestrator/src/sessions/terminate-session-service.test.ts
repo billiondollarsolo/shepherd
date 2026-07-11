@@ -55,7 +55,6 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     hookTokenHash: `argon2id$${id}`,
     status: 'running',
     statusDetail: null,
-    worktreeBranch: null,
     createdAt: now,
     lastStatusAt: now,
     createdBy: USER_ID,
@@ -115,10 +114,12 @@ class FakeSink implements AuditSink {
   }
 }
 
-function build(opts: {
-  sessions?: Session[];
-  browser?: FakeBrowserHarness;
-} = {}) {
+function build(
+  opts: {
+    sessions?: Session[];
+    browser?: FakeBrowserHarness;
+  } = {},
+) {
   const terminator = new FakeTerminator();
   const registry = new FakeRegistry(opts.sessions ?? []);
   const sink = new FakeSink();

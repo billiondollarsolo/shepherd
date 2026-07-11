@@ -1,33 +1,21 @@
-/**
- * Agents lens switcher — pin-first list with sort/filter (herdr Agents view).
- */
+/** Agents sidebar — Pens own membership and drag order. */
 import { useMemo, useState } from 'react';
+import { displayStatus, sessionInHostScope, type Status } from '@flock/shared';
 import {
-  orderAgents,
-  groupAgents,
-  displayStatus,
-  sessionInHostScope,
-  type AgentSortKey,
-  type AgentGroupKey,
-  type AgentListItem,
-  type Status,
-} from '@flock/shared';
-import {
+  Check,
   Columns2,
   GripVertical,
+  GitBranch,
   LayoutGrid,
-  MoreHorizontal,
+  MoreVertical,
   MoveRight,
   Pencil,
-  Pin,
-  RotateCcw,
   Rows2,
-  SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
 import { usePaddock } from '../../store/paddock';
 import { useNodes, useProjects, useSessions, useUpdateSession } from '../../data/queries';
-import { useLiveStatuses, useLiveStatusTransitions } from '../paddock/liveData';
+import { useLiveStatuses } from '../paddock/liveData';
 import { StatusDot } from '../../components/StatusDot';
 import {
   Button,
@@ -37,31 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
 } from '../../components/ui';
-
-const SORT_LABELS: Record<AgentSortKey, string> = {
-  attention: 'Needs attention',
-  status: 'Status',
-  lastStatusChange: 'Recent activity',
-  project: 'Project',
-  node: 'Node',
-};
-
-const GROUP_LABELS: Record<AgentGroupKey, string> = {
-  none: 'No grouping',
-  node: 'Node',
-  project: 'Project',
-  nodeProject: 'Node + project',
-};
 
 export function AgentsSwitcher(): JSX.Element {
   const { data: sessions = [] } = useSessions();
@@ -73,12 +43,14 @@ export function AgentsSwitcher(): JSX.Element {
   const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
   const openAgent = usePaddock((s) => s.openAgent);
   const openDialog = usePaddock((s) => s.openDialog);
+  const selectProject = usePaddock((s) => s.selectProject);
   const penProjectId = usePaddock((s) => s.penProjectId);
   const penGroups = usePaddock((s) => s.penGroups);
   const activePenId = usePaddock((s) => s.activePenId);
   const requestPenAction = usePaddock((s) => s.requestPenAction);
+  const projectView = usePaddock((s) => s.projectView);
+  const openProjectGit = usePaddock((s) => s.openProjectGit);
   const statuses = useLiveStatuses();
-  const transitions = useLiveStatusTransitions();
   const updateSession = useUpdateSession();
   const contextProjectId =
     selectedProjectId ??
@@ -88,10 +60,6 @@ export function AgentsSwitcher(): JSX.Element {
   const contextProject = projects.find((project) => project.id === contextProjectId);
   const contextNode = nodes.find((node) => node.id === nodeInfoNodeId);
 
-  const [sort, setSort] = useState<AgentSortKey>('attention');
-  const [pinnedOnly, setPinnedOnly] = useState(false);
-  const [workingOnly, setWorkingOnly] = useState(false);
-  const [group, setGroup] = useState<AgentGroupKey>('none');
   const [renameSession, setRenameSession] = useState<{ id: string; value: string } | null>(null);
   const [renamePen, setRenamePen] = useState<{ id: string; value: string } | null>(null);
   const [dragOverZone, setDragOverZone] = useState<string | null>(null);
@@ -103,42 +71,25 @@ export function AgentsSwitcher(): JSX.Element {
       if (nodeInfoNodeId) return session.nodeId === nodeInfoNodeId;
       return sessionInHostScope(hostScope, session, nodes);
     });
-    const list: AgentListItem[] = scoped.map((s) => {
+    return scoped.map((s) => {
       const st = (statuses.get(s.id) ?? s.status) as Status;
       const node = nodes.find((n) => n.id === s.nodeId);
       const project = projects.find((p) => p.id === s.projectId);
-      const lastMs = transitions.get(s.id) ?? (Date.parse(s.lastStatusAt) || 0);
       return {
         id: s.id,
         nodeId: s.nodeId,
         projectId: s.projectId,
         nodeName: node?.name,
         projectName: project?.name,
-        pinned: s.pinned,
         status: st,
-        lastStatusTransitionAt: lastMs,
         label: s.note?.trim() || `${s.agentType} · ${s.id.slice(0, 6)}`,
       };
     });
-    return orderAgents(list, { sort, pinnedOnly, workingOnly });
-  }, [
-    sessions,
-    nodes,
-    projects,
-    hostScope,
-    contextProjectId,
-    nodeInfoNodeId,
-    statuses,
-    transitions,
-    sort,
-    pinnedOnly,
-    workingOnly,
-  ]);
+  }, [sessions, nodes, projects, hostScope, contextProjectId, nodeInfoNodeId, statuses]);
 
-  const groups = useMemo(() => groupAgents(items, group), [items, group]);
   const penMode = contextProjectId != null && penProjectId === contextProjectId;
   const displayGroups = useMemo(() => {
-    if (!penMode) return groups.map((entry) => ({ ...entry, zone: null, arrange: null }));
+    if (!penMode) return [{ key: 'agents', label: 'Agents', items, zone: null, arrange: null }];
     const byItemId = new Map(items.map((item) => [item.id, item]));
     const penSet = new Set(penGroups.flatMap((pen) => pen.sessionIds));
     return [
@@ -167,86 +118,34 @@ export function AgentsSwitcher(): JSX.Element {
         arrange: null,
       },
     ];
-  }, [groups, items, penGroups, penMode]);
-  const activeFilterCount = Number(pinnedOnly) + Number(workingOnly);
+  }, [items, penGroups, penMode]);
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="agents-switcher">
-      <div className="border-b border-[var(--flock-border)] p-2" data-testid="agent-list-controls">
-        {contextProject || contextNode ? (
-          <div
-            className="mb-2 flex min-w-0 items-center gap-1 px-1 text-2xs text-flock-ink-muted"
-            data-testid="agent-list-context"
-          >
+      {contextProject || contextNode ? (
+        <div className="border-b border-[var(--flock-border)] p-2" data-testid="agent-list-context">
+          <div className="flex min-w-0 items-center gap-1 px-1 pb-1.5 text-2xs text-flock-ink-muted">
             <span>{contextProject ? 'Project' : 'Node'}:</span>
             <span className="truncate font-semibold text-flock-ink-primary">
               {contextProject?.name ?? contextNode?.name}
             </span>
           </div>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
+          {contextProject ? (
+            <button
               type="button"
-              size="sm"
-              variant={activeFilterCount > 0 ? 'secondary' : 'outline'}
-              aria-label="Agent list view options"
-              className="w-full justify-start px-2"
+              onClick={() => openProjectGit(contextProject.id)}
+              data-active={projectView === 'git' ? '1' : '0'}
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium ${
+                projectView === 'git'
+                  ? 'bg-flock-accent/15 text-flock-accent'
+                  : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
+              }`}
             >
-              <SlidersHorizontal />
-              <span className="font-semibold">View</span>
-              <span className="ml-auto min-w-0 truncate text-2xs font-normal text-flock-ink-muted">
-                {SORT_LABELS[sort]}
-                {group !== 'none' ? ` · ${GROUP_LABELS[group]}` : ''}
-              </span>
-              {activeFilterCount > 0 ? (
-                <span className="rounded-full bg-flock-accent px-1.5 text-2xs text-white">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-60">
-            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={sort}
-              onValueChange={(value) => setSort(value as AgentSortKey)}
-            >
-              {Object.entries(SORT_LABELS).map(([value, label]) => (
-                <DropdownMenuRadioItem key={value} value={value}>
-                  {label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Group by</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={group}
-              onValueChange={(value) => setGroup(value as AgentGroupKey)}
-            >
-              {Object.entries(GROUP_LABELS).map(([value, label]) => (
-                <DropdownMenuRadioItem key={value} value={value}>
-                  {label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Show only</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={pinnedOnly}
-              onCheckedChange={(checked) => setPinnedOnly(checked === true)}
-            >
-              Pinned sessions
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={workingOnly}
-              onCheckedChange={(checked) => setWorkingOnly(checked === true)}
-            >
-              Currently working
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              <GitBranch className="size-3.5" /> Source Control
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {displayGroups.map((g) => (
           <div
@@ -280,7 +179,7 @@ export function AgentsSwitcher(): JSX.Element {
               else requestPenAction({ type: 'add', sessionId, penId: g.zone });
             }}
           >
-            {penMode || group !== 'none' ? (
+            {penMode ? (
               <div
                 className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-accent' : 'text-flock-ink-muted'}`}
               >
@@ -288,54 +187,14 @@ export function AgentsSwitcher(): JSX.Element {
                   type="button"
                   className="min-w-0 flex-1 truncate text-left"
                   disabled={!g.zone || g.zone === 'other' || g.zone === 'new'}
-                  onClick={() => g.zone && requestPenAction({ type: 'select', penId: g.zone })}
+                  onClick={() => {
+                    if (!g.zone) return;
+                    if (contextProjectId) selectProject(contextProjectId);
+                    requestPenAction({ type: 'select', penId: g.zone });
+                  }}
                 >
                   {g.label}
                 </button>
-                {g.arrange ? (
-                  <span
-                    className={`flex items-center gap-0.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 p-0.5 transition-opacity ${g.zone === activePenId ? 'opacity-100' : 'opacity-60 group-hover/pen:opacity-100'}`}
-                    aria-label={`${g.label} layout`}
-                  >
-                    <button
-                      type="button"
-                      aria-label="Side by side"
-                      title="Columns"
-                      onClick={() =>
-                        requestPenAction({ type: 'arrange', penId: g.zone!, mode: 'row' })
-                      }
-                      className={`flex size-6 items-center justify-center rounded ${g.arrange === 'row' ? 'bg-flock-accent/15 text-flock-accent' : 'hover:bg-flock-surface-2 hover:text-flock-ink-primary'}`}
-                    >
-                      <Columns2 className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Stacked"
-                      title="Rows"
-                      onClick={() =>
-                        requestPenAction({ type: 'arrange', penId: g.zone!, mode: 'col' })
-                      }
-                      className={`flex size-6 items-center justify-center rounded ${g.arrange === 'col' ? 'bg-flock-accent/15 text-flock-accent' : 'hover:bg-flock-surface-2 hover:text-flock-ink-primary'}`}
-                    >
-                      <Rows2 className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Grid"
-                      title="2×2 grid"
-                      onClick={() =>
-                        requestPenAction({
-                          type: 'arrange',
-                          penId: g.zone!,
-                          mode: 'grid2x2',
-                        })
-                      }
-                      className={`flex size-6 items-center justify-center rounded ${g.arrange === 'grid2x2' ? 'bg-flock-accent/15 text-flock-accent' : 'hover:bg-flock-surface-2 hover:text-flock-ink-primary'}`}
-                    >
-                      <LayoutGrid className="size-3.5" />
-                    </button>
-                  </span>
-                ) : null}
                 {g.arrange && g.zone ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -344,19 +203,26 @@ export function AgentsSwitcher(): JSX.Element {
                         className="flex size-6 items-center justify-center rounded hover:bg-flock-surface-2"
                         aria-label={`${g.label} actions`}
                       >
-                        <MoreHorizontal className="size-3.5" />
+                        <MoreVertical className="size-3.5" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44 normal-case tracking-normal">
+                      <DropdownMenuLabel>Layout</DropdownMenuLabel>
                       <DropdownMenuItem
                         onSelect={() =>
-                          setRenamePen({
-                            id: g.zone!,
-                            value: penGroups.find((pen) => pen.id === g.zone)?.name ?? 'Pen',
-                          })
+                          requestPenAction({ type: 'arrange', penId: g.zone!, mode: 'row' })
                         }
                       >
-                        <Pencil /> Rename Pen…
+                        <Columns2 /> Side by side
+                        {g.arrange === 'row' ? <Check className="ml-auto" /> : null}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          requestPenAction({ type: 'arrange', penId: g.zone!, mode: 'col' })
+                        }
+                      >
+                        <Rows2 /> Stacked
+                        {g.arrange === 'col' ? <Check className="ml-auto" /> : null}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() =>
@@ -367,7 +233,19 @@ export function AgentsSwitcher(): JSX.Element {
                           })
                         }
                       >
-                        <RotateCcw /> Reset layout
+                        <LayoutGrid /> Grid
+                        {g.arrange === 'grid2x2' ? <Check className="ml-auto" /> : null}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setRenamePen({
+                            id: g.zone!,
+                            value: penGroups.find((pen) => pen.id === g.zone)?.name ?? 'Pen',
+                          })
+                        }
+                      >
+                        <Pencil /> Rename Pen…
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -448,9 +326,6 @@ export function AgentsSwitcher(): JSX.Element {
                           <span className="truncate font-medium text-flock-ink-primary">
                             {item.label}
                           </span>
-                          {item.pinned ? (
-                            <Pin className="size-3 shrink-0 text-flock-accent" />
-                          ) : null}
                           <span
                             className={`shrink-0 text-2xs ${wordClass}`}
                             data-testid={`agent-status-word-${item.id}`}
@@ -470,7 +345,7 @@ export function AgentsSwitcher(): JSX.Element {
                           aria-label={`Agent actions for ${item.label}`}
                           className="mr-2 shrink-0 self-center rounded p-1 text-flock-ink-muted opacity-0 hover:bg-flock-surface-1 hover:text-flock-ink-primary focus:opacity-100 group-hover:opacity-100"
                         >
-                          <MoreHorizontal className="size-4" />
+                          <MoreVertical className="size-4" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
@@ -483,17 +358,6 @@ export function AgentsSwitcher(): JSX.Element {
                           }
                         >
                           <Pencil /> Rename session…
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            updateSession.mutate({
-                              id: item.id,
-                              patch: { pinned: !item.pinned },
-                            })
-                          }
-                        >
-                          <Pin className={item.pinned ? 'text-flock-accent' : undefined} />
-                          {item.pinned ? 'Remove from top' : 'Keep at top'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {penMode ? (

@@ -58,7 +58,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const err = (body.error ?? {}) as { code?: string; message?: string };
-    throw new ApiError(res.status, err.code ?? 'error', err.message ?? `Request failed (${res.status}).`);
+    throw new ApiError(
+      res.status,
+      err.code ?? 'error',
+      err.message ?? `Request failed (${res.status}).`,
+    );
   }
   return body as T;
 }
@@ -69,8 +73,7 @@ export interface NodeStack {
   stacks: string[];
   /** True when the dir is a git work tree. */
   gitRepo: boolean;
-  /** True when HEAD resolves (≥1 commit). The worktree toggle gates on THIS — a
-   *  freshly `git init`'d repo with no commits can't create a worktree. */
+  /** True when HEAD resolves (≥1 commit). */
   gitHasCommits: boolean;
 }
 export interface SearchMatch {
@@ -168,7 +171,9 @@ export function getNodeFsTree(nodeId: string, path?: string): Promise<NodeFsTree
   return request(`/api/nodes/${encodeURIComponent(nodeId)}/fs/tree${q}`);
 }
 export function readNodeFile(nodeId: string, path: string): Promise<NodeFileReadResponse> {
-  return request(`/api/nodes/${encodeURIComponent(nodeId)}/fs/file?path=${encodeURIComponent(path)}`);
+  return request(
+    `/api/nodes/${encodeURIComponent(nodeId)}/fs/file?path=${encodeURIComponent(path)}`,
+  );
 }
 export function writeNodeFile(
   nodeId: string,
@@ -226,7 +231,9 @@ export function listSessionEvents(id: string): Promise<{ events: Event[] }> {
 export function listFleetActivity(limit = 60): Promise<{ events: Event[] }> {
   return request(`/api/activity/fleet?limit=${limit}`);
 }
-export function getLatestChats(): Promise<{ chats: Record<string, { role: string; text: string }> }> {
+export function getLatestChats(): Promise<{
+  chats: Record<string, { role: string; text: string }>;
+}> {
   return request('/api/chats/latest');
 }
 export function getTeams(): Promise<{ edges: Array<{ parent: string; child: string }> }> {
@@ -247,19 +254,28 @@ export function exportConfig(): Promise<{ yaml: string }> {
 }
 /** Hand a session's task + recent context to a fresh agent (any type) in the same
  *  project/cwd. Returns the new session. */
-export function handoffSession(id: string, agentType: string): Promise<{ session: { id: string } }> {
-  return request(`/api/sessions/${id}/handoff`, { method: 'POST', body: JSON.stringify({ agentType }) });
+export function handoffSession(
+  id: string,
+  agentType: string,
+): Promise<{ session: { id: string } }> {
+  return request(`/api/sessions/${id}/handoff`, {
+    method: 'POST',
+    body: JSON.stringify({ agentType }),
+  });
 }
 
 // --- compare / race ---
-/** Spawn the same task across N agents (each in its own worktree), seeded with the
- *  task. Returns the racer session ids to compare. */
+/** Spawn the same task across N agents in the project directory. Flock observes
+ * Git state but does not create branches or worktrees. */
 export function startRace(
   projectId: string,
   task: string,
   agentTypes: string[],
 ): Promise<{ task: string; sessionIds: string[] }> {
-  return request('/api/race', { method: 'POST', body: JSON.stringify({ projectId, task, agentTypes }) });
+  return request('/api/race', {
+    method: 'POST',
+    body: JSON.stringify({ projectId, task, agentTypes }),
+  });
 }
 export function getSessionPlan(id: string): Promise<SessionPlanResponse> {
   return request(`/api/sessions/${id}/plan`);
@@ -270,7 +286,10 @@ export function getGitStatus(id: string): Promise<GitStatusResponse> {
   return request(`/api/sessions/${id}/git/status`);
 }
 export function stageGitFiles(id: string, paths: string[]): Promise<GitStatusResponse> {
-  return request(`/api/sessions/${id}/git/stage`, { method: 'POST', body: JSON.stringify({ paths }) });
+  return request(`/api/sessions/${id}/git/stage`, {
+    method: 'POST',
+    body: JSON.stringify({ paths }),
+  });
 }
 export function unstageGitFiles(id: string, paths: string[]): Promise<GitStatusResponse> {
   return request(`/api/sessions/${id}/git/unstage`, {
@@ -291,7 +310,11 @@ export function pushGit(id: string): Promise<GitPushResponse> {
 export function branchesGit(id: string): Promise<GitBranchesResponse> {
   return request(`/api/sessions/${id}/git/branches`);
 }
-export function createBranchGit(id: string, name: string, from?: string): Promise<GitBranchResponse> {
+export function createBranchGit(
+  id: string,
+  name: string,
+  from?: string,
+): Promise<GitBranchResponse> {
   return request(`/api/sessions/${id}/git/branch`, {
     method: 'POST',
     body: JSON.stringify({ name, from }),

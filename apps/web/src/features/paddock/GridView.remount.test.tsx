@@ -72,7 +72,6 @@ function mk(id: string, createdAt: string): Session {
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,
-    worktreeBranch: null,
     pinned: false,
     note: null,
     createdAt,

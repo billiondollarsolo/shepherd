@@ -86,7 +86,9 @@ export function buildStatusTimeline(
   // Keep the entry with the more specific detail (so a collapsed run still names
   // the action, e.g. the tool command), preserving the run's START (`into`).
   const withRicherDetail = (into: StatusTimelineEntry, from: StatusTimelineEntry) =>
-    (from.detail?.length ?? 0) > (into.detail?.length ?? 0) ? { ...into, detail: from.detail } : into;
+    (from.detail?.length ?? 0) > (into.detail?.length ?? 0)
+      ? { ...into, detail: from.detail }
+      : into;
 
   const out: StatusTimelineEntry[] = [];
   for (const e of chrono) {
@@ -139,16 +141,6 @@ export function buildSessionMetadata(session: Session): SessionMetadataRow[] {
     { key: 'agentType', label: 'Agent', value: session.agentType },
     { key: 'status', label: 'Status', value: session.status },
     { key: 'workingDir', label: 'Working dir', value: session.workingDir },
-    // Only for isolated-worktree sessions: the branch the agent works on.
-    ...(session.worktreeBranch
-      ? [
-          {
-            key: 'worktreeBranch',
-            label: 'Worktree branch',
-            value: session.worktreeBranch,
-          } as SessionMetadataRow,
-        ]
-      : []),
     { key: 'sessionId', label: 'Session ID', value: session.id },
   ];
 }

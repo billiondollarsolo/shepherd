@@ -48,6 +48,7 @@ describe('navToPath', () => {
     gridProjectId: null,
     lens: 'mission',
     hostScope: 'all',
+    projectView: 'agents',
   };
 
   it('mission home is /', () => {
@@ -69,5 +70,21 @@ describe('navToPath', () => {
     expect(navToPath({ ...base, view: 'settings', settingsSection: 'nodes' })).toBe(
       '/settings/nodes',
     );
+  });
+
+  it('maps project source control to its own page', () => {
+    expect(pathToNav('/p/proj-1/git')).toMatchObject({
+      selectedProjectId: 'proj-1',
+      projectView: 'git',
+    });
+    expect(
+      navToPath({
+        ...base,
+        view: 'paddock',
+        lens: 'agents',
+        gridProjectId: 'proj-1',
+        projectView: 'git',
+      }),
+    ).toBe('/p/proj-1/git');
   });
 });

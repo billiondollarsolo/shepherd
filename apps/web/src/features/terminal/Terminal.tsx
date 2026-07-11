@@ -90,7 +90,7 @@ export interface TerminalProps {
 
 /** The single terminal background, shared by xterm AND the wrapper so the
  *  unfilled letterbox margin blends in (no mismatched border). */
-const TERMINAL_BG = '#0b0e14';
+const TERMINAL_BG = '#090909';
 
 /**
  * A polished, widely-loved 16-colour palette (One Dark family) on the Flock dark

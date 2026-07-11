@@ -1,6 +1,6 @@
 /**
  * GitBadge — a compact "⎇ branch · N" chip flagging an agent with uncommitted
- * work, for at-a-glance fleet scanning (Command Center cards, Flock-topology
+ * work, for at-a-glance fleet scanning (project summaries and
  * cards). Pure: the caller supplies the git status (from useFleetGit / useGitStatus,
  * which share one cache), so this never fetches. Renders null when there's nothing
  * to flag, so clean working trees add no noise.

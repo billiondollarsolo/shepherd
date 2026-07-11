@@ -35,7 +35,6 @@ import {
   DiffService,
   GitService,
 } from './sessions/index.js';
-import { WorktreeService } from './sessions/worktree-service.js';
 import { renderScopedConfig } from './sessions/config-injection/index.js';
 import {
   agentSessionKind,
@@ -616,17 +615,10 @@ export async function main(): Promise<void> {
   // (local OR ssh), injecting the per-session Flock hook env (US-19) so the agent
   // emits lifecycle hooks, and tracking it in the live channels so the sidebar +
   // terminal light up immediately.
-  // Per-session git worktrees (isolated parallel work). Runs git on the owning
-  // node via its transport (the node stays a dumb courier).
-  const worktrees = new WorktreeService({
-    transports: (nodeId) => connections.transportFor(nodeId),
-  });
-
   const sessions = new SessionRestService({
     db,
     hashToken: (t) => Promise.resolve(hashHookToken(t)),
     audit: auditLogger,
-    createWorktree: ({ nodeId, repoDir, branch }) => worktrees.create(nodeId, repoDir, branch),
     // flock-agentd is the transport for ALL nodes (local + ssh). It is MANDATORY:
     // 'launched' on success, 'failed' on any error (the session then shows a
     // disconnected dot instead of a silent shell).
@@ -754,18 +746,9 @@ export async function main(): Promise<void> {
   // hook binding + PTY) so it leaves the sidebar and frees its attachment.
   const terminateAndCleanup = {
     async terminate(sessionId: string, ctx: { userId: string; ip?: string | null }) {
-      // Capture worktree info BEFORE terminate (the record is about to close).
-      const owner = (await sessions.listSessions()).find((s) => s.id === sessionId);
       const result = await terminateSession.terminate(sessionId, ctx);
       liveChannels.untrackSession(sessionId);
       agentdSessionMeta.delete(sessionId); // free the per-session telemetry cache (was never evicted)
-      // Remove the session's isolated worktree + delete its branch if merged
-      // (preserved otherwise). Best-effort, off the terminate result.
-      if (owner?.worktreeBranch) {
-        void worktrees
-          .remove(owner.nodeId, owner.workingDir, owner.worktreeBranch)
-          .catch(() => undefined);
-      }
       // Tear down the session's browser (stream + CDP client + Chrome container)
       // so no container orphans (FR-B6). Best-effort, off the terminate result.
       void browserChannels.stopFor(sessionId).catch(() => undefined);
@@ -1125,9 +1108,8 @@ export async function main(): Promise<void> {
       return reply.code(201).send(created);
     });
 
-    // Compare / race: spawn the SAME task across N agents, each in its own git
-    // worktree (so they don't collide), seeded with the task. Returns the racer
-    // session ids; the web compares their diffs and keeps the winner. Cookie-authed.
+    // Compare / race: spawn the same task across N agents in the project directory.
+    // Flock does not manage Git isolation; the user and agents own repository state.
     app.post('/api/race', { preHandler: requireAuth }, async (request, reply) => {
       const body = (request.body ?? {}) as {
         projectId?: string;
@@ -1147,24 +1129,16 @@ export async function main(): Promise<void> {
       const ctx = { userId: actor.id, ip: request.ip ?? null };
       const sessionIds: string[] = [];
       for (const agentType of types) {
-        // Prefer an isolated git worktree per racer; fall back to the shared project
-        // dir when worktrees aren't possible (e.g. the project isn't a git repo).
-        let id: string | null = null;
-        for (const worktree of [true, false]) {
-          const parsed = CreateSessionRequest.safeParse({
-            projectId: body.projectId,
-            agentType,
-            worktree,
-          });
-          if (!parsed.success) break;
-          try {
-            id = (await sessions.createSession(parsed.data, ctx)).session.id;
-            break;
-          } catch {
-            /* try without a worktree, then give up on this agent */
-          }
+        const parsed = CreateSessionRequest.safeParse({
+          projectId: body.projectId,
+          agentType,
+        });
+        if (!parsed.success) continue;
+        try {
+          sessionIds.push((await sessions.createSession(parsed.data, ctx)).session.id);
+        } catch {
+          /* one unavailable agent does not prevent the remaining racers */
         }
-        if (id) sessionIds.push(id);
       }
       // Seed every racer with the task once its PTY attaches (best-effort).
       const seed = `[Race task — work this independently.]\n\n${task}`;

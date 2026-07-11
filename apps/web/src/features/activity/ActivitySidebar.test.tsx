@@ -26,7 +26,6 @@ const SESSION: Session = {
   hookTokenHash: 'super-secret-hash',
   status: 'awaiting_input',
   statusDetail: 'Approve edit to src/app.ts?',
-  worktreeBranch: null,
   pinned: false,
   note: null,
   createdAt: '2026-05-29T09:00:00.000Z',
@@ -49,7 +48,12 @@ function evt(partial: Partial<Event> & Pick<Event, 'id' | 'ts' | 'mappedStatus'>
 const EVENTS: Event[] = [
   evt({ id: 'e1', ts: '2026-05-29T09:00:00.000Z', mappedStatus: 'starting' }),
   evt({ id: 'e2', ts: '2026-05-29T09:02:00.000Z', mappedStatus: 'running' }),
-  evt({ id: 'e3', ts: '2026-05-29T09:05:00.000Z', mappedStatus: 'awaiting_input', detail: 'Approve edit?' }),
+  evt({
+    id: 'e3',
+    ts: '2026-05-29T09:05:00.000Z',
+    mappedStatus: 'awaiting_input',
+    detail: 'Approve edit?',
+  }),
 ];
 
 describe('ActivitySidebar (US-34)', () => {

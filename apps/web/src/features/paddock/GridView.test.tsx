@@ -35,7 +35,6 @@ function mk(id: string, projectId = 'P'): Session {
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,
-    worktreeBranch: null,
     pinned: false,
     note: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -48,12 +47,21 @@ function mk(id: string, projectId = 'P'): Session {
 // Project P has a,b,c; project Q has q.
 const SESSIONS = [mk('a'), mk('b'), mk('c'), mk('q', 'Q')];
 let mockStatuses = new Map<string, string>();
-let mockHealth: { sessions: Record<string, { live: boolean; tokens?: number; tool?: string }> } | null =
-  null;
+let mockHealth: {
+  sessions: Record<string, { live: boolean; tokens?: number; tool?: string }>;
+} | null = null;
 vi.mock('../../data/queries', () => ({
   useSessions: () => ({ data: SESSIONS }),
   useProjects: () => ({
-    data: [{ id: 'P', name: 'proj-P', nodeId: 'n', workingDir: '/w', createdAt: '2026-01-01T00:00:00.000Z' }],
+    data: [
+      {
+        id: 'P',
+        name: 'proj-P',
+        nodeId: 'n',
+        workingDir: '/w',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
   }),
   // GridCell renders TerminalArea (drag-drop upload), which reads this hook.
   useWriteNodeFile: () => ({ mutateAsync: async () => {} }),
@@ -68,7 +76,12 @@ import { GridView } from './GridView';
 describe('GridView (kanban — per-project, scroll, tabs)', () => {
   beforeEach(() => {
     // Project layout (multi-leaf): no selected session → show all panes + tabs.
-    usePaddock.setState({ selectedSessionId: null, selectedProjectId: 'P', dialog: null, lens: 'agents' });
+    usePaddock.setState({
+      selectedSessionId: null,
+      selectedProjectId: 'P',
+      dialog: null,
+      lens: 'agents',
+    });
     mockStatuses = new Map();
     mockHealth = null;
   });

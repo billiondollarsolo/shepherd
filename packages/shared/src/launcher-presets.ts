@@ -9,7 +9,6 @@ export const LauncherPresetSchema = z.object({
   name: z.string().min(1).max(80),
   agentType: AgentTypeEnum,
   permissionMode: SessionPermissionModeEnum.optional(),
-  worktreeDefault: z.boolean().optional(),
   systemPrompt: z.string().max(8000).optional(),
 });
 export type LauncherPreset = z.infer<typeof LauncherPresetSchema>;
@@ -30,9 +29,7 @@ export const BUILTIN_LAUNCHER_PRESETS: readonly LauncherPreset[] = [
   { id: 'builtin-terminal', name: 'Shell', agentType: 'terminal' },
 ];
 
-export function mergePresetsWithBuiltins(
-  userPresets: readonly LauncherPreset[],
-): LauncherPreset[] {
+export function mergePresetsWithBuiltins(userPresets: readonly LauncherPreset[]): LauncherPreset[] {
   const ids = new Set(userPresets.map((p) => p.id));
   const builtins = BUILTIN_LAUNCHER_PRESETS.filter((b) => !ids.has(b.id));
   return [...userPresets, ...builtins];

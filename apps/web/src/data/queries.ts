@@ -54,11 +54,7 @@ import {
   updateSession,
 } from './treeApi';
 import type { UpdateSessionRequest } from '@flock/shared';
-import type {
-  ListNodeDirResponse,
-  NodeFileReadResponse,
-  NodeFsTreeResponse,
-} from '@flock/shared';
+import type { ListNodeDirResponse, NodeFileReadResponse, NodeFsTreeResponse } from '@flock/shared';
 import { getNodeFsTree, makeNodeDir, readNodeFile, writeNodeFile } from './treeApi';
 import { getAgentdStatus, type AgentdHealth } from './treeApi';
 import { getNodeStack, type NodeStack } from './treeApi';
@@ -82,6 +78,10 @@ export const qk = {
   fleetActivity: ['fleet-activity'] as const,
 };
 
+/** Core fleet queries retry continuously only while connectivity is degraded.
+ * A successful response immediately restores the query's normal calm cadence. */
+const CORE_RECOVERY_INTERVAL_MS = 3_000;
+
 function errMessage(e: unknown, fallback: string): string {
   // ApiError extends Error, so the Error branch already covers it.
   return e instanceof Error ? e.message : fallback;
@@ -93,6 +93,8 @@ export function useNodes(): UseQueryResult<FlockNode[]> {
   return useQuery({
     queryKey: qk.nodes,
     queryFn: async () => (await listNodes()).nodes,
+    refetchInterval: (query) =>
+      query.state.status === 'error' ? CORE_RECOVERY_INTERVAL_MS : false,
   });
 }
 
@@ -111,7 +113,8 @@ export function useSessions(): UseQueryResult<Session[]> {
     // status field), so this poll is only a SLOW backstop for lifecycle the WS
     // doesn't carry — sessions created/closed out-of-band (another client, daemon
     // reconcile). Same-client create/terminate invalidates this immediately.
-    refetchInterval: 30_000,
+    refetchInterval: (query) =>
+      query.state.status === 'error' ? CORE_RECOVERY_INTERVAL_MS : 30_000,
   });
 }
 
@@ -133,11 +136,7 @@ export function useAgentdStatus(): UseQueryResult<AgentdHealth> {
 }
 
 /** Detected tech stacks for a project dir (badges + gitRepo). Rarely changes → long stale. */
-export function useStack(
-  nodeId: string,
-  path: string,
-  enabled = true,
-): UseQueryResult<NodeStack> {
+export function useStack(nodeId: string, path: string, enabled = true): UseQueryResult<NodeStack> {
   return useQuery({
     queryKey: qk.stack(nodeId, path),
     enabled: enabled && nodeId !== '' && path !== '',
@@ -254,7 +253,7 @@ export function useGitStatus(
  * Fleet-wide git status: one cache entry PER session (shares `qk.gitStatus(id)`
  * with the Source Control panel + per-card badges, so nothing double-fetches),
  * polled gently. Powers the at-a-glance "who has uncommitted work" surfaces
- * (card badges + the Command Center changes lane). Returns a sessionId → status map.
+ * (project Git summaries and source-control panels). Returns a sessionId → status map.
  */
 export function useFleetGit(sessionIds: string[]): Map<string, GitStatusResponse> {
   const results = useQueries({

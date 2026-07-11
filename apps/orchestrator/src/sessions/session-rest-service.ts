@@ -19,18 +19,19 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import type {
-  CreateSessionRequest,
-  CreateSessionResponse,
-  Session,
-} from '@flock/shared';
+import type { CreateSessionRequest, CreateSessionResponse, Session } from '@flock/shared';
 
 import type { AuditLogger } from '../audit/audit.js';
 import type { Database } from '../db/client.js';
 import { rowToSession, sessionToRow } from '../db/mappers.js';
 import { agentSessions, nodes, projects } from '../db/schema.js';
 import { and, eq, isNull } from 'drizzle-orm';
-import { acpLaunchCommand, agentSupportsAcp, agentLaunchCommand, initialSessionStatus } from './agent-launch.js';
+import {
+  acpLaunchCommand,
+  agentSupportsAcp,
+  agentLaunchCommand,
+  initialSessionStatus,
+} from './agent-launch.js';
 
 /** Raised when the target project id does not resolve (→ 404, spec §10). */
 export class SessionProjectNotFoundError extends Error {
@@ -78,17 +79,6 @@ export interface SessionRestServiceDeps {
     /** Session transport: "acp" for the structured path; undefined = PTY. */
     mode?: string;
   }) => Promise<AgentdLaunchOutcome>;
-  /**
-   * Optional: create an isolated git worktree+branch for a session (US-worktree).
-   * When the request opts in, this runs BEFORE persist/launch and its returned
-   * path becomes the session's working dir. Throws (aborting create) if the dir
-   * isn't a git repo.
-   */
-  createWorktree?: (args: {
-    nodeId: string;
-    repoDir: string;
-    branch: string;
-  }) => Promise<{ path: string; branch: string }>;
   /** Optional sink for best-effort tmux failures; defaults to console.warn. */
   logger?: { warn(msg: string, err: unknown): void };
 }
@@ -115,11 +105,6 @@ export class SessionRestService {
     /** Session transport: "acp" for the structured path; undefined = PTY. */
     mode?: string;
   }) => Promise<AgentdLaunchOutcome>;
-  private readonly createWorktree?: (args: {
-    nodeId: string;
-    repoDir: string;
-    branch: string;
-  }) => Promise<{ path: string; branch: string }>;
   private readonly logger: { warn(msg: string, err: unknown): void };
 
   constructor(deps: SessionRestServiceDeps) {
@@ -129,7 +114,6 @@ export class SessionRestService {
     this.sessionEnv = deps.sessionEnv;
     this.onSessionCreated = deps.onSessionCreated;
     this.agentdLaunch = deps.agentdLaunch;
-    this.createWorktree = deps.createWorktree;
     this.logger = deps.logger ?? {
       warn(msg, err) {
         // eslint-disable-next-line no-console
@@ -145,9 +129,7 @@ export class SessionRestService {
    */
   async listSessions(projectId?: string): Promise<Session[]> {
     const openOnly = isNull(agentSessions.closedAt);
-    const where = projectId
-      ? and(eq(agentSessions.projectId, projectId), openOnly)
-      : openOnly;
+    const where = projectId ? and(eq(agentSessions.projectId, projectId), openOnly) : openOnly;
     const rows = await this.db.select().from(agentSessions).where(where);
     return rows.map(rowToSession);
   }
@@ -171,11 +153,7 @@ export class SessionRestService {
       throw new SessionProjectNotFoundError(input.projectId);
     }
 
-    const [node] = await this.db
-      .select()
-      .from(nodes)
-      .where(eq(nodes.id, project.nodeId))
-      .limit(1);
+    const [node] = await this.db.select().from(nodes).where(eq(nodes.id, project.nodeId)).limit(1);
     if (!node) {
       // A project always references a node (FK), but guard defensively.
       throw new SessionProjectNotFoundError(input.projectId);
@@ -185,24 +163,7 @@ export class SessionRestService {
     // Stable per-session name (the daemon keys by session id; this is a legacy
     // label still stored on the record + used as the terminate lookup key).
     const tmuxSessionName = `flock-${id.replace(/[.:]/g, '-')}`;
-    let workingDir = input.workingDir ?? project.workingDir;
-
-    // Isolated worktree (opt-in): create a dedicated git worktree + branch off the
-    // project repo and run the agent THERE, so parallel sessions don't collide.
-    // Done BEFORE persist/launch so workingDir points at the worktree. A failure
-    // (e.g. not a git repo) aborts create with a clear error — never a silent
-    // non-isolated session.
-    let worktreeBranch: string | null = null;
-    if (input.worktree && this.createWorktree) {
-      const requested = input.worktreeBranch ?? `flock/${id.slice(0, 8)}`;
-      const wt = await this.createWorktree({
-        nodeId: node.id,
-        repoDir: workingDir,
-        branch: requested,
-      });
-      workingDir = wt.path;
-      worktreeBranch = wt.branch;
-    }
+    const workingDir = input.workingDir ?? project.workingDir;
 
     // Mint the per-session hook token: returned ONCE, only its hash is stored.
     const hookToken = randomBytes(32).toString('base64url');
@@ -223,7 +184,6 @@ export class SessionRestService {
       // `running` the moment its shell spawns (see initialSessionStatus).
       status: initialSessionStatus(input.agentType),
       statusDetail: null,
-      worktreeBranch,
       pinned: false,
       note: null,
       reviewedAt: null,
@@ -264,9 +224,11 @@ export class SessionRestService {
     // conversation is still captured as structured messages. `dev` is always a
     // supervised shell command.
     const acpArgv =
-      persisted.agentType === 'dev' ? null : agentSupportsAcp(persisted.agentType)
-        ? acpLaunchCommand(persisted.agentType, input.permissionMode)
-        : null;
+      persisted.agentType === 'dev'
+        ? null
+        : agentSupportsAcp(persisted.agentType)
+          ? acpLaunchCommand(persisted.agentType, input.permissionMode)
+          : null;
     const mode = acpArgv ? 'acp' : undefined;
     const command =
       acpArgv ??

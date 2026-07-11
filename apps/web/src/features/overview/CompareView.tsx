@@ -1,6 +1,6 @@
 /**
- * CompareView — the compare/race overlay: the racers (same task, each in its own
- * worktree) side by side with their live status + git changes. Keep the winner and
+ * CompareView — the compare/race overlay: racers working the same task side by
+ * side with their live status + git changes. Keep the winner and
  * the rest are terminated. Rendered as a full-screen layer when a race is active.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -23,7 +23,8 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
   const qc = useQueryClient();
   const pick = useMutation({
     mutationFn: async () => {
-      for (const id of raceIds) if (id !== session.id) await terminateSession(id).catch(() => undefined);
+      for (const id of raceIds)
+        if (id !== session.id) await terminateSession(id).catch(() => undefined);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sessions'] });
@@ -58,7 +59,9 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
         <FileDiff className="size-3.5 text-flock-accent" />
         <span className="font-medium text-flock-ink-primary">{files.length}</span> file
         {files.length === 1 ? '' : 's'} changed
-        {git?.branch ? <span className="ml-auto truncate font-mono text-2xs">{git.branch}</span> : null}
+        {git?.branch ? (
+          <span className="ml-auto truncate font-mono text-2xs">{git.branch}</span>
+        ) : null}
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <ul className="space-y-0.5 px-3 pb-2 font-mono text-2xs">
@@ -84,9 +87,14 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
           variant={confirming ? 'destructive' : 'primary'}
           disabled={pick.isPending}
           onClick={onKeep}
-          title={confirming ? `Terminate the other ${others} racer${others === 1 ? '' : 's'}` : 'Keep this racer, terminate the others'}
+          title={
+            confirming
+              ? `Terminate the other ${others} racer${others === 1 ? '' : 's'}`
+              : 'Keep this racer, terminate the others'
+          }
         >
-          <Check className="size-3.5" /> {confirming ? `End ${others} other${others === 1 ? '' : 's'}?` : 'Keep'}
+          <Check className="size-3.5" />{' '}
+          {confirming ? `End ${others} other${others === 1 ? '' : 's'}?` : 'Keep'}
         </Button>
       </footer>
     </div>
@@ -107,10 +115,18 @@ export function CompareView(): JSX.Element | null {
       <header className="flex items-center gap-3 border-b border-[var(--flock-border)] px-6 py-3">
         <FileDiff className="size-5 text-flock-accent" />
         <div className="min-w-0">
-          <h2 className="font-display text-lg font-bold tracking-tight text-flock-ink-primary">Race · compare</h2>
+          <h2 className="font-display text-lg font-bold tracking-tight text-flock-ink-primary">
+            Race · compare
+          </h2>
           <p className="truncate text-xs text-flock-ink-muted">{race.task}</p>
         </div>
-        <Button size="icon-sm" variant="ghost" aria-label="Close compare" className="ml-auto" onClick={endRace}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Close compare"
+          className="ml-auto"
+          onClick={endRace}
+        >
           <X className="size-4" />
         </Button>
       </header>
