@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { User, ProjectLayoutV1 } from '@flock/shared';
+import type { User, ProjectLayoutV1, ProjectPensV1 } from '@flock/shared';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { registerMeRoutes } from './me-routes.js';
@@ -24,11 +24,13 @@ const COOKIE = { cookie: `${SESSION_COOKIE}=good-cookie` };
 describe('me routes — selection / presets / layout', () => {
   let selection: FleetSelectionStore;
   const layouts = new Map<string, ProjectLayoutV1>();
+  const pens = new Map<string, ProjectPensV1>();
   const presets = new Map<string, unknown[]>();
 
   beforeEach(() => {
     selection = new FleetSelectionStore();
     layouts.clear();
+    pens.clear();
     presets.clear();
   });
 
@@ -44,6 +46,10 @@ describe('me routes — selection / presets / layout', () => {
       getLayout: async (id) => layouts.get(id) ?? null,
       putLayout: async (id, layout) => {
         layouts.set(id, layout);
+      },
+      getPens: async (id) => pens.get(id) ?? null,
+      putPens: async (id, value) => {
+        pens.set(id, value);
       },
     });
     return f;
@@ -177,6 +183,34 @@ describe('me routes — selection / presets / layout', () => {
         headers: COOKIE,
       });
       expect(get.json().layout.root.sessionId).toBe('sess-a');
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('project Pens PUT/GET persists multiple layouts', async () => {
+    const f = buildApp();
+    try {
+      const leaf = (sessionId: string) => ({
+        version: 1 as const,
+        projectId: 'proj-1',
+        focusedLeafId: `leaf-${sessionId}`,
+        root: { type: 'leaf' as const, id: `leaf-${sessionId}`, kind: 'session' as const, sessionId },
+      });
+      const payload = {
+        version: 1 as const,
+        projectId: 'proj-1',
+        activePenId: 'pen-2',
+        pens: [
+          { id: 'pen-1', name: 'Pen 1', layout: leaf('a') },
+          { id: 'pen-2', name: 'Pen 2', layout: leaf('b') },
+        ],
+      };
+      const put = await f.inject({ method: 'PUT', url: '/api/projects/proj-1/pens', headers: COOKIE, payload });
+      expect(put.statusCode).toBe(200);
+      const get = await f.inject({ method: 'GET', url: '/api/projects/proj-1/pens', headers: COOKIE });
+      expect(get.json().pens.pens).toHaveLength(2);
+      expect(get.json().pens.activePenId).toBe('pen-2');
     } finally {
       await f.close();
     }

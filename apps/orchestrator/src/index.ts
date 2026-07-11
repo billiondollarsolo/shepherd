@@ -69,7 +69,7 @@ import {
 } from './push/index.js';
 import { buildServer } from './server.js';
 import { FleetSelectionStore } from './me/fleet-selection.js';
-import type { LauncherPreset, ProjectLayoutV1 } from '@flock/shared';
+import type { LauncherPreset, ProjectLayoutV1, ProjectPensV1 } from '@flock/shared';
 
 /**
  * T14 — resolve the agentd version from the single source of truth. Priority:
@@ -956,6 +956,7 @@ export async function main(): Promise<void> {
   const fleetSelection = new FleetSelectionStore();
   const userPresets = new Map<string, LauncherPreset[]>();
   const projectLayouts = new Map<string, ProjectLayoutV1>();
+  const projectPens = new Map<string, ProjectPensV1>();
 
   const app = buildServer({
     auth,
@@ -975,6 +976,10 @@ export async function main(): Promise<void> {
       getLayout: async (id) => projectLayouts.get(id) ?? null,
       putLayout: async (id, layout) => {
         projectLayouts.set(id, layout);
+      },
+      getPens: async (id) => projectPens.get(id) ?? null,
+      putPens: async (id, pens) => {
+        projectPens.set(id, pens);
       },
     },
     sessions,

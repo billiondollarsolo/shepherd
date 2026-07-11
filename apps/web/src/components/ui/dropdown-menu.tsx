@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
@@ -50,7 +51,10 @@ export function DropdownMenuLabel({
 }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label>): JSX.Element {
   return (
     <DropdownMenuPrimitive.Label
-      className={cn('px-2 py-1.5 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted', className)}
+      className={cn(
+        'px-2 py-1.5 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted',
+        className,
+      )}
       {...props}
     />
   );
@@ -90,3 +94,25 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
   </DropdownMenuPrimitive.CheckboxItem>
 ));
 DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName;
+
+export const DropdownMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      'relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-7 pr-2 text-sm outline-none transition-colors focus:bg-flock-surface-2',
+      className,
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex size-3.5 items-center justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <span className="size-1.5 rounded-full bg-flock-accent" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.RadioItem>
+));
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;

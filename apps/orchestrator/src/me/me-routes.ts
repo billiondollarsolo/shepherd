@@ -6,11 +6,13 @@ import {
   FleetSelectionPayloadSchema,
   LauncherPresetsPayloadSchema,
   ProjectLayoutV1Schema,
+  ProjectPensV1Schema,
   BUILTIN_LAUNCHER_PRESETS,
   mergePresetsWithBuiltins,
   type FleetSelectionPayload,
   type LauncherPreset,
   type ProjectLayoutV1,
+  type ProjectPensV1,
 } from '@flock/shared';
 import { badRequest } from '../http/reply.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
@@ -25,6 +27,8 @@ export interface MeRouteDeps {
   putPresets?: (userId: string, presets: LauncherPreset[]) => Promise<void>;
   getLayout?: (projectId: string) => Promise<ProjectLayoutV1 | null>;
   putLayout?: (projectId: string, layout: ProjectLayoutV1) => Promise<void>;
+  getPens?: (projectId: string) => Promise<ProjectPensV1 | null>;
+  putPens?: (projectId: string, pens: ProjectPensV1) => Promise<void>;
 }
 
 export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void {
@@ -110,6 +114,32 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       }
       if (deps.putLayout) await deps.putLayout(id, parsed.data);
       return reply.code(200).send({ layout: parsed.data });
+    },
+  );
+
+  app.get(
+    '/api/projects/:id/pens',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = (request.params as { id: string }).id;
+      if (!id) return badRequest(reply, 'project id required');
+      const pens = deps.getPens ? await deps.getPens(id) : null;
+      return reply.code(200).send({ pens });
+    },
+  );
+
+  app.put(
+    '/api/projects/:id/pens',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = (request.params as { id: string }).id;
+      const parsed = ProjectPensV1Schema.safeParse(request.body);
+      if (!parsed.success) return badRequest(reply, 'invalid project Pens');
+      if (parsed.data.projectId !== id) {
+        return badRequest(reply, 'pens.projectId must match path id');
+      }
+      if (deps.putPens) await deps.putPens(id, parsed.data);
+      return reply.code(200).send({ pens: parsed.data });
     },
   );
 }

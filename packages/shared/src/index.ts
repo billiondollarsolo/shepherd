@@ -16,6 +16,7 @@ export * from './shell-nav.js';
 export * from './display-status.js';
 export * from './fleet-selection.js';
 export * from './project-layout.js';
+export * from './project-pens.js';
 export * from './agents-list.js';
 export * from './launcher-presets.js';
 export * from './stage-scope.js';

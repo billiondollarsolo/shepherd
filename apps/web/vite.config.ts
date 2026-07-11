@@ -1,14 +1,19 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 
 // Native dev ports are overridable so we can bind remote-reachable ranges
 // (e.g. 11010–11020) without editing this file each time.
 const webPort = Number(process.env.WEB_PORT ?? 5173);
 const apiTarget = process.env.VITE_API_PROXY ?? `http://127.0.0.1:${process.env.PORT ?? 8080}`;
+const flockVersion = readFileSync(new URL('../../agentd/VERSION', import.meta.url), 'utf8').trim();
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __FLOCK_VERSION__: JSON.stringify(flockVersion),
+  },
   server: {
     host: '0.0.0.0',
     port: webPort,

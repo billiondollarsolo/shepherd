@@ -1,20 +1,28 @@
-/**
- * Host chips — multi-node scope switcher (herdr multi-bridge analogue).
- */
+/** Scalable fleet-scope menu for local and remote nodes. */
 import { sessionInHostScope, type HostScope } from '@flock/shared';
 import type { Node as FlockNode, Session, Status } from '@flock/shared';
+import { ChevronDown, Server } from 'lucide-react';
 import { usePaddock } from '../../store/paddock';
 import { useNodes, useSessions } from '../../data/queries';
 import { useLiveStatuses, useAgentdHealth } from '../paddock/liveData';
 import { orderNodes } from '../../store/paddock';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/ui';
 
 function attentionCount(
-  nodeId: string | 'all',
+  scope: HostScope,
   sessions: readonly Session[],
   statuses: ReadonlyMap<string, Status>,
   nodes: readonly FlockNode[],
 ): number {
-  const scope: HostScope = nodeId === 'all' ? 'all' : { nodeId };
   return sessions.filter((s) => {
     if (s.closedAt) return false;
     if (!sessionInHostScope(scope, s, nodes)) return false;
@@ -34,78 +42,104 @@ export function HostChips(): JSX.Element {
   const ordered = orderNodes(nodes, nodeOrder);
 
   const allAttn = attentionCount('all', sessions, statuses, nodes);
+  const selectedNodeId =
+    typeof hostScope === 'object' && 'nodeId' in hostScope ? hostScope.nodeId : null;
+  const selectedPool = typeof hostScope === 'object' && 'pool' in hostScope ? hostScope.pool : null;
+  const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
+  const selectedLabel =
+    selectedNode?.name ?? (selectedPool ? `Pool: ${selectedPool}` : 'All hosts');
+  const selectedAttention = attentionCount(hostScope, sessions, statuses, nodes);
+  const selectedValue = selectedNodeId
+    ? `node:${selectedNodeId}`
+    : selectedPool
+      ? `pool:${selectedPool}`
+      : 'all';
+  const pools = [
+    ...new Set(ordered.map((node) => node.pool).filter((pool): pool is string => !!pool)),
+  ];
 
   return (
-    <div
-      className="flex flex-wrap items-center gap-1.5"
-      data-testid="host-chips"
-      role="toolbar"
-      aria-label="Host scope"
-    >
-      <Chip
-        active={hostScope === 'all'}
-        label="All"
-        attention={allAttn}
-        onClick={() => setHostScope('all')}
-      />
-      {ordered.map((n) => {
-        const link = (health as { nodes?: Record<string, { link?: string }> } | null)?.nodes?.[n.id]
-          ?.link;
-        const conn = link === 'up' || n.connectionStatus === 'connected';
-        const attn = attentionCount(n.id, sessions, statuses, nodes);
-        return (
-          <Chip
-            key={n.id}
-            active={
-              typeof hostScope === 'object' && 'nodeId' in hostScope && hostScope.nodeId === n.id
-            }
-            label={n.name}
-            attention={attn}
-            connected={!!conn}
-            onClick={() => setHostScope({ nodeId: n.id })}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function Chip({
-  active,
-  label,
-  attention,
-  connected,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  attention: number;
-  connected?: boolean;
-  onClick: () => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      data-testid={`host-chip-${label}`}
-      data-active={active ? '1' : '0'}
-      onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors ${
-        active
-          ? 'border-flock-accent bg-flock-accent/15 text-flock-ink-primary'
-          : 'border-[var(--flock-border)] bg-flock-surface-1 text-flock-ink-muted hover:border-flock-accent/50'
-      }`}
-    >
-      {connected !== undefined ? (
-        <span
-          className={`size-1.5 rounded-full ${connected ? 'bg-status-idle' : 'bg-status-disconnected'}`}
-        />
-      ) : null}
-      <span className="max-w-[8rem] truncate">{label}</span>
-      {attention > 0 ? (
-        <span className="rounded-full bg-status-awaiting/20 px-1.5 tabular-nums text-status-awaiting">
-          {attention}
-        </span>
-      ) : null}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label="Fleet scope"
+          className="max-w-64 justify-start"
+          data-testid="host-scope-menu"
+        >
+          <Server />
+          <span className="font-semibold">Fleet scope</span>
+          <span className="truncate text-2xs font-normal text-flock-ink-muted">
+            {selectedLabel}
+          </span>
+          {selectedAttention > 0 ? (
+            <span className="rounded-full bg-status-awaiting/20 px-1.5 tabular-nums text-status-awaiting">
+              {selectedAttention}
+            </span>
+          ) : null}
+          <ChevronDown className="ml-auto" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel>Fleet scope</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={selectedValue}
+          onValueChange={(value) => {
+            if (value === 'all') setHostScope('all');
+            else if (value.startsWith('node:')) setHostScope({ nodeId: value.slice(5) });
+            else if (value.startsWith('pool:')) setHostScope({ pool: value.slice(5) });
+          }}
+        >
+          <DropdownMenuRadioItem value="all">
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate">All hosts</span>
+              {allAttn > 0 ? (
+                <span className="ml-auto text-2xs tabular-nums text-status-awaiting">
+                  {allAttn} need you
+                </span>
+              ) : null}
+            </span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuSeparator />
+          {ordered.map((node) => {
+            const link = (health as { nodes?: Record<string, { link?: string }> } | null)?.nodes?.[
+              node.id
+            ]?.link;
+            const connected = link === 'up' || node.connectionStatus === 'connected';
+            const attention = attentionCount({ nodeId: node.id }, sessions, statuses, nodes);
+            return (
+              <DropdownMenuRadioItem key={node.id} value={`node:${node.id}`}>
+                <span
+                  className={`size-1.5 rounded-full ${
+                    connected ? 'bg-status-idle' : 'bg-status-disconnected'
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                {attention > 0 ? (
+                  <span className="text-2xs tabular-nums text-status-awaiting">{attention}</span>
+                ) : null}
+              </DropdownMenuRadioItem>
+            );
+          })}
+          {pools.length > 0 ? <DropdownMenuSeparator /> : null}
+          {pools.map((pool) => {
+            const attention = attentionCount({ pool }, sessions, statuses, nodes);
+            return (
+              <DropdownMenuRadioItem key={pool} value={`pool:${pool}`}>
+                <span className="min-w-0 flex-1 truncate">Pool: {pool}</span>
+                {attention > 0 ? (
+                  <span className="text-2xs tabular-nums text-status-awaiting">{attention}</span>
+                ) : null}
+              </DropdownMenuRadioItem>
+            );
+          })}
+        </DropdownMenuRadioGroup>
+        {ordered.length === 0 ? (
+          <div className="px-2 py-2 text-xs text-flock-ink-muted">No hosts configured.</div>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

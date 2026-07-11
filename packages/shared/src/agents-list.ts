@@ -3,14 +3,9 @@
  */
 import type { Status } from './status.js';
 import { STATUS_POLICY } from './status.js';
-import { isActiveDisplayStatus } from './display-status.js';
+import { isWorkingDisplayStatus } from './display-status.js';
 
-export type AgentSortKey =
-  | 'attention'
-  | 'status'
-  | 'lastStatusChange'
-  | 'project'
-  | 'node';
+export type AgentSortKey = 'attention' | 'status' | 'lastStatusChange' | 'project' | 'node';
 
 export type AgentGroupKey = 'none' | 'node' | 'project' | 'nodeProject';
 
@@ -30,7 +25,7 @@ export interface AgentListItem {
 export interface AgentListOptions {
   sort: AgentSortKey;
   pinnedOnly?: boolean;
-  activeOnly?: boolean;
+  workingOnly?: boolean;
   group?: AgentGroupKey;
 }
 
@@ -79,7 +74,7 @@ export function orderAgents(
 ): AgentListItem[] {
   let list = [...items];
   if (opts.pinnedOnly) list = list.filter((i) => i.pinned);
-  if (opts.activeOnly) list = list.filter((i) => isActiveDisplayStatus(i.status));
+  if (opts.workingOnly) list = list.filter((i) => isWorkingDisplayStatus(i.status));
   const sort = SORTERS[opts.sort];
   list.sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -95,10 +90,7 @@ export interface AgentGroup {
 }
 
 /** Group an already-ordered list (does not re-sort within groups beyond pin-first order). */
-export function groupAgents(
-  items: readonly AgentListItem[],
-  group: AgentGroupKey,
-): AgentGroup[] {
+export function groupAgents(items: readonly AgentListItem[], group: AgentGroupKey): AgentGroup[] {
   if (group === 'none') {
     return [{ key: 'all', label: 'All', items: [...items] }];
   }

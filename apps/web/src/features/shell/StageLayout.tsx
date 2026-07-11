@@ -1,265 +1,289 @@
-/**
- * Stage terminal surface for the paddock: project layout + keep-mounted terminals.
- *
- * Focus model (herdr-aligned):
- *   - Open / select an agent → that leaf is ZOOMED full-stage (only that terminal).
- *   - "All agents" → clear selection + unzoom → every open agent visible.
- *   - Multi-agent arrange: side-by-side (row), stacked (col), or 2×2 grid.
- *
- * Zoom is derived from selection at render time (not a fragile post-hoc effect),
- * so a deep-link to /agents/:id always full-stages that agent.
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  collectLeaves,
   effectiveStageProjectId,
   layoutArrangeMode,
-  layoutPrimaryDirection,
-  stageRenderMode,
+  layoutSessionIds,
   type ArrangeMode,
   type ProjectLayoutV1,
-  type Session,
+  type ProjectPensV1,
 } from '@flock/shared';
-import { usePaddock } from '../../store/paddock';
+import { usePaddock, type PenAction, type PenSummary } from '../../store/paddock';
 import { useSessions } from '../../data/queries';
 import { TerminalArea } from '../terminal/TerminalArea';
 import { ProjectLayoutView } from './ProjectLayoutView';
-import { fetchProjectLayout, putProjectLayout } from './projectLayoutApi';
+import { fetchProjectLayout } from './projectLayoutApi';
+import { fetchProjectPens, putProjectPens } from './projectPensApi';
 import {
-  afterTerminateLayout,
   applySelectionZoom,
   rearrangeProjectLayout,
   reconcileProjectLayout,
 } from './projectLayoutState';
 
+const MAX_PEN_SIZE = 4;
+
+function penId(index: number): string {
+  return `pen-${index + 1}`;
+}
+
+function layoutFor(
+  projectId: string,
+  ids: readonly string[],
+  mode: ArrangeMode = 'grid2x2',
+  focus?: string | null,
+): ProjectLayoutV1 {
+  return rearrangeProjectLayout(projectId, ids, mode, focus) ??
+    // Callers always provide at least one id.
+    (() => {
+      throw new Error('cannot build an empty Pen');
+    })();
+}
+
+function migratePens(
+  projectId: string,
+  openIds: readonly string[],
+  legacy: ProjectLayoutV1 | null,
+): ProjectPensV1 {
+  const legacyIds = legacy
+    ? layoutSessionIds(legacy.root).filter((id) => openIds.includes(id)).slice(0, MAX_PEN_SIZE)
+    : [];
+  const assigned = new Set(legacyIds);
+  const chunks: string[][] = [];
+  if (legacyIds.length > 0) chunks.push(legacyIds);
+  const remaining = openIds.filter((id) => !assigned.has(id));
+  for (let index = 0; index < remaining.length; index += MAX_PEN_SIZE) {
+    chunks.push(remaining.slice(index, index + MAX_PEN_SIZE));
+  }
+  if (chunks.length === 0 && openIds[0]) chunks.push([openIds[0]]);
+  const pens = chunks.map((ids, index) => ({
+    id: penId(index),
+    name: `Pen ${index + 1}`,
+    layout:
+      index === 0 && legacy && legacyIds.length === layoutSessionIds(legacy.root).length
+        ? { ...legacy, zoomedLeafId: null }
+        : layoutFor(projectId, ids),
+  }));
+  return { version: 1, projectId, activePenId: pens[0]?.id ?? 'pen-1', pens };
+}
+
+function reconcilePens(
+  document: ProjectPensV1,
+  openIds: readonly string[],
+): ProjectPensV1 {
+  const open = new Set(openIds);
+  const pens = document.pens.flatMap((pen) => {
+    const ids = layoutSessionIds(pen.layout.root).filter((id) => open.has(id)).slice(0, 4);
+    if (ids.length === 0) return [];
+    const layout = reconcileProjectLayout(document.projectId, ids, pen.layout, null, {
+      direction: layoutArrangeMode(pen.layout.root),
+    });
+    return layout ? [{ ...pen, layout: { ...layout, zoomedLeafId: null } }] : [];
+  });
+  const activePenId = pens.some((pen) => pen.id === document.activePenId)
+    ? document.activePenId
+    : (pens[0]?.id ?? 'pen-1');
+  return { ...document, pens, activePenId };
+}
+
+function summaries(document: ProjectPensV1 | null): PenSummary[] {
+  return (
+    document?.pens.map((pen) => ({
+      id: pen.id,
+      name: pen.name,
+      sessionIds: layoutSessionIds(pen.layout.root),
+      arrange: layoutArrangeMode(pen.layout.root),
+    })) ?? []
+  );
+}
+
 export function StageLayout(): JSX.Element {
-  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
-  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
-  const openAgent = usePaddock((s) => s.openAgent);
-  const selectProject = usePaddock((s) => s.selectProject);
+  const selectedSessionId = usePaddock((state) => state.selectedSessionId);
+  const selectedProjectId = usePaddock((state) => state.selectedProjectId);
+  const selectProject = usePaddock((state) => state.selectProject);
+  const setPenState = usePaddock((state) => state.setPenState);
+  const setPenActionHandler = usePaddock((state) => state.setPenActionHandler);
   const { data: sessions = [] } = useSessions();
-
   const selected = selectedSessionId
-    ? sessions.find((s) => s.id === selectedSessionId)
+    ? sessions.find((session) => session.id === selectedSessionId) ?? null
     : null;
-
   const projectId = effectiveStageProjectId({
     selectedSessionId,
     selectedProjectId,
     selectedSessionProjectId: selected?.projectId ?? null,
   });
+  const openInProject = useMemo(
+    () =>
+      projectId
+        ? sessions.filter((session) => session.closedAt === null && session.projectId === projectId)
+        : [],
+    [sessions, projectId],
+  );
+  const openIds = useMemo(() => openInProject.map((session) => session.id), [openInProject]);
+  const openKey = openIds.join(',');
+  const byId = useMemo(() => new Map(openInProject.map((session) => [session.id, session])), [openInProject]);
+  const [document, setDocument] = useState<ProjectPensV1 | null>(null);
+  const [ready, setReady] = useState(false);
+  const lastPersisted = useRef('');
 
-  const openInProject = useMemo(() => {
-    if (!projectId) return [] as Session[];
-    return sessions.filter((s) => s.closedAt === null && s.projectId === projectId);
-  }, [sessions, projectId]);
-
-  const openIds = useMemo(() => openInProject.map((s) => s.id), [openInProject]);
-  const openIdsKey = openIds.join(',');
-
-  /** Base layout tree (splits); zoom is NOT stored here as source of truth. */
-  const [layout, setLayout] = useState<ProjectLayoutV1 | null>(null);
-  const [layoutReady, setLayoutReady] = useState(false);
-  const [stageWidth, setStageWidth] = useState<number | null>(null);
-  const lastPersisted = useRef<string>('');
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const byId = useMemo(() => new Map(openInProject.map((s) => [s.id, s])), [openInProject]);
-  const fetchGen = useRef(0);
-  /** Once the user picks row/col/2×2, keep it until project change (don't auto-flip on resize). */
-  const userArrangeDir = useRef<ArrangeMode | null>(null);
-
-  // Measure stage width for narrow→stacked default.
   useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w != null && w > 0) setStageWidth(w);
-    });
-    ro.observe(el);
-    if (el.clientWidth > 0) setStageWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, [layoutReady, projectId]);
-
-  // Load + reconcile when project or open set changes.
-  useEffect(() => {
-    userArrangeDir.current = null;
-    if (!projectId) {
-      setLayout(null);
-      setLayoutReady(false);
+    if (!projectId || openIds.length === 0) {
+      setDocument(null);
+      setReady(true);
       return;
     }
-    if (openIds.length === 0) {
-      setLayout(null);
-      setLayoutReady(true);
-      return;
-    }
-
-    const gen = ++fetchGen.current;
     let cancelled = false;
-    setLayoutReady(false);
-    void (async () => {
-      const stored = await fetchProjectLayout(projectId);
-      if (cancelled || gen !== fetchGen.current) return;
-      // Prefer stored arrange mode (incl. 2×2); otherwise width-based default.
-      if (stored?.projectId === projectId) {
-        userArrangeDir.current = layoutArrangeMode(stored.root);
-      }
-      const reconciled = reconcileProjectLayout(projectId, openIds, stored, selectedSessionId, {
-        direction: userArrangeDir.current,
-        stageWidthPx: stageWidth,
-      });
-      setLayout(reconciled ? { ...reconciled, zoomedLeafId: null } : null);
-      setLayoutReady(true);
-    })();
+    setReady(false);
+    void Promise.all([fetchProjectPens(projectId), fetchProjectLayout(projectId)]).then(
+      ([stored, legacy]) => {
+        if (cancelled) return;
+        const next = stored
+          ? reconcilePens(stored, openIds)
+          : migratePens(projectId, openIds, legacy);
+        setDocument(next);
+        setReady(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [projectId, openIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // If first multi-agent load happened before width was known, re-default once.
-  useEffect(() => {
-    if (!layout || !layoutReady || !projectId || openIds.length < 2) return;
-    if (userArrangeDir.current != null) return;
-    if (stageWidth == null || stageWidth <= 0) return;
-    const next = reconcileProjectLayout(projectId, openIds, layout, selectedSessionId, {
-      stageWidthPx: stageWidth,
-    });
-    if (!next) return;
-    if (layoutPrimaryDirection(next.root) !== layoutPrimaryDirection(layout.root)) {
-      setLayout({ ...next, zoomedLeafId: null });
-    }
-    userArrangeDir.current = layoutPrimaryDirection(next.root);
-  }, [stageWidth, layoutReady, openIdsKey, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const displayLayout = useMemo(() => {
-    if (!layout) return null;
-    return applySelectionZoom(layout, selectedSessionId);
-  }, [layout, selectedSessionId]);
+  }, [projectId, openKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!displayLayout || !projectId) return;
-    const key = JSON.stringify(displayLayout);
+    setPenState(projectId, summaries(document), document?.activePenId ?? null);
+  }, [document, projectId, setPenState]);
+
+  useEffect(() => {
+    if (!document || !ready) return;
+    const key = JSON.stringify(document);
     if (key === lastPersisted.current) return;
     lastPersisted.current = key;
-    void putProjectLayout(displayLayout).then((saved) => {
+    void putProjectPens(document).then((saved) => {
       if (saved) lastPersisted.current = JSON.stringify(saved);
     });
-  }, [displayLayout, projectId]);
+  }, [document, ready]);
+
+  const updatePenLayout = useCallback((penIdValue: string, layout: ProjectLayoutV1) => {
+    setDocument((current) =>
+      current
+        ? {
+            ...current,
+            pens: current.pens.map((pen) =>
+              pen.id === penIdValue ? { ...pen, layout: { ...layout, zoomedLeafId: null } } : pen,
+            ),
+          }
+        : current,
+    );
+  }, []);
+
+  const handleAction = useCallback(
+    (action: PenAction) => {
+      setDocument((current) => {
+        if (!current) return current;
+        if (action.type === 'select' && action.penId) {
+          return current.pens.some((pen) => pen.id === action.penId)
+            ? { ...current, activePenId: action.penId }
+            : current;
+        }
+        if (action.type === 'create') {
+          const id = crypto.randomUUID();
+          const sessionId = action.sessionId;
+          if (!sessionId || !byId.has(sessionId)) return current;
+          const pens = current.pens.map((pen) => {
+            const ids = layoutSessionIds(pen.layout.root).filter((value) => value !== sessionId);
+            return ids.length === 0
+              ? null
+              : { ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) };
+          }).filter((pen): pen is NonNullable<typeof pen> => pen !== null);
+          pens.push({ id, name: `Pen ${pens.length + 1}`, layout: layoutFor(projectId!, [sessionId]) });
+          return { ...current, pens, activePenId: id };
+        }
+        if (action.type === 'arrange' && action.penId && action.mode) {
+          return {
+            ...current,
+            pens: current.pens.map((pen) =>
+              pen.id === action.penId
+                ? { ...pen, layout: layoutFor(projectId!, layoutSessionIds(pen.layout.root), action.mode) }
+                : pen,
+            ),
+          };
+        }
+        if (!action.sessionId) return current;
+        const source = current.pens.find((pen) => layoutSessionIds(pen.layout.root).includes(action.sessionId!));
+        const target = action.penId ? current.pens.find((pen) => pen.id === action.penId) : undefined;
+        if (action.type === 'move' && source && target && source.id === target.id && action.targetSessionId) {
+          const ids = layoutSessionIds(source.layout.root);
+          const from = ids.indexOf(action.sessionId);
+          const to = ids.indexOf(action.targetSessionId);
+          if (from < 0 || to < 0) return current;
+          const ordered = [...ids];
+          [ordered[from], ordered[to]] = [ordered[to]!, ordered[from]!];
+          return { ...current, pens: current.pens.map((pen) => pen.id === source.id ? { ...pen, layout: layoutFor(projectId!, ordered, layoutArrangeMode(pen.layout.root)) } : pen) };
+        }
+        const without = current.pens.flatMap((pen) => {
+          const ids = layoutSessionIds(pen.layout.root).filter((id) => id !== action.sessionId);
+          return ids.length === 0 ? [] : [{ ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) }];
+        });
+        if (action.type === 'remove') {
+          const activePenId = without.some((pen) => pen.id === current.activePenId) ? current.activePenId : (without[0]?.id ?? current.activePenId);
+          return { ...current, pens: without, activePenId };
+        }
+        if (!target) return current;
+        const targetAfterRemoval = without.find((pen) => pen.id === target.id);
+        if (!targetAfterRemoval) return current;
+        let targetIds = layoutSessionIds(targetAfterRemoval.layout.root);
+        if (targetIds.length >= MAX_PEN_SIZE) {
+          if (!action.targetSessionId) return current;
+          targetIds = targetIds.map((id) => id === action.targetSessionId ? action.sessionId! : id);
+        } else {
+          targetIds = [...targetIds, action.sessionId];
+        }
+        const pens = without.map((pen) => pen.id === target.id ? { ...pen, layout: layoutFor(projectId!, targetIds, layoutArrangeMode(pen.layout.root), action.sessionId) } : pen);
+        return { ...current, pens, activePenId: target.id };
+      });
+      if (projectId) selectProject(projectId);
+    },
+    [byId, projectId, selectProject],
+  );
 
   useEffect(() => {
-    if (!projectId || !layout) return;
-    const live = new Set(openIds);
-    if (openIds.length === 0) {
-      setLayout(null);
-      return;
-    }
-    const pruned = afterTerminateLayout(layout, live);
-    if (!pruned) {
-      setLayout(null);
-      return;
-    }
-    const needsReconcile =
-      JSON.stringify(pruned) !== JSON.stringify(layout) ||
-      openIds.length > collectLeaves(layout.root).filter((l) => l.kind === 'session').length;
-    if (needsReconcile) {
-      const next = reconcileProjectLayout(projectId, openIds, pruned, selectedSessionId, {
-        direction: userArrangeDir.current ?? layoutPrimaryDirection(pruned.root),
-        stageWidthPx: stageWidth,
-      });
-      setLayout(next ? { ...next, zoomedLeafId: null } : null);
-    }
-  }, [openIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    setPenActionHandler(handleAction);
+    return () => setPenActionHandler(null);
+  }, [handleAction, setPenActionHandler]);
 
-  const onLayoutChange = useCallback(
-    (next: ProjectLayoutV1) => {
-      const wasZoomed = displayLayout?.zoomedLeafId ?? null;
-      const wantsZoom = next.zoomedLeafId != null;
-
-      // Leaving single-agent zoom → multi-agent project stage ("All agents").
-      if (wasZoomed && !wantsZoom && projectId) {
-        setLayout({ ...next, zoomedLeafId: null });
-        selectProject(projectId);
-        return;
-      }
-
-      // Multi-view focus / resize only: update the tree, stay on all agents.
-      // Do NOT openAgent — that would zoom via selectedSessionId.
-      if (!wantsZoom) {
-        setLayout({ ...next, zoomedLeafId: null });
-        return;
-      }
-
-      // Explicit maximize / double-click → single-agent focus.
-      setLayout({ ...next, zoomedLeafId: null });
-      const zoomLeaf = collectLeaves(next.root).find((l) => l.id === next.zoomedLeafId);
-      if (zoomLeaf?.sessionId && projectId && zoomLeaf.sessionId !== selectedSessionId) {
-        openAgent(zoomLeaf.sessionId, projectId);
-      }
-    },
-    [openAgent, selectProject, projectId, selectedSessionId, displayLayout?.zoomedLeafId],
-  );
-
-  const onArrangeMode = useCallback(
-    (mode: ArrangeMode) => {
-      if (!projectId || openIds.length === 0) return;
-      userArrangeDir.current = mode;
-      const next = rearrangeProjectLayout(projectId, openIds, mode, selectedSessionId);
-      if (next) setLayout({ ...next, zoomedLeafId: null });
-    },
-    [projectId, openIds, selectedSessionId],
-  );
-
-  const mode = stageRenderMode({
-    projectId,
-    openSessionCount: openInProject.length,
-    layoutReady: layoutReady && displayLayout != null,
-  });
-
+  if (!projectId || openIds.length === 0) {
+    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">No agents in this project.</div>;
+  }
+  if (!ready || !document) {
+    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">Preparing project Pens…</div>;
+  }
+  const activePen = document.pens.find((pen) => pen.id === document.activePenId) ?? document.pens[0];
+  if (!activePen) {
+    return <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">Drag an agent into a new Pen from the sidebar.</div>;
+  }
+  const activeIds = layoutSessionIds(activePen.layout.root);
+  const selectedOutside = selected && selected.projectId === projectId && !activeIds.includes(selected.id);
+  if (selectedOutside) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 py-1.5 text-2xs text-flock-ink-muted">
+          <span className="flex-1">Agent focused — Pen membership is unchanged.</span>
+          <button className="rounded px-2 py-1 hover:bg-flock-surface-2" onClick={() => selectProject(projectId)}>Back to {activePen.name}</button>
+        </div>
+        <div className="min-h-0 flex-1"><TerminalArea session={selected} register /></div>
+      </div>
+    );
+  }
+  const displayLayout = applySelectionZoom(activePen.layout, selectedSessionId);
   return (
-    <div ref={stageRef} className="flex h-full min-h-0 w-full flex-col" data-testid="stage-layout">
-      {mode === 'empty' ? (
-        <div
-          className="flex h-full items-center justify-center text-sm text-flock-ink-muted"
-          data-testid="stage-empty"
-        >
-          Pick an agent from the paddock list to open its stage.
-        </div>
-      ) : mode === 'loading' || !displayLayout ? (
-        <div
-          className="flex h-full flex-col items-center justify-center gap-2 text-sm text-flock-ink-muted"
-          data-testid="stage-loading"
-        >
-          <div className="size-6 animate-pulse rounded-full bg-flock-surface-2" />
-          Preparing paddock stage…
-        </div>
-      ) : (
-        <ProjectLayoutView
-          layout={displayLayout}
-          onLayoutChange={onLayoutChange}
-          onArrangeMode={onArrangeMode}
-          renderLeaf={(leafId, sessionId, kind) => {
-            if (kind === 'shell' || !sessionId) {
-              return (
-                <div className="flex h-full items-center justify-center text-2xs text-flock-ink-muted">
-                  Shell leaf {leafId}
-                </div>
-              );
-            }
-            const session = byId.get(sessionId);
-            if (!session) {
-              return (
-                <div className="flex h-full items-center justify-center text-2xs text-flock-ink-muted">
-                  Session closed
-                </div>
-              );
-            }
-            const focused =
-              displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
-            return <TerminalArea session={session} register={focused} />;
-          }}
-        />
-      )}
-    </div>
+    <ProjectLayoutView
+      layout={displayLayout}
+      showToolbar={false}
+      onLayoutChange={(layout) => updatePenLayout(activePen.id, layout)}
+      renderLeaf={(leafId, sessionId, kind) => {
+        const session = sessionId ? byId.get(sessionId) : null;
+        if (kind !== 'session' || !session) return <div className="flex h-full items-center justify-center text-xs text-flock-ink-muted">Unavailable</div>;
+        const focused = displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
+        return <TerminalArea session={session} register={focused} />;
+      }}
+    />
   );
 }

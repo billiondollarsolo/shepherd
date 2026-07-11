@@ -27,7 +27,15 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { statusLabel, type AgentType, type Node as FlockNode, type Project, type Session, type SessionPermissionMode, type Status } from '@flock/shared';
+import {
+  statusLabel,
+  type AgentType,
+  type Node as FlockNode,
+  type Project,
+  type Session,
+  type SessionPermissionMode,
+  type Status,
+} from '@flock/shared';
 import {
   Button,
   DropdownMenu,
@@ -50,6 +58,7 @@ import { useNodes, useProjects, useSessions, useStack } from '../../data/queries
 import { LiveStatusContext, AgentdHealthContext, useLiveStatuses } from './liveData';
 import { isShellProcess } from '../../lib/utils';
 import { AgentsSwitcher } from '../shell/AgentsSwitcher';
+import { FLOCK_VERSION } from '../../version';
 
 /** A session's live status if the status WS has reported one, else its REST value. */
 function useLiveStatus(session: Session): Status {
@@ -73,15 +82,90 @@ const AGENT_SHORT: Record<AgentType, string> = {
 /** Stable empty list so nodes with no sessions don't get a fresh array each render. */
 const EMPTY_SESSIONS: Session[] = [];
 
+function SidebarLensNav({ collapsed = false }: { collapsed?: boolean }): JSX.Element {
+  const lens = usePaddock((state) => state.lens);
+  const openMission = usePaddock((state) => state.openMission);
+  const setLens = usePaddock((state) => state.setLens);
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1" data-testid="sidebar-lens-nav">
+        <SimpleTooltip label="Paddock" side="right">
+          <Button
+            size="icon-sm"
+            variant={lens === 'mission' ? 'secondary' : 'ghost'}
+            aria-label="Paddock"
+            onClick={() => openMission()}
+          >
+            <LayoutGrid />
+          </Button>
+        </SimpleTooltip>
+        <SimpleTooltip label="Agents" side="right">
+          <Button
+            size="icon-sm"
+            variant={lens === 'agents' ? 'secondary' : 'ghost'}
+            aria-label="Agents"
+            onClick={() => setLens('agents')}
+          >
+            <Bot />
+          </Button>
+        </SimpleTooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="grid grid-cols-2 gap-1 rounded-lg bg-flock-surface-2 p-1"
+      data-testid="sidebar-lens-nav"
+    >
+      <button
+        type="button"
+        data-active={lens === 'mission' ? '1' : '0'}
+        onClick={() => openMission()}
+        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium ${
+          lens === 'mission'
+            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
+            : 'text-flock-ink-muted hover:text-flock-ink-primary'
+        }`}
+      >
+        <LayoutGrid className="size-3.5" /> Paddock
+      </button>
+      <button
+        type="button"
+        data-active={lens === 'agents' ? '1' : '0'}
+        onClick={() => setLens('agents')}
+        className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium ${
+          lens === 'agents'
+            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
+            : 'text-flock-ink-muted hover:text-flock-ink-primary'
+        }`}
+      >
+        <Bot className="size-3.5" /> Agents
+      </button>
+    </div>
+  );
+}
+
 /**
  * Permission-mode badge for a session row — the at-a-glance safety signal of how
  * autonomous an agent is. `default` (asks before edits) is the safe norm and gets
  * NO badge; the riskier modes are flagged, autonomous most loudly.
  */
-const MODE_BADGE: Partial<Record<SessionPermissionMode, { label: string; title: string; cls: string }>> = {
-  plan: { label: 'PLAN', title: 'Plan mode — read-only until you approve', cls: 'text-flock-accent' },
+const MODE_BADGE: Partial<
+  Record<SessionPermissionMode, { label: string; title: string; cls: string }>
+> = {
+  plan: {
+    label: 'PLAN',
+    title: 'Plan mode — read-only until you approve',
+    cls: 'text-flock-accent',
+  },
   acceptEdits: { label: 'AUTO', title: 'Auto-accept edits', cls: 'text-status-awaiting' },
-  autonomous: { label: 'YOLO', title: 'Autonomous — no approval prompts', cls: 'text-status-error' },
+  autonomous: {
+    label: 'YOLO',
+    title: 'Autonomous — no approval prompts',
+    cls: 'text-status-error',
+  },
 };
 
 /** Sort rank by status: the agents that need you float to the top of the sidebar. */
@@ -131,7 +215,11 @@ function SessionConn({ session }: { session: Session }): JSX.Element | null {
         : 'Agent disconnected';
   return (
     <SimpleTooltip label={label}>
-      <span className={`flex shrink-0 items-center ${cls}`} data-testid={`session-conn-${session.id}`} data-conn={state}>
+      <span
+        className={`flex shrink-0 items-center ${cls}`}
+        data-testid={`session-conn-${session.id}`}
+        data-conn={state}
+      >
         {state === 'down' ? (
           <WifiOff className="size-3" />
         ) : (
@@ -193,7 +281,10 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
       }`}
     >
       {selected ? (
-        <span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-flock-accent" />
+        <span
+          aria-hidden
+          className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-flock-accent"
+        />
       ) : null}
       <button
         type="button"
@@ -238,9 +329,18 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
 
 /** Human labels for detected stack ids (from /api/nodes/:id/stack). */
 const STACK_LABELS: Record<string, string> = {
-  node: 'Node', deno: 'Deno', rust: 'Rust', go: 'Go', python: 'Python',
-  laravel: 'Laravel', php: 'PHP', rails: 'Rails', ruby: 'Ruby',
-  maven: 'Java', gradle: 'Gradle', docker: 'Docker',
+  node: 'Node',
+  deno: 'Deno',
+  rust: 'Rust',
+  go: 'Go',
+  python: 'Python',
+  laravel: 'Laravel',
+  php: 'PHP',
+  rails: 'Rails',
+  ruby: 'Ruby',
+  maven: 'Java',
+  gradle: 'Gradle',
+  docker: 'Docker',
 };
 
 /** Small auto-detected tech-stack badges on a project row (hiteterm-style). */
@@ -272,7 +372,8 @@ function ProjectRow({ project }: { project: Project }): JSX.Element {
     () =>
       [...allSessions.filter((x) => x.projectId === project.id)].sort(
         (a, b) =>
-          (STATUS_RANK[live.get(a.id) ?? a.status] ?? 9) - (STATUS_RANK[live.get(b.id) ?? b.status] ?? 9),
+          (STATUS_RANK[live.get(a.id) ?? a.status] ?? 9) -
+          (STATUS_RANK[live.get(b.id) ?? b.status] ?? 9),
       ),
     [allSessions, project.id, live],
   );
@@ -292,7 +393,11 @@ function ProjectRow({ project }: { project: Project }): JSX.Element {
           }}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          {open ? <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" /> : <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />}
+          {open ? (
+            <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />
+          )}
           <FolderGit2 className="size-3.5 shrink-0 text-flock-ink-muted" />
           <span className="truncate font-medium">{project.name}</span>
           <StackBadges project={project} />
@@ -371,10 +476,22 @@ function NodeRow({
         >
           <GripVertical className="size-3.5" />
         </span>
-        <button type="button" onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          {open ? <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" /> : <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />}
-          <HardDrive className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`} />
-          <span className="truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted">{node.name}</span>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          {open ? (
+            <ChevronDown className="size-3.5 shrink-0 text-flock-ink-muted" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />
+          )}
+          <HardDrive
+            className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
+          />
+          <span className="truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
+            {node.name}
+          </span>
           {node.pool ? (
             <span
               className="shrink-0 rounded-full bg-flock-surface-3 px-1.5 text-[0.625rem] font-medium normal-case tracking-normal text-flock-ink-muted"
@@ -440,7 +557,9 @@ function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
         className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ring-white/[0.03]"
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
       >
-        <HardDrive className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`} />
+        <HardDrive
+          className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
+        />
         <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
           {node.name}
         </span>
@@ -624,7 +743,6 @@ export function Sidebar(): JSX.Element {
   const openDialog = usePaddock((s) => s.openDialog);
   const openSettings = usePaddock((s) => s.openSettings);
   const openMission = usePaddock((s) => s.openMission);
-  const view = usePaddock((s) => s.view);
   const lens = usePaddock((s) => s.lens);
   // Open agent on stage (agents lens + terminal-first chrome).
   const select = usePaddock((s) => s.openAgent);
@@ -703,17 +821,19 @@ export function Sidebar(): JSX.Element {
   // sidebar, plus the "needs you" sessions as pulsing status dots.
   if (collapsed) {
     return (
-      <div className="flex h-full flex-col items-center gap-2 bg-flock-surface-1 py-2">
-        <SimpleTooltip label="Expand sidebar" side="right">
-          <button
-            type="button"
-            aria-label="Expand sidebar"
-            onClick={toggleSidebar}
-            className="flex size-10 items-center justify-center rounded-md text-flock-ink-muted outline-none hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:bg-flock-surface-2"
-          >
-            <FlockMark className="size-6" />
-          </button>
-        </SimpleTooltip>
+      <div className="flex h-full flex-col items-center gap-2 bg-flock-surface-1 pb-2">
+        <div className="flex h-12 w-full shrink-0 items-center justify-center border-b border-[var(--flock-border)]">
+          <SimpleTooltip label="Expand sidebar" side="right">
+            <button
+              type="button"
+              aria-label="Expand sidebar"
+              onClick={toggleSidebar}
+              className="flex size-10 items-center justify-center rounded-md text-flock-ink-muted outline-none hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:bg-flock-surface-2"
+            >
+              <FlockMark className="size-6" />
+            </button>
+          </SimpleTooltip>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -745,6 +865,8 @@ export function Sidebar(): JSX.Element {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <div className="my-0.5 h-px w-6 bg-[var(--flock-border)]" />
+        <SidebarLensNav collapsed />
         <div className="my-0.5 h-px w-6 bg-[var(--flock-border)]" />
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto py-1">
           {/* Nodes — icon + connection dot; HOVER flies out the node's sessions. */}
@@ -783,10 +905,8 @@ export function Sidebar(): JSX.Element {
         </div>
 
         <div className="mt-auto flex flex-col items-center gap-1 border-t border-[var(--flock-border)] pt-2">
-          <SimpleTooltip label="Paddock" side="right">
-            <Button size="icon-sm" variant="ghost" aria-label="Paddock" onClick={() => openMission()}>
-              <LayoutGrid className="size-4" />
-            </Button>
+          <SimpleTooltip label={`Flock ${FLOCK_VERSION}`} side="right">
+            <span className="text-[9px] font-medium text-flock-ink-muted">v{FLOCK_VERSION}</span>
           </SimpleTooltip>
         </div>
       </div>
@@ -795,55 +915,67 @@ export function Sidebar(): JSX.Element {
 
   return (
     <div className="flex h-full flex-col border-r border-[var(--flock-border)] bg-flock-surface-1">
-      {/* Section label + global add — clicking returns to the Paddock home. */}
-      <header className="flex items-center gap-2 px-3 py-2.5">
-        <button
-          type="button"
-          onClick={() => openMission()}
-          aria-label="Paddock (home)"
-          title="Paddock (home)"
-          className="rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-label text-flock-ink-muted outline-none hover:text-flock-ink-primary focus-visible:ring-1 focus-visible:ring-flock-accent"
-        >
-          Paddock
-        </button>
-        <div className="ml-auto flex items-center gap-1">
-          <SimpleTooltip label="Collapse sidebar">
-            <Button size="icon-sm" variant="ghost" aria-label="Collapse sidebar" onClick={toggleSidebar}>
-              <PanelLeftClose className="size-4" />
-            </Button>
-          </SimpleTooltip>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant="ghost" aria-label="Add">
-                <Plus className="size-4" />
+      <header className="shrink-0">
+        <div className="flex h-12 items-center gap-2 border-b border-[var(--flock-border)] px-4">
+          <button
+            type="button"
+            onClick={() => openMission()}
+            aria-label="Flock home"
+            className="flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-flock-accent"
+          >
+            <FlockMark className="size-7 shrink-0" />
+            <span className="font-wordmark truncate text-xl font-semibold text-flock-ink-primary">
+              Flock
+            </span>
+          </button>
+        </div>
+        <div className="space-y-1 p-2">
+          <SidebarLensNav />
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" aria-label="New" className="flex-1 justify-start">
+                  <Plus className="size-4" />
+                  New
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Add</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => openDialog('node')}>
+                  <HardDrive /> New node
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openDialog('project')}>
+                  <FolderGit2 /> New project
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openDialog('session')}>
+                  <Bot /> New session
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openDialog('race')}>
+                  <GitCompareArrows /> Race a task…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openDialog('config')}>
+                  <FileCode2 /> Config (flock.yml)…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => openMission()}>
+                  <LayoutGrid /> Paddock
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openSettings()}>
+                  <Settings /> Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SimpleTooltip label="Collapse sidebar">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Collapse sidebar"
+                onClick={toggleSidebar}
+              >
+                <PanelLeftClose className="size-4" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Add</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => openDialog('node')}>
-                <HardDrive /> New node
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openDialog('project')}>
-                <FolderGit2 /> New project
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openDialog('session')}>
-                <Bot /> New session
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openDialog('race')}>
-                <GitCompareArrows /> Race a task…
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openDialog('config')}>
-                <FileCode2 /> Config (flock.yml)…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => openMission()}>
-                <LayoutGrid /> Paddock
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openSettings()}>
-                <Settings /> Settings
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SimpleTooltip>
+          </div>
         </div>
       </header>
 
@@ -855,78 +987,62 @@ export function Sidebar(): JSX.Element {
       ) : null}
 
       {lens !== 'agents' ? (
-      <>
-      {/* Primary nav: back to the Paddock home (the fleet). */}
-      <div className="px-2 pb-1">
-        <button
-          type="button"
-          onClick={() => openMission()}
-          aria-current={view === 'overview'}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
-            view === 'overview'
-              ? 'bg-flock-accent/15 text-flock-accent ring-1 ring-flock-accent/30'
-              : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
-          }`}
-        >
-          <LayoutGrid className="size-4" /> Paddock
-        </button>
-      </div>
-
-      {/* Needs attention */}
-      {attention.length > 0 && (
-        <div className="px-2 pb-2">
-          <p className="px-1.5 pb-1 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
-            Needs you
-          </p>
-          {attention.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => select(s.id, s.projectId)}
-              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-sm text-flock-ink-primary hover:bg-flock-surface-2"
-            >
-              <Dot status={liveStatus(s)} pulse />
-              <span className="truncate">{sessionLabel(s)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="mx-2 mb-1 h-px bg-[var(--flock-border)]" />
-
-      {/* Tree */}
-      <ScrollArea className="min-h-0 flex-1 px-1.5">
-        <div className="py-1">
-          {!loaded ? (
-            <p className="px-2 py-3 text-sm text-flock-ink-muted">Loading…</p>
-          ) : nodes.length === 0 ? (
-            <div className="px-2 py-4 text-sm text-flock-ink-muted">
-              <p className="mb-2">No nodes yet.</p>
-              <Button size="sm" variant="secondary" onClick={() => openDialog('node')}>
-                <Plus /> Add a node
-              </Button>
-            </div>
-          ) : nodes.length === 1 ? (
-            // Single node: workspace-first (projects at the top, node as a header).
-            <WorkspaceList node={nodes[0]!} />
-          ) : (
-            // Multiple nodes: keep the node grouping so "which machine" is clear,
-            // with a divider between each node so the groups don't run together.
-            <div className="divide-y divide-[var(--flock-border)]">
-              {orderedNodes.map((n) => (
-                <NodeRow key={n.id} node={n} onReorder={reorderNode} />
+        <>
+          {/* Needs attention */}
+          {attention.length > 0 && (
+            <div className="px-2 pb-2">
+              <p className="px-1.5 pb-1 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
+                Needs you
+              </p>
+              {attention.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => select(s.id, s.projectId)}
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-sm text-flock-ink-primary hover:bg-flock-surface-2"
+                >
+                  <Dot status={liveStatus(s)} pulse />
+                  <span className="truncate">{sessionLabel(s)}</span>
+                </button>
               ))}
             </div>
           )}
-        </div>
-      </ScrollArea>
-      </>
+
+          <div className="mx-2 mb-1 h-px bg-[var(--flock-border)]" />
+
+          {/* Tree */}
+          <ScrollArea className="min-h-0 flex-1 px-1.5">
+            <div className="py-1">
+              {!loaded ? (
+                <p className="px-2 py-3 text-sm text-flock-ink-muted">Loading…</p>
+              ) : nodes.length === 0 ? (
+                <div className="px-2 py-4 text-sm text-flock-ink-muted">
+                  <p className="mb-2">No nodes yet.</p>
+                  <Button size="sm" variant="secondary" onClick={() => openDialog('node')}>
+                    <Plus /> Add a node
+                  </Button>
+                </div>
+              ) : nodes.length === 1 ? (
+                // Single node: workspace-first (projects at the top, node as a header).
+                <WorkspaceList node={nodes[0]!} />
+              ) : (
+                // Multiple nodes: keep the node grouping so "which machine" is clear,
+                // with a divider between each node so the groups don't run together.
+                <div className="divide-y divide-[var(--flock-border)]">
+                  {orderedNodes.map((n) => (
+                    <NodeRow key={n.id} node={n} onReorder={reorderNode} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </>
       ) : null}
 
       <footer className="mt-auto shrink-0 border-t border-[var(--flock-border)] px-3 py-2.5">
-        <BuiltBy stacked />
+        <p className="mb-1 text-2xs font-medium text-flock-ink-muted">Flock v{FLOCK_VERSION}</p>
+        <BuiltBy />
       </footer>
     </div>
   );
 }
-

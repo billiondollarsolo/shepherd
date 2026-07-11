@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { orderAgents, groupAgents, type AgentListItem } from './agents-list.js';
 
-function item(partial: Partial<AgentListItem> & Pick<AgentListItem, 'id' | 'status'>): AgentListItem {
+function item(
+  partial: Partial<AgentListItem> & Pick<AgentListItem, 'id' | 'status'>,
+): AgentListItem {
   return {
     nodeId: 'n1',
     projectId: 'p1',
@@ -22,14 +24,14 @@ describe('agents-list', () => {
     expect(ordered.map((i) => i.id)).toEqual(['pin', 'need', 'idle']);
   });
 
-  it('activeOnly filters quiet statuses', () => {
+  it('workingOnly includes running work but not attention states', () => {
     const items = [
       item({ id: 'a', status: 'idle' }),
       item({ id: 'b', status: 'running' }),
       item({ id: 'c', status: 'awaiting_input' }),
     ];
-    const ordered = orderAgents(items, { sort: 'attention', activeOnly: true });
-    expect(ordered.map((i) => i.id).sort()).toEqual(['b', 'c']);
+    const ordered = orderAgents(items, { sort: 'attention', workingOnly: true });
+    expect(ordered.map((i) => i.id)).toEqual(['b']);
   });
 
   it('lastStatusChange sorts by timestamp desc', () => {

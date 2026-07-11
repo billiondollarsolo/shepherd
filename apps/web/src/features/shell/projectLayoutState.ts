@@ -13,18 +13,18 @@ import {
   equalSessionLayout,
   isGrid2x2Layout,
   layoutArrangeMode,
-  layoutPrimaryDirection,
   layoutSessionIds,
   pruneLayoutSessions,
   rebalanceEqualLeafWeights,
   sessionLayoutForMode,
-  splitLeaf,
   type ArrangeDirection,
   type ArrangeMode,
   type ProjectLayoutV1,
+  type LayoutNode,
 } from '@flock/shared';
 
 export type { ArrangeDirection, ArrangeMode };
+export const MAX_STAGE_SESSIONS = 4;
 
 /** Layout covering all open sessions with equal pane sizes along `direction`. */
 export function layoutFromSessions(
@@ -57,12 +57,6 @@ export function resolveArrangeMode(opts: {
   return defaultArrangeDirection(opts.stageWidthPx);
 }
 
-function setEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size !== b.size) return false;
-  for (const x of a) if (!b.has(x)) return false;
-  return true;
-}
-
 function focusLeafIdFor(layout: ProjectLayoutV1, focusedSessionId?: string | null): string {
   const leaves = collectLeaves(layout.root);
   if (leaves.length === 0) return layout.focusedLeafId;
@@ -76,7 +70,8 @@ function focusLeafIdFor(layout: ProjectLayoutV1, focusedSessionId?: string | nul
 
 /**
  * Keep stored tree + ratios when the open set is the same; prune terminated;
- * append new sessions without equal-rebalancing the whole tree.
+ * keep newly discovered sessions out of the saved split tree until the user
+ * explicitly adds them or applies an arrange preset.
  */
 function preserveStoredLayout(
   projectId: string,
@@ -90,36 +85,23 @@ function preserveStoredLayout(
 
   let base: ProjectLayoutV1 | null = stored;
   const storedSet = new Set(layoutSessionIds(stored.root));
+  const retainedSet = new Set(
+    layoutSessionIds(stored.root)
+      .filter((id) => openSet.has(id))
+      .slice(0, MAX_STAGE_SESSIONS),
+  );
 
-  // Drop terminated sessions; keep remaining split ratios.
-  if ([...storedSet].some((id) => !openSet.has(id))) {
-    base = pruneLayoutSessions(stored, openSet);
+  // Drop terminated sessions and legacy panes beyond the four-slot cap while
+  // preserving the remaining split ratios.
+  if ([...storedSet].some((id) => !retainedSet.has(id))) {
+    base = pruneLayoutSessions(stored, retainedSet);
     if (!base) return null;
   }
 
-  // Append brand-new sessions as equal splits off the focused leaf (preserves
-  // existing sibling ratios).
-  const present = new Set(layoutSessionIds(base.root));
-  const missing = openSessionIds.filter((id) => !present.has(id));
-  if (missing.length > 0) {
-    const dir = layoutPrimaryDirection(base.root);
-    let next = base;
-    for (const sid of missing) {
-      const focusId = focusLeafIdFor(next, focusedSessionId);
-      next = splitLeaf(
-        next,
-        focusId,
-        dir,
-        { type: 'leaf', id: `leaf-${sid}`, kind: 'session', sessionId: sid },
-        0.5,
-      );
-    }
-    base = next;
-  }
-
-  // Same open set as layout leaves (order may differ — we keep stored order).
+  // Every saved leaf must still be open. New open sessions are intentionally
+  // allowed to be absent: merely starting an agent must not resize the stage.
   const finalIds = new Set(layoutSessionIds(base.root));
-  if (!setEqual(finalIds, openSet)) {
+  if ([...finalIds].some((id) => !openSet.has(id))) {
     // Unexpected drift — refuse preserve so caller can rebuild.
     return null;
   }
@@ -180,7 +162,9 @@ export function reconcileProjectLayout(
     }
   }
 
-  const layout = sessionLayoutForMode(projectId, openSessionIds, mode, focus);
+  const stageSessionIds = openSessionIds.slice(0, MAX_STAGE_SESSIONS);
+  if (focus && !stageSessionIds.includes(focus)) focus = stageSessionIds[0] ?? null;
+  const layout = sessionLayoutForMode(projectId, stageSessionIds, mode, focus);
   if (!layout) return null;
   if (mode === 'grid2x2' || isGrid2x2Layout(layout.root)) {
     return layout;
@@ -198,7 +182,27 @@ export function rearrangeProjectLayout(
   mode: ArrangeMode,
   focusedSessionId?: string | null,
 ): ProjectLayoutV1 | null {
-  return sessionLayoutForMode(projectId, openSessionIds, mode, focusedSessionId);
+  return sessionLayoutForMode(
+    projectId,
+    openSessionIds.slice(0, MAX_STAGE_SESSIONS),
+    mode,
+    focusedSessionId,
+  );
+}
+
+/** Put a session into an existing pane without changing split geometry. */
+export function replaceLayoutLeafSession(
+  layout: ProjectLayoutV1,
+  leafId: string,
+  sessionId: string,
+): ProjectLayoutV1 {
+  const replace = (node: LayoutNode): LayoutNode => {
+    if (node.type === 'leaf') {
+      return node.id === leafId ? { ...node, kind: 'session', sessionId } : node;
+    }
+    return { ...node, a: replace(node.a), b: replace(node.b) };
+  };
+  return { ...layout, root: replace(layout.root), focusedLeafId: leafId, zoomedLeafId: null };
 }
 
 /** After terminate: prune leaf and return null if empty. */

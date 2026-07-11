@@ -14,6 +14,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* xterm scrolls with wheel/trackpad without needing a permanently reserved
+   native scrollbar track, which otherwise reads as right-side pane padding. */
+.xterm .xterm-viewport {
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 /*
  * Legacy aliases — earlier skeleton code (and tailwind.config.cjs) referenced
  * --flock-bg / --flock-surface / --flock-fg / --flock-muted / --flock-attention
@@ -62,4 +74,14 @@ samp,
   font-family: var(--flock-font-display);
   letter-spacing: -0.02em;
   font-feature-settings: 'ss01' 1;
+}
+
+/* Geist is a crisp, familiar developer-tool face. Keep it scoped to the
+   wordmark so the broader UI typography remains stable. */
+.font-wordmark {
+  font-family: 'Geist Variable', 'Geist', var(--flock-font-ui);
+  font-feature-settings:
+    'ss01' 1,
+    'cv01' 1;
+  letter-spacing: -0.03em;
 }

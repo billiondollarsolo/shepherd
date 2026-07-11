@@ -17,7 +17,14 @@ export type PaddockView = 'paddock' | 'settings' | 'overview';
  * Which dialog is open (null = none). Settings is a view, not a dialog.
  * `terminate-session` is a destructive-action CONFIRM (not a create dialog).
  */
-export type DialogKind = 'node' | 'project' | 'session' | 'terminate-session' | 'config' | 'race' | null;
+export type DialogKind =
+  | 'node'
+  | 'project'
+  | 'session'
+  | 'terminate-session'
+  | 'config'
+  | 'race'
+  | null;
 
 /** An active compare/race: the shared task + the racer session ids being compared. */
 export interface ActiveRace {
@@ -30,6 +37,21 @@ export type SettingsSection = 'appearance' | 'notifications' | 'nodes' | 'accoun
 
 /** Which view the right-hand session panel shows (Codex-style side panel). */
 export type RightTab = 'chat' | 'activity' | 'browser' | 'diff' | 'files' | 'search' | 'notes';
+
+export type PenAction = {
+  type: 'add' | 'remove' | 'move' | 'select' | 'create' | 'arrange';
+  sessionId?: string;
+  targetSessionId?: string;
+  penId?: string;
+  mode?: 'row' | 'col' | 'grid2x2';
+};
+
+export interface PenSummary {
+  id: string;
+  name: string;
+  sessionIds: string[];
+  arrange: 'row' | 'col' | 'grid2x2';
+}
 
 /** Per-project user-defined session order (ids), persisted in localStorage. */
 export type SessionOrder = Record<string, string[]>;
@@ -68,7 +90,10 @@ function saveNodeOrder(order: string[]): void {
   }
 }
 
-export function orderNodes<T extends { id: string; name: string }>(nodes: T[], order: string[]): T[] {
+export function orderNodes<T extends { id: string; name: string }>(
+  nodes: T[],
+  order: string[],
+): T[] {
   const idx = new Map(order.map((id, i) => [id, i]));
   return [...nodes].sort((a, b) => {
     const ai = idx.has(a.id) ? (idx.get(a.id) as number) : Number.POSITIVE_INFINITY;
@@ -234,9 +259,9 @@ export interface PaddockUiState {
    */
   selectedProjectId: string | null;
 
-  /** Host chips scope (D1 default all). */
+  /** Fleet supervision scope (D1 default all). */
   hostScope: HostScope;
-  /** Mission Control | Agents lens. */
+  /** Paddock | Agents lens. */
   lens: ShellLens;
   /** stage = terminal-first (D5 default); tools = right panel open. */
   chrome: ShellChrome;
@@ -247,6 +272,11 @@ export interface PaddockUiState {
 
   sessionOrder: SessionOrder;
   nodeOrder: string[];
+  penProjectId: string | null;
+  penSessionIds: string[];
+  penGroups: PenSummary[];
+  activePenId: string | null;
+  penActionHandler: ((action: PenAction) => void) | null;
   dialog: DialogKind;
   dialogNodeId: string | null;
   dialogProjectId: string | null;
@@ -290,6 +320,13 @@ export interface PaddockUiState {
 
   setSessionOrder: (projectId: string, orderedIds: string[]) => void;
   setNodeOrder: (orderedIds: string[]) => void;
+  setPenState: (
+    projectId: string | null,
+    groups: PenSummary[],
+    activePenId: string | null,
+  ) => void;
+  setPenActionHandler: (handler: ((action: PenAction) => void) | null) => void;
+  requestPenAction: (action: PenAction) => void;
   saveLayoutPreset: (name: string, projectId: string, order: string[]) => void;
   applyLayoutPreset: (id: string) => void;
   deleteLayoutPreset: (id: string) => void;
@@ -307,7 +344,7 @@ export interface PaddockUiState {
   openFileInViewer: (path: string) => void;
   closeFileViewer: () => void;
   setTerminalInput: (fn: ((text: string) => void) | null) => void;
-  /** Mission Control lens (preserves selection). */
+  /** Paddock lens (preserves selection). */
   openMission: () => void;
   openSettings: (section?: SettingsSection) => void;
   setSettingsSection: (section: SettingsSection) => void;
@@ -352,6 +389,11 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   zoomLeafId: null,
   sessionOrder: loadSessionOrder(),
   nodeOrder: loadNodeOrder(),
+  penProjectId: null,
+  penSessionIds: [],
+  penGroups: [],
+  activePenId: null,
+  penActionHandler: null,
 
   selectSession: (id) =>
     set({
@@ -394,7 +436,11 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     saveHostScope(scope);
     set({ hostScope: scope });
   },
-  setLens: (lens) => set({ lens, view: lens === 'mission' && !usePaddock.getState().selectedSessionId ? 'overview' : 'paddock' }),
+  setLens: (lens) =>
+    set({
+      lens,
+      view: lens === 'mission' && !usePaddock.getState().selectedSessionId ? 'overview' : 'paddock',
+    }),
   setChrome: (chrome) =>
     set({
       chrome,
@@ -428,6 +474,17 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       saveNodeOrder(orderedIds);
       return { nodeOrder: orderedIds };
     }),
+  setPenState: (projectId, groups, activePenId) => {
+    const active = groups.find((pen) => pen.id === activePenId);
+    set({
+      penProjectId: projectId,
+      penGroups: groups,
+      activePenId,
+      penSessionIds: active?.sessionIds ?? [],
+    });
+  },
+  setPenActionHandler: (handler) => set({ penActionHandler: handler }),
+  requestPenAction: (action) => usePaddock.getState().penActionHandler?.(action),
   saveLayoutPreset: (name, projectId, order) =>
     set((s) => {
       const preset: LayoutPreset = {
@@ -500,7 +557,8 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     }),
   selectDiffFile: (path, staged = null) =>
     set({ diffSelectedPath: path, diffSelectedStaged: path === null ? null : staged }),
-  openFileInViewer: (path) => set({ viewerFile: path, rightTab: 'files', rightOpen: true, chrome: 'tools' }),
+  openFileInViewer: (path) =>
+    set({ viewerFile: path, rightTab: 'files', rightOpen: true, chrome: 'tools' }),
   closeFileViewer: () => set({ viewerFile: null }),
   setTerminalInput: (fn) => set({ terminalInput: fn }),
 

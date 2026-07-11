@@ -15,7 +15,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import { Columns2, LayoutGrid, Maximize2, Rows2 } from 'lucide-react';
+import { Columns2, GripVertical, LayoutGrid, Maximize2, Rows2 } from 'lucide-react';
 import {
   collectLeaves,
   layoutArrangeMode,
@@ -34,6 +34,8 @@ export interface ProjectLayoutViewProps {
    * Only used when 2+ leaves and not zoomed.
    */
   onArrangeMode?: (mode: ArrangeMode) => void;
+  /** Sidebar-owned Pens hide the redundant main-content tab/arrange bar. */
+  showToolbar?: boolean;
   /** Render a leaf's content (terminal, shell, …). */
   renderLeaf: (
     leafId: string,
@@ -44,6 +46,29 @@ export interface ProjectLayoutViewProps {
 
 /** Gutter thickness (px) — also the middle track in the CSS grid. */
 const GUTTER_PX = 6;
+
+/** Swap two leaf positions without changing the user's split geometry. */
+export function swapLayoutLeaves(
+  layout: ProjectLayoutV1,
+  sourceLeafId: string,
+  targetLeafId: string,
+): ProjectLayoutV1 {
+  if (sourceLeafId === targetLeafId) return layout;
+  const leaves = collectLeaves(layout.root);
+  const source = leaves.find((leaf) => leaf.id === sourceLeafId);
+  const target = leaves.find((leaf) => leaf.id === targetLeafId);
+  if (!source || !target) return layout;
+
+  const swap = (node: LayoutNode): LayoutNode => {
+    if (node.type === 'leaf') {
+      if (node.id === sourceLeafId) return target;
+      if (node.id === targetLeafId) return source;
+      return node;
+    }
+    return { ...node, a: swap(node.a), b: swap(node.b) };
+  };
+  return { ...layout, root: swap(layout.root) };
+}
 
 function SplitNode({
   node,
@@ -241,6 +266,7 @@ export function ProjectLayoutView({
   layout,
   onLayoutChange,
   onArrangeMode,
+  showToolbar = true,
   renderLeaf,
 }: ProjectLayoutViewProps): JSX.Element {
   const leaves = collectLeaves(layout.root);
@@ -289,24 +315,42 @@ export function ProjectLayoutView({
       data-arrange={arrange ?? undefined}
     >
       {/* Multi-agent chrome: agent tabs + arrange presets (row / col / 2×2). */}
-      {multi ? (
+      {multi && showToolbar ? (
         <div className="flex shrink-0 items-center gap-1 border-b border-[var(--flock-border)] px-2 py-1">
+          <span className="mr-1 hidden text-2xs text-flock-ink-muted xl:inline">
+            Pen · drag tabs to rearrange panes
+          </span>
           {leaves.map((l) => {
             const focused = layout.focusedLeafId === l.id;
             return (
               <div key={l.id} className="flex items-center gap-0.5">
                 <button
                   type="button"
+                  draggable
                   data-testid={`layout-tab-${l.id}`}
-                  title="Focus this agent (stay in multi-agent view). Double-click to maximize."
-                  className={`rounded px-2 py-0.5 text-2xs ${
+                  title="Drag to rearrange. Click to focus; double-click to maximize."
+                  className={`inline-flex cursor-grab items-center rounded py-0.5 pl-1 pr-2 text-2xs active:cursor-grabbing ${
                     focused
                       ? 'bg-flock-accent/15 text-flock-accent'
                       : 'text-flock-ink-muted hover:bg-flock-surface-2'
                   }`}
                   onClick={() => focusLeaf(l.id)}
                   onDoubleClick={() => zoomLeaf(l.id)}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/flock-layout-leaf', l.id);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId = event.dataTransfer.getData('text/flock-layout-leaf');
+                    if (sourceId) onLayoutChange(swapLayoutLeaves(layout, sourceId, l.id));
+                  }}
                 >
+                  <GripVertical className="mr-0.5 size-3 text-flock-ink-muted" />
                   {l.kind === 'shell' ? 'shell' : (l.sessionId ?? l.id).slice(0, 8)}
                 </button>
                 {focused ? (

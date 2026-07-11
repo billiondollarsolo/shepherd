@@ -14,13 +14,7 @@ export {
 export { Badge, badgeVariants, type BadgeProps } from './badge';
 export { Separator } from './separator';
 export { Switch } from './switch';
-export {
-  Tooltip,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipContent,
-  SimpleTooltip,
-} from './tooltip';
+export { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent, SimpleTooltip } from './tooltip';
 export {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,6 +24,8 @@ export {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from './dropdown-menu';
 export { Popover, PopoverTrigger, PopoverAnchor, PopoverContent } from './popover';
 export {

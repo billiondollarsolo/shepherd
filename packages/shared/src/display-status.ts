@@ -7,13 +7,7 @@
  */
 import type { Status } from './status.js';
 
-export type DisplayStatusKind =
-  | 'blocked'
-  | 'error'
-  | 'working'
-  | 'done'
-  | 'idle'
-  | 'disconnected';
+export type DisplayStatusKind = 'blocked' | 'error' | 'working' | 'done' | 'idle' | 'disconnected';
 
 export interface DisplayStatus {
   kind: DisplayStatusKind;
@@ -46,15 +40,9 @@ export function statusWord(status: Status): string {
   return displayStatus(status).label;
 }
 
-/** Whether a status is attention-worthy for active-only filters (working/blocked/done/error). */
-export function isActiveDisplayStatus(status: Status): boolean {
-  return (
-    status === 'awaiting_input' ||
-    status === 'error' ||
-    status === 'running' ||
-    status === 'starting' ||
-    status === 'done'
-  );
+/** Whether the agent is currently executing or starting work. */
+export function isWorkingDisplayStatus(status: Status): boolean {
+  return status === 'running' || status === 'starting';
 }
 
 /**

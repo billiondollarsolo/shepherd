@@ -41,12 +41,10 @@ function CenterPane(): JSX.Element {
 
   if (nodeInfoNodeId) return <NodePage />;
 
-  // Mission Control board when lens is mission and nothing is on stage
+  // Paddock board when lens is mission and nothing is on stage
   // (D1 home). Opening an agent switches lens to agents and shows stage (D2).
   const showMission =
-    (view === 'overview' || lens === 'mission') &&
-    !selectedSessionId &&
-    !selectedProjectId;
+    (view === 'overview' || lens === 'mission') && !selectedSessionId && !selectedProjectId;
 
   if (showMission) return <FleetView />;
   return <SessionPane />;
@@ -78,19 +76,22 @@ export function Paddock(): JSX.Element {
           <LiveDataProvider>
             <FleetSelectionSync />
             {/* One shell always — no zen tree rebuild (plan Phase 0). */}
-            <div className="flex h-screen w-screen flex-col overflow-hidden" data-chrome={chrome}>
-              <TopBar />
-              <ConnectivityBanner />
-              <div className="min-h-0 flex-1">
-                <AppShell
-                  tree={<Sidebar />}
-                  session={<CenterPane />}
-                  drawer={<DrawerContent />}
-                  treeCollapsed={sidebarCollapsed}
-                />
-              </div>
-              {/* Bottom telemetry only when tools chrome is open (D5 terminal-first). */}
-              {chrome === 'tools' ? <BottomBar /> : null}
+            <div className="h-screen w-screen overflow-hidden" data-chrome={chrome}>
+              <AppShell
+                tree={<Sidebar />}
+                session={
+                  <div className="flex h-full min-h-0 flex-col">
+                    <TopBar />
+                    <ConnectivityBanner />
+                    <div className="min-h-0 flex-1">
+                      <CenterPane />
+                    </div>
+                    {chrome === 'tools' ? <BottomBar /> : null}
+                  </div>
+                }
+                drawer={<DrawerContent />}
+                treeCollapsed={sidebarCollapsed}
+              />
             </div>
             <CompareView />
           </LiveDataProvider>

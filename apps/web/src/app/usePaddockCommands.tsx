@@ -46,15 +46,35 @@ export function buildPaddockCommands(args: {
 }): Command[] {
   const { sessions, projects, nodes, actions: a } = args;
   const commands: Command[] = [
-    { id: 'new-session', title: 'New session…', hint: 'Create', run: () => a.openDialog('session') },
-    { id: 'new-project', title: 'New project…', hint: 'Create', run: () => a.openDialog('project') },
+    {
+      id: 'new-session',
+      title: 'New session…',
+      hint: 'Create',
+      run: () => a.openDialog('session'),
+    },
+    {
+      id: 'new-project',
+      title: 'New project…',
+      hint: 'Create',
+      run: () => a.openDialog('project'),
+    },
     { id: 'add-node', title: 'Add node…', hint: 'Create', run: () => a.openDialog('node') },
 
-    { id: 'lens-mission', title: 'Mission Control', hint: 'View', run: () => a.openMission() },
+    { id: 'lens-mission', title: 'Paddock', hint: 'View', run: () => a.openMission() },
     { id: 'lens-agents', title: 'Agents lens', hint: 'View', run: () => a.setLens('agents') },
     { id: 'open-tools', title: 'Open tools panel', hint: 'View', run: () => a.openTools() },
-    { id: 'close-tools', title: 'Terminal-first stage (hide tools)', hint: 'View', run: () => a.closeTools() },
-    { id: 'toggle-grid-layout', title: 'Toggle grid layout (columns / rows)', hint: 'View', run: a.toggleGridLayout },
+    {
+      id: 'close-tools',
+      title: 'Terminal-first stage (hide tools)',
+      hint: 'View',
+      run: () => a.closeTools(),
+    },
+    {
+      id: 'toggle-grid-layout',
+      title: 'Toggle grid layout (columns / rows)',
+      hint: 'View',
+      run: a.toggleGridLayout,
+    },
     { id: 'toggle-sidebar', title: 'Toggle sidebar', hint: 'View', run: a.toggleSidebar },
     { id: 'toggle-right', title: 'Toggle right panel', hint: 'View', run: a.toggleRight },
 

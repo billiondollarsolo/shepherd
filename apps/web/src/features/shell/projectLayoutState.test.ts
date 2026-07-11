@@ -5,8 +5,11 @@ import {
   layoutFromSessions,
   rearrangeProjectLayout,
   reconcileProjectLayout,
+  replaceLayoutLeafSession,
   resolveArrangeMode,
+  MAX_STAGE_SESSIONS,
 } from './projectLayoutState';
+import { swapLayoutLeaves } from './ProjectLayoutView';
 import {
   collectLeaves,
   isGrid2x2Layout,
@@ -36,14 +39,14 @@ describe('projectLayoutState (production reconcile)', () => {
     }
   });
 
-  it('reconcile prunes terminated and adds new sessions', () => {
+  it('reconcile prunes terminated sessions without auto-splitting for new sessions', () => {
     const stored = layoutFromSessions('p1', ['a', 'b'], 'a')!;
     const next = reconcileProjectLayout('p1', ['b', 'c'], stored, 'c');
     expect(next).not.toBeNull();
     const ids = collectLeaves(next!.root)
       .map((l) => l.sessionId)
       .sort();
-    expect(ids).toEqual(['b', 'c']);
+    expect(ids).toEqual(['b']);
   });
 
   it('D4: stored layout with only foreign sessions is replaced', () => {
@@ -187,5 +190,39 @@ describe('projectLayoutState (production reconcile)', () => {
     // Only a remains after b terminates — single leaf, no ratio to keep.
     const next = reconcileProjectLayout('p1', ['a'], dragged, null)!;
     expect(collectLeaves(next.root).map((l) => l.sessionId)).toEqual(['a']);
+  });
+
+  it('swaps pane positions without changing split geometry', () => {
+    const layout = layoutFromSessions('p1', ['a', 'b', 'c'], 'a')!;
+    const leaves = collectLeaves(layout.root);
+    const beforeRoot = layout.root.type === 'split' ? layout.root.ratio : null;
+    const swapped = swapLayoutLeaves(layout, leaves[0]!.id, leaves[2]!.id);
+    expect(collectLeaves(swapped.root).map((leaf) => leaf.sessionId)).toEqual(['c', 'b', 'a']);
+    expect(swapped.root.type === 'split' ? swapped.root.ratio : null).toBe(beforeRoot);
+  });
+
+  it('replaces a pane session without changing the four-pane geometry', () => {
+    const layout = rearrangeProjectLayout('p1', ['a', 'b', 'c', 'd'], 'grid2x2', 'b')!;
+    const beforeIds = collectLeaves(layout.root).map((leaf) => leaf.id);
+    const replaced = replaceLayoutLeafSession(layout, layout.focusedLeafId, 'e');
+    expect(collectLeaves(replaced.root).map((leaf) => leaf.id)).toEqual(beforeIds);
+    expect(collectLeaves(replaced.root).map((leaf) => leaf.sessionId)).toEqual([
+      'a',
+      'e',
+      'c',
+      'd',
+    ]);
+    expect(isGrid2x2Layout(replaced.root)).toBe(true);
+  });
+
+  it('caps rebuilt and legacy saved Pens at four sessions', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    const rebuilt = reconcileProjectLayout('p1', ids, null, null)!;
+    expect(collectLeaves(rebuilt.root)).toHaveLength(MAX_STAGE_SESSIONS);
+
+    const legacy = layoutFromSessions('p1', ids)!;
+    const repaired = reconcileProjectLayout('p1', ids, legacy, null)!;
+    expect(collectLeaves(repaired.root)).toHaveLength(MAX_STAGE_SESSIONS);
+    expect(collectLeaves(repaired.root).map((leaf) => leaf.sessionId)).toEqual(ids.slice(0, 4));
   });
 });

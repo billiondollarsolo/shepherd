@@ -43,6 +43,8 @@ export interface XtermLike {
   reset?(): void;
   /** Force DOM repaint of rows (real xterm; tests may omit). */
   refresh?(start: number, end: number): void;
+  /** Resize the character grid (real xterm; test fakes may omit). */
+  resize?(cols: number, rows: number): void;
   dispose(): void;
   readonly cols: number;
   readonly rows: number;
@@ -293,6 +295,20 @@ export default function Terminal({
     // visibly garbles alt-screen TUIs (gemini/claude/htop) mid-drag and can leave
     // WebGL artifacts. One settled fit → one SIGWINCH → the app repaints once.
     let fitTimer: ReturnType<typeof setTimeout> | undefined;
+    const fitEdgeToEdge = (): void => {
+      fit.fit();
+      // FitAddon always subtracts xterm's measured native scrollbar width when
+      // scrollback is enabled. Our viewport uses an overlay/hidden scrollbar,
+      // so that subtraction leaves a visible ~15–21px strip in every pane.
+      // Recover those columns from the rendered cell width without stretching
+      // glyphs or breaking terminal mouse coordinates.
+      const screen = el.querySelector<HTMLElement>('.xterm-screen');
+      if (!screen || term.cols <= 0) return;
+      const cellWidth = screen.getBoundingClientRect().width / term.cols;
+      if (!Number.isFinite(cellWidth) || cellWidth <= 0) return;
+      const cols = Math.max(2, Math.floor(el.clientWidth / cellWidth));
+      if (cols !== term.cols) term.resize?.(cols, term.rows);
+    };
     const fitAndSync = (opts?: { forceResize?: boolean; refresh?: boolean }): void => {
       if (disposed) return;
       // NEVER fit a zero-size container: FitAddon clamps to its ~10×4 / 84px minimum,
@@ -307,7 +323,7 @@ export default function Terminal({
         return;
       }
       try {
-        fit.fit();
+        fitEdgeToEdge();
       } catch {
         // container not laid out yet; ignore
       }
@@ -350,7 +366,7 @@ export default function Terminal({
     // When unsized, doFit()'s self-retry below fits once layout settles / it shows.
     if (el.clientWidth > 0 && el.clientHeight > 0) {
       try {
-        fit.fit();
+        fitEdgeToEdge();
       } catch {
         /* container not laid out yet */
       }
@@ -501,7 +517,7 @@ export default function Terminal({
       data-session-id={sessionId}
       data-pty-state={state}
       data-blank-suspect={blankSuspect ? '1' : '0'}
-      style={{ backgroundColor: TERMINAL_BG, padding: '8px 10px' }}
+      style={{ backgroundColor: TERMINAL_BG }}
     >
       <div
         ref={containerRef}

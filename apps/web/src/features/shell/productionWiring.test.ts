@@ -43,7 +43,7 @@ describe('production wiring (herdr-aligned shell)', () => {
   it('StageLayout uses projectLayoutApi + ProjectLayoutView + prune/reconcile', () => {
     const src = read('features/shell/StageLayout.tsx');
     expect(src).toMatch(/fetchProjectLayout/);
-    expect(src).toMatch(/putProjectLayout/);
+    expect(src).toMatch(/putProjectPens/);
     expect(src).toMatch(/ProjectLayoutView/);
     expect(src).toMatch(/reconcileProjectLayout|afterTerminateLayout/);
     expect(src).toMatch(/applySelectionZoom/);
@@ -61,7 +61,7 @@ describe('production wiring (herdr-aligned shell)', () => {
   it('StageLayout does not use GridView as loading fallback for same sessions', () => {
     const src = read('features/shell/StageLayout.tsx');
     expect(src).not.toMatch(/return\s*<GridView/);
-    expect(src).toMatch(/stage-loading|stageRenderMode|Preparing paddock stage/);
+    expect(src).toMatch(/Preparing project Pens/);
     expect(src).toMatch(/effectiveStageProjectId/);
   });
 

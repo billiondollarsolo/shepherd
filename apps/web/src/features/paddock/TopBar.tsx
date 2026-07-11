@@ -1,14 +1,15 @@
 /**
- * TopBar — brand, host chips, lens tabs, account controls.
+ * TopBar — main-content scope and account controls. Brand + primary navigation
+ * live in the full-height sidebar.
  */
 import { LogOut, Settings, User } from 'lucide-react';
-import { FlockMark } from '../../components/SheepIcon';
 import { ThemeToggle } from '../../theme';
 import { usePaddock } from '../../store/paddock';
 import { useAuthOptional } from '../auth/AuthGate';
 import { AttentionInbox } from './AttentionInbox';
 import { ActivityFeed } from './ActivityFeed';
 import { HostChips } from '../shell/HostChips';
+import { shouldShowFleetScope } from '../shell/fleetScopeVisibility';
 import {
   Button,
   DropdownMenu,
@@ -68,59 +69,19 @@ function AccountMenu(): JSX.Element | null {
   );
 }
 
-function LensTabs(): JSX.Element {
-  const lens = usePaddock((s) => s.lens);
-  const openMission = usePaddock((s) => s.openMission);
-  const setLens = usePaddock((s) => s.setLens);
-  return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-[var(--flock-border)] bg-flock-surface-2 p-0.5" data-testid="lens-tabs">
-      <button
-        type="button"
-        data-active={lens === 'mission' ? '1' : '0'}
-        onClick={() => openMission()}
-        className={`rounded-md px-2.5 py-1 text-2xs font-medium ${
-          lens === 'mission'
-            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
-            : 'text-flock-ink-muted hover:text-flock-ink-primary'
-        }`}
-      >
-        Mission Control
-      </button>
-      <button
-        type="button"
-        data-active={lens === 'agents' ? '1' : '0'}
-        onClick={() => setLens('agents')}
-        className={`rounded-md px-2.5 py-1 text-2xs font-medium ${
-          lens === 'agents'
-            ? 'bg-flock-surface-1 text-flock-ink-primary shadow-sm'
-            : 'text-flock-ink-muted hover:text-flock-ink-primary'
-        }`}
-      >
-        Agents
-      </button>
-    </div>
-  );
-}
-
 export function TopBar(): JSX.Element {
-  const openMission = usePaddock((s) => s.openMission);
   const openSettings = usePaddock((s) => s.openSettings);
+  const selectedSessionId = usePaddock((s) => s.selectedSessionId);
+  const selectedProjectId = usePaddock((s) => s.selectedProjectId);
+  const nodeInfoNodeId = usePaddock((s) => s.nodeInfoNodeId);
+  const showFleetScope = shouldShowFleetScope({
+    selectedSessionId,
+    selectedProjectId,
+    nodeInfoNodeId,
+  });
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
-      <button
-        type="button"
-        onClick={() => openMission()}
-        className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-flock-surface-2"
-        aria-label="Flock home"
-      >
-        <FlockMark className="size-6" />
-        <span className="text-sm font-semibold tracking-tight text-flock-ink-primary">Flock</span>
-      </button>
-
-      <LensTabs />
-      <div className="min-w-0 flex-1 overflow-x-auto">
-        <HostChips />
-      </div>
+      <div className="min-w-0 flex-1">{showFleetScope ? <HostChips /> : null}</div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <ActivityFeed />
@@ -130,7 +91,12 @@ export function TopBar(): JSX.Element {
           <ThemeToggle />
         </SimpleTooltip>
         <SimpleTooltip label="Settings">
-          <Button size="icon-sm" variant="ghost" aria-label="Settings" onClick={() => openSettings()}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Settings"
+            onClick={() => openSettings()}
+          >
             <Settings className="size-4" />
           </Button>
         </SimpleTooltip>

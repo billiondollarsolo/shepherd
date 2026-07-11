@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   displayStatus,
-  isActiveDisplayStatus,
+  isWorkingDisplayStatus,
   loudStatusWord,
   statusWord,
 } from './display-status.js';
@@ -31,12 +31,13 @@ describe('display-status calm map', () => {
     expect(statusWord('running')).toBe('Working');
   });
 
-  it('active filter includes working blocked done error', () => {
-    expect(isActiveDisplayStatus('awaiting_input')).toBe(true);
-    expect(isActiveDisplayStatus('running')).toBe(true);
-    expect(isActiveDisplayStatus('done')).toBe(true);
-    expect(isActiveDisplayStatus('error')).toBe(true);
-    expect(isActiveDisplayStatus('idle')).toBe(false);
-    expect(isActiveDisplayStatus('disconnected')).toBe(false);
+  it('working filter only includes running and starting agents', () => {
+    expect(isWorkingDisplayStatus('running')).toBe(true);
+    expect(isWorkingDisplayStatus('starting')).toBe(true);
+    expect(isWorkingDisplayStatus('awaiting_input')).toBe(false);
+    expect(isWorkingDisplayStatus('done')).toBe(false);
+    expect(isWorkingDisplayStatus('error')).toBe(false);
+    expect(isWorkingDisplayStatus('idle')).toBe(false);
+    expect(isWorkingDisplayStatus('disconnected')).toBe(false);
   });
 });
