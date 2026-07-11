@@ -15,53 +15,43 @@ const member: User = {
 const admin: User = { ...member, id: 'a1', role: 'admin' };
 
 describe('originAllowed (T5)', () => {
-  it('allows same origin, rejects cross origin, allows missing (non-browser)', () => {
-    expect(originAllowed(req({ origin: 'https://flock.example' }), 'https://flock.example')).toBe(
-      true,
-    );
-    expect(originAllowed(req({ origin: 'https://evil.example' }), 'https://flock.example')).toBe(
-      false,
-    );
-    expect(originAllowed(req({}), 'https://flock.example')).toBe(true); // no Origin → curl/etc.
-    expect(originAllowed(req({ origin: 'https://evil.example' }), undefined)).toBe(true); // unconfigured → allow
+  const allowed = new Set(['https://flock.example', 'http://100.64.0.42:11010']);
+
+  it('accepts only exact configured browser origins', () => {
+    expect(originAllowed(req({ origin: 'https://flock.example' }), allowed)).toBe(true);
+    expect(originAllowed(req({ origin: 'http://100.64.0.42:11010' }), allowed)).toBe(true);
+    expect(originAllowed(req({ origin: 'https://evil.example' }), allowed)).toBe(false);
+    expect(originAllowed(req({ origin: 'https://flock.example:444' }), allowed)).toBe(false);
+    expect(originAllowed(req({ origin: 'http://flock.example' }), allowed)).toBe(false);
   });
 
-  it('dev bypass: any Origin allowed regardless of PUBLIC_BASE_URL', () => {
-    // The Tailscale-IP dev bug: browse host != PUBLIC_BASE_URL must still connect.
-    expect(
-      originAllowed(req({ origin: 'http://100.64.0.42:5173' }), 'http://localhost:5173', {
-        dev: true,
-      }),
-    ).toBe(true);
+  it('fails closed for malformed, path-bearing, and unconfigured browser origins', () => {
+    expect(originAllowed(req({ origin: 'not a URL' }), allowed)).toBe(false);
+    expect(originAllowed(req({ origin: 'https://flock.example/path' }), allowed)).toBe(false);
+    expect(originAllowed(req({ origin: 'https://flock.example' }), new Set())).toBe(false);
   });
 
-  it('same-origin: Origin host matches the request Host (proxy-aware), even if != PUBLIC_BASE_URL', () => {
+  it('does not derive trust from Host or proxy headers', () => {
     expect(
       originAllowed(
-        req({ origin: 'https://box.ts.net', host: 'box.ts.net' }),
-        'https://flock.example',
-      ),
-    ).toBe(true);
-    // X-Forwarded-Host (behind Caddy) is honored.
-    expect(
-      originAllowed(
-        req({ origin: 'https://box.ts.net', 'x-forwarded-host': 'box.ts.net' }),
-        'https://flock.example',
-      ),
-    ).toBe(true);
-    // genuine cross-site (origin host != request host, != PUBLIC_BASE_URL) still rejected
-    expect(
-      originAllowed(
-        req({ origin: 'https://evil.example', host: 'box.ts.net' }),
-        'https://flock.example',
+        req({
+          origin: 'https://unconfigured.example',
+          host: 'unconfigured.example',
+          'x-forwarded-host': 'unconfigured.example',
+        }),
+        allowed,
       ),
     ).toBe(false);
+  });
+
+  it('allows missing Origin for deliberate non-browser clients', () => {
+    expect(originAllowed(req({}), allowed)).toBe(true);
   });
 });
 
 describe('makeWsAuthorizer (T4)', () => {
   const base = {
-    allowedOrigin: 'https://flock.example',
+    allowedOrigins: new Set(['https://flock.example']),
     resolveUser: async (c: string | undefined) =>
       c === 'admin' ? admin : c === 'member' ? member : null,
     sessionOwner: async (id: string) => (id === 'owned' ? 'u1' : id === 'other' ? 'u2' : null),

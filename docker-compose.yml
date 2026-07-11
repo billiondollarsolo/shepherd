@@ -118,13 +118,18 @@ services:
       # Public URL users open in the browser (Caddy HTTPS), NOT the internal
       # orchestrator:8080 address. Used for hook callbacks, cookies, and push.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
+      # Exact browser origins allowed to open authenticated WebSockets. Keep this
+      # separate from cookie transport settings; comma-separate additional exact
+      # origins only when users intentionally browse through more than one URL.
+      FLOCK_ALLOWED_ORIGINS: ${FLOCK_ALLOWED_ORIGINS:-https://localhost}
       # Secret-store master key (encryption at rest, NFR-SEC2). Prefer the file.
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY:-}
       FLOCK_MASTER_KEY_FILE: /run/secrets/flock_master_key
       FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-0}
       # T16: removed dead SESSION_SECRET / COOKIE_SECURE knobs (never read by the
-      # app). Cookie security is controlled by FLOCK_INSECURE_COOKIES (unset in
-      # prod = Secure cookies). T14: the agentd version is SINGLE-SOURCED from the
+      # app). Cookie transport is controlled by FLOCK_INSECURE_COOKIES (unset in
+      # prod = Secure cookies); it never relaxes FLOCK_ALLOWED_ORIGINS. T14: the
+      # agentd version is SINGLE-SOURCED from the
       # COPYed agentd/VERSION (resolveAgentdVersion reads it when this is empty).
       # Do NOT bake a literal default here: a stale value shadows the shipped
       # binary's version → ensureRunning re-ships+relaunches the daemon on every

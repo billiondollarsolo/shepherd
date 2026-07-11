@@ -2,7 +2,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-import { AuthService, makeDbAuthAuditRecorder, makeDbAuditSink } from './auth/index.js';
+import {
+  AuthService,
+  describeOriginPolicy,
+  makeDbAuthAuditRecorder,
+  makeDbAuditSink,
+  readOriginPolicy,
+} from './auth/index.js';
 import { AuditQueryService, DrizzleAuditReadStore } from './audit/index.js';
 import { AuditLogger } from './audit/index.js';
 import { getDb, closeDb } from './db/index.js';
@@ -141,6 +147,9 @@ function resolveAgentdVersion(): string {
  * the system of record only — never the live status path (spec §6.6).
  */
 export async function main(): Promise<void> {
+  const originPolicy = readOriginPolicy(process.env);
+  // eslint-disable-next-line no-console
+  console.log(describeOriginPolicy(originPolicy));
   const { db, pool } = getDb();
   const auth = new AuthService({ db, audit: makeDbAuthAuditRecorder(db) });
 
@@ -442,13 +451,9 @@ export async function main(): Promise<void> {
   // never wired in before — without them a session sits at "starting" with no
   // events and the terminal shows "reconnecting".
   // T4/T5: WS upgrade authorizer — Origin check + cookie→user + per-session
-  // ownership (owner or admin). Shared by the PTY, status, and screencast sockets.
+  // ownership. Shared by the PTY, status, and screencast sockets.
   const wsAuthorize = makeWsAuthorizer({
-    allowedOrigin: process.env.PUBLIC_BASE_URL,
-    // Dev (no TLS, accessed via localhost/LAN/Tailscale) skips the cross-site
-    // Origin check so the terminal WS isn't rejected when the browse host differs
-    // from PUBLIC_BASE_URL. Prod (secure cookies) keeps full anti-CSWSH enforcement.
-    insecureDev: process.env.FLOCK_INSECURE_COOKIES === '1',
+    allowedOrigins: originPolicy.allowedOrigins,
     resolveUser: async (cookieHeader) => {
       const sid = readSessionCookie(cookieHeader ?? undefined);
       return sid ? await auth.getUserBySession(sid) : null;
@@ -608,7 +613,7 @@ export async function main(): Promise<void> {
   // Where agent hook callbacks POST. Over an SSH node the agent curls localhost
   // (the reverse tunnel forwards it back); locally it hits the orchestrator
   // directly. PUBLIC_BASE_URL is the orchestrator's own origin.
-  const hookBaseUrl = process.env.PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 8080}`;
+  const hookBaseUrl = originPolicy.publicBaseUrl ?? `http://localhost:${process.env.PORT ?? 8080}`;
 
   // Session create launches the agent on the target node's flock-agentd daemon
   // (local OR ssh), injecting the per-session Flock hook env (US-19) so the agent

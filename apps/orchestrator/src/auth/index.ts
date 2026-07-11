@@ -8,3 +8,4 @@ export * from './middleware.js';
 export * from './surface-guard.js';
 export * from './routes.js';
 export * from './audit-sink.js';
+export * from './origin-policy.js';

@@ -46,6 +46,7 @@ services:
       # FLOCK_INSECURE_COOKIES (see auth/cookie.ts), not COOKIE_SECURE.
       FLOCK_INSECURE_COOKIES: '1'
       PUBLIC_BASE_URL: http://localhost:48080
+      FLOCK_ALLOWED_ORIGINS: http://localhost:48080
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY}
       FLOCK_MASTER_KEY_VERSION: '1'
       CHROME_BIN: /usr/bin/chromium

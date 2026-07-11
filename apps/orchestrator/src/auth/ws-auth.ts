@@ -13,62 +13,30 @@ import type { IncomingMessage } from 'node:http';
 import type { User } from '@flock/shared';
 
 export interface WsAuthDeps {
-  /** The app's public origin (PUBLIC_BASE_URL); used for the Origin check. */
-  allowedOrigin?: string;
-  /**
-   * Insecure dev mode (FLOCK_INSECURE_COOKIES=1): the app is reached via
-   * localhost / LAN IP / Tailscale interchangeably and isn't a hostile
-   * environment, so the cross-site Origin check is skipped (it otherwise rejects
-   * any host that isn't PUBLIC_BASE_URL — the "connecting forever" dev bug).
-   */
-  insecureDev?: boolean;
+  /** Exact canonical browser origins accepted by startup configuration. */
+  allowedOrigins: ReadonlySet<string>;
   /** Resolve the signed-in user from the request cookie, or null. */
   resolveUser(cookieHeader: string | undefined): Promise<User | null>;
   /** Owner (user id) of a session, or null when the session is unknown/invalid. */
   sessionOwner(sessionId: string): Promise<string | null>;
 }
 
-/** The Host the request actually arrived on (proxy-aware). */
-function requestHost(req: IncomingMessage): string | undefined {
-  const fwd = req.headers['x-forwarded-host'];
-  const host = Array.isArray(fwd) ? fwd[0] : fwd;
-  return host || req.headers.host || undefined;
-}
-
 /**
  * Origin check (T5, anti-CSWSH): a browser ALWAYS sends Origin on a WS upgrade,
- * so a cross-site origin → reject. Accept when ANY of:
- *   - no Origin (non-browser client: curl, the orchestrator's own probes);
- *   - `dev` (insecure dev mode) — reached via localhost/LAN/Tailscale, not hostile;
- *   - the Origin's host == the host the request arrived on (same-origin — the
- *     canonical, host-AGNOSTIC CSWSH defense; works behind Caddy via X-Forwarded-Host);
- *   - the Origin matches the configured PUBLIC_BASE_URL exactly;
- *   - PUBLIC_BASE_URL isn't configured (don't block).
+ * so a cross-site origin is rejected unless its exact canonical origin appears in
+ * the startup allowlist. Missing Origin remains valid for deliberate non-browser
+ * clients, which do not receive ambient browser cookies.
  */
-export function originAllowed(
-  req: IncomingMessage,
-  allowedOrigin?: string,
-  opts?: { dev?: boolean },
-): boolean {
+export function originAllowed(req: IncomingMessage, allowedOrigins: ReadonlySet<string>): boolean {
   const origin = req.headers.origin;
   if (!origin) return true; // non-browser client; no CSWSH risk
-  if (opts?.dev) return true; // dev: any access host is fine
-  let o: URL;
+  if (Array.isArray(origin)) return false;
   try {
-    o = new URL(origin);
+    const parsed = new URL(origin);
+    return origin === parsed.origin && allowedOrigins.has(parsed.origin);
   } catch {
     return false;
   }
-  const host = requestHost(req);
-  if (host && o.host === host) return true; // same-origin as the request arrived
-  if (allowedOrigin) {
-    try {
-      return o.origin === new URL(allowedOrigin).origin;
-    } catch {
-      return false;
-    }
-  }
-  return true; // not configured → don't block
 }
 
 /**
@@ -80,7 +48,7 @@ export function originAllowed(
  */
 export function makeWsAuthorizer(deps: WsAuthDeps) {
   return async (req: IncomingMessage, sessionId?: string | null): Promise<boolean> => {
-    if (!originAllowed(req, deps.allowedOrigin, { dev: deps.insecureDev })) return false;
+    if (!originAllowed(req, deps.allowedOrigins)) return false;
     const user = await deps.resolveUser(req.headers.cookie);
     if (!user) return false;
     if (!sessionId) return true; // status stream: any authed user

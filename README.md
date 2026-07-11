@@ -157,7 +157,7 @@ The host needs **only Docker** (with the Compose plugin) — nothing else is ins
 it. See [`docs/deployment.md`](docs/deployment.md) for the full guide; the short version:
 
 ```bash
-cp .env.example .env && $EDITOR .env          # set PUBLIC_BASE_URL + FLOCK_DOMAIN
+cp .env.example .env && $EDITOR .env          # set public URL, allowed origins + domain
 
 # Required: Compose mounts these as Docker secrets (up fails if they are missing)
 mkdir -p secrets
@@ -179,8 +179,11 @@ and per-session browser containers are launched on demand. Open `https://<host>`
 complete admin setup.
 
 > **Must set in `.env`:** `PUBLIC_BASE_URL` to the URL users open in the browser
-> (e.g. `https://flock.example.com`) — used for hooks, cookies, and push. Match
-> `FLOCK_DOMAIN` to that hostname so Caddy’s TLS cert is correct.
+> (for example, `https://flock.example.com`) and `FLOCK_ALLOWED_ORIGINS` to the
+> exact browser origin(s) allowed to open authenticated WebSockets. Match
+> `FLOCK_DOMAIN` to that hostname so Caddy’s TLS certificate is correct.
+> Production startup fails closed when either setting is missing or malformed, or
+> when the allowlist omits `PUBLIC_BASE_URL`.
 
 ---
 
