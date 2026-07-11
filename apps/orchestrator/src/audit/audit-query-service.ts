@@ -1,10 +1,10 @@
 /**
- * AuditQueryService — the admin READ side of the audit surface (US-40, FR-A3).
+ * AuditQueryService — the owner read side of the audit surface (US-40, FR-A3).
  *
  * US-40 acceptance: "login, node add/remove, session create/terminate, browser
- * takeover, secret access all produce audit rows (FR-A3); admin can read them."
+ * takeover, secret access all produce audit rows (FR-A3); the owner can read them."
  * The WRITE side is the shared {@link AuditLogger}/`AuditSink` (audit.ts); this
- * module is the READ side that backs the admin-only `GET /api/audit` route.
+ * module is the read side that backs the owner-only `GET /api/audit` route.
  *
  * It normalizes the query (default + max page size, default offset) and delegates
  * the actual fetch to an injected {@link AuditReadStore} — the Drizzle-backed
@@ -54,7 +54,7 @@ export class AuditQueryService {
   constructor(private readonly store: AuditReadStore) {}
 
   /**
-   * List audit entries newest-first (FR-A3 admin read). Applies the default page
+   * List audit entries newest-first (FR-A3 owner read). Applies the default page
    * size and clamps to the max so a caller can never request an unbounded page.
    */
   async list(input: ListAuditInput): Promise<ListAuditResponse> {

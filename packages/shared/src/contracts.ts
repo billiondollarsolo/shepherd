@@ -255,8 +255,8 @@ export type NodeFileWriteResponse = z.infer<typeof NodeFileWriteResponse>;
  * POST /api/nodes/:id/fs/mkdir — create ONE new directory `name` inside the
  * existing `parent` dir (the path picker's "New folder"). `name` is a single path
  * component — no separators or `.`/`..` (enforced server-side too) so it can't
- * escape `parent`. Like the file write, this is a node filesystem mutation →
- * admin-gated.
+ * escape `parent`. Like the file write, this is an authenticated node filesystem
+ * mutation.
  */
 export const NodeMakeDirRequest = z.object({
   parent: z.string().min(1),
@@ -647,8 +647,8 @@ export const AUDIT_MAX_LIMIT = 500;
 export const AUDIT_DEFAULT_LIMIT = 100;
 
 /**
- * GET /api/audit query (admin-only, US-40). Supports newest-first pagination and
- * optional narrowing by `action` and/or acting `userId`, so an admin can answer
+ * GET /api/audit query (owner-only, US-40). Supports newest-first pagination and
+ * optional narrowing by `action` and/or acting `userId`, so the owner can answer
  * "show me every login" or "what did user X do". All fields are optional; the
  * route applies {@link AUDIT_DEFAULT_LIMIT} / {@link AUDIT_MAX_LIMIT}.
  *
@@ -668,7 +668,7 @@ export const ListAuditQuery = z.object({
 export type ListAuditQuery = z.infer<typeof ListAuditQuery>;
 
 /**
- * GET /api/audit response (admin-only, US-40). `entries` are ordered newest-first
+ * GET /api/audit response (owner-only, US-40). `entries` are ordered newest-first
  * (descending `ts`). The append-only audit log is read off the live status path
  * (spec §6.6); this is a durable-store read, never the in-memory status map.
  */
@@ -682,6 +682,7 @@ export const ErrorResponse = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
+    details: z.unknown().optional(),
   }),
 });
 export type ErrorResponse = z.infer<typeof ErrorResponse>;

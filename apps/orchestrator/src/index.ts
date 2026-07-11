@@ -60,8 +60,10 @@ import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
 import { makeWsAuthorizer } from './auth/ws-auth.js';
 import { makeRequireAuth } from './auth/middleware.js';
-import { agentSessions, projectPens as projectPensTable } from './db/schema.js';
-import { and, eq } from 'drizzle-orm';
+import { UserPreferencesService } from './me/user-preferences-service.js';
+import { ProjectPensService } from './me/project-pens-service.js';
+import { agentSessions } from './db/schema.js';
+import { eq } from 'drizzle-orm';
 import { createLiveChannels } from './live-channels.js';
 import { createBrowserChannels } from './browser-channels.js';
 import { EventReadService } from './events/index.js';
@@ -73,7 +75,6 @@ import {
   type PushRouteDeps,
 } from './push/index.js';
 import { buildServer } from './server.js';
-import { parseProjectPens } from '@flock/shared';
 
 /**
  * T14 — resolve the agentd version from the single source of truth. Priority:
@@ -156,8 +157,8 @@ export async function main(): Promise<void> {
   const { db, pool } = getDb();
   const auth = new AuthService({ db, audit: makeDbAuthAuditRecorder(db) });
 
-  // US-40: admin audit read surface (GET /api/audit). Reads the append-only
-  // audit_log off the live status path (spec §6.6); guarded admin-only by `auth`.
+  // US-40: owner audit read surface (GET /api/audit). Reads the append-only
+  // audit_log off the live status path; guarded by authentication.
   const audit = new AuditQueryService(new DrizzleAuditReadStore(db));
 
   // Shared audit logger + secret store for the CRUD surfaces (FR-A3/FR-A4).
@@ -1012,25 +1013,8 @@ export async function main(): Promise<void> {
     projects,
     me: {
       auth,
-      getPens: async (userId, projectId) => {
-        const [row] = await db
-          .select({ document: projectPensTable.document })
-          .from(projectPensTable)
-          .where(
-            and(eq(projectPensTable.userId, userId), eq(projectPensTable.projectId, projectId)),
-          )
-          .limit(1);
-        return parseProjectPens(row?.document);
-      },
-      putPens: async (userId, projectId, pens) => {
-        await db
-          .insert(projectPensTable)
-          .values({ userId, projectId, document: pens, updatedAt: new Date() })
-          .onConflictDoUpdate({
-            target: [projectPensTable.userId, projectPensTable.projectId],
-            set: { document: pens, updatedAt: new Date() },
-          });
-      },
+      preferences: new UserPreferencesService(db),
+      pens: new ProjectPensService(db),
     },
     sessions,
     diff,

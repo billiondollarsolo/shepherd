@@ -134,6 +134,20 @@
       "when": 1783818000000,
       "tag": "0018_remove_generic_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783821600000,
+      "tag": "0019_user_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783825200000,
+      "tag": "0020_project_pens_revision",
+      "breakpoints": true
     }
   ]
 }

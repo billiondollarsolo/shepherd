@@ -6,7 +6,7 @@
  * production impl of {@link AuditReadStore}; tests use an in-memory fake.
  *
  * Postgres is the durable system of record here, NOT the live status path (spec
- * §6.6): the admin audit read is intentionally off the hot path. Rows are mapped
+ * §6.6): the owner audit read is intentionally off the hot path. Rows are mapped
  * to the shared `AuditEntry` via `rowToAuditEntry` so the domain type is never
  * duplicated.
  */

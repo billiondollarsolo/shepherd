@@ -1,28 +1,35 @@
-import { parseProjectPens, type ProjectPensV1 } from '@flock/shared';
+import {
+  ProjectPensResponseSchema,
+  type ProjectPensResponse,
+  type ProjectPensV1,
+} from '@flock/shared';
+import { apiRequest } from '../../lib/apiClient';
 
 export async function fetchProjectPens(
   projectId: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<ProjectPensV1 | null> {
-  const response = await fetchImpl(`/api/projects/${encodeURIComponent(projectId)}/pens`, {
-    credentials: 'include',
+  signal?: AbortSignal,
+): Promise<ProjectPensResponse> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}/pens`, {
+    schema: ProjectPensResponseSchema,
+    fetchImpl,
+    signal,
   });
-  if (!response.ok) return null;
-  const body = (await response.json()) as { pens: unknown };
-  return parseProjectPens(body.pens);
 }
 
 export async function putProjectPens(
   pens: ProjectPensV1,
+  baseRevision: number,
   fetchImpl: typeof fetch = fetch,
-): Promise<ProjectPensV1 | null> {
-  const response = await fetchImpl(`/api/projects/${encodeURIComponent(pens.projectId)}/pens`, {
+  signal?: AbortSignal,
+): Promise<ProjectPensResponse> {
+  return apiRequest(`/api/projects/${encodeURIComponent(pens.projectId)}/pens`, {
     method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(pens),
+    body: JSON.stringify({ baseRevision, pens }),
+    schema: ProjectPensResponseSchema,
+    fetchImpl,
+    signal,
+    idempotent: true,
+    retry: { attempts: 2, baseDelayMs: 200 },
   });
-  if (!response.ok) return null;
-  const body = (await response.json()) as { pens: unknown };
-  return parseProjectPens(body.pens);
 }

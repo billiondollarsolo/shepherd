@@ -62,7 +62,13 @@ describe('sendSubscriptionToServer', () => {
       toJSON: () => subJson,
     } as unknown as PushSubscription;
 
-    const fetchMock = vi.fn(async () => ({ ok: true, status: 201 }) as Response);
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await sendSubscriptionToServer(subscription);
@@ -80,7 +86,13 @@ describe('sendSubscriptionToServer', () => {
     } as unknown as PushSubscription;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: false, status: 401 }) as Response),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: { code: 'unauthenticated', message: 'Sign in required.' } }),
+            { status: 401, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
     );
 
     await expect(sendSubscriptionToServer(subscription)).rejects.toThrow();
@@ -109,15 +121,24 @@ describe('enablePush (full enrollment flow)', () => {
     const register = vi.fn(async () => registration);
 
     vi.stubGlobal('navigator', { serviceWorker: { register } });
-    vi.stubGlobal('window', { PushManager: function () {} });
+    Object.defineProperty(window, 'PushManager', {
+      configurable: true,
+      value: function PushManager() {},
+    });
     vi.stubGlobal('Notification', {
       requestPermission: vi.fn(async () => opts.permission ?? 'granted'),
     });
     const fetchMock = vi.fn(async (url: string) => {
       if (url === '/api/push/vapid-public-key') {
-        return { ok: true, json: async () => ({ publicKey: 'AQID' }) } as Response;
+        return new Response(JSON.stringify({ publicKey: 'AQID' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
       }
-      return { ok: true, status: 201 } as Response;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
     });
     vi.stubGlobal('fetch', fetchMock);
 

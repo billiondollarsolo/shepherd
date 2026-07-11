@@ -106,7 +106,7 @@ export interface LiveChannelsDeps {
   connections: NodeConnectionManager;
   /**
    * Authorize a WS upgrade (NFR-SEC6 + T4/T5): Origin + valid cookie, and for a
-   * session-scoped socket (sessionId given) that the user OWNS it or is admin. The
+   * session-scoped socket (sessionId given) that the user owns it. The
    * status stream passes no sessionId (any authed user). See makeWsAuthorizer.
    */
   authorizeUpgrade(
@@ -276,7 +276,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
   });
   const ptyServer = new PtyWsServer({
     registry,
-    // T4/T5: Origin + valid cookie + the user owns this session (or is admin).
+    // T4/T5: Origin + valid cookie + the user owns this session.
     authenticate: (req, sessionId) => deps.authorizeUpgrade(req, sessionId),
   });
 

@@ -1,5 +1,5 @@
 /**
- * One-off admin/operator password reset (there is no self-serve reset UI yet).
+ * One-off installation-owner password reset (there is no self-serve reset UI yet).
  *
  *   pnpm exec tsx --env-file=.env.dev.local \
  *     apps/orchestrator/src/db/reset-password.ts <username> <newPassword>

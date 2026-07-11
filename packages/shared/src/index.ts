@@ -18,3 +18,4 @@ export * from './project-layout.js';
 export * from './project-pens.js';
 export * from './launcher-presets.js';
 export * from './stage-scope.js';
+export * from './user-preferences.js';

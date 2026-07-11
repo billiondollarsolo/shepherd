@@ -22,11 +22,10 @@ afterEach(() => cleanup());
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
-    status,
-    json: async () => body,
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 const SAMPLE_DIFF = ['diff --git a/x b/x', '@@ -1 +1 @@', '-old', '+new'].join('\n');

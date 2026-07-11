@@ -1,12 +1,11 @@
 /**
- * AuditLogView — the admin Audit Log surface (US-40, FR-A3).
+ * AuditLogView — the owner Audit Log surface (US-40, FR-A3).
  *
- * "Admin can read them": a simple, calm table of the append-only audit rows
- * (timestamp, action, user, target, ip, detail) fetched from the admin-only
+ * A simple, calm table of the append-only audit rows
+ * (timestamp, action, user, target, ip, detail) fetched from the owner-only
  * `GET /api/audit`, with a filter dropdown to narrow by action and a refresh
- * button. The endpoint is admin-only on the SERVER (the authorization decision
- * stays there, NFR-SEC6); when a non-admin reaches this view the server replies
- * 403 and we show a clear "admins only" message instead of a table.
+ * button. The endpoint is owner-only on the server; authorization remains a
+ * server decision and rejected requests show a clear access message.
  *
  * Codex-calm density (Appendix A.4): quiet surfaces, a single accent, status by
  * small text — not loud badges. The audit-action set comes from the shared
@@ -74,7 +73,7 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
           data-testid="audit-forbidden"
           className="flex flex-1 items-center justify-center px-4 py-6 text-center text-sm text-flock-muted"
         >
-          {error ?? 'You need an admin account to view the audit log.'}
+          {error ?? 'Owner access is required to view the audit log.'}
         </div>
       ) : loading ? (
         <div

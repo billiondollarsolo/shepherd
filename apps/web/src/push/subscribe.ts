@@ -14,6 +14,9 @@
  * "web test for the SW registration") is unit-testable in jsdom without a real
  * push service.
  */
+import { PushSubscribeResponse } from '@flock/shared';
+import { z } from 'zod';
+import { apiRequest } from '../lib/apiClient';
 
 /** True when the browser can register a service worker. */
 export function isServiceWorkerSupported(): boolean {
@@ -55,27 +58,21 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 /** Fetch the orchestrator's VAPID public key (authed via the session cookie). */
 export async function fetchVapidPublicKey(): Promise<string> {
-  const res = await fetch('/api/push/vapid-public-key', { credentials: 'include' });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch VAPID public key: ${res.status}`);
-  }
-  const body = (await res.json()) as { publicKey: string };
+  const body = await apiRequest('/api/push/vapid-public-key', {
+    schema: z.object({ publicKey: z.string().min(1) }),
+  });
   return body.publicKey;
 }
 
 /** POST a browser PushSubscription to the orchestrator (`/api/push/subscribe`). */
 export async function sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
-  const res = await fetch('/api/push/subscribe', {
+  await apiRequest('/api/push/subscribe', {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
     // `toJSON()` yields { endpoint, keys: { p256dh, auth } } — the shared
     // PushSubscribeRequest shape exactly.
     body: JSON.stringify(subscription.toJSON()),
+    schema: PushSubscribeResponse,
   });
-  if (!res.ok) {
-    throw new Error(`Failed to register push subscription: ${res.status}`);
-  }
 }
 
 /** Outcome of {@link enablePush}. */

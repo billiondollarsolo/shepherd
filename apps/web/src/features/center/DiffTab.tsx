@@ -13,7 +13,8 @@
  */
 import { useEffect, useState } from 'react';
 
-import { DiffApiError, fetchSessionDiff, type FetchLike } from './diffApi';
+import { fetchSessionDiff, type FetchLike } from './diffApi';
+import { ApiError } from '../../lib/apiClient';
 import { isEmptyDiff, parseDiff, type DiffLineKind } from './diffLines';
 
 export interface DiffTabProps {
@@ -50,7 +51,7 @@ export default function DiffTab({ sessionId, fetchImpl }: DiffTabProps): JSX.Ele
       .catch((err: unknown) => {
         if (cancelled) return;
         const message =
-          err instanceof DiffApiError ? err.message : 'Could not load the diff for this session.';
+          err instanceof ApiError ? err.message : 'Could not load the diff for this session.';
         setState({ phase: 'error', message });
       });
     return () => {

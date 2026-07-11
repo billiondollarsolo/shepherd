@@ -8,7 +8,14 @@
  * Server data lives in TanStack Query; this store holds NO server data.
  */
 import { create } from 'zustand';
-import type { ShellChrome, ShellLens } from '@flock/shared';
+import type {
+  GridLayout,
+  SavedLayoutPreset,
+  ShellChrome,
+  ShellLens,
+  UserPreferencesDocument,
+} from '@flock/shared';
+export type { GridLayout } from '@flock/shared';
 
 /** Top-level surface. Settings is a full PAGE (not a modal). */
 export type PaddockView = 'paddock' | 'settings' | 'overview';
@@ -54,42 +61,8 @@ export interface PenSummary {
   arrange: 'row' | 'col' | 'grid2x2';
 }
 
-/** Per-project user-defined session order (ids), persisted in localStorage. */
+/** Per-project user-defined session order (ids), persisted by DurablePreferencesSync. */
 export type SessionOrder = Record<string, string[]>;
-
-const ORDER_KEY = 'flock.sessionOrder';
-function loadSessionOrder(): SessionOrder {
-  try {
-    const raw = localStorage.getItem(ORDER_KEY);
-    return raw ? (JSON.parse(raw) as SessionOrder) : {};
-  } catch {
-    return {};
-  }
-}
-function saveSessionOrder(order: SessionOrder): void {
-  try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(order));
-  } catch {
-    /* storage unavailable */
-  }
-}
-
-const NODE_ORDER_KEY = 'flock.nodeOrder';
-function loadNodeOrder(): string[] {
-  try {
-    const raw = localStorage.getItem(NODE_ORDER_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-function saveNodeOrder(order: string[]): void {
-  try {
-    localStorage.setItem(NODE_ORDER_KEY, JSON.stringify(order));
-  } catch {
-    /* storage unavailable */
-  }
-}
 
 export function orderNodes<T extends { id: string; name: string }>(
   nodes: T[],
@@ -119,7 +92,6 @@ function saveSidebarCollapsed(v: boolean): void {
   }
 }
 
-export type GridLayout = 'columns' | 'grid';
 const GRID_LAYOUT_KEY = 'flock.gridLayout';
 function loadGridLayout(): GridLayout {
   try {
@@ -136,29 +108,7 @@ function saveGridLayout(v: GridLayout): void {
   }
 }
 
-export interface LayoutPreset {
-  id: string;
-  name: string;
-  projectId: string;
-  gridLayout: GridLayout;
-  order: string[];
-}
-const PRESETS_KEY = 'flock.layoutPresets';
-function loadLayoutPresets(): LayoutPreset[] {
-  try {
-    const raw = localStorage.getItem(PRESETS_KEY);
-    return raw ? (JSON.parse(raw) as LayoutPreset[]) : [];
-  } catch {
-    return [];
-  }
-}
-function saveLayoutPresets(p: LayoutPreset[]): void {
-  try {
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
-  } catch {
-    /* storage unavailable */
-  }
-}
+export type LayoutPreset = SavedLayoutPreset;
 
 const ASSIST_KEY = 'flock.assistivePanels';
 function loadAssistive(): boolean {
@@ -195,6 +145,11 @@ export interface PaddockUiState {
 
   sessionOrder: SessionOrder;
   nodeOrder: string[];
+  preferencesRevision: number;
+  preferencesHydrated: boolean;
+  preferencesSaveState: 'loading' | 'saved' | 'saving' | 'retrying' | 'failed';
+  preferencesError: string | null;
+  preferencesRetryNonce: number;
   penProjectId: string | null;
   penSessionIds: string[];
   penGroups: PenSummary[];
@@ -240,6 +195,13 @@ export interface PaddockUiState {
 
   setSessionOrder: (projectId: string, orderedIds: string[]) => void;
   setNodeOrder: (orderedIds: string[]) => void;
+  hydrateDurablePreferences: (document: UserPreferencesDocument) => void;
+  acknowledgeDurablePreferences: (revision: number) => void;
+  setPreferencesSaveState: (
+    state: PaddockUiState['preferencesSaveState'],
+    error?: string | null,
+  ) => void;
+  retryPreferences: () => void;
   setPenState: (projectId: string | null, groups: PenSummary[], activePenId: string | null) => void;
   setPenActionHandler: (handler: ((action: PenAction) => void) | null) => void;
   requestPenAction: (action: PenAction) => void;
@@ -287,7 +249,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
 
   sidebarCollapsed: loadSidebarCollapsed(),
   gridLayout: loadGridLayout(),
-  layoutPresets: loadLayoutPresets(),
+  layoutPresets: [],
   race: null,
   rightTab: 'chat',
   // D5: tools closed by default (terminal-first stage)
@@ -299,8 +261,13 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   terminalInput: null,
   nodeInfoNodeId: null,
   zoomLeafId: null,
-  sessionOrder: loadSessionOrder(),
-  nodeOrder: loadNodeOrder(),
+  sessionOrder: {},
+  nodeOrder: [],
+  preferencesRevision: 0,
+  preferencesHydrated: false,
+  preferencesSaveState: 'loading',
+  preferencesError: null,
+  preferencesRetryNonce: 0,
   penProjectId: null,
   penSessionIds: [],
   penGroups: [],
@@ -379,14 +346,25 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   setSessionOrder: (projectId, orderedIds) =>
     set((s) => {
       const next = { ...s.sessionOrder, [projectId]: orderedIds };
-      saveSessionOrder(next);
       return { sessionOrder: next };
     }),
-  setNodeOrder: (orderedIds) =>
-    set(() => {
-      saveNodeOrder(orderedIds);
-      return { nodeOrder: orderedIds };
+  setNodeOrder: (orderedIds) => set({ nodeOrder: orderedIds }),
+  hydrateDurablePreferences: (document) =>
+    set({
+      nodeOrder: document.nodeOrder,
+      sessionOrder: document.sessionOrder,
+      layoutPresets: document.layoutPresets,
+      preferencesRevision: document.revision,
+      preferencesHydrated: true,
+      preferencesSaveState: 'saved',
+      preferencesError: null,
     }),
+  acknowledgeDurablePreferences: (preferencesRevision) =>
+    set({ preferencesRevision, preferencesSaveState: 'saved', preferencesError: null }),
+  setPreferencesSaveState: (preferencesSaveState, preferencesError = null) =>
+    set({ preferencesSaveState, preferencesError }),
+  retryPreferences: () =>
+    set((state) => ({ preferencesRetryNonce: state.preferencesRetryNonce + 1 })),
   setPenState: (projectId, groups, activePenId) => {
     const active = groups.find((pen) => pen.id === activePenId);
     set({
@@ -411,7 +389,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
         ...s.layoutPresets.filter((p) => !(p.projectId === projectId && p.name === name)),
         preset,
       ];
-      saveLayoutPresets(next);
       return { layoutPresets: next };
     }),
   applyLayoutPreset: (id) =>
@@ -420,13 +397,11 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       if (!p) return {};
       saveGridLayout(p.gridLayout);
       const order = { ...s.sessionOrder, [p.projectId]: p.order };
-      saveSessionOrder(order);
       return { gridLayout: p.gridLayout, sessionOrder: order };
     }),
   deleteLayoutPreset: (id) =>
     set((s) => {
       const next = s.layoutPresets.filter((x) => x.id !== id);
-      saveLayoutPresets(next);
       return { layoutPresets: next };
     }),
   setRace: (race) => set({ race, dialog: null }),

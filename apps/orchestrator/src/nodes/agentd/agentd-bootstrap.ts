@@ -118,7 +118,7 @@ export class AgentdBootstrap {
 
   private async remoteHome(host: AgentdHost): Promise<string> {
     const home = (await host.exec('printf %s "$HOME"')).stdout.trim();
-    if (!home) throw new Error('agentd: could not resolve remote administrative home');
+    if (!home) throw new Error('agentd: could not resolve the remote account home');
     return home;
   }
 

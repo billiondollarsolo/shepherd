@@ -9,6 +9,7 @@ import { pathToShellNav, shellNavToPath, type ShellLens, type ShellChrome } from
 import { AuthGate } from '../features/auth/AuthGate';
 import { ResponsivePaddock } from '../features/responsive';
 import { useSessions } from '../data/queries';
+import { DurablePreferencesSync } from '../data/DurablePreferencesSync';
 import { usePaddock, type PaddockUiState, type SettingsSection } from '../store/paddock';
 
 const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -155,6 +156,7 @@ function RootComponent(): JSX.Element {
   return (
     <>
       <AuthGate>
+        <DurablePreferencesSync />
         <UrlStoreSync />
         <ResponsivePaddock />
       </AuthGate>

@@ -1,17 +1,21 @@
 /**
  * US-40 — auditApi unit tests (`pnpm test:unit` web project).
- * Verifies the client calls the admin audit endpoint with credentials, encodes
+ * Verifies the client calls the owner audit endpoint with credentials, encodes
  * filters into the query string, validates against the shared ListAuditResponse
- * contract, and raises AuditApiError on failure (incl. 403) / malformed bodies.
+ * contract, and raises ApiError on failure (incl. 403) / malformed bodies.
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { AuditApiError, fetchAuditLog } from './auditApi';
+import { ApiError } from '../../lib/apiClient';
+import { fetchAuditLog } from './auditApi';
 
 const USER_ID = '44444444-4444-4444-8444-444444444444';
 
 function response(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 const SAMPLE = {
@@ -52,21 +56,21 @@ describe('fetchAuditLog (US-40)', () => {
     expect(url).toContain('offset=5');
   });
 
-  it('throws AuditApiError carrying the server error code on 403 (non-admin)', async () => {
+  it('throws ApiError carrying the server error code on 403', async () => {
     const fetchImpl = vi.fn(async () =>
-      response({ error: { code: 'forbidden', message: 'Admin role required.' } }, false, 403),
+      response({ error: { code: 'forbidden', message: 'Owner access required.' } }, false, 403),
     );
     await expect(fetchAuditLog({}, fetchImpl as unknown as typeof fetch)).rejects.toMatchObject({
-      name: 'AuditApiError',
+      name: 'ApiError',
       status: 403,
       code: 'forbidden',
     });
   });
 
-  it('throws AuditApiError on a malformed (contract-violating) body', async () => {
+  it('throws ApiError on a malformed (contract-violating) body', async () => {
     const fetchImpl = vi.fn(async () => response({ entries: [{ id: 'not-a-uuid' }] }));
     await expect(fetchAuditLog({}, fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(
-      AuditApiError,
+      ApiError,
     );
   });
 });

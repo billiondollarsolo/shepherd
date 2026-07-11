@@ -71,8 +71,13 @@ function waitForExit(
  * @param name    label for the implementation under test (e.g. "LocalTransport").
  * @param factory builds a fresh transport per test.
  */
-export function runTransportContract(name: string, factory: TransportFactory): void {
-  describe(`NodeTransport contract — ${name}`, () => {
+export function runTransportContract(
+  name: string,
+  factory: TransportFactory,
+  options: { skip?: boolean } = {},
+): void {
+  const suite = options.skip ? describe.skip : describe;
+  suite(`NodeTransport contract — ${name}`, () => {
     async function withTransport<T>(fn: (t: NodeTransport) => Promise<T>): Promise<T> {
       const transport = await factory();
       try {

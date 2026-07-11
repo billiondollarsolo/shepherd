@@ -1,16 +1,16 @@
 /**
- * First-run admin setup screen (US-4).
+ * First-run owner setup screen (US-4).
  *
  * Minimal, functional form (full UI lands in the UI phase). Submits to
  * POST /api/auth/setup; on success it invokes `onComplete` so the host can
- * route to the login screen. A 409 means an admin already exists -- we surface
+ * route to the login screen. A 409 means an owner already exists -- we surface
  * a clear message and offer to continue to login.
  */
 import { useState, type FormEvent } from 'react';
-import { ApiError, setupAdmin } from './api';
+import { ApiError, setupOwner } from './api';
 
 export interface SetupProps {
-  /** Called after the admin is created (or when setup is already complete). */
+  /** Called after the owner is created (or when setup is already complete). */
   onComplete?: () => void;
 }
 
@@ -26,12 +26,12 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
     setError(null);
     setSubmitting(true);
     try {
-      await setupAdmin({ username, password });
+      await setupOwner({ username, password });
       setDone(true);
       onComplete?.();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError('An admin already exists. Continue to login.');
+        setError('An owner already exists. Continue to login.');
       } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
@@ -45,7 +45,7 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
   if (done) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-flock-bg text-flock-fg">
-        <h1 className="text-2xl font-semibold">Admin created</h1>
+        <h1 className="text-2xl font-semibold">Owner created</h1>
         <button
           type="button"
           className="rounded bg-flock-accent px-4 py-2 text-sm font-medium"
@@ -62,10 +62,10 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
       <form
         onSubmit={handleSubmit}
         className="flex w-80 flex-col gap-3"
-        aria-label="First-run admin setup"
+        aria-label="First-run owner setup"
       >
         <h1 className="text-2xl font-semibold tracking-tight">Set up Flock</h1>
-        <p className="text-flock-muted text-sm">Create the first administrator account.</p>
+        <p className="text-flock-muted text-sm">Create the installation owner account.</p>
 
         <label className="flex flex-col gap-1 text-sm">
           <span>Username</span>
@@ -104,7 +104,7 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
           disabled={submitting}
           className="rounded bg-flock-accent px-4 py-2 text-sm font-medium disabled:opacity-50"
         >
-          {submitting ? 'Creating...' : 'Create admin'}
+          {submitting ? 'Creating...' : 'Create owner'}
         </button>
       </form>
     </main>

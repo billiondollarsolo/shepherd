@@ -2,21 +2,21 @@
  * AuthScreen — first-run password confirmation guard.
  *
  * Regression for the lockout where a typo in the (unconfirmed) setup password
- * silently became the admin password. Setup mode must require a matching
+ * silently became the owner password. Setup mode must require a matching
  * confirmation BEFORE it calls the API.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Spy on the API client so we can assert setup is NOT called on a mismatch.
-const setupAdmin = vi.fn();
+const setupOwner = vi.fn();
 const login = vi.fn();
 const me = vi.fn();
 vi.mock('../../routes/api', async (orig) => {
   const actual = await orig<typeof import('../../routes/api')>();
   return {
     ...actual,
-    setupAdmin: (...a: unknown[]) => setupAdmin(...a),
+    setupOwner: (...a: unknown[]) => setupOwner(...a),
     login: (...a: unknown[]) => login(...a),
     me: (...a: unknown[]) => me(...a),
   };
@@ -25,7 +25,7 @@ vi.mock('../../routes/api', async (orig) => {
 import { AuthScreen } from './AuthScreen';
 
 beforeEach(() => {
-  setupAdmin.mockReset();
+  setupOwner.mockReset();
   login.mockReset();
   me.mockReset();
 });
@@ -48,10 +48,10 @@ describe('AuthScreen first-run confirmation', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: 'password999' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /create admin/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create owner/i }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/do not match/i));
-    expect(setupAdmin).not.toHaveBeenCalled();
+    expect(setupOwner).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
   });
 
@@ -60,9 +60,9 @@ describe('AuthScreen first-run confirmation', () => {
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
-    fireEvent.click(screen.getByRole('button', { name: /create admin/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create owner/i }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/at least 8/i));
-    expect(setupAdmin).not.toHaveBeenCalled();
+    expect(setupOwner).not.toHaveBeenCalled();
   });
 });

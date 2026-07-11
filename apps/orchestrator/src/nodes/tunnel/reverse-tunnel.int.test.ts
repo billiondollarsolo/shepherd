@@ -18,7 +18,7 @@
  * here on the orchestrator side over the managed ssh2 connection.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 
 import { Client } from 'ssh2';
@@ -31,6 +31,7 @@ const HOST = process.env.FLOCK_TEST_SSH_HOST ?? 'sshd';
 const PORT = Number(process.env.FLOCK_TEST_SSH_PORT ?? '22');
 const USER = process.env.FLOCK_TEST_SSH_USER ?? 'flock';
 const KEY_PATH = process.env.FLOCK_TEST_SSH_KEY ?? '/ssh-keys/id_test';
+const SSH_FIXTURE_AVAILABLE = existsSync(KEY_PATH);
 
 /** Open a raw ssh2 Client to the dockerized node (mirrors the connector in transport). */
 function openClient(): Promise<Client> {
@@ -79,6 +80,7 @@ let hookPort: number;
 const hookHits: Array<{ url: string; body: string }> = [];
 
 beforeAll(async () => {
+  if (!SSH_FIXTURE_AVAILABLE) return;
   // Stub orchestrator hook endpoint. The tunnel pipes node-side hook curls here
   // (POST /api/hooks/:sessionId, spec §8.1). Bind on all interfaces so the dial
   // target (127.0.0.1) inside the builder reliably reaches it regardless of how
@@ -103,10 +105,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   client?.end();
-  await new Promise<void>((resolve) => hookServer?.close(() => resolve()));
+  if (hookServer) await new Promise<void>((resolve) => hookServer.close(() => resolve()));
 });
 
-describe('US-9 reverse tunnel for hooks', () => {
+describe.skipIf(!SSH_FIXTURE_AVAILABLE)('US-9 reverse tunnel for hooks', () => {
   it('a curl localhost:<port> on the NODE reaches the orchestrator hook endpoint', async () => {
     const tunnel = new ReverseTunnel(sshTunnelHost(client), {
       host: '127.0.0.1',

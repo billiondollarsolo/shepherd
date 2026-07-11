@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   Pin,
   Plus,
+  RefreshCw,
   Settings,
   Wifi,
   WifiOff,
@@ -768,6 +769,9 @@ export function Sidebar(): JSX.Element {
   const collapsed = usePaddock((s) => s.sidebarCollapsed);
   const toggleSidebar = usePaddock((s) => s.toggleSidebar);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
+  const preferencesSaveState = usePaddock((s) => s.preferencesSaveState);
+  const preferencesError = usePaddock((s) => s.preferencesError);
+  const retryPreferences = usePaddock((s) => s.retryPreferences);
 
   // Live status overlay + agentd health from the SHARED provider (one WS for the
   // whole paddock — sidebar, tabs, grid). The REST list only has create-time status.
@@ -1063,6 +1067,23 @@ export function Sidebar(): JSX.Element {
       ) : null}
 
       <footer className="mt-auto shrink-0 border-t border-[var(--flock-border)] px-3 py-2.5">
+        {preferencesSaveState === 'saving' || preferencesSaveState === 'retrying' ? (
+          <p className="mb-1 text-2xs text-flock-ink-muted" role="status">
+            {preferencesSaveState === 'retrying'
+              ? 'Merging workspace changes…'
+              : 'Saving workspace…'}
+          </p>
+        ) : null}
+        {preferencesSaveState === 'failed' ? (
+          <button
+            type="button"
+            className="mb-1 flex items-center gap-1 text-left text-2xs text-status-error hover:underline"
+            title={preferencesError ?? undefined}
+            onClick={retryPreferences}
+          >
+            <RefreshCw className="size-3" /> Workspace not saved — retry
+          </button>
+        ) : null}
         <p className="mb-1 text-2xs font-medium text-flock-ink-muted">Flock v{FLOCK_VERSION}</p>
         <BuiltBy />
       </footer>

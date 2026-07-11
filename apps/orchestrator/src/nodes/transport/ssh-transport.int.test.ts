@@ -20,7 +20,7 @@
  * Nodes stay DUMB couriers (spec §4.3, §5.1): all logic — status, supervision,
  * backoff — lives here on the orchestrator side. The node only runs sshd.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -31,6 +31,7 @@ const HOST = process.env.FLOCK_TEST_SSH_HOST ?? 'sshd';
 const PORT = Number(process.env.FLOCK_TEST_SSH_PORT ?? '22');
 const USER = process.env.FLOCK_TEST_SSH_USER ?? 'flock';
 const KEY_PATH = process.env.FLOCK_TEST_SSH_KEY ?? '/ssh-keys/id_test';
+const SSH_FIXTURE_AVAILABLE = existsSync(KEY_PATH);
 
 function privateKey(): Buffer {
   return readFileSync(KEY_PATH);
@@ -85,6 +86,7 @@ let probeConn: SupervisedSshConnection;
 const openConnections: SupervisedSshConnection[] = [];
 
 beforeAll(async () => {
+  if (!SSH_FIXTURE_AVAILABLE) return;
   probeConn = new SupervisedSshConnection(connectConfig());
   await probeConn.connect();
 }, 20_000);
@@ -97,18 +99,22 @@ afterAll(async () => {
 // Each contract assertion gets a fresh, independently-supervised connection +
 // transport. The contract's `withTransport` disposes the transport after each
 // test; we additionally track the connection so afterAll closes the ssh2 client.
-runTransportContract('SshTransport', async () => {
-  const conn = new SupervisedSshConnection(connectConfig());
-  openConnections.push(conn);
-  await conn.connect();
-  return conn.transport();
-});
+runTransportContract(
+  'SshTransport',
+  async () => {
+    const conn = new SupervisedSshConnection(connectConfig());
+    openConnections.push(conn);
+    await conn.connect();
+    return conn.transport();
+  },
+  { skip: !SSH_FIXTURE_AVAILABLE },
+);
 
 // ---------------------------------------------------------------------------
 // 2. Supervised connection — connect / forced drop / auto-reconnect (US-8).
 // ---------------------------------------------------------------------------
 
-describe('US-8 supervised SSH connection', () => {
+describe.skipIf(!SSH_FIXTURE_AVAILABLE)('US-8 supervised SSH connection', () => {
   it('opens a managed connection and reports status "connected"', async () => {
     const conn = new SupervisedSshConnection(connectConfig());
     try {

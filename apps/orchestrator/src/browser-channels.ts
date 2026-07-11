@@ -43,7 +43,7 @@ export interface BrowserChannelsDeps {
   resolveUserId: (cookieHeader: string | undefined) => Promise<string | null>;
   /**
    * T4/T5: authorize the screencast WS upgrade — Origin check + the user owns the
-   * session (or is admin). Optional so tests can omit it (then only resolveUserId
+   * session. Optional so tests can omit it (then only resolveUserId
    * gates). Returns false → the upgrade is refused.
    */
   authorizeUpgrade?: (
@@ -333,7 +333,7 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
         if (!match) return; // not ours — another handler owns it
         const sessionId = decodeURIComponent(match[1] ?? '');
         void (async () => {
-          // T4/T5: Origin + per-session ownership (owner or admin). Reject before
+          // T4/T5: Origin + per-session ownership. Reject before
           // touching the browser so a hostile page / non-owner can't take over.
           if (deps.authorizeUpgrade && !(await deps.authorizeUpgrade(req, sessionId))) {
             socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');

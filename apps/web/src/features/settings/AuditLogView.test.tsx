@@ -1,7 +1,7 @@
 /**
  * US-40 — AuditLogView smoke (web project, FR-A3).
- * Renders the admin audit table from the injected fetch, filters by action, and
- * shows the admins-only message when the server rejects a non-admin (403).
+ * Renders the owner audit table from the injected fetch, filters by action, and
+ * shows the access-denied message when the server rejects the request (403).
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,10 @@ import { AuditLogView } from './AuditLogView';
 const USER_ID = '44444444-4444-4444-8444-444444444444';
 
 function response(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 function entry(action: string, id: string) {
@@ -70,9 +73,9 @@ describe('AuditLogView (US-40)', () => {
     });
   });
 
-  it('shows an admins-only message when the server rejects a non-admin (403)', async () => {
+  it('shows an access-denied message when the server rejects the request (403)', async () => {
     const fetchImpl = vi.fn(async () =>
-      response({ error: { code: 'forbidden', message: 'Admin role required.' } }, false, 403),
+      response({ error: { code: 'forbidden', message: 'Owner access required.' } }, false, 403),
     );
 
     render(<AuditLogView fetchImpl={fetchImpl as unknown as typeof fetch} />);

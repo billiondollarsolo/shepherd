@@ -6,12 +6,14 @@ import {
   type ArrangeMode,
   type ProjectLayoutV1,
   type ProjectPensV1,
+  ProjectPensResponseSchema,
 } from '@flock/shared';
 import { usePaddock, type PenAction, type PenSummary } from '../../store/paddock';
 import { useSessions } from '../../data/queries';
 import { TerminalArea } from '../terminal/TerminalArea';
 import { ProjectLayoutView } from './ProjectLayoutView';
 import { fetchProjectPens, putProjectPens } from './projectPensApi';
+import { ApiError } from '../../lib/apiClient';
 import {
   applySelectionZoom,
   rearrangeProjectLayout,
@@ -114,12 +116,20 @@ export function StageLayout(): JSX.Element {
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loadNonce, setLoadNonce] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'retrying' | 'failed'>('saved');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNonce, setSaveNonce] = useState(0);
   const lastPersisted = useRef('');
+  const saveSequence = useRef(0);
+  const conflictRevision = useRef<number | null>(null);
 
   useEffect(() => {
     if (!projectId || openIds.length === 0) {
       setDocument(null);
       setLoadError(false);
+      setRevision(0);
+      setSaveState('saved');
       setReady(true);
       return;
     }
@@ -130,7 +140,11 @@ export function StageLayout(): JSX.Element {
     void fetchProjectPens(projectId)
       .then((stored) => {
         if (cancelled) return;
-        const next = stored ? reconcilePens(stored, openIds) : initialPens(projectId, openIds);
+        const next = stored.pens
+          ? reconcilePens(stored.pens, openIds)
+          : initialPens(projectId, openIds);
+        lastPersisted.current = stored.pens ? JSON.stringify(stored.pens) : '';
+        setRevision(stored.revision);
         setDocument(next);
         setReady(true);
       })
@@ -152,11 +166,29 @@ export function StageLayout(): JSX.Element {
     if (!document || !ready) return;
     const key = JSON.stringify(document);
     if (key === lastPersisted.current) return;
-    lastPersisted.current = key;
-    void putProjectPens(document).then((saved) => {
-      if (saved) lastPersisted.current = JSON.stringify(saved);
-    });
-  }, [document, ready]);
+    const sequence = ++saveSequence.current;
+    const controller = new AbortController();
+    setSaveState((state) => (state === 'failed' ? 'retrying' : 'saving'));
+    setSaveError(null);
+    void putProjectPens(document, revision, fetch, controller.signal)
+      .then((saved) => {
+        if (sequence !== saveSequence.current) return;
+        lastPersisted.current = JSON.stringify(saved.pens);
+        setRevision(saved.revision);
+        setSaveState('saved');
+      })
+      .catch((error: unknown) => {
+        if (sequence !== saveSequence.current) return;
+        if (error instanceof ApiError && error.kind === 'aborted') return;
+        if (error instanceof ApiError && error.code === 'pens_conflict') {
+          const current = ProjectPensResponseSchema.safeParse(error.details);
+          if (current.success) conflictRevision.current = current.data.revision;
+        }
+        setSaveState('failed');
+        setSaveError(error instanceof Error ? error.message : 'Pens were not saved.');
+      });
+    return () => controller.abort();
+  }, [document, ready, revision, saveNonce]);
 
   const updatePenLayout = useCallback((penIdValue: string, layout: ProjectLayoutV1) => {
     setDocument((current) =>
@@ -375,22 +407,58 @@ export function StageLayout(): JSX.Element {
   }
   const displayLayout = applySelectionZoom(activePen.layout, selectedSessionId);
   return (
-    <ProjectLayoutView
-      layout={displayLayout}
-      showToolbar={false}
-      onLayoutChange={(layout) => updatePenLayout(activePen.id, layout)}
-      renderLeaf={(leafId, sessionId, kind) => {
-        const session = sessionId ? byId.get(sessionId) : null;
-        if (kind !== 'session' || !session)
-          return (
-            <div className="flex h-full items-center justify-center text-xs text-flock-ink-muted">
-              Unavailable
-            </div>
-          );
-        const focused =
-          displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
-        return <TerminalArea session={session} register={focused} />;
-      }}
-    />
+    <div className="flex h-full min-h-0 flex-col">
+      {saveState !== 'saved' ? (
+        <div
+          className={`flex shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-3 py-1 text-2xs ${saveState === 'failed' ? 'text-status-error' : 'text-flock-ink-muted'}`}
+          role={saveState === 'failed' ? 'alert' : 'status'}
+          data-testid="pens-save-state"
+        >
+          <span className="flex-1">
+            {saveState === 'failed'
+              ? (saveError ?? 'Pens were not saved.')
+              : saveState === 'retrying'
+                ? 'Retrying Pen save…'
+                : 'Saving Pens…'}
+          </span>
+          {saveState === 'failed' ? (
+            <button
+              type="button"
+              className="rounded px-2 py-0.5 text-flock-ink-primary hover:bg-flock-surface-2"
+              onClick={() => {
+                if (conflictRevision.current !== null) {
+                  const nextRevision = conflictRevision.current;
+                  conflictRevision.current = null;
+                  setRevision(nextRevision);
+                } else {
+                  setSaveNonce((value) => value + 1);
+                }
+              }}
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <ProjectLayoutView
+          layout={displayLayout}
+          showToolbar={false}
+          onLayoutChange={(layout) => updatePenLayout(activePen.id, layout)}
+          renderLeaf={(leafId, sessionId, kind) => {
+            const session = sessionId ? byId.get(sessionId) : null;
+            if (kind !== 'session' || !session)
+              return (
+                <div className="flex h-full items-center justify-center text-xs text-flock-ink-muted">
+                  Unavailable
+                </div>
+              );
+            const focused =
+              displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
+            return <TerminalArea session={session} register={focused} />;
+          }}
+        />
+      </div>
+    </div>
   );
 }

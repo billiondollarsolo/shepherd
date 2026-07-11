@@ -16,7 +16,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCw } from 'lucide-react';
-import type { BrowserControlResponse, InputIntent } from '@flock/shared';
+import {
+  BrowserControlResponse as BrowserControlResponseSchema,
+  type BrowserControlResponse,
+  type InputIntent,
+} from '@flock/shared';
+import { apiRequest } from '../../lib/apiClient';
 import { useScreencast, type ScreencastConnectionState, type WsFactory } from './useScreencast';
 import { frameToDataUrl, type ScreencastFrameMessage } from './screencastProtocol';
 import { useBrowserControl, type BrowserControlTransport } from './useBrowserControl';
@@ -30,8 +35,6 @@ import {
 } from './browserInput';
 
 export type { WsLike, WsFactory } from './useScreencast';
-
-const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
 export interface BrowserPaneProps {
   /** The single authoritative session id (spec §4.2). */
@@ -52,15 +55,7 @@ function statusLabel(state: ScreencastConnectionState): string {
 }
 
 async function postControl(path: string): Promise<BrowserControlResponse> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', credentials: 'include' });
-  const body = (await res.json().catch(() => ({}))) as
-    | BrowserControlResponse
-    | { error?: { message?: string } };
-  if (!res.ok) {
-    const message = (body as { error?: { message?: string } }).error?.message;
-    throw new Error(message ?? `Request failed (${res.status}).`);
-  }
-  return body as BrowserControlResponse;
+  return apiRequest(path, { method: 'POST', schema: BrowserControlResponseSchema });
 }
 
 export default function BrowserPane({ sessionId, wsFactory }: BrowserPaneProps): JSX.Element {

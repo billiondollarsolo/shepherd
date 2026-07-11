@@ -2,8 +2,8 @@
  * AuthScreen — sign-in / first-run surface.
  *
  * Two-pane layout (marketing brand + credential form), inspired by modern
- * product login pages. Auto-detects first run: if creating the admin returns
- * 409 (admin exists) we flip to sign-in. On success it calls `onAuthenticated`
+ * product login pages. Auto-detects first run: if creating the owner returns
+ * 409 (owner exists) we flip to sign-in. On success it calls `onAuthenticated`
  * so the gate swaps in the paddock.
  */
 import { useState, type FormEvent, type ReactNode } from 'react';
@@ -18,7 +18,7 @@ import {
 import type { User } from '@flock/shared';
 import { BuiltBy } from '../../components/BuiltBy';
 import { FlockMark } from '../../components/SheepIcon';
-import { ApiError, login, me, setupAdmin } from '../../routes/api';
+import { ApiError, login, me, setupOwner } from '../../routes/api';
 import { Button, Input, Label } from '../../components/ui';
 
 type Mode = 'signin' | 'setup';
@@ -75,7 +75,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
     e.preventDefault();
     setError(null);
     // On first-run setup, require the password to be confirmed so a typo can't
-    // silently become the admin password (there is no recovery flow yet).
+    // silently become the owner password.
     if (mode === 'setup') {
       if (password.length < 8) {
         setError('Password must be at least 8 characters.');
@@ -90,10 +90,10 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
     try {
       if (mode === 'setup') {
         try {
-          await setupAdmin({ username, password });
+          await setupOwner({ username, password });
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
-            // Admin already exists — fall through to a normal sign-in.
+            // Owner already exists — fall through to a normal sign-in.
             setMode('signin');
           } else {
             throw err;
@@ -208,18 +208,18 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           <div className="mb-8 lg:mb-10">
             <BrandWordmark className="mb-8 lg:hidden" />
             <h2 className="text-2xl font-semibold tracking-tight text-flock-ink-primary">
-              {isSetup ? 'Create your admin' : 'Sign in to Flock'}
+              {isSetup ? 'Create the owner account' : 'Sign in to Flock'}
             </h2>
             <p className="mt-1.5 text-sm text-flock-ink-muted">
               {isSetup
-                ? 'First run — set up the administrator account for this paddock.'
+                ? 'First run — set up the installation owner for this paddock.'
                 : 'Enter your credentials to open the paddock.'}
             </p>
           </div>
 
           <form
             onSubmit={onSubmit}
-            aria-label={isSetup ? 'First-run admin setup' : 'Log in'}
+            aria-label={isSetup ? 'First-run owner setup' : 'Log in'}
             className="grid min-w-0 max-w-full gap-4"
           >
             <div className="grid gap-1.5">
@@ -281,7 +281,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
 
             <Button type="submit" size="lg" disabled={busy} className="mt-1 w-full">
               {busy && <Loader2 className="size-4 animate-spin" />}
-              {isSetup ? (busy ? 'Creating…' : 'Create admin') : busy ? 'Signing in…' : 'Sign in'}
+              {isSetup ? (busy ? 'Creating…' : 'Create owner') : busy ? 'Signing in…' : 'Sign in'}
             </Button>
 
             <button
@@ -293,7 +293,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
               }}
               className="text-center text-2xs text-flock-ink-muted underline-offset-2 hover:text-flock-ink-primary hover:underline"
             >
-              {isSetup ? 'Already set up? Sign in' : 'First run? Create the first admin'}
+              {isSetup ? 'Already set up? Sign in' : 'First run? Create the owner account'}
             </button>
           </form>
 

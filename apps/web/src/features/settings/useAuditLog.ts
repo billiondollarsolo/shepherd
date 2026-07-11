@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AuditAction, AuditEntry, ListAuditQuery } from '@flock/shared';
 
-import { AuditApiError, fetchAuditLog, type FetchLike } from './auditApi';
+import { fetchAuditLog, type FetchLike } from './auditApi';
+import { ApiError } from '../../lib/apiClient';
 
 /**
- * US-40 — admin Audit Log view state (FR-A3).
+ * US-40 — owner Audit Log view state (FR-A3).
  *
- * Loads `GET /api/audit` (admin-only), exposes the entries + a loading/error
+ * Loads `GET /api/audit` (owner-only), exposes the entries + a loading/error
  * state, and lets the view narrow by `action` and refresh. The endpoint is
- * admin-only on the server (401/403); this hook surfaces that as a `forbidden`
- * flag so the view can show a clear "admins only" message rather than a raw
+ * owner-only on the server (401/403); this hook surfaces that as a `forbidden`
+ * flag so the view can show a clear access message rather than a raw
  * error — the authorization decision stays on the server (NFR-SEC6).
  *
  * Pure UI state + an injectable `fetchImpl` seam so tests need no global fetch.
@@ -28,7 +29,7 @@ export interface UseAuditLog {
   loading: boolean;
   /** A human-facing error message, or null. */
   error: string | null;
-  /** True when the server rejected the read as non-admin (403) / unauth (401). */
+  /** True when the server rejected the read as forbidden (403) / unauthenticated (401). */
   forbidden: boolean;
   /** The current action filter (undefined = all). */
   action: AuditAction | undefined;
@@ -58,10 +59,10 @@ export function useAuditLog(options: UseAuditLogOptions = {}): UseAuditLog {
         const res = await fetchAuditLog(query, fetchImpl ?? fetch);
         setEntries(res.entries);
       } catch (err) {
-        if (err instanceof AuditApiError && (err.status === 403 || err.status === 401)) {
+        if (err instanceof ApiError && (err.status === 403 || err.status === 401)) {
           setForbidden(true);
-          setError('You need an admin account to view the audit log.');
-        } else if (err instanceof AuditApiError) {
+          setError('Owner access is required to view the audit log.');
+        } else if (err instanceof ApiError) {
           setError(err.message);
         } else {
           setError('Could not reach the server.');

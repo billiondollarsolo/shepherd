@@ -1061,6 +1061,11 @@ make automated dead-code results noisy enough to ignore.
 
 **Priority:** High
 
+**Implementation status:** Complete. Cross-device ordering and layout presets now
+use versioned PostgreSQL preferences; project Pens use their own durable revisioned
+documents. Device-local presentation state is bounded and documented in
+`docs/architecture/state-ownership.md`.
+
 **Why**
 
 Node order, session order, layout presets, sidebar state, Pens, and selection currently
@@ -1096,6 +1101,11 @@ inconsistencies.
 ### Q5.2 — Build one typed web API client
 
 **Priority:** High
+
+**Implementation status:** Complete. All browser REST domains use the shared
+`apiRequest` transport with runtime schemas, normalized errors, abort/timeout support,
+and explicit bounded retries. Production REST response bodies are no longer directly
+cast to domain types.
 
 **Why**
 
@@ -1137,6 +1147,11 @@ validated.
 ### Q5.3 — Make persistence failures visible and retryable
 
 **Priority:** High
+
+**Implementation status:** Complete. Preference and Pen writes expose
+saving/retrying/failed states, safe retries, optimistic revisions, and explicit
+conflict recovery. Database integration tests cover initial, successive, and stale
+writes; client tests cover merge and bounded transport behavior.
 
 **Why**
 

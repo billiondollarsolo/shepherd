@@ -1,19 +1,23 @@
 /**
  * US-33 — diffApi unit tests (`pnpm test:unit`).
  * Verifies the client calls the session-scoped diff endpoint with credentials,
- * validates against the shared DiffResponse contract, and raises DiffApiError on
+ * validates against the shared DiffResponse contract, and raises ApiError on
  * failure / malformed bodies.
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { DiffApiError, fetchSessionDiff } from './diffApi';
+import { ApiError } from '../../lib/apiClient';
+import { fetchSessionDiff } from './diffApi';
 
 // The shared DiffResponse contract validates `sessionId` as a UUID, so the
 // fixtures use a real uuid (not a placeholder like "sess-1").
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
 function response(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 describe('fetchSessionDiff (US-33)', () => {
@@ -36,21 +40,21 @@ describe('fetchSessionDiff (US-33)', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
-  it('throws DiffApiError carrying the server error code on a non-2xx response', async () => {
+  it('throws ApiError carrying the server error code on a non-2xx response', async () => {
     const fetchImpl = vi.fn(async () =>
       response({ error: { code: 'session_not_found', message: 'nope' } }, false, 404),
     );
 
     await expect(
       fetchSessionDiff(SESSION_ID, fetchImpl as unknown as typeof fetch),
-    ).rejects.toMatchObject({ name: 'DiffApiError', status: 404, code: 'session_not_found' });
+    ).rejects.toMatchObject({ name: 'ApiError', status: 404, code: 'session_not_found' });
   });
 
-  it('throws DiffApiError on a malformed (contract-violating) body', async () => {
+  it('throws ApiError on a malformed (contract-violating) body', async () => {
     const fetchImpl = vi.fn(async () => response({ sessionId: SESSION_ID }));
 
     await expect(
       fetchSessionDiff(SESSION_ID, fetchImpl as unknown as typeof fetch),
-    ).rejects.toBeInstanceOf(DiffApiError);
+    ).rejects.toBeInstanceOf(ApiError);
   });
 });

@@ -16,6 +16,18 @@ export const ProjectPensV1Schema = z.object({
 });
 export type ProjectPensV1 = z.infer<typeof ProjectPensV1Schema>;
 
+export const ProjectPensResponseSchema = z.object({
+  pens: ProjectPensV1Schema.nullable(),
+  revision: z.number().int().nonnegative(),
+});
+export type ProjectPensResponse = z.infer<typeof ProjectPensResponseSchema>;
+
+export const PutProjectPensRequestSchema = z.object({
+  baseRevision: z.number().int().nonnegative(),
+  pens: ProjectPensV1Schema,
+});
+export type PutProjectPensRequest = z.infer<typeof PutProjectPensRequestSchema>;
+
 export function parseProjectPens(raw: unknown): ProjectPensV1 | null {
   const parsed = ProjectPensV1Schema.safeParse(raw);
   return parsed.success ? parsed.data : null;

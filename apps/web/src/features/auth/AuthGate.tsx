@@ -1,8 +1,8 @@
 /**
  * AuthGate — decides what the app shows: a loading veil, the auth screen, or the
  * authenticated paddock. On mount it probes `GET /api/auth/me`; a 401 means no
- * session. It then asks `GET /api/auth/status` whether the initial admin still
- * needs creating, so a fresh instance lands on "Create first admin" and an
+ * session. It then asks `GET /api/auth/status` whether the installation owner still
+ * needs creating, so a fresh instance lands on owner setup and an
  * existing one lands on "Sign in" — no destructive probe, no wrong-screen 401s.
  *
  * Transient API downtime (orchestrator `tsx watch` restart, vite proxy

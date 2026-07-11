@@ -17,15 +17,15 @@ export async function seed(db: Database): Promise<void> {
     throw new Error('Refusing to seed in production.');
   }
 
-  const [admin] = await db
+  const [owner] = await db
     .insert(users)
     .values({
-      username: 'admin',
+      username: 'owner',
       // Placeholder hash; real argon2id hashing lands in US-4. Dev-only.
       passwordHash: 'dev-placeholder-not-a-real-hash',
     })
     .returning();
-  if (!admin) throw new Error('[seed] failed to insert owner');
+  if (!owner) throw new Error('[seed] failed to insert owner');
 
   const [node] = await db
     .insert(nodes)
@@ -33,7 +33,7 @@ export async function seed(db: Database): Promise<void> {
       name: 'local',
       kind: 'local',
       connectionStatus: 'connected',
-      createdBy: admin.id,
+      createdBy: owner.id,
     })
     .returning();
 
@@ -58,7 +58,7 @@ export async function seed(db: Database): Promise<void> {
     workingDir: project.workingDir,
     hookTokenHash: 'dev-hook-token-hash-please-rotate',
     status: 'idle',
-    createdBy: admin.id,
+    createdBy: owner.id,
   });
 }
 

@@ -127,7 +127,7 @@ export function rowToProject(row: ProjectRow): SharedProject {
  * Map an `audit_log` row to the shared `AuditEntry` domain type (US-40, FR-A3).
  * The `detail` column is stored as a JSON string by the audit sink; it is kept
  * as that opaque string here (the shared contract types it as `string | null`),
- * so the admin UI shows it verbatim and no plaintext is ever re-parsed/leaked.
+ * so the owner UI shows it verbatim and no plaintext is ever re-parsed/leaked.
  */
 export function rowToAuditEntry(row: AuditLogRow): AuditEntry {
   return {

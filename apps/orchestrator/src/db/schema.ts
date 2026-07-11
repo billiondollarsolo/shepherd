@@ -131,6 +131,18 @@ export const users = pgTable('users', {
 });
 
 // ---------------------------------------------------------------------------
+// user_preferences — cross-device owner ordering and saved workspace choices
+// ---------------------------------------------------------------------------
+export const userPreferences = pgTable('user_preferences', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  document: jsonb('document').notNull(),
+  revision: integer('revision').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // sessions_auth — web login sessions; the httpOnly cookie holds `id` (spec §6)
 // ---------------------------------------------------------------------------
 export const sessionsAuth = pgTable(
@@ -423,6 +435,7 @@ export const projectPens = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     document: jsonb('document').notNull(),
+    revision: integer('revision').notNull().default(1),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -462,10 +475,12 @@ export type NewSecretRow = typeof secrets.$inferInsert;
 export type AgentCapabilityRow = typeof agentCapabilities.$inferSelect;
 export type NewAgentCapabilityRow = typeof agentCapabilities.$inferInsert;
 export type ProjectPensRow = typeof projectPens.$inferSelect;
+export type UserPreferencesRow = typeof userPreferences.$inferSelect;
 
 /** Full schema object for the Drizzle client. */
 export const schema = {
   users,
+  userPreferences,
   sessionsAuth,
   secrets,
   nodes,

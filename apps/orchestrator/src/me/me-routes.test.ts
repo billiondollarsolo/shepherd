@@ -8,6 +8,7 @@ import { registerMeRoutes } from './me-routes.js';
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
   username: 'alice',
+  displayName: null,
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,
@@ -20,7 +21,7 @@ const authStub: AuthGuardDeps = {
 const COOKIE = { cookie: `${SESSION_COOKIE}=good-cookie` };
 
 describe('me routes — built-in presets / durable Pens', () => {
-  const pens = new Map<string, ProjectPensV1>();
+  const pens = new Map<string, { value: ProjectPensV1; revision: number }>();
 
   beforeEach(() => {
     pens.clear();
@@ -30,9 +31,18 @@ describe('me routes — built-in presets / durable Pens', () => {
     const f = Fastify({ logger: false });
     registerMeRoutes(f, {
       auth: authStub,
-      getPens: async (_userId, id) => pens.get(id) ?? null,
-      putPens: async (_userId, id, value) => {
-        pens.set(id, value);
+      pens: {
+        get: async (_userId, id) => {
+          const stored = pens.get(id);
+          return stored
+            ? { pens: stored.value, revision: stored.revision }
+            : { pens: null, revision: 0 };
+        },
+        put: async (_userId, id, baseRevision, value) => {
+          const revision = baseRevision + 1;
+          pens.set(id, { value, revision });
+          return { pens: value, revision };
+        },
       },
     });
     return f;
@@ -125,7 +135,7 @@ describe('me routes — built-in presets / durable Pens', () => {
         method: 'PUT',
         url: '/api/projects/proj-1/pens',
         headers: COOKIE,
-        payload,
+        payload: { baseRevision: 0, pens: payload },
       });
       expect(put.statusCode).toBe(200);
       const get = await f.inject({
@@ -135,6 +145,7 @@ describe('me routes — built-in presets / durable Pens', () => {
       });
       expect(get.json().pens.pens).toHaveLength(2);
       expect(get.json().pens.activePenId).toBe('pen-2');
+      expect(get.json().revision).toBe(1);
     } finally {
       await f.close();
     }

@@ -1,14 +1,23 @@
 /** Built-in launcher presets and durable project Pen APIs. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ProjectPensV1Schema, BUILTIN_LAUNCHER_PRESETS, type ProjectPensV1 } from '@flock/shared';
+import {
+  PutProjectPensRequestSchema,
+  PutUserPreferencesRequest,
+  BUILTIN_LAUNCHER_PRESETS,
+} from '@flock/shared';
 import { badRequest } from '../http/reply.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAuth } from '../auth/middleware.js';
+import {
+  UserPreferencesConflictError,
+  type UserPreferencesService,
+} from './user-preferences-service.js';
+import { ProjectPensConflictError, type ProjectPensService } from './project-pens-service.js';
 
 export interface MeRouteDeps {
   auth: AuthGuardDeps;
-  getPens?: (userId: string, projectId: string) => Promise<ProjectPensV1 | null>;
-  putPens?: (userId: string, projectId: string, pens: ProjectPensV1) => Promise<void>;
+  pens?: Pick<ProjectPensService, 'get' | 'put'>;
+  preferences?: UserPreferencesService;
 }
 
 export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void {
@@ -23,13 +32,64 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
   );
 
   app.get(
+    '/api/me/preferences',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const preferences = deps.preferences
+        ? await deps.preferences.get(request.authUser!.id)
+        : null;
+      if (!preferences) {
+        return reply.code(503).send({
+          error: { code: 'preferences_unavailable', message: 'Preferences are unavailable.' },
+        });
+      }
+      return reply.code(200).send({ preferences });
+    },
+  );
+
+  app.put(
+    '/api/me/preferences',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = PutUserPreferencesRequest.safeParse(request.body);
+      if (!parsed.success) return badRequest(reply, 'invalid preferences document');
+      if (!deps.preferences) {
+        return reply.code(503).send({
+          error: { code: 'preferences_unavailable', message: 'Preferences are unavailable.' },
+        });
+      }
+      try {
+        const preferences = await deps.preferences.put(
+          request.authUser!.id,
+          parsed.data.baseRevision,
+          parsed.data.preferences,
+        );
+        return reply.code(200).send({ preferences });
+      } catch (error) {
+        if (error instanceof UserPreferencesConflictError) {
+          return reply.code(409).send({
+            error: {
+              code: 'preferences_conflict',
+              message: error.message,
+              details: { preferences: error.current },
+            },
+          });
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get(
     '/api/projects/:id/pens',
     { preHandler: requireAuth },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const id = (request.params as { id: string }).id;
       if (!id) return badRequest(reply, 'project id required');
-      const pens = deps.getPens ? await deps.getPens(request.authUser!.id, id) : null;
-      return reply.code(200).send({ pens });
+      const result = deps.pens
+        ? await deps.pens.get(request.authUser!.id, id)
+        : { pens: null, revision: 0 };
+      return reply.code(200).send(result);
     },
   );
 
@@ -38,13 +98,36 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     { preHandler: requireAuth },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const id = (request.params as { id: string }).id;
-      const parsed = ProjectPensV1Schema.safeParse(request.body);
+      const parsed = PutProjectPensRequestSchema.safeParse(request.body);
       if (!parsed.success) return badRequest(reply, 'invalid project Pens');
-      if (parsed.data.projectId !== id) {
+      if (parsed.data.pens.projectId !== id) {
         return badRequest(reply, 'pens.projectId must match path id');
       }
-      if (deps.putPens) await deps.putPens(request.authUser!.id, id, parsed.data);
-      return reply.code(200).send({ pens: parsed.data });
+      if (!deps.pens) {
+        return reply.code(503).send({
+          error: { code: 'pens_unavailable', message: 'Pens are unavailable.' },
+        });
+      }
+      try {
+        const result = await deps.pens.put(
+          request.authUser!.id,
+          id,
+          parsed.data.baseRevision,
+          parsed.data.pens,
+        );
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof ProjectPensConflictError) {
+          return reply.code(409).send({
+            error: {
+              code: 'pens_conflict',
+              message: error.message,
+              details: error.current,
+            },
+          });
+        }
+        throw error;
+      }
     },
   );
 }

@@ -13,7 +13,10 @@ import { useAuditLog } from './useAuditLog';
 const USER_ID = '44444444-4444-4444-8444-444444444444';
 
 function response(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 function entry(action = 'login') {
@@ -63,9 +66,9 @@ describe('useAuditLog (US-40)', () => {
     expect(lastUrl).toContain('action=node_add');
   });
 
-  it('sets forbidden when the server rejects a non-admin with 403', async () => {
+  it('sets forbidden when the server rejects access with 403', async () => {
     const fetchImpl = vi.fn(async () =>
-      response({ error: { code: 'forbidden', message: 'Admin role required.' } }, false, 403),
+      response({ error: { code: 'forbidden', message: 'Owner access required.' } }, false, 403),
     );
     const { result } = renderHook(() =>
       useAuditLog({ fetchImpl: fetchImpl as unknown as typeof fetch }),

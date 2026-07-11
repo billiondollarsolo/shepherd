@@ -285,7 +285,19 @@ function EmptyState(): JSX.Element {
 
 const PANEL_MIN = 360;
 const PANEL_DEFAULT = 520;
+const PANEL_STORED_MAX = 1_200;
 const PANEL_WIDTH_KEY = 'flock.rightPanelWidth';
+
+function readStoredPanelWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    return Number.isFinite(saved) && saved >= PANEL_MIN && saved <= PANEL_STORED_MAX
+      ? saved
+      : PANEL_DEFAULT;
+  } catch {
+    return PANEL_DEFAULT;
+  }
+}
 
 export function SessionPane(): JSX.Element {
   const selectedId = usePaddock((s) => s.selectedSessionId);
@@ -301,12 +313,13 @@ export function SessionPane(): JSX.Element {
     if (!session && chrome === 'tools') closeTools();
   }, [session, chrome, closeTools]);
   const splitRef = useRef<HTMLDivElement | null>(null);
-  const [panelWidth, setPanelWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
-    return Number.isFinite(saved) && saved >= PANEL_MIN ? saved : PANEL_DEFAULT;
-  });
+  const [panelWidth, setPanelWidth] = useState<number>(readStoredPanelWidth);
   useEffect(() => {
-    localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
+    } catch {
+      // Device-local presentation state is optional (private mode / denied storage).
+    }
   }, [panelWidth]);
 
   // Drag the divider to resize the right panel (clamped; never starves the terminal).

@@ -9,20 +9,7 @@
  * same way everywhere.
  */
 import { DiffResponse } from '@flock/shared';
-
-const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
-
-/** A failed (non-2xx) diff API call, carrying the server's error code + message. */
-export class DiffApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'DiffApiError';
-  }
-}
+import { apiRequest } from '../../lib/apiClient';
 
 /** The fetch implementation, injectable so the hook/tests need no global fetch. */
 export type FetchLike = typeof fetch;
@@ -43,7 +30,7 @@ function diffUrl(sessionId: string, scope?: DiffScope): string {
   if (scope?.staged !== undefined) params.set('staged', String(scope.staged));
   if (scope?.path) params.set('path', scope.path);
   const q = params.toString();
-  return `${BASE}/api/sessions/${sessionId}/diff${q ? `?${q}` : ''}`;
+  return `/api/sessions/${sessionId}/diff${q ? `?${q}` : ''}`;
 }
 
 /**
@@ -57,27 +44,12 @@ export async function fetchSessionDiff(
   fetchImpl: FetchLike = fetch,
   scope?: DiffScope,
 ): Promise<DiffResponse> {
-  const res = await fetchImpl(diffUrl(sessionId, scope), {
+  return apiRequest(diffUrl(sessionId, scope), {
     method: 'GET',
-    credentials: 'include',
-    headers: { accept: 'application/json' },
+    schema: DiffResponse,
+    fetchImpl,
+    signal: undefined,
   });
-
-  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) {
-    const err = (body.error ?? {}) as { code?: string; message?: string };
-    throw new DiffApiError(
-      res.status,
-      err.code ?? 'error',
-      err.message ?? `Diff request failed (${res.status}).`,
-    );
-  }
-
-  const parsed = DiffResponse.safeParse(body);
-  if (!parsed.success) {
-    throw new DiffApiError(res.status, 'invalid_response', 'Malformed diff response.');
-  }
-  return parsed.data;
 }
 
 // Re-export the shared response type for convenience so consumers import one place.
