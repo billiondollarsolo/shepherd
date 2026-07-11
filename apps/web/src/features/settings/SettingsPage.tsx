@@ -13,6 +13,7 @@ import {
   HardDrive,
   Info,
   Palette,
+  Activity,
   UserCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import { NotificationsSection } from './sections/NotificationsSection';
 import { NodesSection } from './sections/NodesSection';
 import { AccountSection } from './sections/AccountSection';
 import { AboutSection } from './sections/AboutSection';
+import { OperationsSection } from './sections/OperationsSection';
 
 interface SectionDef {
   id: SettingsSection;
@@ -55,6 +57,7 @@ export const SETTINGS_SECTIONS: readonly SectionDef[] = [
   { id: 'notifications', label: 'Notifications', Icon: Bell, Component: NotificationsSection },
   { id: 'nodes', label: 'Nodes', Icon: HardDrive, Component: NodesSection },
   { id: 'account', label: 'Account', Icon: UserCircle, Component: AccountSection },
+  { id: 'operations', label: 'Operations', Icon: Activity, Component: OperationsSection },
   { id: 'about', label: 'About', Icon: Info, Component: AboutSection },
 ];
 

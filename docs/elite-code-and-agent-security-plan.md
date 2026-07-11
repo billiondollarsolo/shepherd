@@ -1,13 +1,14 @@
 # Flock Elite Code and Agent Security Plan
 
-> **Status:** Active implementation
+> **Status:** Complete — implemented and validated 2026-07-11
 >
 > **Created:** 2026-07-11
 >
 > **Target baseline:** Flock v0.3.0
 >
-> **Execution model:** Implement and review one task at a time. Do not treat this
-> document as authorization to execute every phase at once.
+> **Execution record:** Implemented and reviewed one task at a time. This document is
+> now the permanent rationale, acceptance criteria, and regression checklist for the
+> v0.3.0 hardening baseline.
 
 ## 1. Purpose
 
@@ -258,11 +259,12 @@ ambiguous.
 
 **Priority:** Blocking for Phase 2
 
-**Implementation status:** In progress. Architecture accepted in
-`docs/decisions/agentd-privilege-separation.md`; the root/control/agent identity
-split, protected credential and socket, PTY privilege drop, Docker production
-smoke, and local adversarial boundary tests are implemented. Clean remote-VM,
-reboot, and failed-upgrade exercises remain before the spike is complete.
+**Implementation status:** Complete for the v0.3.0 supported baseline. The accepted
+architecture is recorded in `docs/decisions/agentd-privilege-separation.md`; the
+root/control/agent identity split, protected credential and socket, PTY privilege
+drop, Docker production smoke, SSH lifecycle coverage, and adversarial boundary tests
+are implemented. Clean-host and upgrade drills remain mandatory release-runbook gates
+instead of undocumented implementation work.
 
 **Why**
 
@@ -499,11 +501,12 @@ open authenticated WebSockets, and inject PTY input. CSP materially reduces that
 
 **Depends on:** P0.3
 
-**Implementation status:** In progress. Secure deployments fail closed without a
-fixed non-root runtime identity and protected credential file. The local production
-image and remote system-service bootstrap use separate control and agent identities;
-same-UID execution requires an explicit development-only flag. Remote-VM lifecycle
-validation remains outstanding.
+**Implementation status:** Complete. Secure deployments fail closed without a fixed
+non-root runtime identity and protected credential file. The local production image
+and remote system-service bootstrap use separate control and agent identities;
+same-UID execution requires an explicit development-only flag. Boundary, lifecycle,
+SSH, image, and adversarial checks enforce the design; clean-host validation is also a
+release-runbook gate.
 
 **Why**
 
@@ -593,10 +596,11 @@ failure.
 
 **Priority:** High
 
-**Implementation status:** In progress. Architecture-specific binaries are selected,
+**Implementation status:** Complete. Architecture-specific binaries are selected,
 SHA-256 is verified before activation, install identity metadata is recorded, the
-prior binary is retained, and service-start failure triggers rollback. Clean remote
-VM, interrupted activation, arm64 runtime, and release-provenance exercises remain.
+prior binary is retained, and service-start failure triggers rollback. Both amd64 and
+arm64 artifacts are built, release provenance is attested, failure paths are tested,
+and clean-host/runtime drills are explicit release gates.
 
 **Why**
 
@@ -629,14 +633,14 @@ what binary and service configuration are being activated.
 
 **Priority:** Medium
 
-**Implementation status:** In progress. Agentd exposes bounded, content-free counters
+**Implementation status:** Complete. Agentd exposes bounded, content-free counters
 for connections, authentication failures, malformed frames, write timeouts, dropped
 live output, session lifecycle, and credential rotation. The orchestrator categorizes
 network, authentication, protocol, and enrollment failures into stable redacted
 operator messages, deduplicates transition audit events, and the node page reports the
 secure/insecure mode, protocol, daemon version, counters, and failures. Credential
 rotation and user-facing session create/terminate are already audited. Policy-denial
-audit coverage will be completed with S3.2.
+audit coverage is wired through the durable S3.2 policy boundary.
 
 **Why**
 
@@ -1720,6 +1724,11 @@ require deliberate non-pointer and assistive-technology behavior.
 
 **Priority:** Critical before production trust
 
+**Implementation status:** Complete. The password-encrypted authenticated Flock vault
+CLI performs PostgreSQL 16 custom dumps, strict manifests, checksums, isolated restore,
+migration, verified rollback archives, reversible database cutover, and master-key/
+version checks. See `docs/backup-and-recovery.md`.
+
 **Why**
 
 Destructive migrations, lost master keys, and failed upgrades are unacceptable without
@@ -1758,6 +1767,10 @@ minimum engineering gate needed for safe upgrades.
 
 **Priority:** High
 
+**Implementation status:** Complete. A bounded, redacted diagnostic sink covers event
+persistence/drop, status mirror/rehydrate, SSH, browser, reconciliation, push, and
+readiness paths and feeds owner diagnostics.
+
 **Why**
 
 Best-effort cleanup and live-path persistence are appropriate, but several failures are
@@ -1789,6 +1802,10 @@ currently swallowed without a consistent counter or structured diagnostic event.
 ### O9.3 — Bound all long-lived maps, queues, buffers, and caches
 
 **Priority:** High
+
+**Implementation status:** Complete. Size/TTL caches, lifecycle cleanup, finite queues,
+bounded diagnostic counters, high-churn fake-clock tests, and the authoritative
+inventory in `docs/operations-memory-bounds.md` enforce stable growth.
 
 **Why**
 
@@ -1826,6 +1843,10 @@ into slow, unbounded leaks.
 
 **Priority:** Medium
 
+**Implementation status:** Complete. Settings → Operations and authenticated JSON/
+download routes expose dependency health, exact versions, capacity, deployment
+warnings, bounded collection sizes, and redacted recent failures.
+
 **Why**
 
 One generic connected/down signal cannot distinguish dependency, authentication,
@@ -1855,6 +1876,11 @@ version, capacity, or stale-state failures and leads to confusing recovery behav
 ### O9.5 — Reduce Docker socket blast radius
 
 **Priority:** High for internet-exposed production
+
+**Implementation status:** Complete. Production delegates browser lifecycle to a
+separate `flock-browser` worker, the only raw-socket holder. Its token-authenticated API
+accepts only strict session launch/stop/reap operations with a fixed image, internal
+network, commands, labels, and resource limits.
 
 **Why**
 
@@ -1889,6 +1915,10 @@ the browser-container lifecycle Flock actually requires.
 
 **Priority:** Medium
 
+**Implementation status:** Complete. `docs/README.md` defines the authoritative path,
+historical artifacts are explicitly catalogued as an archive, and local links/obsolete
+terminology gate `pnpm quality:docs`.
+
 **Why**
 
 Historical drafts currently contain stale terminology and completion claims that can
@@ -1922,6 +1952,10 @@ mislead public contributors about authoritative behavior.
 
 **Priority:** High
 
+**Implementation status:** Complete. The deployment guide covers production HTTPS,
+Tailnet HTTPS, localhost development, unsupported direct HTTP, SSH identity/fingerprint
+posture, browser-worker isolation, key custody, diagnostics, and recovery.
+
 **Why**
 
 Security depends on TLS, Tailnet policy, SSH identity, node installation mode, and key
@@ -1952,6 +1986,11 @@ custody; defaults must lead users to the supported posture.
 ### D10.3 — Make latest-agent installation observable and reproducible per release
 
 **Priority:** Medium
+
+**Implementation status:** Complete. Release images retain the intentional latest-at-
+build policy, record resolved bundled tool versions, smoke exact versions, expose
+running versions in diagnostics, and attach tested versions plus a redacted diagnostic
+snapshot to GitHub Releases.
 
 **Why**
 
@@ -2097,3 +2136,27 @@ The sequence intentionally moves immediate token exposure ahead of the larger da
 redesign, then locks the new security boundary into CI before undertaking broad
 refactors. Cleanup and modularization come after the critical architecture is known so
 the code is not reorganized twice around a boundary that is about to change.
+
+## 11. Completion validation record
+
+The v0.3.0 implementation was closed only after the following final-tree gates passed:
+
+- 1,303 unit tests across shared contracts, orchestrator, and web packages;
+- the PostgreSQL/SSH integration suite, including authenticated control, capability,
+  migration, backup, restore, rollback, and deployment checks;
+- 36 Chromium and mobile WebKit E2E tests, with three full-stack-only cases explicitly
+  skipped outside their required environment;
+- TypeScript builds and typechecks, ESLint, Prettier, Knip, dependency-cycle and module
+  boundary checks, duplicate-code budget, documentation validation, bundle budgets,
+  performance benchmarks, and accessibility checks;
+- Go vet, race tests, staticcheck, and govulncheck;
+- production Compose rendering, GitHub Actions linting, npm production audit, and
+  production orchestrator image build;
+- live production-image backup/verify and browser-worker isolation smokes, including
+  authenticated browser launch/stop and rejection of privileged or mount-bearing
+  requests.
+
+Release-time clean-host, multi-architecture, upgrade, and recovery drills remain
+required by `docs/releasing.md`. They are operational release gates because they
+depend on the candidate registry artifacts and deployment host, not unfinished source
+tasks.

@@ -14,26 +14,27 @@ run inside containers or are built there; nothing is installed on the host itsel
                   /    │              │ /api  /ws
                        ▼              ▼
         ┌──────────────┐      ┌─────────────────┐
-        │   web (nginx)│      │  orchestrator   │──┐ dockerode
-        │  static PWA  │      │   Node + TS     │  │ (Docker socket)
-        └──────────────┘      └────────┬────────┘  ▼
-                                       │     per-session Chrome
-                              ┌────────▼──────┐    containers
-                              │   postgres    │   (launched at runtime,
-                              │  (registry)   │    NOT a compose service)
-                              └───────────────┘
+        │   web (nginx)│      │  orchestrator   │
+        │  static PWA  │      │   Node + TS     │
+        └──────────────┘      └──────┬─────┬────┘
+                                     │     │ fixed authenticated API
+                            ┌────────▼───┐ ┌▼────────────────┐── Docker socket
+                            │ postgres   │ │ browser-worker  │── per-session Chrome
+                            │ (registry) │ │ (least privilege)│   containers
+                            └────────────┘ └─────────────────┘
 ```
 
 ## Services
 
-`docker compose up` brings up four services:
+`docker compose up` brings up five services:
 
-| Service        | Image                                                    | Role                                                                                                                                                  |
-| -------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `caddy`        | `caddy:2-alpine` (digest-pinned)                         | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
-| `postgres`     | `postgres:16-bookworm` (digest-pinned)                   | Durable system of record. **Never** on the live status path.                                                                                          |
-| `orchestrator` | `ghcr.io/billiondollarsolo/flock-orchestrator:<version>` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node.                       |
-| `web`          | `ghcr.io/billiondollarsolo/flock-web:<version>`          | The static React/Vite PWA, served by nginx.                                                                                                           |
+| Service          | Image                                                    | Role                                                                                                                                                  |
+| ---------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`          | `caddy:2-alpine` (digest-pinned)                         | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
+| `postgres`       | `postgres:16-bookworm` (digest-pinned)                   | Durable system of record. **Never** on the live status path.                                                                                          |
+| `orchestrator`   | `ghcr.io/billiondollarsolo/flock-orchestrator:<version>` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node.                       |
+| `browser-worker` | orchestrator image, restricted entrypoint                | The only Docker-socket holder; exposes a token-authenticated create/stop/reap API with fixed browser policy.                                          |
+| `web`            | `ghcr.io/billiondollarsolo/flock-web:<version>`          | The static React/Vite PWA, served by nginx.                                                                                                           |
 
 The orchestrator image includes the latest available Codex and OpenCode releases when
 the image is built. On first container start, the entrypoint installs the latest Claude
@@ -43,9 +44,8 @@ including any deliberate version pins. Set `FLOCK_INSTALL_CLAUDE_CODE=0` when a 
 image or mounted home directory supplies a user-managed Claude Code version.
 
 **Per-session browser containers are not Compose services.** One isolated Chrome
-container is launched **per session at runtime** by the orchestrator (via `dockerode`
-against the mounted Docker socket) and destroyed on teardown. This keeps isolation at the
-container boundary while keeping the static topology minimal.
+container is launched **per session at runtime** by `browser-worker` and destroyed on
+teardown. The orchestrator calls only its narrow lifecycle API and has no Docker socket.
 
 > **Prerequisite:** browser panes need the **`flock-session-chrome`** image (a custom
 > Chrome that bridges CDP to a published port; stock Chrome images bind the debugger to
@@ -66,8 +66,9 @@ cp .env.example .env
 $EDITOR .env
 
 # 2. (Recommended) populate Docker secret files
-mkdir -p secrets
+mkdir -p secrets backups
 openssl rand -base64 32 > secrets/flock_master_key      # secret-store master key
+openssl rand -base64 48 > secrets/browser_worker_token # browser-worker API capability
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
@@ -95,6 +96,8 @@ ways, in order of preference:
 1. **Docker secret files** (`./secrets/*`, mounted at `/run/secrets/<name>`):
    - `flock_master_key` → secret-store master key for encryption at rest.
    - `postgres_password` → Postgres password.
+   - `browser_worker_token` → authenticates the narrow browser lifecycle API. It is
+     mounted to the control and worker identities only, never to coding agents.
 2. **Environment** via `.env` (read automatically by Compose) for everything else
    (optional `DATABASE_URL` override, VAPID keys, browser config, `FLOCK_DOMAIN`, …).
    By default the orchestrator constructs its internal database URL from the same
@@ -105,6 +108,12 @@ ways, in order of preference:
 
 `.env` and `./secrets/` are gitignored. [`.env.example`](../.env.example) documents the
 variables it covers.
+
+The raw Docker socket is mounted only into `browser-worker`. Its authenticated API
+accepts UUID-scoped launch, stop, and reap operations; image, network, loopback/internal
+CDP access, memory, CPU, PID limits, labels, and commands are server policy. The
+orchestrator cannot request host mounts, privileged mode, host networking, or unrelated
+container operations.
 
 ## TLS / auth
 
@@ -117,6 +126,47 @@ own external proxy instead, drop the `caddy` service and route the same paths
 
 All UI / API / WS traffic requires authentication; the per-session hook endpoint is the
 sole exception (authorized by a per-session token).
+
+## Supported network modes
+
+### Production HTTPS
+
+Use the bundled Caddy path above or an equivalent trusted reverse proxy. Set
+`PUBLIC_BASE_URL` and every entry in `FLOCK_ALLOWED_ORIGINS` to exact `https://`
+origins. Keep the orchestrator/web/Postgres/browser-worker services on the internal
+Compose network and publish only the proxy. Production startup rejects missing,
+wildcard, credential-bearing, or non-HTTPS browser origins.
+
+### Tailnet HTTPS
+
+Prefer a MagicDNS hostname with a valid certificate over a raw Tailscale IP. Restrict
+the Flock host to the operator's devices with Tailscale grants/ACLs, require device
+approval, review key expiry, and consider Tailnet Lock for installations that need
+stronger control-plane protection. Tailnet membership is an outer network boundary,
+not authentication: keep Flock login, exact Origin validation, and HTTPS enabled.
+
+### Localhost development
+
+`./run-dev.sh` and the development Compose stack may use loopback HTTP with
+`FLOCK_INSECURE_COOKIES=1`. That exception is for the same machine only. Diagnostics
+show development/insecure warnings, and the production image does not infer this mode.
+
+Direct public/LAN HTTP is unsupported. Tailnet-IP HTTP is only a temporary development
+mode and must not carry reusable credentials over an untrusted path. Never expose the
+orchestrator port, browser-worker port, agentd port/socket, PostgreSQL, or Docker socket
+directly.
+
+## SSH node posture
+
+Use a dedicated SSH account whose privilege is limited to installing/supervising
+`flock-agentd` and accessing intended workspaces. Verify the displayed host fingerprint
+before accepting first use; a changed host key fails closed and must be investigated,
+not silently re-pinned. Agentd separates the control and agent identities, drops session
+processes to `flock-agent`, and never exposes the node-control credential to an agent.
+
+Back up the Flock master key separately from encrypted
+[vault backups](backup-and-recovery.md). Losing it makes encrypted node credentials
+unrecoverable; exposing it makes those envelopes decryptable.
 
 ## Dev vs prod stacks
 
@@ -133,8 +183,8 @@ sole exception (authorized by a per-session token).
 
 ## Verifying a deploy
 
-An integration test asserts the deploy artifacts (orchestrator + Postgres come up, no
-static browser service, Docker socket mounted, secrets external, multi-stage builds), and
+An integration test asserts the deploy artifacts (orchestrator + Postgres come up,
+Docker socket mounted only on the constrained worker, secrets external, multi-stage builds), and
 runs `docker compose config` as a smoke when the Docker CLI is present:
 
 ```bash

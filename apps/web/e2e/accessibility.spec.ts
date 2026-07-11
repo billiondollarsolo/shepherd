@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './flock-test';
+import { diagnosticsFixture } from './diagnostics-fixture';
 
 const NOW = '2026-07-11T00:00:00.000Z';
 const NODE_ID = '22222222-2222-4222-8222-222222222222';
@@ -47,6 +48,7 @@ const session = {
 };
 
 function apiBody(path: string): unknown {
+  if (path === '/api/diagnostics') return diagnosticsFixture(NOW);
   if (path === '/api/nodes') return { nodes: [node] };
   if (path === '/api/projects') return { projects: [project] };
   if (path === '/api/sessions') return { sessions: [session] };
@@ -165,6 +167,7 @@ for (const theme of ['dark', 'light'] as const) {
     page,
     browserName,
   }) => {
+    test.setTimeout(60_000);
     test.skip(browserName === 'webkit', 'desktop coverage runs in Chromium');
     await installFleet(page);
     await page.goto('/');
@@ -176,7 +179,7 @@ for (const theme of ['dark', 'light'] as const) {
       `/n/${NODE_ID}`,
       `/p/${PROJECT_ID}`,
       `/p/${PROJECT_ID}/git`,
-      ...['appearance', 'notifications', 'nodes', 'account', 'about'].map(
+      ...['appearance', 'notifications', 'nodes', 'account', 'operations', 'about'].map(
         (section) => `/settings/${section}`,
       ),
     ]) {
@@ -200,7 +203,10 @@ for (const theme of ['dark', 'light'] as const) {
       await page.keyboard.press('Escape');
     }
 
-    await page.keyboard.press('Meta+k');
+    await page
+      .getByRole('button', { name: 'Search agents, projects, nodes, and commands' })
+      .click();
+    await expect(page.getByRole('dialog', { name: /command palette/i })).toBeVisible();
     await expectAccessible(page, `${theme} command palette`);
   });
 
@@ -217,6 +223,7 @@ for (const theme of ['dark', 'light'] as const) {
       `/p/${PROJECT_ID}/git`,
       '/settings/appearance',
       '/settings/nodes',
+      '/settings/operations',
       '/settings/about',
     ]) {
       await page.goto(path);

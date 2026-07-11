@@ -1,5 +1,8 @@
 # PRD: Conductor — A Web Cockpit for Supervising Coding Agents
 
+> **HISTORICAL.** This original PRD uses pre-Flock terminology and is not the current
+> product contract. Start with `docs/README.md`.
+
 **Status:** Draft v1
 **Document type:** Build-spec PRD
 **Last updated:** 2026-05-28

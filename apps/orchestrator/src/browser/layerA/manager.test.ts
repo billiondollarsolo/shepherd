@@ -120,6 +120,23 @@ describe('LayerABrowserManager (US-25)', () => {
     }
   });
 
+  it('uses internal DNS without publishing a host port in browser-worker mode', async () => {
+    let resolvedHost = '';
+    const workerManager = new LayerABrowserManager({
+      docker,
+      resolveCdp: async ({ bindHost, containerCdpPort }) => {
+        resolvedHost = bindHost;
+        return { hostPort: containerCdpPort, browserWsPath: '/devtools/browser/worker' };
+      },
+      config: { networkName: 'flock_internal' },
+    });
+    const browser = await workerManager.launch('session-id');
+    expect(docker.created[0]?.HostConfig?.NetworkMode).toBe('flock_internal');
+    expect(docker.created[0]?.HostConfig?.PortBindings).toBeUndefined();
+    expect(resolvedHost).toBe('flock-browser-session-id');
+    expect(browser.cdpEndpoint).toContain('flock-browser-session-id:9222');
+  });
+
   it('refuses a non-loopback bindHost (NFR-SEC5 hard invariant)', () => {
     expect(() => makeManager({ bindHost: '0.0.0.0' })).toThrow(/loopback/i);
   });

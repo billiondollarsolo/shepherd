@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './flock-test';
+import { diagnosticsFixture } from './diagnostics-fixture';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const NODE_ID = '22222222-2222-4222-8222-222222222222';
@@ -67,6 +68,7 @@ const session = {
 };
 
 function apiBody(path: string): unknown {
+  if (path === '/api/diagnostics') return diagnosticsFixture(NOW);
   if (path === '/api/auth/me') return { user };
   if (path === '/api/auth/status') return { setupRequired: false };
   if (path === '/api/nodes') return { nodes: [node] };
@@ -207,7 +209,14 @@ test('all authenticated mobile pages fit the visual viewport without crashing', 
   await expectMobilePage(page, `/agents/${SESSION_ID}`, '[data-testid="phone-stage"]');
   await expectMobilePage(page, `/n/${NODE_ID}`, '[data-testid="phone-node-details"]');
   await expectMobilePage(page, `/p/${PROJECT_ID}/git`, '[data-testid="phone-project-git"]');
-  for (const section of ['appearance', 'notifications', 'nodes', 'account', 'about']) {
+  for (const section of [
+    'appearance',
+    'notifications',
+    'nodes',
+    'account',
+    'operations',
+    'about',
+  ]) {
     await expectMobilePage(page, `/settings/${section}`, '[data-testid="phone-settings"]');
   }
   expect(errors).toEqual([]);
@@ -251,7 +260,14 @@ test('all mobile pages also fit a 320px-wide phone', async ({ page }) => {
   await expectMobilePage(page, `/agents/${SESSION_ID}`, '[data-testid="phone-stage"]');
   await expectMobilePage(page, `/n/${NODE_ID}`, '[data-testid="phone-node-details"]');
   await expectMobilePage(page, `/p/${PROJECT_ID}/git`, '[data-testid="phone-project-git"]');
-  for (const section of ['appearance', 'notifications', 'nodes', 'account', 'about']) {
+  for (const section of [
+    'appearance',
+    'notifications',
+    'nodes',
+    'account',
+    'operations',
+    'about',
+  ]) {
     await expectMobilePage(page, `/settings/${section}`, '[data-testid="phone-settings"]');
   }
   expect(errors).toEqual([]);

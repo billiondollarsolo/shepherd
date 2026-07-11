@@ -10,10 +10,8 @@
 # auth, enforced by the orchestrator's default-deny surface guard (NFR-SEC6);
 # the per-session-token hook endpoint is the one exception (spec §8.1).
 #
-# Per-session browser containers (Layer A, PRD §6.5) are DELIBERATELY NOT
-# declared here: they are launched/destroyed dynamically at runtime by the
-# orchestrator via dockerode against the mounted Docker socket (NFR-DEP1). One
-# isolated Chrome container per session, on the orchestrator VPS.
+# Per-session browser containers (Layer A, PRD §6.5) are launched dynamically by
+# the constrained browser-worker. Only that worker receives the Docker socket.
 #
 # Secrets are supplied at runtime via env / Docker secret files — never baked
 # into images (NFR-DEP2). Copy `.env.example` -> `.env` and fill it in, and (in
@@ -86,9 +84,9 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Orchestrator — the brain. Status model, hooks, SSH, browser lifecycle, auth.
-  # Mounts the Docker socket so it can launch per-session browser containers
-  # at runtime via dockerode (NFR-DEP1). TLS is terminated by an upstream proxy
+  # Orchestrator — the brain. Status model, hooks, SSH, browser control, auth.
+  # Browser container lifecycle is delegated to browser-worker, so this service
+  # has no Docker socket. TLS is terminated by an upstream proxy
   # (US-39 / NFR-SEC1) — this service speaks plain HTTP/WS internally.
   # ---------------------------------------------------------------------------
   orchestrator:
@@ -100,6 +98,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      browser-worker:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: ${PORT:-8080}
@@ -150,21 +150,26 @@ services:
       # (plain Chrome binds the debugger to loopback only).
       BROWSER_IMAGE: ${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
-      DOCKER_SOCKET: /var/run/docker.sock
+      BROWSER_WORKER_URL: http://browser-worker:8090
+      BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
       # Attach per-session browser containers to this compose network so the
       # orchestrator can reach their loopback-bound CDP endpoint.
       BROWSER_NETWORK: flock_internal
     secrets:
       - flock_master_key
       - postgres_password
+      - source: browser_worker_token
+        target: browser_worker_token
+        uid: '700'
+        gid: '700'
+        mode: 0400
     volumes:
-      # dockerode needs the host Docker socket to manage browser containers.
-      # Read-write is required to create/destroy containers (NFR-DEP1).
-      - '${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock'
       # Runtime home/workspaces/tool credentials belong only to flock-agent.
       - 'flock_agent_home:/home/flock-agent'
       # Root-owned daemon state and its control credential persist independently.
       - 'flock_agentd_state:/var/lib/flock-agentd'
+      # Operator-managed encrypted vault destination; keep it on separate storage.
+      - '${FLOCK_BACKUP_DIR:-./backups}:/backups'
     # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
     # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
     # network. `expose` documents the internal port without publishing it.
@@ -180,6 +185,38 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
+
+  # Narrow browser lifecycle worker. This is the only Flock process with the
+  # Docker socket; its authenticated API accepts only create/stop/reap for the
+  # allowlisted browser image with fixed network and resource limits.
+  browser-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.orchestrator
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-orchestrator:${FLOCK_VERSION:-0.3.0}
+    restart: unless-stopped
+    entrypoint: ['/usr/local/bin/flock-browser-worker-entrypoint.sh']
+    environment:
+      NODE_ENV: production
+      BROWSER_WORKER_PORT: 8090
+      BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}
+      BROWSER_NETWORK: flock_internal
+      BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
+      BROWSER_MEMORY_BYTES: ${BROWSER_MEMORY_BYTES:-1073741824}
+      BROWSER_NANO_CPUS: ${BROWSER_NANO_CPUS:-1000000000}
+      BROWSER_PIDS_LIMIT: ${BROWSER_PIDS_LIMIT:-512}
+      DOCKER_SOCKET: /var/run/docker.sock
+    secrets:
+      - source: browser_worker_token
+        target: browser_worker_token
+        uid: '702'
+        gid: '702'
+        mode: 0400
+    volumes:
+      - '${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock'
+    networks:
+      - internal
 
   # ---------------------------------------------------------------------------
   # Web — static React/Vite PWA bundle served by nginx. Fronted by the Caddy TLS
@@ -225,6 +262,7 @@ networks:
 # NEVER copied into an image. Create with e.g.:
 #   mkdir -p secrets
 #   openssl rand -base64 32 > secrets/flock_master_key
+#   openssl rand -base64 48 > secrets/browser_worker_token
 #   printf '%s' 'strong-db-password' > secrets/postgres_password
 # -----------------------------------------------------------------------------
 secrets:
@@ -232,3 +270,5 @@ secrets:
     file: ./secrets/flock_master_key
   postgres_password:
     file: ./secrets/postgres_password
+  browser_worker_token:
+    file: ./secrets/browser_worker_token

@@ -25,7 +25,7 @@ import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.
 import { registerNodeCredentialRotationRoute } from './nodes/agentd/credential-rotation-route.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest } from '@flock/shared';
-import { planEventFields } from './hooks/plan.js';
+import { forgetPlan, planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
   type NodeConnectionManagerDeps,
@@ -78,6 +78,9 @@ import { registerCollaborationRoutes } from './sessions/collaboration-routes.js'
 import { resolveAgentdVersion } from './runtime/agentd-version.js';
 import { mergeAgentMeta, type CachedAgentMeta } from './runtime/telemetry-cache.js';
 import { createGracefulShutdown, installShutdownSignals } from './runtime/graceful-shutdown.js';
+import { DiagnosticSink } from './runtime/diagnostics.js';
+import { collectDiagnostics } from './operations/diagnostics.js';
+import { BoundedTtlMap } from './runtime/bounded-ttl-map.js';
 
 /**
  * Entry point. Starts the HTTP server ONLY when this module is run directly
@@ -89,6 +92,34 @@ import { createGracefulShutdown, installShutdownSignals } from './runtime/gracef
  * the system of record only — never the live status path (spec §6.6).
  */
 export async function main(): Promise<void> {
+  const diagnosticSecrets = [
+    process.env.FLOCK_MASTER_KEY,
+    process.env.FLOCK_AGENTD_SECRET,
+    process.env.VAPID_PRIVATE_KEY,
+    process.env.DATABASE_URL,
+  ].filter((value): value is string => Boolean(value));
+  for (const file of [
+    process.env.FLOCK_MASTER_KEY_FILE,
+    process.env.POSTGRES_PASSWORD_FILE,
+    process.env.BROWSER_WORKER_TOKEN_FILE,
+  ]) {
+    if (!file) continue;
+    try {
+      const value = readFileSync(file, 'utf8').trim();
+      if (value) diagnosticSecrets.push(value);
+    } catch {
+      // Startup validation reports required missing files through their owner.
+    }
+  }
+  const diagnostics = new DiagnosticSink(200, undefined, () => diagnosticSecrets);
+  const recordFailure = (
+    category: string,
+    operation: string,
+    error: unknown,
+    context?: Record<string, unknown>,
+  ): void => {
+    diagnostics.record({ category, operation, message: error, context });
+  };
   const originPolicy = readOriginPolicy(process.env);
   // eslint-disable-next-line no-console
   console.log(describeOriginPolicy(originPolicy));
@@ -124,6 +155,16 @@ export async function main(): Promise<void> {
   const connections = new NodeConnectionManager({
     db,
     secrets,
+    logger: {
+      warn: (message, error) => recordFailure('ssh', message, error ?? message),
+      info: (message) =>
+        diagnostics.record({
+          category: 'ssh',
+          operation: 'lifecycle',
+          severity: 'info',
+          message,
+        }),
+    },
     hookTunnel: {
       target: { host: '127.0.0.1', port: orchestratorPort },
       remotePort: hookTunnelRemotePort,
@@ -140,19 +181,23 @@ export async function main(): Promise<void> {
     secrets,
     audit: auditLogger,
     onSshNodeCreated: (id) => {
-      void connections.connectNode(id).catch(() => undefined);
+      void connections
+        .connectNode(id)
+        .catch((error) => recordFailure('ssh', 'connect-created-node', error, { nodeId: id }));
     },
     onNodeRemoved: (id) => {
-      void connections.disconnectNode(id).catch(() => undefined);
+      void connections
+        .disconnectNode(id)
+        .catch((error) => recordFailure('ssh', 'disconnect-removed-node', error, { nodeId: id }));
     },
     onSshNodeUpdated: (id) => {
       // Edited connection params → drop the stale link and reconnect with the new
       // host/user/credential. Fire-and-forget; a failure leaves it error/retry.
       void connections
         .disconnectNode(id)
-        .catch(() => undefined)
+        .catch((error) => recordFailure('ssh', 'disconnect-updated-node', error, { nodeId: id }))
         .then(() => connections.connectNode(id))
-        .catch(() => undefined);
+        .catch((error) => recordFailure('ssh', 'reconnect-updated-node', error, { nodeId: id }));
     },
   });
   const projects = new ProjectService({ db, audit: auditLogger });
@@ -206,14 +251,17 @@ export async function main(): Promise<void> {
   // per-session meta (token usage + current tool) shown in the paddock sidebar.
   // Per-session telemetry cache (everything except `plan`, which is routed to the
   // plan-event artifact rather than cached here).
-  const agentdSessionMeta = new Map<string, CachedAgentMeta>();
+  const agentdSessionMeta = new BoundedTtlMap<string, CachedAgentMeta>(
+    10_000,
+    24 * 60 * 60 * 1_000,
+  );
   // Cache the connect-only daemon probe per ssh node so a down/zero-session node
   // isn't re-probed (connect + handshake + teardown) on every 4s health poll.
-  const probeCache = new Map<string, { up: boolean; at: number }>();
+  const probeCache = new BoundedTtlMap<string, { up: boolean; at: number }>(5_000, 15_000);
   const PROBE_TTL_MS = 15_000;
   // sandboxAvailable is a STATIC node property (Landlock support); cache it so an
   // autonomous launch doesn't fetch full host metrics every time.
-  const sandboxAvailableByNode = new Map<string, boolean>();
+  const sandboxAvailableByNode = new BoundedTtlMap<string, boolean>(5_000, 24 * 60 * 60 * 1_000);
   let forwardAgentdStatus: (id: string, state: string, meta: AgentdStatusMeta) => void = () => {};
   const recordNodeControlEvent = (nodeId: string, event: string): void => {
     void auditLogger
@@ -223,7 +271,7 @@ export async function main(): Promise<void> {
         targetId: nodeId,
         detail: { event },
       })
-      .catch(() => undefined);
+      .catch((error) => recordFailure('audit', 'node-control-event', error, { nodeId }));
   };
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
@@ -255,6 +303,7 @@ export async function main(): Promise<void> {
       try {
         return await agentdConns.clientForLocal(nodeId);
       } catch {
+        diagnostics.increment('agentd.local_connect_failures');
         return null;
       }
     }
@@ -352,6 +401,7 @@ export async function main(): Promise<void> {
               const host = await connections.agentdHostFor(n.id);
               up = await agentdConns.probeRemote(n.id, host, agentdPort);
             } catch {
+              diagnostics.increment('agentd.remote_probe_failures');
               up = false;
             }
             probeCache.set(n.id, { up, at: Date.now() });
@@ -381,6 +431,7 @@ export async function main(): Promise<void> {
           try {
             client = await agentdConns.clientForLocal(localNodeId);
           } catch {
+            diagnostics.increment('agentd.local_health_connect_failures');
             client = null;
           }
         }
@@ -391,7 +442,7 @@ export async function main(): Promise<void> {
             liveSet = new Set((await client.list()).map((x) => x.id));
             probed = true;
           } catch {
-            /* link hiccup → treat as not-live */
+            diagnostics.increment('agentd.session_inventory_failures');
           }
         }
         for (const id of ids) {
@@ -430,6 +481,7 @@ export async function main(): Promise<void> {
     try {
       return await client.nodeInfo();
     } catch {
+      diagnostics.increment('agentd.node_info_failures');
       return null;
     }
   };
@@ -477,6 +529,7 @@ export async function main(): Promise<void> {
   const liveChannels = createLiveChannels({
     db,
     connections,
+    diagnostics,
     authorizeUpgrade: wsAuthorize,
     agentdResolve: useAgentd
       ? async (sessionId, base, isShell) => {
@@ -597,6 +650,7 @@ export async function main(): Promise<void> {
     );
     pushRouteDeps = { store: pushStore, resolveUserId, vapidPublicKey: vapid.publicKey };
   } catch (err) {
+    recordFailure('push', 'configure', err);
     // eslint-disable-next-line no-console
     console.warn(
       `[flock-orchestrator] Web Push disabled (set VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY): ${
@@ -612,6 +666,9 @@ export async function main(): Promise<void> {
     audit: auditLogger,
     resolveUserId,
     authorizeUpgrade: wsAuthorize, // T4/T5: origin + owner check on screencast upgrades
+    logger: {
+      warn: (message, error) => recordFailure('browser', message, error),
+    },
   });
 
   // Where agent hook callbacks POST. Over an SSH node the agent curls localhost
@@ -756,9 +813,12 @@ export async function main(): Promise<void> {
       const result = await terminateSession.terminate(sessionId, ctx);
       liveChannels.untrackSession(sessionId);
       agentdSessionMeta.delete(sessionId); // free the per-session telemetry cache (was never evicted)
+      forgetPlan(sessionId);
       // Tear down the session's browser (stream + CDP client + Chrome container)
       // so no container orphans (FR-B6). Best-effort, off the terminate result.
-      void browserChannels.stopFor(sessionId).catch(() => undefined);
+      void browserChannels
+        .stopFor(sessionId)
+        .catch((error) => recordFailure('browser', 'stop-session', error, { sessionId }));
       return result;
     },
   };
@@ -787,7 +847,10 @@ export async function main(): Promise<void> {
           try {
             const client =
               agentdConns.peekLocal() ??
-              (await agentdConns.clientForLocal(localNodeId).catch(() => null));
+              (await agentdConns.clientForLocal(localNodeId).catch(() => {
+                diagnostics.increment('reconcile.local_connect_failures');
+                return null;
+              }));
             if (client) {
               liveSessionIds = new Set((await client.list()).map((x) => x.id));
             } else {
@@ -795,6 +858,7 @@ export async function main(): Promise<void> {
               liveSessionIds = new Set();
             }
           } catch {
+            diagnostics.increment('reconcile.local_inventory_failures');
             liveSessionIds = new Set();
           }
           truth.set(n.id, {
@@ -816,6 +880,7 @@ export async function main(): Promise<void> {
             try {
               liveSessionIds = new Set((await client.list()).map((x) => x.id));
             } catch {
+              diagnostics.increment('reconcile.remote_inventory_failures');
               liveSessionIds = null; // transient — don't invent disconnects
             }
           } else {
@@ -858,6 +923,7 @@ export async function main(): Promise<void> {
       }
       return applied;
     } catch (err) {
+      recordFailure('reconcile', 'session-truth', err);
       // eslint-disable-next-line no-console
       console.warn(`[reconcile] session truth failed: ${err instanceof Error ? err.message : err}`);
       return 0;
@@ -897,13 +963,15 @@ export async function main(): Promise<void> {
   // Hydrate the live binding from surviving sessions so the terminal can attach
   // and status shows after an orchestrator restart (NFR-AV1). Rehydrate first,
   // then ground-truth reconcile so a powered-off VM never paints as "running".
-  await liveChannels.hydrate().catch(() => undefined);
+  await liveChannels
+    .hydrate()
+    .catch((error) => recordFailure('status', 'hydrate-live-channels', error));
 
   // Reconnect to every known SSH node on boot (best-effort). Connectivity
   // transitions fire onConnectivityChange → session truth.
   void connections
     .connectAll()
-    .catch(() => undefined)
+    .catch((error) => recordFailure('ssh', 'connect-all', error))
     .finally(() => {
       void reconcileSessionTruth();
     });
@@ -922,7 +990,7 @@ export async function main(): Promise<void> {
   reconcileTimer.unref?.();
 
   // Sweep any browser containers orphaned by a prior crash (FR-B6).
-  void browserChannels.reap().catch(() => undefined);
+  void browserChannels.reap().catch((error) => recordFailure('browser', 'reap', error));
 
   // Read-only `git diff` for the center pane's Diff tab (US-33). Runs `git diff`
   // on the session's node via its transport. Built+tested but never wired before
@@ -957,6 +1025,20 @@ export async function main(): Promise<void> {
     sessions,
     diff,
     git,
+    diagnostics: () =>
+      collectDiagnostics({
+        pool,
+        sink: diagnostics,
+        agentdHealth: agentdHealthSnapshot,
+        listNodes: () => nodes.listNodes(),
+        collectionSizes: () => ({
+          agentTelemetry: agentdSessionMeta.size,
+          daemonProbes: probeCache.size,
+          sandboxCapabilities: sandboxAvailableByNode.size,
+          ...liveChannels.diagnosticSizes(),
+          ...browserChannels.diagnosticSizes(),
+        }),
+      }),
     events: new EventReadService(db),
     push: pushRouteDeps,
     browserControl: browserChannels,
@@ -969,6 +1051,7 @@ export async function main(): Promise<void> {
         await pool.query({ text: 'select 1', query_timeout: 1000 } as never);
         return true;
       } catch {
+        diagnostics.increment('readiness.failures');
         return false;
       }
     },
@@ -1038,11 +1121,16 @@ export async function main(): Promise<void> {
       try {
         await terminateAndCleanup.terminate(targetId, { userId: '', ip: null });
         return true;
-      } catch {
+      } catch (error) {
         // terminate can throw on a racy / still-opening session even though it DID
         // close the record — report success if the session is actually gone.
-        const s = await sessionRegistry.getSession(targetId).catch(() => null);
-        return !s || s.closedAt != null;
+        const s = await sessionRegistry.getSession(targetId).catch((lookupError) => {
+          recordFailure('session', 'verify-termination', lookupError, { sessionId: targetId });
+          return null;
+        });
+        const closed = !s || s.closedAt != null;
+        if (!closed) recordFailure('session', 'terminate-agent', error, { sessionId: targetId });
+        return closed;
       }
     },
     // read_output: a sibling's recent chat/assistant messages (oldest→newest).
@@ -1057,7 +1145,9 @@ export async function main(): Promise<void> {
           targetId: callerId,
           detail: { event: 'denied', required },
         })
-        .catch(() => undefined);
+        .catch((error) =>
+          recordFailure('audit', 'agent-policy-denial', error, { sessionId: callerId }),
+        );
     },
   );
   registerOrchestrateRoute(app, orchestration);

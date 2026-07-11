@@ -26,6 +26,7 @@ artifacts/
 # Root-only (`/secrets/`); do not use a bare `secrets/` pattern — that also
 # ignored apps/orchestrator/src/secrets/ source modules and broke CI builds.
 /secrets/
+/backups/
 *.pem
 *_key
 *.key

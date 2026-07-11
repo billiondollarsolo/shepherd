@@ -51,18 +51,6 @@ fi
 chown root:"$CONTROL_GROUP" "$NODE_ID_FILE"
 chmod 0640 "$NODE_ID_FILE"
 
-# Give only the control user access to the host Docker socket used by the
-# constrained browser lifecycle. The runtime agent user is never added.
-if [ -S /var/run/docker.sock ]; then
-  DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
-  DOCKER_GROUP="$(getent group "$DOCKER_GID" | cut -d: -f1 || true)"
-  if [ -z "$DOCKER_GROUP" ]; then
-    DOCKER_GROUP=flock-docker-host
-    groupadd -g "$DOCKER_GID" "$DOCKER_GROUP"
-  fi
-  usermod -aG "$DOCKER_GROUP" "$CONTROL_USER"
-fi
-
 # Claude Code is commercially licensed rather than open source. Install its
 # latest release from Anthropic on first container start instead of
 # redistributing the binary inside Flock's public image. A transient installer

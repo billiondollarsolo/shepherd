@@ -16,9 +16,9 @@ back. Your browser is never in the data path — disconnect it and the agents ke
 ```
  Browser ──HTTPS/WS──▶ orchestrator ──SSH/socket──▶ flock-agentd (per node) ──PTY──▶ agent
    (viewer)              (brain + API)                (terminals + status)         (claude/…)
-                            │
-                            ▼
-                        Postgres  (durable record — NOT on the live path)
+                            ├──▶ Postgres  (durable record — NOT on the live path)
+                            └──▶ browser worker ──▶ Docker socket
+                                  (fixed lifecycle API; only socket holder)
 ```
 
 ## The three components
@@ -58,7 +58,10 @@ Always-on. Stateless on the hot path; durable state in Postgres.
   _translators_ map each agent's payload to the unified status (`status/translators/`).
 - **Transport.** An agentd client (with SSH bootstrap for remote nodes, a reverse tunnel
   so node-side agents can reach the hook endpoint, and reconnect-with-backoff).
-- **Per-session browsers, auth, web push, secret store** (encryption at rest).
+- **Per-session browsers** through an authenticated, least-privilege browser worker;
+  the orchestrator cannot issue arbitrary Docker operations.
+- **Auth, web push, secret store** (encryption at rest), verified vault recovery, and
+  owner-only redacted diagnostics.
 - **Postgres** (via Drizzle) is the **system of record** — users, nodes, projects,
   sessions, audit — and is _never_ on the live status path (PRD §6.6). Migrations run
   idempotently on boot.
@@ -139,6 +142,9 @@ Postgres is not involved in steps 2–4 — it only records the durable history.
   refuses to open a TCP control port without a secret.
 - Secrets (master key, DB password, SSH keys) are runtime-only — never in images, never
   in the repo.
+- The raw Docker socket exists only in the browser-worker container. Its API fixes the
+  image, network, command, labels, and resource limits and exposes no host-mount,
+  privileged, host-network, or unrelated-container operation.
 
 See [deployment.md](deployment.md) for how this maps onto the production stack, and the
 [agent integration matrix](agent-integration-matrix.md) for the per-agent specifics.

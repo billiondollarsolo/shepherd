@@ -18,7 +18,7 @@ export type CdpResolver = (params: {
   containerId: string;
   bindHost: string;
   containerCdpPort: number;
-}) => Promise<{ hostPort: number; browserWsPath?: string }>;
+}) => Promise<{ hostPort: number; host?: string; browserWsPath?: string }>;
 
 export interface LayerABrowserManagerDeps {
   docker: DockerLike;
@@ -103,13 +103,22 @@ export class LayerABrowserManager {
 
   private async doLaunch(sessionId: string): Promise<SessionBrowser> {
     const guid = newBrowserGuid();
-    const { containerCdpPort, bindHost, image, labelKey, memoryBytes, nanoCpus, pidsLimit } =
-      this.config;
+    const {
+      containerCdpPort,
+      bindHost,
+      image,
+      labelKey,
+      memoryBytes,
+      nanoCpus,
+      pidsLimit,
+      networkName,
+    } = this.config;
     const portKey = `${containerCdpPort}/tcp`;
+    const containerName = `flock-browser-${sessionId}`;
 
     const createOpts: CreateContainerOptions = {
       Image: image,
-      name: `flock-browser-${sessionId}`,
+      name: containerName,
       Labels: {
         [labelKey]: sessionId,
         'io.flock.browser-guid': guid,
@@ -129,9 +138,9 @@ export class LayerABrowserManager {
       HostConfig: {
         // Loopback-only: the CDP port is published exclusively on 127.0.0.1 of the
         // orchestrator host (NFR-SEC5). No 0.0.0.0 host binding ever.
-        PortBindings: {
-          [portKey]: [{ HostIp: bindHost, HostPort: '0' }],
-        },
+        ...(networkName
+          ? { NetworkMode: networkName }
+          : { PortBindings: { [portKey]: [{ HostIp: bindHost, HostPort: '0' }] } }),
         Init: true,
         ShmSize: 256 * 1024 * 1024,
         // T15(c): cap each session's Chrome so one heavy page can't OOM/peg the
@@ -155,12 +164,17 @@ export class LayerABrowserManager {
 
     let endpoint: OpaqueCdpEndpoint;
     try {
-      const { hostPort, browserWsPath } = await this.resolveCdp({
+      const { hostPort, host, browserWsPath } = await this.resolveCdp({
         containerId,
-        bindHost,
+        bindHost: networkName ? containerName : bindHost,
         containerCdpPort,
       });
-      endpoint = buildCdpEndpoint({ host: bindHost, port: hostPort, guid, browserWsPath });
+      endpoint = buildCdpEndpoint({
+        host: host ?? (networkName ? containerName : bindHost),
+        port: hostPort,
+        guid,
+        browserWsPath,
+      });
     } catch (err) {
       // Resolution failed — do not leak the container (no-orphan guarantee, FR-B6).
       await this.forceRemove(containerId);

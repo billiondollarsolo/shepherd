@@ -34,6 +34,8 @@ import { ScreencastManager, InputTakeoverController } from './browser/layerC/ind
 import { BandwidthController, ScreencastEngineAdapter } from './browser/controls/index.js';
 import { connectCdpPageClient, type CdpPageClient } from './browser/cdp-page-client.js';
 import { attachWsHeartbeat } from './ws-heartbeat.js';
+import { BrowserWorkerClient } from './browser/worker-client.js';
+import type { BrowserLifecycle } from './browser/lifecycle.js';
 
 export interface BrowserChannelsDeps {
   /**
@@ -60,6 +62,8 @@ export interface BrowserChannelsDeps {
   dockerSocket?: string;
   /** Sink for best-effort warnings; defaults to console.warn. */
   logger?: { warn(msg: string, err: unknown): void };
+  /** Injected lifecycle for tests or the production least-privilege worker. */
+  lifecycle?: BrowserLifecycle;
 }
 
 export interface BrowserChannels {
@@ -79,6 +83,7 @@ export interface BrowserChannels {
   reap(): Promise<void>;
   /** Stop every stream + container (shutdown). */
   dispose(): Promise<void>;
+  diagnosticSizes(): Record<string, number>;
 }
 
 export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannels {
@@ -89,29 +94,42 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
     },
   };
 
-  const docker = new Docker(
-    deps.dockerSocket ? { socketPath: deps.dockerSocket } : undefined,
-  ) as unknown as DockerLike;
-
-  const layerA = new LayerABrowserManager({
-    docker,
-    resolveCdp: createDockerCdpResolver(docker),
-    config: {
-      // The Flock session-chrome image bridges CDP to a published port (plain
-      // Chrome images bind the debugger to loopback only). See docker/Dockerfile.session-chrome.
-      image: deps.image ?? process.env.BROWSER_IMAGE ?? 'flock/session-chrome:latest',
-      maxConcurrent: deps.maxConcurrent ?? Number(process.env.BROWSER_MAX_CONCURRENT ?? 4),
-      // T15(c): per-container resource caps (0 = leave unset). Defaults applied by
-      // DEFAULT_LAYER_A_CONFIG; override per-deploy via env.
-      ...(process.env.BROWSER_MEMORY_BYTES
-        ? { memoryBytes: Number(process.env.BROWSER_MEMORY_BYTES) }
-        : {}),
-      ...(process.env.BROWSER_NANO_CPUS ? { nanoCpus: Number(process.env.BROWSER_NANO_CPUS) } : {}),
-      ...(process.env.BROWSER_PIDS_LIMIT
-        ? { pidsLimit: Number(process.env.BROWSER_PIDS_LIMIT) }
-        : {}),
-    },
-  });
+  const layerA: BrowserLifecycle =
+    deps.lifecycle ??
+    (() => {
+      const workerUrl = process.env.BROWSER_WORKER_URL;
+      const workerTokenFile = process.env.BROWSER_WORKER_TOKEN_FILE;
+      if (workerUrl || workerTokenFile) {
+        if (!workerUrl || !workerTokenFile) {
+          throw new Error('BROWSER_WORKER_URL and BROWSER_WORKER_TOKEN_FILE must be set together');
+        }
+        return new BrowserWorkerClient(workerUrl, workerTokenFile);
+      }
+      const docker = new Docker(
+        deps.dockerSocket ? { socketPath: deps.dockerSocket } : undefined,
+      ) as unknown as DockerLike;
+      return new LayerABrowserManager({
+        docker,
+        resolveCdp: createDockerCdpResolver(docker),
+        config: {
+          // The Flock session-chrome image bridges CDP to a published port (plain
+          // Chrome images bind the debugger to loopback only). See docker/Dockerfile.session-chrome.
+          image: deps.image ?? process.env.BROWSER_IMAGE ?? 'flock/session-chrome:latest',
+          maxConcurrent: deps.maxConcurrent ?? Number(process.env.BROWSER_MAX_CONCURRENT ?? 4),
+          // T15(c): per-container resource caps (0 = leave unset). Defaults applied by
+          // DEFAULT_LAYER_A_CONFIG; override per-deploy via env.
+          ...(process.env.BROWSER_MEMORY_BYTES
+            ? { memoryBytes: Number(process.env.BROWSER_MEMORY_BYTES) }
+            : {}),
+          ...(process.env.BROWSER_NANO_CPUS
+            ? { nanoCpus: Number(process.env.BROWSER_NANO_CPUS) }
+            : {}),
+          ...(process.env.BROWSER_PIDS_LIMIT
+            ? { pidsLimit: Number(process.env.BROWSER_PIDS_LIMIT) }
+            : {}),
+        },
+      });
+    })();
 
   // One CDP page client per session, shared by the stream (+ future input).
   const clients = new Map<string, Promise<CdpPageClient>>();
@@ -206,7 +224,11 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
     sinks.delete(sessionId);
     viewports.delete(sessionId);
     const holder = input.controllerOf(sessionId);
-    if (holder) await input.release(sessionId, holder).catch(() => undefined);
+    if (holder) {
+      await input
+        .release(sessionId, holder)
+        .catch((error) => logger.warn(`browser input release failed for ${sessionId}`, error));
+    }
     try {
       await bandwidth.close(sessionId);
     } catch (err) {
@@ -255,7 +277,9 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
         // Forward a user input intent (only the lock holder succeeds, US-28).
         const parsed = InputIntent.safeParse(msg.intent);
         if (!parsed.success) return;
-        void input.forward(sessionId, controllerId, parsed.data).catch(() => undefined);
+        void input
+          .forward(sessionId, controllerId, parsed.data)
+          .catch((error) => logger.warn(`browser input forwarding failed for ${sessionId}`, error));
         return;
       }
       if (msg.op === 'resize' && typeof msg.width === 'number' && typeof msg.height === 'number') {
@@ -272,15 +296,19 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
       if (msg.op === 'reload') {
         void clientFor(sessionId)
           .then((c) => c.reload())
-          .catch(() => undefined);
+          .catch((error) => logger.warn(`browser reload failed for ${sessionId}`, error));
         return;
       }
       if (msg.op === 'screencast:focus') {
-        void bandwidth.focus(sessionId).catch(() => undefined);
+        void bandwidth
+          .focus(sessionId)
+          .catch((error) => logger.warn(`browser focus failed for ${sessionId}`, error));
         return;
       }
       if (msg.op === 'screencast:blur') {
-        void bandwidth.blur(sessionId).catch(() => undefined);
+        void bandwidth
+          .blur(sessionId)
+          .catch((error) => logger.warn(`browser blur failed for ${sessionId}`, error));
         return;
       }
       if (msg.op === 'open') {
@@ -309,7 +337,9 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
             }
           });
       } else if (msg.op === 'close') {
-        void bandwidth.close(sessionId).catch(() => undefined);
+        void bandwidth
+          .close(sessionId)
+          .catch((error) => logger.warn(`browser stream close failed for ${sessionId}`, error));
       } else if (msg.op === 'screencast:quality' && typeof msg.quality === 'number') {
         bandwidth.setQuality(sessionId, msg.quality);
       }
@@ -321,7 +351,9 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
       if (sinks.get(sessionId)) sinks.delete(sessionId);
       urlUnsub?.();
       urlUnsub = null;
-      void bandwidth.close(sessionId).catch(() => undefined);
+      void bandwidth
+        .close(sessionId)
+        .catch((error) => logger.warn(`browser socket close failed for ${sessionId}`, error));
     });
   }
 
@@ -347,7 +379,10 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
             return;
           }
           wss.handleUpgrade(req, socket, head, (ws) => bindSocket(sessionId, userId, ws));
-        })().catch(() => socket.destroy());
+        })().catch((error) => {
+          logger.warn(`browser WebSocket upgrade failed for ${sessionId}`, error);
+          socket.destroy();
+        });
       });
     },
     async takeover(sessionId, controllerId, ip) {
@@ -369,6 +404,11 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
       };
     },
     stopFor,
+    diagnosticSizes: () => ({
+      browserClients: clients.size,
+      browserSinks: sinks.size,
+      browserViewports: viewports.size,
+    }),
     async reap() {
       try {
         await layerA.reap();
@@ -378,10 +418,12 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
     },
     async dispose() {
       stopHeartbeat();
-      await input.releaseAll().catch(() => undefined);
-      await bandwidth.stopAll().catch(() => undefined);
+      await input.releaseAll().catch((error) => logger.warn('browser release-all failed', error));
+      await bandwidth
+        .stopAll()
+        .catch((error) => logger.warn('browser stream stop-all failed', error));
       await Promise.all([...clients.keys()].map((id) => closeClient(id)));
-      await layerA.stopAll().catch(() => undefined);
+      await layerA.stopAll().catch((error) => logger.warn('browser worker stop-all failed', error));
     },
   };
 }

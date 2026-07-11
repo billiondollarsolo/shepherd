@@ -18,11 +18,13 @@ test('renders the current paddock shell regions', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Flock home' })).toBeVisible();
 });
 
-test('Cmd+K opens the command palette', async ({ page }) => {
+test('command palette opens from its visible shortcut control', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('dialog', { name: /command palette/i })).toHaveCount(0);
 
-  await page.keyboard.press('Meta+k');
+  // Browser-reserved modifier chords are covered at the KeyboardProvider layer;
+  // this browser test follows the equivalent visible control end to end.
+  await page.getByRole('button', { name: 'Search agents, projects, nodes, and commands' }).click();
   await expect(page.getByRole('dialog', { name: /command palette/i })).toBeVisible();
 
   // Escape dismisses it.
@@ -30,13 +32,17 @@ test('Cmd+K opens the command palette', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: /command palette/i })).toHaveCount(0);
 });
 
-test('Cmd+J toggles the bottom shell drawer', async ({ page }) => {
+test('command palette toggles the bottom shell drawer', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('region-drawer')).toHaveCount(0);
 
-  await page.keyboard.press('Meta+j');
+  const openPalette = () =>
+    page.getByRole('button', { name: 'Search agents, projects, nodes, and commands' }).click();
+  await openPalette();
+  await page.getByRole('option', { name: /toggle shell drawer/i }).click();
   await expect(page.getByTestId('region-drawer')).toBeVisible();
 
-  await page.keyboard.press('Meta+j');
+  await openPalette();
+  await page.getByRole('option', { name: /toggle shell drawer/i }).click();
   await expect(page.getByTestId('region-drawer')).toHaveCount(0);
 });

@@ -19,6 +19,9 @@ New here? Read in this order:
    (services, TLS, secrets, per-session browsers, verifying a deploy).
 5. **[Releasing](releasing.md)** — public-repository setup, versioning, GHCR
    publication, verification, and operational follow-through.
+6. **[Backup and recovery](backup-and-recovery.md)** and
+   **[Operations and diagnostics](operations-and-diagnostics.md)** — verified vaults,
+   health semantics, support bundles, and runtime bounds.
 
 ## Reference
 
@@ -29,6 +32,9 @@ New here? Read in this order:
 | [flock-agentd-design.md](flock-agentd-design.md)                 | Node daemon design + protocol rationale                                                                                                  |
 | [deployment.md](deployment.md)                                   | Docker Compose production deploy, TLS, secrets, ops                                                                                      |
 | [releasing.md](releasing.md)                                     | Release gates, GitHub/GHCR publication, verification, and public-repository checklist                                                    |
+| [backup-and-recovery.md](backup-and-recovery.md)                 | Encrypted vault creation, verification, isolated restore, rollback, and drills                                                           |
+| [operations-and-diagnostics.md](operations-and-diagnostics.md)   | Health/readiness, owner diagnostics, redaction, and support bundle                                                                       |
+| [operations-memory-bounds.md](operations-memory-bounds.md)       | Required bounds and cleanup policy for every process-lifetime collection                                                                 |
 | [design-tokens.md](design-tokens.md)                             | The web UI design system — color, type, spacing tokens                                                                                   |
 | [premium-single-user-roadmap.md](premium-single-user-roadmap.md) | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
 | [decisions/](decisions/)                                         | Architecture Decision Records (e.g. terminal renderer, browser-driving)                                                                  |
@@ -40,14 +46,9 @@ Security boundary decisions:
 
 ## Background / historical
 
-These capture original intent and the build history — useful for context, not required
-to run or extend Flock:
-
-- **[`../PRD.md`](../PRD.md)** — the product requirements doc (original vision; some
-  names predate the code, e.g. "Conductor" → Flock, "cockpit" → the web dashboard).
-- **[specs/](specs/)** — the original TDD task breakdown the build followed.
-- **[elite-readiness-plan.md](elite-readiness-plan.md)** — the hardening plan executed
-  to bring the platform to production quality.
+Historical drafts and build ledgers are catalogued in
+**[archive/README.md](archive/README.md)**. They are deliberately excluded from the
+authoritative reading path.
 
 > **A note on terminology.** The codebase is **Flock**; the web dashboard's internal
 > name is the **paddock**. Older docs may say "Conductor" or "cockpit" — same thing.

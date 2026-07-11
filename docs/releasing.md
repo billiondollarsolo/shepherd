@@ -67,6 +67,10 @@ docker build -f docker/Dockerfile.web -t flock-web:test .
 docker build -f docker/Dockerfile.session-chrome -t flock-session-chrome:test .
 ```
 
+Before a destructive migration or upgrade, create and verify a vault using
+[backup-and-recovery.md](backup-and-recovery.md). A release candidate is not ready if
+the current vault cannot restore into an isolated database with the matching master key.
+
 ## Publish
 
 1. Merge the prepared release commit to `main` and wait for CI and CodeQL.
@@ -96,13 +100,14 @@ docker pull ghcr.io/billiondollarsolo/flock-session-chrome:<version>
 Confirm that anonymous pulls work, both amd64 and arm64 manifests exist, provenance
 is visible, release notes match `CHANGELOG.md`, and a clean-host Compose deployment
 can complete first-run setup, launch an agent, reconnect its terminal, and start a
-browser pane.
+browser pane. The workflow attaches `agent-versions.txt` and a redacted candidate
+diagnostics snapshot to the GitHub Release. The orchestrator image also contains
+`/usr/share/flock/agent-versions.txt`; Settings → Operations reports the exact tools in
+the running installation, including a first-start Claude installation or a user override.
 
-## Operations to plan before wider adoption
+## Ongoing release operations
 
-- Document and test backup/restore for Postgres, runtime secrets, the master key,
-  Caddy data, and local workspaces.
-- Define upgrade and rollback procedures, including database migration compatibility.
+- Run the documented vault/restore drill and retain the prior verified rollback.
 - Publish a support policy and compatibility matrix for Docker, browsers, host
   architectures, agent CLIs, and remote-node operating systems.
 - Establish an incident-response path and a regular dependency/base-image update

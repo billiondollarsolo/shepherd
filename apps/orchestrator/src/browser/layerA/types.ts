@@ -67,6 +67,8 @@ export interface CreateContainerOptions {
     NanoCpus?: number;
     /** T15(c) — max PIDs in the container (fork-bomb guard; Docker `PidsLimit`). */
     PidsLimit?: number;
+    /** Dedicated internal network used by the constrained browser worker. */
+    NetworkMode?: string;
   };
 }
 
@@ -102,6 +104,8 @@ export interface LayerAConfig {
   readonly memoryBytes: number;
   readonly nanoCpus: number;
   readonly pidsLimit: number;
+  /** When set, connect by container DNS on this network instead of publishing a host port. */
+  readonly networkName?: string;
 }
 
 export const DEFAULT_LAYER_A_CONFIG: LayerAConfig = {

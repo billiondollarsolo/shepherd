@@ -13,6 +13,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { readFileSync } from 'node:fs';
 
 import { schema } from './schema.js';
 
@@ -32,12 +33,20 @@ export interface DbHandle {
  */
 export function getDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   const url = env.DATABASE_URL;
-  if (!url || url.trim() === '') {
-    throw new Error(
-      'DATABASE_URL is not set. Expected the compose postgres service connection string.',
-    );
+  if (url?.trim()) return url;
+  const passwordFile = env.POSTGRES_PASSWORD_FILE;
+  if (passwordFile) {
+    const username = env.POSTGRES_USER ?? 'flock';
+    const database = env.POSTGRES_DB ?? 'flock';
+    const host = env.POSTGRES_HOST ?? 'postgres';
+    const port = env.POSTGRES_PORT ?? '5432';
+    const password = readFileSync(passwordFile, 'utf8').trim();
+    if (!password) throw new Error('POSTGRES_PASSWORD_FILE is empty');
+    return `postgres://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
   }
-  return url;
+  throw new Error(
+    'DATABASE_URL is not set and POSTGRES_PASSWORD_FILE is unavailable. Expected the compose postgres configuration.',
+  );
 }
 
 /**

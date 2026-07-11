@@ -1,5 +1,8 @@
 # Flock — Elite Readiness Plan
 
+> **HISTORICAL.** This draft predates the current implementation and is retained only
+> as design archaeology. Use `docs/README.md` for authoritative behavior.
+
 > Status: **DRAFT for review.** Generated 2026-06-03 from a 4-dimension audit
 > (security, agent capabilities, production readiness, reliability). Nothing here
 > is implemented yet. Review, adjust priorities/scope, then we execute task by task.

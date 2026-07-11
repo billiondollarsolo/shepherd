@@ -15,6 +15,7 @@
  * mapped.
  */
 import type { AgentType, PlanItem, PlanItemStatus } from '@flock/shared';
+import { BoundedTtlMap } from '../runtime/bounded-ttl-map.js';
 
 /** The normalized plan snapshot stored in a `plan` event's `agent_event_raw`. */
 export interface ExtractedPlan {
@@ -22,7 +23,11 @@ export interface ExtractedPlan {
 }
 
 /** Per-session last-emitted plan (serialized), so identical plans aren't re-stored. */
-const lastPlanBySession = new Map<string, string>();
+const lastPlanBySession = new BoundedTtlMap<string, string>(5_000, 24 * 60 * 60 * 1_000);
+
+export function forgetPlan(sessionId: string): void {
+  lastPlanBySession.delete(sessionId);
+}
 
 /** The variable fields of a `plan` event (the caller adds `sessionId` + `source`). */
 export interface PlanEventFields {

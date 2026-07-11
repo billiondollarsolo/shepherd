@@ -3,6 +3,7 @@ import { STATUS_VALUES } from '@flock/shared';
 import {
   registerAuthRoutes,
   makeSurfaceAuthGuard,
+  makeRequireAuth,
   type AuthService,
   type AuthGuardDeps,
 } from './auth/index.js';
@@ -179,6 +180,8 @@ export interface BuildServerDeps {
    * and so it covers routes even before their owning service is supplied.
    */
   surfaceAuth?: AuthGuardDeps;
+  /** Authenticated, redacted operational health and bounded failure history. */
+  diagnostics?: () => Promise<unknown>;
 }
 
 /**
@@ -384,6 +387,21 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     if (deps.sessions) {
       registerSessionRestRoutes(app, { service: deps.sessions, auth: deps.auth });
     }
+  }
+
+  const diagnosticsAuth = deps.surfaceAuth ?? deps.auth;
+  if (deps.diagnostics && diagnosticsAuth) {
+    const diagnostics = deps.diagnostics;
+    const requireAuth = makeRequireAuth(diagnosticsAuth);
+    app.get('/api/diagnostics', { preHandler: requireAuth }, async () => diagnostics());
+    app.get('/api/diagnostics/bundle', { preHandler: requireAuth }, async (_req, reply) => {
+      reply.header('content-type', 'application/json; charset=utf-8');
+      reply.header(
+        'content-disposition',
+        `attachment; filename="flock-diagnostics-${new Date().toISOString().replaceAll(':', '-')}.json"`,
+      );
+      return diagnostics();
+    });
   }
 
   // flock-agentd connection health (cookie-authed via the surface guard).

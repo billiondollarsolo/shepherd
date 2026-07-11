@@ -41,6 +41,7 @@ import {
 } from './sessions/pty-ws/pty-session-registry.js';
 import { PtyWsServer } from './sessions/pty-ws/pty-ws-server.js';
 import type { NodeConnectionManager } from './nodes/node-connection-manager.js';
+import type { DiagnosticSink } from './runtime/diagnostics.js';
 
 /**
  * Turn an agent's RAW hook telemetry into the COMPUTED {@link AgentTelemetry}
@@ -96,6 +97,8 @@ export interface LiveChannels {
   hydrate(): Promise<void>;
   /** Append an event to the write-behind log (e.g. reconcile resync events). */
   enqueueEvent(record: EventRecord): void;
+  /** Low-cardinality collection sizes for support diagnostics. */
+  diagnosticSizes(): Record<string, number>;
   /** Attach the status + pty WS servers to the HTTP server (after listen). */
   attach(server: HttpServer): void;
   dispose(): Promise<void>;
@@ -124,6 +127,7 @@ export interface LiveChannelsDeps {
     base: { nodeId: string; workingDir: string },
     isShell: boolean,
   ) => Promise<PtySessionBinding | null>;
+  diagnostics?: DiagnosticSink;
 }
 
 export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
@@ -136,6 +140,13 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
   const events = new WriteBehindEventQueue({
     writer: createDrizzleEventWriter(db),
     retryBackoffMs: 250,
+    onDrop: () => deps.diagnostics?.increment('events.dropped'),
+    onError: (_record, error) =>
+      deps.diagnostics?.record({
+        category: 'events',
+        operation: 'persist',
+        message: error,
+      }),
   });
   // Write-behind: (1) append the transition to the event log, AND (2) mirror the
   // new status onto agent_sessions.status so the REST API + the F3 boot-rehydrate
@@ -159,8 +170,13 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
             lastStatusAt: new Date(),
           })
           .where(eq(agentSessions.id, sessionId)),
-      ).catch(() => {
-        /* mirror is best-effort; a failed write never affects the live path */
+      ).catch((error) => {
+        deps.diagnostics?.record({
+          category: 'status',
+          operation: 'mirror',
+          message: error,
+          context: { sessionId },
+        });
       });
     },
   });
@@ -177,6 +193,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
     // The column is constrained to STATUS_VALUES; drizzle widens it to string.
     return rows.map((r) => ({ id: r.id, status: r.status as Status }));
   }).catch((err) => {
+    deps.diagnostics?.record({ category: 'status', operation: 'rehydrate', message: err });
     console.warn(`[live-channels] status rehydrate failed: ${String(err)}`);
   });
 
@@ -308,6 +325,12 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
     statusMap,
     hookService,
     enqueueEvent: (record) => events.enqueue(record),
+    diagnosticSizes: () => ({
+      liveSessions: live.size,
+      statusEntries: Object.keys(statusMap.snapshot()).length,
+      ptyFallbacks: fallbacks.size,
+      pendingEvents: events.pending,
+    }),
     trackSession(session) {
       live.set(session.id, session);
       // Seed the status map so the sidebar shows the session immediately. Agents
@@ -351,8 +374,12 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
             detail: r.detail ?? null,
           });
         }
-      } catch {
-        /* best-effort; fall back to the record's create-time status below */
+      } catch (error) {
+        deps.diagnostics?.record({
+          category: 'status',
+          operation: 'hydrate-latest',
+          message: error,
+        });
       }
       for (const row of rows) {
         if (row.closedAt) continue;
@@ -408,7 +435,14 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
             ws.on('close', () => statusChannel.remove(ws));
             ws.on('error', () => statusChannel.remove(ws));
           });
-        })();
+        })().catch((error) => {
+          deps.diagnostics?.record({
+            category: 'websocket',
+            operation: 'status-upgrade',
+            message: error,
+          });
+          socket.destroy();
+        });
       });
     },
     async dispose() {

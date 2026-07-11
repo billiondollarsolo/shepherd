@@ -17,6 +17,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   'notifications',
   'nodes',
   'account',
+  'operations',
   'about',
 ];
 

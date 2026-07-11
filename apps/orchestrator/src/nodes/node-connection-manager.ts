@@ -92,7 +92,13 @@ export class NodeConnectionManager {
    */
   async connectAll(): Promise<void> {
     const rows = await this.db.select().from(nodes).where(eq(nodes.kind, 'ssh'));
-    await Promise.all(rows.map((r) => this.connectNode(r.id).catch(() => undefined)));
+    await Promise.all(
+      rows.map((row) =>
+        this.connectNode(row.id).catch((error) => {
+          this.logger.warn(`SSH boot connect failed for node ${row.id}`, error);
+        }),
+      ),
+    );
   }
 
   /**
@@ -197,8 +203,8 @@ export class NodeConnectionManager {
       void this.persistStatus(nodeId, status);
       try {
         this.onConnectivityChange?.(nodeId, status, prevStatus);
-      } catch {
-        /* connectivity observers are best-effort */
+      } catch (error) {
+        this.logger.warn(`connectivity observer failed for node ${nodeId}`, error);
       }
       prevStatus = status;
     });
@@ -244,8 +250,8 @@ export class NodeConnectionManager {
     if (!this.ssh.get(nodeId)) {
       try {
         await this.connectNode(nodeId);
-      } catch {
-        /* keep polling — the supervisor may still bring it up */
+      } catch (error) {
+        this.logger.warn(`initial SSH wait failed for node ${nodeId}; supervisor continues`, error);
       }
     }
     const deadline = Date.now() + timeoutMs;
@@ -293,9 +299,17 @@ export class NodeConnectionManager {
 
   /** Dispose every managed connection (shutdown). */
   async disposeAll(): Promise<void> {
-    await Promise.all([...this.ssh.values()].map((c) => c.dispose().catch(() => undefined)));
+    await Promise.all(
+      [...this.ssh.entries()].map(([nodeId, connection]) =>
+        connection
+          .dispose()
+          .catch((error) => this.logger.warn(`SSH dispose failed for node ${nodeId}`, error)),
+      ),
+    );
     this.ssh.clear();
-    await this.local.dispose().catch(() => undefined);
+    await this.local
+      .dispose()
+      .catch((error) => this.logger.warn('local transport dispose failed', error));
   }
 
   private async persistStatus(nodeId: string, status: ConnectionStatus): Promise<void> {

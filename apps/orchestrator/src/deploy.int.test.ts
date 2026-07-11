@@ -5,8 +5,8 @@
  * the US-38 acceptance criteria and the mapped NFRs:
  *
  *   - `docker compose up` brings up orchestrator + Postgres                (US-38)
- *   - per-session browser containers are managed DYNAMICALLY, i.e. they are
- *     NOT declared as compose services and the Docker socket is mounted      (NFR-DEP1)
+ *   - per-session browsers are managed by a constrained worker that alone
+ *     receives the Docker socket                                             (NFR-DEP1)
  *   - secrets via env / secret files, not baked into images                 (NFR-DEP2)
  *
  * These are structural assertions over the deploy artifacts (no live Docker
@@ -26,6 +26,7 @@ const repoRoot = resolve(here, '..', '..', '..');
 const composePath = resolve(repoRoot, 'docker-compose.yml');
 const orchDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.orchestrator');
 const orchEntrypoint = resolve(repoRoot, 'docker', 'orchestrator-entrypoint.sh');
+const browserWorkerEntrypoint = resolve(repoRoot, 'docker', 'browser-worker-entrypoint.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
 const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
@@ -51,6 +52,18 @@ function extractTopLevelBlock(yaml: string, key: string): string {
     body.push(line);
   }
   return body.join('\n');
+}
+
+function extractServiceBlock(yaml: string, service: string): string {
+  const services = extractTopLevelBlock(yaml, 'services').split('\n');
+  const start = services.findIndex((line) => line === `  ${service}:`);
+  if (start < 0) return '';
+  const result: string[] = [];
+  for (let i = start + 1; i < services.length; i++) {
+    if (/^ {2}[a-z0-9_-]+:\s*$/.test(services[i]!)) break;
+    result.push(services[i]!);
+  }
+  return result.join('\n');
 }
 
 describe('US-38: production deploy artifacts exist', () => {
@@ -83,6 +96,10 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
     expect(compose).toMatch(/^\s{2}web:/m);
   });
 
+  it('declares the constrained browser worker', () => {
+    expect(compose).toMatch(/^\s{2}browser-worker:/m);
+  });
+
   it('orchestrator depends on postgres being healthy', () => {
     // depends_on with a health condition keeps Postgres off the boot race.
     expect(compose).toMatch(/depends_on:[\s\S]*postgres:[\s\S]*condition:\s*service_healthy/);
@@ -97,15 +114,11 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
   });
 });
 
-describe('NFR-DEP1: per-session browser containers managed dynamically', () => {
+describe('NFR-DEP1: Docker access is isolated behind the browser worker', () => {
   const compose = read(composePath);
 
   it('does NOT declare any static per-session browser/chrome service', () => {
-    // Per-session browser containers are launched at runtime via dockerode,
-    // never declared as compose services (NFR-DEP1). The core services are
-    // orchestrator + postgres + web; US-39 adds a `caddy` TLS proxy in front
-    // (NFR-SEC1). What matters here is that NO static browser/chrome service is
-    // declared and the known infra services are exactly the core trio + caddy.
+    // browser-worker is infrastructure, not a per-session Chrome service.
     // Scope the scan to the `services:` block so top-level volumes/networks/
     // secrets keys are not mistaken for services.
     const servicesBlock = extractTopLevelBlock(compose, 'services');
@@ -115,18 +128,30 @@ describe('NFR-DEP1: per-session browser containers managed dynamically', () => {
     );
     expect(serviceNames).toEqual(expect.arrayContaining(['orchestrator', 'postgres', 'web']));
     // No per-session browser/chrome service is statically declared.
-    expect(servicesBlock).not.toMatch(/^\s{2}(browser|chrome|chromium)[a-z0-9_-]*:/m);
-    // The only services are the core trio plus the US-39 Caddy TLS proxy — a
-    // rogue extra service would still fail this.
-    expect(serviceNames.sort()).toEqual(['caddy', 'orchestrator', 'postgres', 'web']);
+    expect(servicesBlock).not.toMatch(/^\s{2}(chrome|chromium)[a-z0-9_-]*:/m);
+    expect(serviceNames.sort()).toEqual([
+      'browser-worker',
+      'caddy',
+      'orchestrator',
+      'postgres',
+      'web',
+    ]);
   });
 
-  it('mounts the Docker socket into the orchestrator for dockerode', () => {
-    // The socket is bind-mounted to the container target /var/run/docker.sock.
-    // The host side may be parameterised (e.g.
-    // `${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock`), so assert
-    // on the mount TARGET rather than a literal host:container string.
-    expect(compose).toMatch(/:\s*\/var\/run\/docker\.sock\b/);
+  it('mounts the Docker socket only into browser-worker', () => {
+    expect(extractServiceBlock(compose, 'orchestrator')).not.toMatch(/\/var\/run\/docker\.sock/);
+    expect(extractServiceBlock(compose, 'browser-worker')).toMatch(
+      /:\s*\/var\/run\/docker\.sock\b/,
+    );
+    expect(compose.match(/^\s*-\s+.*:\/var\/run\/docker\.sock\b/gm)).toHaveLength(1);
+  });
+
+  it('uses a separate OS identity and token-authenticated fixed worker API', () => {
+    const entry = read(browserWorkerEntrypoint);
+    expect(entry).toMatch(/WORKER_USER=flock-browser/);
+    expect(entry).toMatch(/BROWSER_WORKER_TOKEN_FILE/);
+    expect(entry).toMatch(/dist\/browser\/worker\.js/);
+    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/BROWSER_WORKER_URL/);
   });
 
   it('configures a browser image + concurrency cap for runtime launches', () => {
@@ -145,6 +170,9 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
     expect(compose).toMatch(/^secrets:/m);
     expect(compose).toMatch(/flock_master_key:[\s\S]*file:\s*\.\/secrets\/flock_master_key/);
     expect(compose).toMatch(/postgres_password:[\s\S]*file:\s*\.\/secrets\/postgres_password/);
+    expect(compose).toMatch(
+      /browser_worker_token:[\s\S]*file:\s*\.\/secrets\/browser_worker_token/,
+    );
   });
 
   it('supplies the master key + db creds at runtime via env/secret', () => {

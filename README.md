@@ -160,8 +160,9 @@ it. See [`docs/deployment.md`](docs/deployment.md) for the full guide; the short
 cp .env.example .env && $EDITOR .env          # set public URL, allowed origins + domain
 
 # Required: Compose mounts these as Docker secrets (up fails if they are missing)
-mkdir -p secrets
+mkdir -p secrets backups
 openssl rand -base64 32 > secrets/flock_master_key
+openssl rand -base64 48 > secrets/browser_worker_token
 printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
@@ -174,7 +175,8 @@ docker compose logs -f orchestrator
 ```
 
 Caddy terminates TLS on `443` (`80` redirects), migrations run automatically on boot,
-and per-session browser containers are launched on demand. Open `https://<host>`
+and per-session browser containers are launched on demand by a least-privilege browser
+worker; the orchestrator and coding agents never receive the raw Docker socket. Open `https://<host>`
 (or `https://localhost`) and
 complete admin setup.
 
@@ -264,8 +266,9 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 - Node transport is SSH; the agentd control channel adds a shared secret on top, stored
   in a `0600` file and stripped from spawned agents' environments.
 - Secrets and SSH keys live outside the repo and outside image layers (runtime only).
-- Enabling browser containers grants the orchestrator access to the Docker socket;
-  treat Flock administrators as trusted operators of the Docker host and configured nodes.
+- Browser containers are managed by a token-authenticated worker that is the only
+  Flock service with Docker-socket access. Its API fixes image, network, command, and
+  resource policy; the orchestrator and coding agents never receive the socket.
 
 Please report vulnerabilities through [private vulnerability reporting](SECURITY.md),
 not public issues.

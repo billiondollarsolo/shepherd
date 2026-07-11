@@ -211,6 +211,7 @@ jobs:
           mkdir -p secrets
           openssl rand -base64 32 > secrets/flock_master_key
           openssl rand -base64 32 > secrets/postgres_password
+          openssl rand -base64 48 > secrets/browser_worker_token
 
       - name: Pull exact candidates
         run: |
@@ -222,7 +223,7 @@ jobs:
         env:
           FLOCK_VERSION: ${{ env.CANDIDATE_TAG }}
           BROWSER_IMAGE: ${{ env.FLOCK_IMAGE_REGISTRY }}/flock-session-chrome:${{ env.CANDIDATE_TAG }}
-        run: docker compose up -d --no-build --wait postgres orchestrator web caddy
+        run: docker compose up -d --no-build --wait postgres browser-worker orchestrator web caddy
 
       - name: Verify migrations, readiness, setup, login, and API
         run: |
@@ -244,8 +245,30 @@ jobs:
           curl --fail --silent --show-error --insecure https://localhost:18443/ \
             | grep -q '<div id="root">'
           docker compose exec -T orchestrator flock-agentd version | tee -a release-smoke.log
-          docker compose exec -T orchestrator codex --version | tee -a release-smoke.log
-          docker compose exec -T orchestrator opencode --version | tee -a release-smoke.log
+          {
+            docker compose exec -T orchestrator codex --version
+            docker compose exec -T orchestrator opencode --version
+            docker compose exec -T orchestrator sh -lc 'claude --version 2>/dev/null || echo "claude: runtime installer disabled in candidate smoke"'
+          } | tee agent-versions.txt | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure -b release-cookies.txt \
+            https://localhost:18443/api/diagnostics | tee release-diagnostics.json
+
+      - name: Verify constrained browser worker policy and lifecycle
+        run: |
+          set -eu
+          test "$(docker compose exec -T browser-worker sh -lc \
+            "curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/containers/create")" = 401
+          docker compose exec -T browser-worker sh -lc '
+            token="$(cat /run/secrets/browser_worker_token)"
+            id=11111111-1111-4111-8111-111111111111
+            test "$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $token" \
+              -H "Content-Type: application/json" -d "{\"sessionId\":\"$id\",\"privileged\":true}" \
+              http://127.0.0.1:8090/v1/browsers)" = 400
+            curl --fail --silent -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+              -d "{\"sessionId\":\"$id\"}" http://127.0.0.1:8090/v1/browsers
+            curl --fail --silent -X DELETE -H "Authorization: Bearer $token" \
+              "http://127.0.0.1:8090/v1/browsers/$id"
+          ' | tee -a release-smoke.log
 
       - name: Collect candidate diagnostics
         if: always()
@@ -259,6 +282,8 @@ jobs:
           path: |
             release-smoke.log
             release-containers.log
+            release-diagnostics.json
+            agent-versions.txt
           if-no-files-found: warn
           retention-days: 90
 
@@ -282,6 +307,12 @@ jobs:
           path: digests
           merge-multiple: true
 
+      - name: Download tested agent versions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-smoke
+          path: release-smoke
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -298,17 +329,24 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           set -eu
+          # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
           for image in flock-orchestrator flock-web flock-session-chrome; do
             digest="$(cat "digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
+            annotations=''
+            if [ "$image" = flock-orchestrator ]; then
+              codex_version="$(sed -n '1s/.* //p' release-smoke/agent-versions.txt)"
+              opencode_version="$(sed -n '2s/.* //p' release-smoke/agent-versions.txt)"
+              annotations="--annotation index:io.flock.agent.codex-version=$codex_version --annotation index:io.flock.agent.opencode-version=$opencode_version"
+            fi
             if ! printf '%s' "$version" | grep -q -- '-'; then
               tags="$tags --tag $REGISTRY/$image:$major_minor --tag $REGISTRY/$image:latest"
             fi
             # shellcheck disable=SC2086
-            docker buildx imagetools create $tags "$source"
+            docker buildx imagetools create $tags $annotations "$source"
             manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"
             printf '%s\n' "$manifest" | grep -q 'linux/amd64'
             printf '%s\n' "$manifest" | grep -q 'linux/arm64'
@@ -325,6 +363,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download tested agent versions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-smoke
+          path: release-smoke
+
       - name: Create release only after image verification
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -333,4 +377,11 @@ jobs:
           prerelease=''
           if printf '%s' "$TAG" | grep -q -- '-'; then prerelease='--prerelease'; fi
           # shellcheck disable=SC2086
-          gh release create "$TAG" --verify-tag --generate-notes --title "Flock ${TAG#v}" $prerelease
+          {
+            printf '## Tested coding-agent versions\n\n```text\n'
+            cat release-smoke/agent-versions.txt
+            printf '```\n\nClaude Code is installed from the latest channel at first start and its exact running version is shown in Settings → Operations.\n'
+          } > release-tool-versions.md
+          # shellcheck disable=SC2086
+          gh release create "$TAG" --verify-tag --generate-notes --notes-file release-tool-versions.md --title "Flock ${TAG#v}" $prerelease
+          gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt

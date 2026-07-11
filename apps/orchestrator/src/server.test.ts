@@ -91,3 +91,35 @@ describe('orchestrator readiness route (T15)', () => {
     await app.close();
   });
 });
+
+describe('authenticated diagnostics bundle', () => {
+  const user = {
+    id: '11111111-1111-4111-8111-111111111111',
+    username: 'owner',
+    createdAt: new Date(0).toISOString(),
+    lastLoginAt: null,
+    isActive: true,
+  } as never;
+
+  it('rejects anonymous requests and downloads the redacted snapshot for the owner', async () => {
+    const app = buildServer({
+      surfaceAuth: { getUserBySession: async (id) => (id === 'valid' ? user : null) },
+      diagnostics: async () => ({
+        bundleVersion: 1,
+        privacy: { excluded: 'tokens and PTY content' },
+      }),
+    });
+    try {
+      expect((await app.inject('/api/diagnostics')).statusCode).toBe(401);
+      const response = await app.inject({
+        url: '/api/diagnostics/bundle',
+        headers: { cookie: 'flock_session=valid' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-disposition']).toContain('flock-diagnostics-');
+      expect(response.json().bundleVersion).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+});

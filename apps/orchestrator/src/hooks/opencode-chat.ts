@@ -14,10 +14,23 @@
  * State is per Flock session id; call forget() when the session ends. Reasoning /
  * step-* parts are ignored (not conversation).
  */
+import { BoundedTtlMap } from '../runtime/bounded-ttl-map.js';
 
 export interface AssembledChat {
   role: string; // user | assistant
   text: string;
+}
+
+const MAX_SESSIONS = 5_000;
+const MAX_MESSAGES_PER_SESSION = 2_000;
+const MAX_PARTS_PER_SESSION = 4_000;
+
+function trimOldest<K, V>(map: Map<K, V>, max: number): void {
+  while (map.size > max) {
+    const oldest = map.keys().next().value as K | undefined;
+    if (oldest === undefined) return;
+    map.delete(oldest);
+  }
 }
 
 interface SessionState {
@@ -28,13 +41,18 @@ interface SessionState {
 }
 
 export class OpenCodeChatAssembler {
-  private readonly sessions = new Map<string, SessionState>();
+  private readonly sessions = new BoundedTtlMap<string, SessionState>(
+    MAX_SESSIONS,
+    24 * 60 * 60 * 1_000,
+  );
 
   private state(id: string): SessionState {
     let s = this.sessions.get(id);
     if (!s) {
       s = { roles: new Map(), parts: new Map(), emitted: new Set(), seq: 0 };
       this.sessions.set(id, s);
+    } else {
+      this.sessions.touch(id);
     }
     return s;
   }
@@ -46,8 +64,10 @@ export class OpenCodeChatAssembler {
     const props = (e.properties ?? {}) as Record<string, unknown>;
     if (e.type === 'message.updated') {
       const info = props.info as { id?: string; role?: string } | undefined;
-      if (info?.id && typeof info.role === 'string')
+      if (info?.id && typeof info.role === 'string') {
         this.state(sessionId).roles.set(info.id, info.role);
+        trimOldest(this.state(sessionId).roles, MAX_MESSAGES_PER_SESSION);
+      }
     } else if (e.type === 'message.part.updated') {
       const part = props.part as
         | { id?: string; type?: string; text?: string; messageID?: string }
@@ -60,6 +80,10 @@ export class OpenCodeChatAssembler {
           text: part.text,
           seq: prev?.seq ?? st.seq++,
         });
+        trimOldest(st.parts, MAX_PARTS_PER_SESSION);
+        for (const emittedId of st.emitted) {
+          if (!st.parts.has(emittedId)) st.emitted.delete(emittedId);
+        }
       }
     }
   }

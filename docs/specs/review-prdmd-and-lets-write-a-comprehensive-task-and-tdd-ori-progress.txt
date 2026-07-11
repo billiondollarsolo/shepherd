@@ -1,3 +1,5 @@
+HISTORICAL BUILD LEDGER — NOT CURRENT PRODUCT STATUS; SEE docs/README.md
+
 FLOCK — IMPLEMENTATION PROGRESS
 Spec: docs/specs/review-prdmd-and-lets-write-a-comprehensive-task-and-tdd-ori.md
 Built by flock-build workflow (run wf_5ccd8de2-4d9, 51 agents). Gates RE-RUN FIRSTHAND by the operator 2026-05-29.

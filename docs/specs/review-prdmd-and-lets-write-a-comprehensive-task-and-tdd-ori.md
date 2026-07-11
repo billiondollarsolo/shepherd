@@ -1,5 +1,8 @@
 # Flock — Comprehensive TDD Build Plan & Specification
 
+> **HISTORICAL.** Generated build input; names, scope, and completion boxes are not
+> current product truth. Use `docs/README.md`.
+
 **Project:** Flock — a web cockpit for supervising a _flock_ of CLI coding agents
 **Derived from:** `PRD.md` (working name "Conductor"; renamed **Flock**)
 **Spec type:** Implementation spec + TDD-oriented, phased task plan

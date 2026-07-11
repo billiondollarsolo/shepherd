@@ -16,13 +16,16 @@ harness approach.
 Per the spec, **spikes US-0a/US-0b are optional and can be deferred; the v1
 defaults are safe.** v1 drives the browser via **native CDP
 (`chrome-remote-interface`) / MCP**, with **one chromium container per session**
-managed by the orchestrator (`dockerode`). The system chromium ships in the dev
+managed by a dedicated browser worker (`dockerode`). The orchestrator calls only a
+token-authenticated UUID-scoped launch/stop/reap API; the worker is the sole raw
+Docker-socket holder and fixes image, network, command, labels, and resource limits.
+The system chromium ships in the dev
 image (`CHROME_BIN=/usr/bin/chromium`).
 
 ## Consequences
 
-- `chrome-remote-interface` and `dockerode` are declared deps of
-  `apps/orchestrator`.
+- `chrome-remote-interface` and `dockerode` are declared dependencies of the shared
+  orchestrator image, but only the worker entrypoint joins the Docker socket group.
 - Per-session browser isolation: one container per session, on the orchestrator
   VPS, exposed to the node-side agent over a loopback-bound reverse tunnel.
 - The browser CDP endpoint is threaded by the single authoritative `session_id`

@@ -40,7 +40,13 @@ export interface ActiveRace {
 }
 
 /** A settings page section (inner-sidebar item). Extend as settings grow. */
-export type SettingsSection = 'appearance' | 'notifications' | 'nodes' | 'account' | 'about';
+export type SettingsSection =
+  | 'appearance'
+  | 'notifications'
+  | 'nodes'
+  | 'account'
+  | 'operations'
+  | 'about';
 
 /** Which view the right-hand session panel shows (Codex-style side panel). */
 export type RightTab = 'chat' | 'activity' | 'browser' | 'diff' | 'files' | 'search' | 'notes';

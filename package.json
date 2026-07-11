@@ -57,7 +57,8 @@
     "quality:duplicates": "node scripts/check-duplicates.mjs",
     "quality:bundle": "node scripts/check-bundle-budget.mjs",
     "quality:performance": "tsx scripts/benchmark-runtime.ts --output=artifacts/performance/runtime-benchmarks.json",
-    "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates && pnpm quality:bundle && pnpm quality:performance"
+    "quality:docs": "node scripts/check-docs.mjs",
+    "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates && pnpm quality:bundle && pnpm quality:performance && pnpm quality:docs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
