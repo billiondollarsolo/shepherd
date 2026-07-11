@@ -11,6 +11,7 @@
  * token hash, and the browser CDP endpoint into ONE record.
  */
 import type {
+  AgentAuthority,
   AgentType,
   AuditAction,
   AuditEntry,
@@ -20,6 +21,7 @@ import type {
   SessionPermissionMode,
   Status,
 } from '@flock/shared';
+import { DEFAULT_PROJECT_AGENT_POLICY, ProjectAgentPolicySchema } from '@flock/shared';
 
 import type {
   AgentSessionRow,
@@ -58,6 +60,7 @@ export function rowToSession(row: AgentSessionRow): SessionRecord {
     note: row.note ?? null,
     reviewedAt: toIsoOrNull(row.reviewedAt),
     permissionMode: (row.permissionMode ?? 'default') as SessionPermissionMode,
+    orchestrationAuthority: (row.orchestrationAuthority ?? 'callback_only') as AgentAuthority,
     createdAt: toIso(row.createdAt),
     lastStatusAt: toIso(row.lastStatusAt),
     createdBy: row.createdBy,
@@ -84,6 +87,7 @@ export function sessionToRow(session: SessionRecord): NewAgentSessionRow {
     pinned: session.pinned ?? false,
     note: session.note ?? null,
     permissionMode: session.permissionMode ?? 'default',
+    orchestrationAuthority: session.orchestrationAuthority ?? 'callback_only',
     createdAt: new Date(session.createdAt),
     lastStatusAt: new Date(session.lastStatusAt),
     createdBy: session.createdBy,
@@ -117,6 +121,7 @@ export function rowToProject(row: ProjectRow): SharedProject {
     nodeId: row.nodeId,
     name: row.name,
     workingDir: row.workingDir,
+    agentPolicy: ProjectAgentPolicySchema.parse(row.agentPolicy ?? DEFAULT_PROJECT_AGENT_POLICY),
     createdAt: toIso(row.createdAt),
   };
 }

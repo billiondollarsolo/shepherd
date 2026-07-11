@@ -1,6 +1,6 @@
 # Flock Elite Code and Agent Security Plan
 
-> **Status:** Draft for review
+> **Status:** Active implementation
 >
 > **Created:** 2026-07-11
 >
@@ -670,12 +670,12 @@ credential rejection, protocol mismatch, node failure, and ordinary reconnects.
 
 **Priority:** Critical
 
-**Implementation status:** In progress. Callback credentials no longer authorize
+**Implementation status:** Complete. Callback credentials no longer authorize
 orchestration. Optional orchestration credentials are separately generated, hashed,
 installation/session/project/expiry/revocation bound, default to absent, and enforce
 per-verb scopes. Agent/MCP wiring uses `FLOCK_ORCHESTRATE_TOKEN`; hook tokens fail the
-orchestration authorizer. Durable project policy and user-facing scope selection/
-visibility remain under S3.2.
+orchestration authorizer. Durable project policy and explicit user-facing authority
+selection/visibility are implemented under S3.2.
 
 **Why**
 
@@ -719,6 +719,15 @@ killing siblings.
 
 **Priority:** High
 
+**Implementation status:** Complete. Projects now persist validated default and
+maximum authority tiers plus concurrent-agent, spawn-rate, message-size, and output-read
+bounds. Sessions persist and publicly display their effective authority without token
+material. The server rejects overrides above policy, rechecks existing capabilities
+against policy changes, enforces all resource bounds when the UI is bypassed, audits
+policy changes/denials, and the UI separates coding-tool mode from Flock authority with
+explicit destructive confirmation. Unit, PostgreSQL API-bypass integration, and
+Playwright callback-only/manage creation tests pass.
+
 **Why**
 
 Capability scope must be durable and server-owned; otherwise UI defaults or agent
@@ -751,10 +760,14 @@ arguments become the accidental authorization policy.
 
 **Priority:** High
 
-**Implementation status:** In progress. Secure sessions inherit only locale/display
-settings; identity fields are forced, control-plane/database/Docker/socket/loader
-variables are denied even when explicitly supplied, and root-boundary tests assert
-absence. Typed provider credential grants and per-session temporary directories remain.
+**Implementation status:** Complete. Secure sessions inherit only locale/display
+settings; identity fields are forced; control-plane/database/Docker/socket/loader
+variables are denied even when explicitly supplied. Known provider credentials are
+typed grants restricted to compatible tools. Hook commands read tokens at execution
+instead of embedding literals. PTY and ACP sessions receive private mode-0700 temporary
+directories with deterministic cleanup. Environment policy, race, and root-boundary
+tests assert these properties; `docs/security/agent-environment.md` documents the exact
+blast radius.
 
 **Why**
 

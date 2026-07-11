@@ -12,7 +12,15 @@ import {
 } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { HardDrive, FolderGit2, Bot, FolderOpen, TriangleAlert } from 'lucide-react';
-import type { AgentType, NodeKind, SessionPermissionMode, SshAuthMethod } from '@flock/shared';
+import {
+  AgentAuthorityEnum,
+  authorityAllows,
+  type AgentAuthority,
+  type AgentType,
+  type NodeKind,
+  type SessionPermissionMode,
+  type SshAuthMethod,
+} from '@flock/shared';
 import {
   Button,
   Dialog,
@@ -66,6 +74,22 @@ const AGENT_LABELS: Record<AgentType, string> = {
   generic: 'Generic (OSC/PTY)',
   terminal: 'Terminal (plain shell)',
   dev: 'Dev server (auto-restart)',
+};
+
+const AUTHORITY_LABELS: Record<AgentAuthority, string> = {
+  callback_only: 'Independent — callback only',
+  observe: 'Observe — list and read agents',
+  collaborate: 'Collaborate — observe and send',
+  delegate: 'Delegate — collaborate and spawn',
+  manage: 'Manage — delegate and terminate',
+};
+
+const AUTHORITY_HINTS: Record<AgentAuthority, string> = {
+  callback_only: 'This agent reports its own status but cannot inspect or control other agents.',
+  observe: 'Can list agents in this project and read their recent output.',
+  collaborate: 'Can also send tasks and replies to agents in this project.',
+  delegate: 'Can also start new agents within the project policy limits.',
+  manage: 'Can also terminate or restart agents. This is destructive authority.',
 };
 
 /**
@@ -606,6 +630,8 @@ function AddSessionDialog(): JSX.Element {
   );
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [permissionMode, setPermissionMode] = useState<SessionPermissionMode>('default');
+  const [authority, setAuthority] = useState<'project_default' | AgentAuthority>('project_default');
+  const [confirmedManage, setConfirmedManage] = useState(false);
   const [devCommand, setDevCommand] = useState('');
   const [presets, setPresets] = useState<LauncherPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
@@ -634,6 +660,21 @@ function AddSessionDialog(): JSX.Element {
   const isDev = agentType === 'dev';
 
   const project = projects.find((p) => p.id === projectId);
+  const effectiveAuthority: AgentAuthority =
+    authority === 'project_default'
+      ? (project?.agentPolicy?.defaultAuthority ?? 'callback_only')
+      : authority;
+
+  useEffect(() => {
+    if (
+      authority !== 'project_default' &&
+      project &&
+      !authorityAllows(project.agentPolicy?.maxAuthority ?? 'callback_only', authority)
+    ) {
+      setAuthority('project_default');
+    }
+    setConfirmedManage(false);
+  }, [project, authority]);
 
   // Grey out agents whose CLI isn't installed on this project's node (flock-agentd
   // detection, NodeInfo.agents) so you can't pick one that would fail at launch
@@ -673,6 +714,7 @@ function AddSessionDialog(): JSX.Element {
         ...(showMode && effectiveMode !== 'default' ? { permissionMode: effectiveMode } : {}),
         // Dev session: the supervised, auto-restarting command (sh -lc on the node).
         ...(isDev ? { devCommand: devCommand.trim() } : {}),
+        ...(authority === 'project_default' ? {} : { orchestrationAuthority: authority }),
       });
       // Open on stage (agents lens + terminal-first chrome).
       openAgent(session.id, session.projectId);
@@ -779,6 +821,51 @@ function AddSessionDialog(): JSX.Element {
           </Select>
         </Field>
       ) : null}
+      <Field
+        label="Flock authority"
+        htmlFor="sess-authority"
+        hint={AUTHORITY_HINTS[effectiveAuthority]}
+      >
+        <Select
+          value={authority}
+          onValueChange={(value) => {
+            setAuthority(value as 'project_default' | AgentAuthority);
+            setConfirmedManage(false);
+          }}
+        >
+          <SelectTrigger id="sess-authority">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="project_default">
+              Project default —{' '}
+              {AUTHORITY_LABELS[project?.agentPolicy?.defaultAuthority ?? 'callback_only']}
+            </SelectItem>
+            {AgentAuthorityEnum.options
+              .filter((candidate) =>
+                authorityAllows(project?.agentPolicy?.maxAuthority ?? 'callback_only', candidate),
+              )
+              .map((candidate) => (
+                <SelectItem key={candidate} value={candidate}>
+                  {AUTHORITY_LABELS[candidate]}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {effectiveAuthority === 'manage' ? (
+        <label className="flex items-start gap-2 rounded-lg border border-status-error/40 bg-status-error/10 p-3 text-xs text-flock-ink-primary">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={confirmedManage}
+            onChange={(event) => setConfirmedManage(event.target.checked)}
+          />
+          <span>
+            I understand this agent can terminate or restart other agents in this project.
+          </span>
+        </label>
+      ) : null}
       {isDev ? (
         <Field
           label="Command"
@@ -803,7 +890,11 @@ function AddSessionDialog(): JSX.Element {
         <Button
           type="submit"
           disabled={
-            busy || !projectId || !agentAvailable(agentType) || (isDev && !devCommand.trim())
+            busy ||
+            !projectId ||
+            !agentAvailable(agentType) ||
+            (isDev && !devCommand.trim()) ||
+            (effectiveAuthority === 'manage' && !confirmedManage)
           }
         >
           {busy ? 'Starting…' : 'Start session'}

@@ -8,12 +8,17 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import type { CreateSessionRequest } from '@flock/shared';
+import {
+  DEFAULT_PROJECT_AGENT_POLICY,
+  type CreateSessionRequest,
+  type ProjectAgentPolicy,
+} from '@flock/shared';
 
 import { AuditLogger } from '../audit/audit.js';
 import { nodes, projects } from '../db/schema.js';
 import {
   SessionProjectNotFoundError,
+  SessionPolicyViolationError,
   SessionRestService,
   type AgentdLaunchOutcome,
   type SessionRestServiceDeps,
@@ -83,12 +88,21 @@ function makeService(
     agentdLaunch?: SessionRestServiceDeps['agentdLaunch'];
     sessionEnv?: SessionRestServiceDeps['sessionEnv'];
     issueOrchestrationCapability?: SessionRestServiceDeps['issueOrchestrationCapability'];
+    projectPolicy?: ProjectAgentPolicy;
   } = {},
 ) {
   const nodeRows = [
     { id: NODE_ID, kind: opts.nodeKind ?? 'local', name: 'local', connectionStatus: 'connected' },
   ];
-  const projectRows = [{ id: PROJECT_ID, nodeId: NODE_ID, name: 'flock', workingDir: '/work' }];
+  const projectRows = [
+    {
+      id: PROJECT_ID,
+      nodeId: NODE_ID,
+      name: 'flock',
+      workingDir: '/work',
+      agentPolicy: opts.projectPolicy ?? DEFAULT_PROJECT_AGENT_POLICY,
+    },
+  ];
   const db = new FakeDb(nodeRows, projectRows);
   const service = new SessionRestService({
     db: db as never,
@@ -145,7 +159,7 @@ describe('SessionRestService.createSession', () => {
     expect(calls).toEqual([{ id: session.id, nodeKind: 'ssh' }]);
   });
 
-  it('defaults to callback-only and injects a distinct token only for requested scopes', async () => {
+  it('defaults to callback-only and injects a distinct token only for requested authority', async () => {
     const issued: string[][] = [];
     const envCalls: Array<{ hook: string; orchestration?: string }> = [];
     const { service } = makeService({
@@ -160,17 +174,31 @@ describe('SessionRestService.createSession', () => {
     });
     const callbackOnly = await service.createSession(REQ, { userId: USER_ID });
     const delegated = await service.createSession(
-      { ...REQ, orchestrationScopes: ['agents:list:project'] },
+      { ...REQ, orchestrationAuthority: 'observe' },
       { userId: USER_ID },
     );
 
-    expect(issued).toEqual([[], ['agents:list:project']]);
+    expect(issued).toEqual([[], ['agents:list:project', 'agents:read:project']]);
     expect(envCalls[0]).toEqual({ hook: callbackOnly.hookToken, orchestration: undefined });
     expect(envCalls[1]).toEqual({
       hook: delegated.hookToken,
       orchestration: 'separate-orchestration-token',
     });
     expect(envCalls[1]!.hook).not.toBe(envCalls[1]!.orchestration);
+    expect(delegated.session.orchestrationAuthority).toBe('observe');
+  });
+
+  it('rejects a session override above the durable project maximum', async () => {
+    const { service, db } = makeService({
+      projectPolicy: {
+        ...DEFAULT_PROJECT_AGENT_POLICY,
+        maxAuthority: 'collaborate',
+      },
+    });
+    await expect(
+      service.createSession({ ...REQ, orchestrationAuthority: 'manage' }, { userId: USER_ID }),
+    ).rejects.toBeInstanceOf(SessionPolicyViolationError);
+    expect(db.sessions).toHaveLength(0);
   });
 
   it('still persists the record when the agentd launch throws (no throw out)', async () => {

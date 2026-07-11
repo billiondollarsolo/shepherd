@@ -11,7 +11,7 @@
  * expiry, and revocation state.
  */
 import { and, count, eq, isNull, isNotNull } from 'drizzle-orm';
-import type { AgentCapabilityScope, Status } from '@flock/shared';
+import type { AgentCapabilityScope, ProjectAgentPolicy, Status } from '@flock/shared';
 
 import type { Database } from '../db/client.js';
 import { agentSessions } from '../db/schema.js';
@@ -38,6 +38,7 @@ export interface AuthorizedCaller {
   projectId: string;
   createdBy: string;
   scopes: AgentCapabilityScope[];
+  policy: ProjectAgentPolicy;
 }
 
 export const ORCHESTRATION_SCOPES = {
@@ -109,12 +110,12 @@ export class OrchestrationService {
       targetId: string,
       limit: number,
     ) => Promise<Array<{ role: string; text: string }>>,
-    /** Runaway guard: max OPEN agents per project (spawn rejects beyond this). */
-    private readonly maxPerProject = 12,
-    /** Anti-runaway: max spawns per project within `spawnRateWindowMs`. */
-    private readonly spawnRateLimit = 10,
     private readonly spawnRateWindowMs = 60_000,
     private readonly now: () => number = () => Date.now(),
+    private readonly auditDenied: (
+      callerId: string,
+      required: AgentCapabilityScope,
+    ) => void = () => {},
   ) {}
 
   /** Per-project recent spawn timestamps for the sliding-window rate limit. */
@@ -148,15 +149,15 @@ export class OrchestrationService {
   }
 
   /** Throw if the project exceeded its spawn rate, bounding delegated spawn authority. */
-  private checkSpawnRate(projectId: string): void {
+  private checkSpawnRate(projectId: string, limit: number): void {
     const now = this.now();
     this.pruneSpawnRates(now);
     const cutoff = now - this.spawnRateWindowMs;
     const recent = (this.spawnTimes.get(projectId) ?? []).filter((t) => t >= cutoff);
-    if (recent.length >= this.spawnRateLimit) {
+    if (recent.length >= limit) {
       throw new OrchestrationError(
         'rate_limited',
-        `spawn rate limit reached (${this.spawnRateLimit} per ${Math.round(this.spawnRateWindowMs / 1000)}s) for this project`,
+        `spawn rate limit reached (${limit} per ${Math.round(this.spawnRateWindowMs / 1000)}s) for this project`,
         recent[0]! + this.spawnRateWindowMs - now,
       );
     }
@@ -190,6 +191,7 @@ export class OrchestrationService {
     try {
       return await this.authorizeCapability(callerId, token, required);
     } catch {
+      this.auditDenied(callerId, required);
       throw new OrchestrationError('unauthorized', 'invalid session token');
     }
   }
@@ -247,7 +249,7 @@ export class OrchestrationService {
    *  caller typically then waits for it to be `idle`, sends it a task, and waits
    *  again for `idle`/`done`. */
   async spawn(callerId: string, token: string, agentType: string): Promise<{ id: string }> {
-    const { projectId, createdBy } = await this.authCaller(
+    const { projectId, createdBy, policy } = await this.authCaller(
       callerId,
       token,
       ORCHESTRATION_SCOPES.spawn,
@@ -255,15 +257,15 @@ export class OrchestrationService {
     if (!agentType || typeof agentType !== 'string') {
       throw new OrchestrationError('bad_request', 'agentType is required');
     }
-    this.checkSpawnRate(projectId);
+    this.checkSpawnRate(projectId, policy.spawnRateLimitPerMinute);
     const [row] = await this.db
       .select({ n: count() })
       .from(agentSessions)
       .where(and(eq(agentSessions.projectId, projectId), isNull(agentSessions.closedAt)));
-    if (Number(row?.n ?? 0) >= this.maxPerProject) {
+    if (Number(row?.n ?? 0) >= policy.maxConcurrentAgents) {
       throw new OrchestrationError(
         'bad_request',
-        `project is at the spawn cap (${this.maxPerProject} open agents)`,
+        `project is at the spawn cap (${policy.maxConcurrentAgents} open agents)`,
       );
     }
     try {
@@ -283,9 +285,15 @@ export class OrchestrationService {
     targetId: string,
     text: string,
   ): Promise<{ delivered: boolean }> {
-    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.send);
+    const { projectId, policy } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.send);
     if (typeof text !== 'string' || text.length === 0) {
       throw new OrchestrationError('bad_request', 'text is required');
+    }
+    if (Buffer.byteLength(text, 'utf8') > policy.maxSendBytes) {
+      throw new OrchestrationError(
+        'bad_request',
+        `message exceeds the project limit (${policy.maxSendBytes} bytes)`,
+      );
     }
     const [tgt] = await this.db
       .select({ projectId: agentSessions.projectId })
@@ -306,9 +314,9 @@ export class OrchestrationService {
     targetId: string,
     limit: number,
   ): Promise<{ messages: Array<{ role: string; text: string }> }> {
-    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.read);
+    const { projectId, policy } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.read);
     await this.requireTargetInProject(projectId, targetId);
-    const lim = Math.min(Math.max(limit || 10, 1), 50);
+    const lim = Math.min(Math.max(limit || 10, 1), policy.maxReadMessages);
     return { messages: await this.readOutputFn(targetId, lim) };
   }
 
@@ -328,6 +336,7 @@ export class OrchestrationService {
       ORCHESTRATION_SCOPES.restart[0],
     );
     if (!scopes.includes(ORCHESTRATION_SCOPES.restart[1])) {
+      this.auditDenied(callerId, ORCHESTRATION_SCOPES.restart[1]);
       throw new OrchestrationError('unauthorized', 'restart also requires spawn capability');
     }
     const { agentType } = await this.requireTargetInProject(projectId, targetId);

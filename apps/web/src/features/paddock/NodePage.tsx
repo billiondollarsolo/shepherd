@@ -23,6 +23,7 @@ import { usePaddock } from '../../store/paddock';
 import { formatGB } from '../../lib/utils';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
+import { ProjectPolicyEditor } from './ProjectPolicyEditor';
 
 function fmtUptime(sec: number): string {
   const d = Math.floor(sec / 86400);
@@ -305,6 +306,7 @@ export function NodePage(): JSX.Element {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 border-y border-[var(--flock-border)] bg-flock-surface-0 px-4 py-2 font-mono text-2xs text-flock-ink-muted">
+                        <ProjectPolicyEditor project={project} />
                         {git ? (
                           <>
                             <span className={git.files.length ? 'text-status-awaiting' : ''}>

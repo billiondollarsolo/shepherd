@@ -16,7 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { statusLabel, type AgentType, type Session } from '@flock/shared';
+import { statusLabel, type AgentAuthority, type AgentType, type Session } from '@flock/shared';
 import { RightPanel } from './RightPanel';
 import { RespondBar } from './RespondBar';
 import { StageLayout } from '../shell/StageLayout';
@@ -42,6 +42,14 @@ const HANDOFF_TARGETS: ReadonlyArray<{ type: AgentType; label: string }> = [
   { type: 'grok', label: 'Grok' },
   { type: 'opencode', label: 'OpenCode' },
 ];
+
+const AUTHORITY_LABEL: Record<AgentAuthority, string> = {
+  callback_only: 'Independent',
+  observe: 'Observe',
+  collaborate: 'Collaborate',
+  delegate: 'Delegate',
+  manage: 'Manage',
+};
 import { useShell } from '../../app/KeyboardProvider';
 import { usePaddock } from '../../store/paddock';
 import {
@@ -124,6 +132,7 @@ function Header({ session }: { session: Session }): JSX.Element {
   // lags the WS, which made this header contradict the sidebar dot for the SAME
   // session (header "Running" vs sidebar "Awaiting input").
   const liveStatus = liveStatuses.get(session.id) ?? session.status;
+  const authority = session.orchestrationAuthority ?? 'callback_only';
 
   // Status-driven accent (bold design language): the header underline reflects
   // the agent's live state, tying the workspace to the same status colors as the
@@ -161,6 +170,13 @@ function Header({ session }: { session: Session }): JSX.Element {
       <Badge variant={STATUS_VARIANT[liveStatus] ?? 'neutral'} className="ml-1">
         <StatusDot status={liveStatus} />
         {statusLabel(liveStatus)}
+      </Badge>
+
+      <Badge
+        variant={authority === 'manage' ? 'danger' : 'outline'}
+        title={`Flock authority: ${AUTHORITY_LABEL[authority]}`}
+      >
+        {AUTHORITY_LABEL[authority]}
       </Badge>
 
       <BranchChip sessionId={session.id} />

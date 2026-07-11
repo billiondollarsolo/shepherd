@@ -27,6 +27,7 @@ import type {
   Session,
   SessionPlan,
   UpdateNodeRequest,
+  UpdateProjectAgentPolicyRequest,
 } from '@flock/shared';
 import {
   commitGit,
@@ -34,6 +35,7 @@ import {
   createPrGit,
   createNode,
   updateNode,
+  updateProjectAgentPolicy,
   createProject,
   createSession,
   deleteNode,
@@ -406,6 +408,24 @@ export function useCreateProject() {
       toast.success(`Project “${project.name}” added`);
     },
     onError: (e) => toast.error(errMessage(e, 'Could not add project')),
+  });
+}
+
+export function useUpdateProjectAgentPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      policy,
+    }: {
+      projectId: string;
+      policy: UpdateProjectAgentPolicyRequest;
+    }) => updateProjectAgentPolicy(projectId, policy),
+    onSuccess: ({ project }) => {
+      void qc.invalidateQueries({ queryKey: qk.projects });
+      toast.success(`Agent policy for “${project.name}” updated`);
+    },
+    onError: (error) => toast.error(errMessage(error, 'Could not update agent policy')),
   });
 }
 

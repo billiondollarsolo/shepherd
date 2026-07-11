@@ -121,6 +121,7 @@ type Session struct {
 	finalized bool // supervision ended; no more output ever
 
 	configDir string // scoped hook-config dir seeded for this session (rm on Close); "" = none
+	tempDir   string // private per-session TMPDIR (rm when the session finalizes)
 
 	// droppedOutputBytes contains only counts, never terminal content.
 	droppedOutputBytes atomic.Uint64
@@ -164,7 +165,20 @@ func Open(spec Spec) (*Session, error) {
 		s.spec.Env = append(s.spec.Env, env)
 	}
 	ensureConfigOwnership(s.spec, s.configDir)
+	if dir, err := seedSessionTemp(s.spec); err != nil {
+		if s.configDir != "" {
+			_ = os.RemoveAll(s.configDir)
+		}
+		return nil, fmt.Errorf("create private session temp directory: %w", err)
+	} else {
+		s.tempDir = dir
+		s.spec.Env = append(s.spec.Env, "TMPDIR="+dir, "TMP="+dir, "TEMP="+dir)
+	}
 	if err := s.startProcess(); err != nil {
+		_ = os.RemoveAll(s.tempDir)
+		if s.configDir != "" {
+			_ = os.RemoveAll(s.configDir)
+		}
 		return nil, err
 	}
 	go s.supervise()
@@ -507,9 +521,14 @@ func (s *Session) finalize() {
 	s.subs = map[int]chan []byte{}
 	dir := s.configDir
 	s.configDir = ""
+	tempDir := s.tempDir
+	s.tempDir = ""
 	s.mu.Unlock()
 	if dir != "" {
 		_ = os.RemoveAll(dir) // remove the scoped hook-config on session end
+	}
+	if tempDir != "" {
+		_ = os.RemoveAll(tempDir)
 	}
 	close(s.done)
 }
@@ -732,6 +751,39 @@ func hasEnvKey(env []string, key string) bool {
 		}
 	}
 	return false
+}
+
+// seedSessionTemp creates one private temporary directory per session beneath
+// the runtime home. It prevents tools from sharing a global /tmp namespace for
+// ordinary temporary files and makes cleanup deterministic on session close.
+func seedSessionTemp(spec Spec) (string, error) {
+	if spec.ID == "" || len(spec.ID) > 128 || strings.ContainsAny(spec.ID, `/\\`) {
+		return "", fmt.Errorf("invalid session id for temporary directory")
+	}
+	home := homeForSpec(spec)
+	if home == "" {
+		return "", fmt.Errorf("runtime home is unavailable")
+	}
+	flockDir := filepath.Join(home, ".flock")
+	base := filepath.Join(flockDir, "tmp")
+	dir := filepath.Join(base, spec.ID)
+	if err := os.RemoveAll(dir); err != nil {
+		return "", err
+	}
+	for _, path := range []string{flockDir, base, dir} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			return "", err
+		}
+		if err := os.Chmod(path, 0o700); err != nil {
+			return "", err
+		}
+		if spec.Identity != nil {
+			if err := os.Chown(path, int(spec.Identity.UID), int(spec.Identity.GID)); err != nil {
+				return "", err
+			}
+		}
+	}
+	return dir, nil
 }
 
 // seedScopedConfig builds the per-session scoped hook-config dir on THIS node

@@ -29,6 +29,7 @@ function sampleSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     note: null,
     reviewedAt: null,
     permissionMode: 'default',
+    orchestrationAuthority: 'callback_only',
     createdAt: '2026-05-29T00:00:00.000Z',
     lastStatusAt: '2026-05-29T00:00:00.000Z',
     createdBy: '44444444-4444-4444-8444-444444444444',

@@ -87,6 +87,64 @@ export const AgentCapabilityScopeEnum = z.enum([
 ]);
 export type AgentCapabilityScope = z.infer<typeof AgentCapabilityScopeEnum>;
 
+/** Human-readable authority tiers; coding-tool autonomy remains a separate setting. */
+export const AgentAuthorityEnum = z.enum([
+  'callback_only',
+  'observe',
+  'collaborate',
+  'delegate',
+  'manage',
+]);
+export type AgentAuthority = z.infer<typeof AgentAuthorityEnum>;
+
+const AUTHORITY_SCOPES: Record<AgentAuthority, readonly AgentCapabilityScope[]> = {
+  callback_only: [],
+  observe: ['agents:list:project', 'agents:read:project'],
+  collaborate: ['agents:list:project', 'agents:read:project', 'agents:send:project'],
+  delegate: [
+    'agents:list:project',
+    'agents:read:project',
+    'agents:send:project',
+    'agents:spawn:project',
+  ],
+  manage: [...AgentCapabilityScopeEnum.options],
+};
+
+export function agentAuthorityScopes(authority: AgentAuthority): AgentCapabilityScope[] {
+  return [...AUTHORITY_SCOPES[authority]];
+}
+
+export function authorityAllows(maximum: AgentAuthority, requested: AgentAuthority): boolean {
+  return (
+    AgentAuthorityEnum.options.indexOf(requested) <= AgentAuthorityEnum.options.indexOf(maximum)
+  );
+}
+
+/** Durable, server-owned project bounds for agent-to-agent orchestration. */
+export const ProjectAgentPolicySchema = z
+  .object({
+    defaultAuthority: AgentAuthorityEnum,
+    maxAuthority: AgentAuthorityEnum,
+    maxConcurrentAgents: z.number().int().min(1).max(64),
+    spawnRateLimitPerMinute: z.number().int().min(1).max(60),
+    maxSendBytes: z.number().int().min(256).max(65536),
+    maxReadMessages: z.number().int().min(1).max(500),
+  })
+  .refine((policy) => authorityAllows(policy.maxAuthority, policy.defaultAuthority), {
+    message: 'default authority must not exceed maximum authority',
+    path: ['defaultAuthority'],
+  });
+export type ProjectAgentPolicy = z.infer<typeof ProjectAgentPolicySchema>;
+
+export const DEFAULT_PROJECT_AGENT_POLICY: ProjectAgentPolicy = Object.freeze({
+  defaultAuthority: 'callback_only',
+  maxAuthority: 'manage',
+  maxConcurrentAgents: 12,
+  spawnRateLimitPerMinute: 10,
+  maxSendBytes: 16 * 1024,
+  maxReadMessages: 100,
+});
+
 export const AuditActionEnum = z.enum([
   'login',
   'logout',
@@ -95,6 +153,7 @@ export const AuditActionEnum = z.enum([
   'node_remove',
   'node_credential_rotate',
   'node_control_event',
+  'agent_policy_event',
   'session_create',
   'session_terminate',
   'browser_takeover',
@@ -155,6 +214,7 @@ export const ProjectSchema = z.object({
   nodeId: Uuid,
   name: z.string().min(1),
   workingDir: z.string().min(1),
+  agentPolicy: ProjectAgentPolicySchema,
   createdAt: IsoTimestamp,
 });
 export type Project = z.infer<typeof ProjectSchema>;
@@ -193,6 +253,8 @@ export const SessionRecordSchema = z.object({
    * safety-relevant state) and so the session can be restarted as-is.
    */
   permissionMode: SessionPermissionModeEnum,
+  /** Effective Flock agent-to-agent authority. Contains no credential material. */
+  orchestrationAuthority: AgentAuthorityEnum,
   createdAt: IsoTimestamp,
   lastStatusAt: IsoTimestamp,
   createdBy: Uuid,

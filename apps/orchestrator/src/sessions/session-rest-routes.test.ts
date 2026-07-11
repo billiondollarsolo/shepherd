@@ -9,7 +9,10 @@ import type { CreateSessionRequest, SessionRecord, User } from '@flock/shared';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import { registerSessionRestRoutes } from './session-rest-routes.js';
-import { SessionProjectNotFoundError } from './session-rest-service.js';
+import {
+  SessionPolicyViolationError,
+  SessionProjectNotFoundError,
+} from './session-rest-service.js';
 
 const PROJECT_ID = '33333333-3333-4333-8333-333333333333';
 const FAKE_USER: User = {
@@ -43,6 +46,7 @@ function fakeSession(over: Partial<SessionRecord> = {}): SessionRecord {
     note: null,
     reviewedAt: null,
     permissionMode: 'default',
+    orchestrationAuthority: 'callback_only',
     createdAt: '2026-05-29T00:00:00.000Z',
     lastStatusAt: '2026-05-29T00:00:00.000Z',
     createdBy: FAKE_USER.id,
@@ -54,12 +58,14 @@ function fakeSession(over: Partial<SessionRecord> = {}): SessionRecord {
 class FakeSessionService {
   listArg: string | undefined;
   notFound = false;
+  policyDenied = false;
   async listSessions(projectId?: string): Promise<SessionRecord[]> {
     this.listArg = projectId;
     return [fakeSession()];
   }
   async createSession(input: CreateSessionRequest) {
     if (this.notFound) throw new SessionProjectNotFoundError(input.projectId);
+    if (this.policyDenied) throw new SessionPolicyViolationError();
     return { session: fakeSession({ agentType: input.agentType }), hookToken: 'plain-token' };
   }
 }
@@ -140,6 +146,28 @@ describe('POST /api/sessions', () => {
       });
       expect(res.statusCode).toBe(404);
       expect(res.json().error.code).toBe('project_not_found');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('403 when requested authority exceeds the project policy', async () => {
+    const service = new FakeSessionService();
+    service.policyDenied = true;
+    const app = buildApp(service);
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        headers: COOKIE,
+        payload: {
+          projectId: PROJECT_ID,
+          agentType: 'codex',
+          orchestrationAuthority: 'manage',
+        },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('policy_denied');
     } finally {
       await app.close();
     }

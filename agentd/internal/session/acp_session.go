@@ -60,6 +60,12 @@ func OpenACP(spec Spec, statusPush func(status.Update)) (*Session, error) {
 		done:       make(chan struct{}),
 		statusPush: statusPush,
 	}
+	tempDir, err := seedSessionTemp(spec)
+	if err != nil {
+		return nil, fmt.Errorf("create private session temp directory: %w", err)
+	}
+	s.tempDir = tempDir
+	s.spec.Env = append(s.spec.Env, "TMPDIR="+tempDir, "TMP="+tempDir, "TEMP="+tempDir)
 	go s.runACP(append([]string(nil), spec.Command...))
 	return s, nil
 }

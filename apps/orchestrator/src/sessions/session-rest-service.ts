@@ -19,7 +19,14 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import type { AgentCapabilityScope, CreateSessionRequest, SessionRecord } from '@flock/shared';
+import {
+  agentAuthorityScopes,
+  authorityAllows,
+  ProjectAgentPolicySchema,
+  type AgentCapabilityScope,
+  type CreateSessionRequest,
+  type SessionRecord,
+} from '@flock/shared';
 
 import type { AuditLogger } from '../audit/audit.js';
 import type { Database } from '../db/client.js';
@@ -38,6 +45,13 @@ export class SessionProjectNotFoundError extends Error {
   constructor(public readonly projectId: string) {
     super(`Project "${projectId}" was not found.`);
     this.name = 'SessionProjectNotFoundError';
+  }
+}
+
+export class SessionPolicyViolationError extends Error {
+  constructor() {
+    super('Requested orchestration authority exceeds the project policy.');
+    this.name = 'SessionPolicyViolationError';
   }
 }
 
@@ -176,6 +190,11 @@ export class SessionRestService {
     // label still stored on the record + used as the terminate lookup key).
     const tmuxSessionName = `flock-${id.replace(/[.:]/g, '-')}`;
     const workingDir = input.workingDir ?? project.workingDir;
+    const policy = ProjectAgentPolicySchema.parse(project.agentPolicy);
+    const orchestrationAuthority = input.orchestrationAuthority ?? policy.defaultAuthority;
+    if (!authorityAllows(policy.maxAuthority, orchestrationAuthority)) {
+      throw new SessionPolicyViolationError();
+    }
 
     // Mint the per-session hook token: returned ONCE, only its hash is stored.
     const hookToken = randomBytes(32).toString('base64url');
@@ -201,6 +220,7 @@ export class SessionRestService {
       reviewedAt: null,
       // T18: persist the autonomy level so it survives restart + shows in the UI.
       permissionMode: input.permissionMode ?? 'default',
+      orchestrationAuthority,
       createdAt: now,
       lastStatusAt: now,
       createdBy: ctx.userId,
@@ -218,7 +238,7 @@ export class SessionRestService {
       try {
         orchestrationToken = await this.issueOrchestrationCapability(
           persisted,
-          input.orchestrationScopes ?? [],
+          agentAuthorityScopes(orchestrationAuthority),
         );
       } catch (err) {
         // The session is not live or visible yet. Roll back the registry row so
@@ -282,7 +302,11 @@ export class SessionRestService {
         sessionId: persisted.id,
         userId: ctx.userId,
         ip: ctx.ip ?? null,
-        detail: { agentType: persisted.agentType, nodeId: persisted.nodeId },
+        detail: {
+          agentType: persisted.agentType,
+          nodeId: persisted.nodeId,
+          orchestrationAuthority: persisted.orchestrationAuthority,
+        },
       });
     } catch {
       /* swallow — create succeeds regardless (FR-A3 best-effort here). */

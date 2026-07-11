@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { StatusEnum } from './status.js';
 import {
   AgentTypeEnum,
-  AgentCapabilityScopeEnum,
+  AgentAuthorityEnum,
   SessionPermissionModeEnum,
   AuditActionEnum,
   AuditEntrySchema,
@@ -12,6 +12,7 @@ import {
   NodeSchema,
   SshAuthMethodEnum,
   ProjectSchema,
+  ProjectAgentPolicySchema,
   RoleEnum,
   SessionSchema,
   UserSchema,
@@ -302,10 +303,14 @@ export const CreateProjectRequest = z.object({
   nodeId: Uuid,
   name: z.string().min(1),
   workingDir: z.string().min(1),
+  agentPolicy: ProjectAgentPolicySchema.optional(),
 });
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequest>;
 export const ProjectResponse = z.object({ project: ProjectSchema });
 export type ProjectResponse = z.infer<typeof ProjectResponse>;
+
+export const UpdateProjectAgentPolicyRequest = ProjectAgentPolicySchema;
+export type UpdateProjectAgentPolicyRequest = z.infer<typeof UpdateProjectAgentPolicyRequest>;
 
 // --- sessions --------------------------------------------------------------
 
@@ -348,7 +353,7 @@ export const CreateSessionRequest = z
     transport: z.enum(['pty', 'acp']).optional(),
     /** Optional, explicit Flock orchestration authority. Omitted means the agent
      * receives callback-only credentials and cannot inspect/control siblings. */
-    orchestrationScopes: z.array(AgentCapabilityScopeEnum).max(5).optional(),
+    orchestrationAuthority: AgentAuthorityEnum.optional(),
   })
   .superRefine((val, ctx) => {
     if (val.agentType === 'dev' && !val.devCommand?.trim()) {

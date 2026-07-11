@@ -26,7 +26,11 @@ import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAuth } from '../auth/middleware.js';
-import { SessionProjectNotFoundError, type SessionRestService } from './session-rest-service.js';
+import {
+  SessionPolicyViolationError,
+  SessionProjectNotFoundError,
+  type SessionRestService,
+} from './session-rest-service.js';
 
 /**
  * Register `GET`/`POST /api/sessions` against a {@link SessionRestService}. Plain
@@ -74,6 +78,9 @@ export function registerSessionRestRoutes(
           return reply
             .code(404)
             .send({ error: { code: 'project_not_found', message: err.message } });
+        }
+        if (err instanceof SessionPolicyViolationError) {
+          return reply.code(403).send({ error: { code: 'policy_denied', message: err.message } });
         }
         throw err;
       }

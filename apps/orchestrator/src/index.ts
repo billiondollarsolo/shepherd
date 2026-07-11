@@ -54,6 +54,7 @@ import { hashHookToken } from './hooks/hook-token.js';
 import { OrchestrationService } from './orchestrate/orchestrate-service.js';
 import { registerOrchestrateRoute } from './orchestrate/orchestrate-route.js';
 import { AgentCapabilityService } from './orchestrate/capability-service.js';
+import { buildAgentEnvironment } from './sessions/agent-environment-policy.js';
 import { ConfigService } from './config/config-service.js';
 import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
@@ -216,7 +217,7 @@ export async function main(): Promise<void> {
         .catch(() => undefined);
     },
   });
-  const projects = new ProjectService({ db });
+  const projects = new ProjectService({ db, audit: auditLogger });
 
   // One node-transport resolver, shared by fs-browse, workspace intel, and git:
   // resolve the node's transport, or null when unreachable (routes map null → 422).
@@ -730,7 +731,7 @@ export async function main(): Promise<void> {
           // env (session/hook vars win on a key clash). Best-effort — never fail a
           // launch because node env can't be read.
           const nodeEnv = await nodes.envForNode(session.nodeId).catch(() => ({}));
-          const mergedEnv = { ...nodeEnv, ...(env ?? {}) };
+          const mergedEnv = buildAgentEnvironment(session.agentType, nodeEnv, env ?? {});
           try {
             await client.open({
               id: session.id,
@@ -784,8 +785,6 @@ export async function main(): Promise<void> {
         FLOCK_SESSION_ID: session.id,
         FLOCK_HOOK_URL: hookUrl,
         FLOCK_HOOK_TOKEN: hookToken,
-        // One-liner the agent hook templates call: POST the event JSON to Flock.
-        FLOCK_HOOK_CMD: `curl -sS -m 5 -X POST -H "Authorization: Bearer ${hookToken}" -H "content-type: application/json" --data-binary`,
         ...(orchestrationToken ? { FLOCK_ORCHESTRATE_TOKEN: orchestrationToken } : {}),
       };
     },
@@ -1109,7 +1108,7 @@ export async function main(): Promise<void> {
     },
   });
 
-  // Agent-facing orchestration API: separate durable capability, project scope,
+  // Agent-facing orchestration API: separate durable capability, project policy,
   // and explicit per-verb grants. Callback-only agents cannot enter this surface.
   const orchestration = new OrchestrationService(
     db,
@@ -1144,6 +1143,18 @@ export async function main(): Promise<void> {
     },
     // read_output: a sibling's recent chat/assistant messages (oldest→newest).
     (targetId, limit) => new EventReadService(db).recentChats(targetId, limit),
+    60_000,
+    () => Date.now(),
+    (callerId, required) => {
+      void auditLogger
+        .record({
+          action: 'agent_policy_event',
+          targetType: 'session',
+          targetId: callerId,
+          detail: { event: 'denied', required },
+        })
+        .catch(() => undefined);
+    },
   );
   registerOrchestrateRoute(app, orchestration);
   // The live collaboration graph (which agent spawned which) for the web — cookie

@@ -14,9 +14,16 @@
  */
 import { eq } from 'drizzle-orm';
 
-import type { CreateProjectRequest, Project as SharedProject } from '@flock/shared';
+import {
+  DEFAULT_PROJECT_AGENT_POLICY,
+  ProjectAgentPolicySchema,
+  type CreateProjectRequest,
+  type Project as SharedProject,
+  type ProjectAgentPolicy,
+} from '@flock/shared';
 
 import type { Database } from '../db/client.js';
+import type { AuditLogger } from '../audit/audit.js';
 import { rowToProject } from '../db/mappers.js';
 import { nodes, projects } from '../db/schema.js';
 
@@ -30,13 +37,16 @@ export class ProjectNodeNotFoundError extends Error {
 
 export interface ProjectServiceDeps {
   db: Database;
+  audit?: AuditLogger;
 }
 
 export class ProjectService {
   private readonly db: Database;
+  private readonly audit?: AuditLogger;
 
   constructor(deps: ProjectServiceDeps) {
     this.db = deps.db;
+    this.audit = deps.audit;
   }
 
   /** List projects, optionally narrowed to a single node. */
@@ -68,11 +78,42 @@ export class ProjectService {
         nodeId: input.nodeId,
         name: input.name,
         workingDir: input.workingDir,
+        agentPolicy: input.agentPolicy ?? DEFAULT_PROJECT_AGENT_POLICY,
       })
       .returning();
     if (!row) {
       throw new Error('Failed to persist project record.');
     }
+    return rowToProject(row);
+  }
+
+  /** Replace the durable server-owned policy after full contract validation. */
+  async updateAgentPolicy(
+    projectId: string,
+    policy: ProjectAgentPolicy,
+    context?: { userId?: string | null; ip?: string | null },
+  ): Promise<SharedProject | null> {
+    const parsed = ProjectAgentPolicySchema.parse(policy);
+    const [row] = await this.db
+      .update(projects)
+      .set({ agentPolicy: parsed })
+      .where(eq(projects.id, projectId))
+      .returning();
+    if (!row) return null;
+    void this.audit
+      ?.record({
+        action: 'agent_policy_event',
+        userId: context?.userId,
+        ip: context?.ip,
+        targetType: 'project',
+        targetId: projectId,
+        detail: {
+          event: 'updated',
+          defaultAuthority: parsed.defaultAuthority,
+          maxAuthority: parsed.maxAuthority,
+        },
+      })
+      .catch(() => undefined);
     return rowToProject(row);
   }
 }

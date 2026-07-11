@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AgentTypeEnum,
+  AgentAuthorityEnum,
   AuditActionEnum,
   ConnectionStatusEnum,
   EventSourceEnum,
@@ -102,6 +103,12 @@ describe('enum columns are the single source of truth from @flock/shared', () =>
     expect(agentSessions.permissionMode.enumValues).toEqual([...SessionPermissionModeEnum.options]);
   });
 
+  it('agent_sessions orchestration authority matches the shared AgentAuthorityEnum', () => {
+    expect(agentSessions.orchestrationAuthority.enumValues).toEqual([
+      ...AgentAuthorityEnum.options,
+    ]);
+  });
+
   it('agent_sessions.agent_type matches the shared AgentTypeEnum', () => {
     expect(agentSessions.agentType.enumValues).toEqual([...AgentTypeEnum.options]);
   });
@@ -138,6 +145,7 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     reviewedAt: null,
     reviewedBy: null,
     permissionMode: 'default',
+    orchestrationAuthority: 'callback_only',
     createdAt: now,
     lastStatusAt: now,
     createdBy: '44444444-4444-4444-8444-444444444444',

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,6 +131,42 @@ func TestScrollbackReplay(t *testing.T) {
 	defer sub.Close()
 	if !strings.Contains(string(sub.Replay), "scrollback-data") {
 		t.Fatalf("want scrollback replay to contain scrollback-data, got %q", string(sub.Replay))
+	}
+}
+
+func TestSessionUsesPrivateTemporaryDirectoryAndCleansIt(t *testing.T) {
+	id := fmt.Sprintf("temp-%d", time.Now().UnixNano())
+	s, err := Open(Spec{
+		ID:      id,
+		Command: []string{"sh", "-c", `printf 'TMP=%s\n' "$TMPDIR"; stat -c 'MODE=%a' "$TMPDIR"; sleep 5`},
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	out := drain(t, s.Subscribe(), "MODE=700", 2*time.Second)
+	var tempDir string
+	for _, line := range strings.Split(strings.ReplaceAll(out, "\r", ""), "\n") {
+		if strings.HasPrefix(line, "TMP=") {
+			tempDir = strings.TrimPrefix(line, "TMP=")
+			break
+		}
+	}
+	if tempDir == "" || !strings.Contains(tempDir, filepath.Join(".flock", "tmp", id)) {
+		t.Fatalf("unexpected private TMPDIR in output: %q", out)
+	}
+	if !strings.Contains(out, "MODE=700") {
+		t.Fatalf("private TMPDIR must be mode 0700: %q", out)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-s.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("session did not finalize")
+	}
+	if _, err := os.Stat(tempDir); !os.IsNotExist(err) {
+		t.Fatalf("private TMPDIR was not removed: %v", err)
 	}
 }
 

@@ -71,6 +71,13 @@ const AGENT_TYPE_VALUES: EnumTuple = [
 ];
 // T18: persisted agent autonomy level (mirrors shared SessionPermissionModeEnum).
 const PERMISSION_MODE_VALUES: EnumTuple = ['default', 'acceptEdits', 'plan', 'autonomous'];
+const AGENT_AUTHORITY_VALUES: EnumTuple = [
+  'callback_only',
+  'observe',
+  'collaborate',
+  'delegate',
+  'manage',
+];
 const EVENT_SOURCE_VALUES: EnumTuple = ['hook', 'osc', 'pty', 'orchestrator'];
 // Mirrors shared SshAuthMethodEnum (named so the enum-drift guard can assert it).
 const SSH_AUTH_METHOD_VALUES: EnumTuple = ['key', 'password'];
@@ -83,6 +90,7 @@ const AUDIT_ACTION_VALUES: EnumTuple = [
   'node_remove',
   'node_credential_rotate',
   'node_control_event',
+  'agent_policy_event',
   'session_create',
   'session_terminate',
   'browser_takeover',
@@ -222,6 +230,24 @@ export const projects = pgTable(
       .references(() => nodes.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     workingDir: text('working_dir').notNull(),
+    agentPolicy: jsonb('agent_policy')
+      .$type<{
+        defaultAuthority: string;
+        maxAuthority: string;
+        maxConcurrentAgents: number;
+        spawnRateLimitPerMinute: number;
+        maxSendBytes: number;
+        maxReadMessages: number;
+      }>()
+      .notNull()
+      .default({
+        defaultAuthority: 'callback_only',
+        maxAuthority: 'manage',
+        maxConcurrentAgents: 12,
+        spawnRateLimitPerMinute: 10,
+        maxSendBytes: 16384,
+        maxReadMessages: 100,
+      }),
     createdAt: createdAt(),
   },
   (t) => ({
@@ -277,6 +303,9 @@ export const agentSessions = pgTable(
     permissionMode: text('permission_mode', { enum: PERMISSION_MODE_VALUES })
       .notNull()
       .default('default'),
+    orchestrationAuthority: text('orchestration_authority', { enum: AGENT_AUTHORITY_VALUES })
+      .notNull()
+      .default('callback_only'),
     createdAt: createdAt(),
     lastStatusAt: timestamp('last_status_at', { withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid('created_by')

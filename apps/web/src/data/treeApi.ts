@@ -34,6 +34,7 @@ import type {
   SessionResponse,
   UpdateSessionRequest,
   UpdateNodeRequest,
+  UpdateProjectAgentPolicyRequest,
   SessionPlanResponse,
 } from '@flock/shared';
 import { ApiError } from '../routes/api';
@@ -215,6 +216,15 @@ export function listProjects(nodeId?: string): Promise<ListProjectsResponse> {
 }
 export function createProject(input: CreateProjectRequest): Promise<ProjectResponse> {
   return request('/api/projects', { method: 'POST', body: JSON.stringify(input) });
+}
+export function updateProjectAgentPolicy(
+  projectId: string,
+  input: UpdateProjectAgentPolicyRequest,
+): Promise<ProjectResponse> {
+  return request(`/api/projects/${encodeURIComponent(projectId)}/agent-policy`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
 }
 
 // --- sessions ---

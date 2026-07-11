@@ -4,7 +4,13 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import type { CreateProjectRequest, Project as SharedProject, User } from '@flock/shared';
+import {
+  DEFAULT_PROJECT_AGENT_POLICY,
+  type CreateProjectRequest,
+  type Project as SharedProject,
+  type ProjectAgentPolicy,
+  type User,
+} from '@flock/shared';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
@@ -33,6 +39,7 @@ function fakeProject(over: Partial<SharedProject> = {}): SharedProject {
     nodeId: NODE_ID,
     name: 'flock',
     workingDir: '/work',
+    agentPolicy: DEFAULT_PROJECT_AGENT_POLICY,
     createdAt: '2026-05-29T00:00:00.000Z',
     ...over,
   };
@@ -48,6 +55,13 @@ class FakeProjectService {
   async createProject(input: CreateProjectRequest): Promise<SharedProject> {
     if (this.notFound) throw new ProjectNodeNotFoundError(input.nodeId);
     return fakeProject({ name: input.name, workingDir: input.workingDir });
+  }
+  async updateAgentPolicy(
+    _projectId: string,
+    policy: ProjectAgentPolicy,
+  ): Promise<SharedProject | null> {
+    if (this.notFound) return null;
+    return fakeProject({ agentPolicy: policy });
   }
 }
 
@@ -82,6 +96,44 @@ describe('GET /api/projects', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().projects).toHaveLength(1);
       expect(service.listArg).toBe(NODE_ID);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('PATCH /api/projects/:id/agent-policy', () => {
+  it('validates and replaces the complete durable policy', async () => {
+    const app = buildApp(new FakeProjectService());
+    try {
+      const policy = { ...DEFAULT_PROJECT_AGENT_POLICY, maxAuthority: 'collaborate' as const };
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/projects/33333333-3333-4333-8333-333333333333/agent-policy',
+        headers: COOKIE,
+        payload: policy,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().project.agentPolicy.maxAuthority).toBe('collaborate');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects a default that exceeds the maximum', async () => {
+    const app = buildApp(new FakeProjectService());
+    try {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/projects/33333333-3333-4333-8333-333333333333/agent-policy',
+        headers: COOKIE,
+        payload: {
+          ...DEFAULT_PROJECT_AGENT_POLICY,
+          defaultAuthority: 'manage',
+          maxAuthority: 'observe',
+        },
+      });
+      expect(res.statusCode).toBe(400);
     } finally {
       await app.close();
     }

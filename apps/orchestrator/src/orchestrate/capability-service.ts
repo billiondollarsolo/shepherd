@@ -2,16 +2,22 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { and, eq, gt, isNull } from 'drizzle-orm';
 
-import type { AgentCapabilityScope } from '@flock/shared';
+import {
+  agentAuthorityScopes,
+  ProjectAgentPolicySchema,
+  type AgentCapabilityScope,
+  type ProjectAgentPolicy,
+} from '@flock/shared';
 
 import type { Database } from '../db/client.js';
-import { agentCapabilities, agentSessions } from '../db/schema.js';
+import { agentCapabilities, agentSessions, projects } from '../db/schema.js';
 
 export interface AuthorizedAgentCapability {
   sessionId: string;
   projectId: string;
   createdBy: string;
   scopes: AgentCapabilityScope[];
+  policy: ProjectAgentPolicy;
 }
 
 export class AgentCapabilityError extends Error {
@@ -74,9 +80,11 @@ export class AgentCapabilityService {
         installationId: agentCapabilities.installationId,
         scopes: agentCapabilities.scopes,
         createdBy: agentSessions.createdBy,
+        agentPolicy: projects.agentPolicy,
       })
       .from(agentCapabilities)
       .innerJoin(agentSessions, eq(agentSessions.id, agentCapabilities.sessionId))
+      .innerJoin(projects, eq(projects.id, agentCapabilities.projectId))
       .where(
         and(
           eq(agentCapabilities.sessionId, sessionId),
@@ -90,11 +98,16 @@ export class AgentCapabilityService {
       .limit(1);
     const scopes = (row?.scopes ?? []) as AgentCapabilityScope[];
     if (!row || !scopes.includes(required)) throw new AgentCapabilityError();
+    const policy = ProjectAgentPolicySchema.parse(row.agentPolicy);
+    if (!agentAuthorityScopes(policy.maxAuthority).includes(required)) {
+      throw new AgentCapabilityError('agent capability is disabled by current project policy');
+    }
     return {
       sessionId: row.sessionId,
       projectId: row.projectId,
       createdBy: row.createdBy,
       scopes,
+      policy,
     };
   }
 

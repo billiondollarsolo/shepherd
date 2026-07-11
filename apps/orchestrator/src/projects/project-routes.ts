@@ -10,7 +10,12 @@
  * `{ project }` to match the shared `ProjectResponse`.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { CreateProjectRequest, ListProjectsQuery } from '@flock/shared';
+import {
+  CreateProjectRequest,
+  ListProjectsQuery,
+  UpdateProjectAgentPolicyRequest,
+  Uuid,
+} from '@flock/shared';
 import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
@@ -59,6 +64,29 @@ export function registerProjectRoutes(
         }
         throw err;
       }
+    },
+  );
+
+  // --- replace durable agent-orchestration policy -----------------------
+  app.patch(
+    '/api/projects/:id/agent-policy',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = Uuid.safeParse((request.params as { id?: string }).id);
+      const policy = UpdateProjectAgentPolicyRequest.safeParse(request.body);
+      if (!id.success || !policy.success) {
+        return badRequest(reply, 'A valid project id and complete agent policy are required.');
+      }
+      const project = await deps.service.updateAgentPolicy(id.data, policy.data, {
+        userId: request.authUser?.id,
+        ip: request.ip ?? null,
+      });
+      if (!project) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'project_not_found', message: 'Project not found.' } });
+      }
+      return reply.code(200).send({ project });
     },
   );
 }

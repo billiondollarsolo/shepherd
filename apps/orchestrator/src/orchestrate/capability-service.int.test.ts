@@ -8,6 +8,7 @@ import { runMigrations } from '../db/migrate.js';
 import { agentCapabilities, agentSessions, nodes, projects, users } from '../db/schema.js';
 import { hashHookToken } from '../hooks/hook-token.js';
 import { AgentCapabilityService } from './capability-service.js';
+import { DEFAULT_PROJECT_AGENT_POLICY } from '@flock/shared';
 
 let handle: DbHandle;
 let userId: string;
@@ -112,5 +113,42 @@ describe('scoped agent orchestration capabilities', () => {
     now = new Date('2026-07-11T20:00:00.000Z');
     await service.revokeSession(session.id);
     await expect(service.authorize(session.id, token!, 'agents:list:project')).rejects.toThrow();
+  });
+
+  it('immediately enforces a narrowed durable project policy against existing tokens', async () => {
+    const session = await createSession();
+    const service = new AgentCapabilityService({
+      db: handle.db,
+      installationId: 'installation-policy-test',
+    });
+    const token = await service.issue(session.id, projectId, [
+      'agents:list:project',
+      'agents:terminate:project',
+    ]);
+    await expect(
+      service.authorize(session.id, token!, 'agents:terminate:project'),
+    ).resolves.toBeTruthy();
+
+    await handle.db
+      .update(projects)
+      .set({
+        agentPolicy: {
+          ...DEFAULT_PROJECT_AGENT_POLICY,
+          maxAuthority: 'observe',
+        },
+      })
+      .where(eq(projects.id, projectId));
+
+    await expect(service.authorize(session.id, token!, 'agents:terminate:project')).rejects.toThrow(
+      /disabled by current project policy/,
+    );
+    await expect(
+      service.authorize(session.id, token!, 'agents:list:project'),
+    ).resolves.toBeTruthy();
+
+    await handle.db
+      .update(projects)
+      .set({ agentPolicy: DEFAULT_PROJECT_AGENT_POLICY })
+      .where(eq(projects.id, projectId));
   });
 });
