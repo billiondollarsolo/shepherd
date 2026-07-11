@@ -53,4 +53,22 @@ describe('LoginThrottle (T6)', () => {
     expect(t.check(LoginThrottle.key('ipA', 'u')).allowed).toBe(false);
     expect(t.check(LoginThrottle.key('ipB', 'u')).allowed).toBe(true);
   });
+
+  it('bounds unique failed keys and evicts idle entries', () => {
+    let now = 0;
+    const t = new LoginThrottle({
+      maxEntries: 3,
+      idleTtlMs: 100,
+      windowMs: 50,
+      lockoutMs: 50,
+      now: () => now,
+    });
+    for (let i = 0; i < 20; i += 1) {
+      t.recordFailure(LoginThrottle.key(`ip-${i}`, 'owner'));
+      now += 1;
+    }
+    expect(t.trackedEntries).toBeLessThanOrEqual(3);
+    now += 101;
+    expect(t.trackedEntries).toBe(0);
+  });
 });

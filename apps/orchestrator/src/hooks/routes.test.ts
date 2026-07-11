@@ -14,9 +14,10 @@
  * cookie (spec §8.1 line 187).
  */
 import Fastify from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { registerHookRoute } from './routes.js';
+import { createHookAbuseControls, registerHookRoute } from './routes.js';
+import { RequestBudget } from '../http/request-budget.js';
 import {
   HookSessionNotFoundError,
   HookUnauthorizedError,
@@ -40,15 +41,34 @@ class FakeHookService {
   }
 }
 
-function buildApp(service: FakeHookService) {
+function buildApp(
+  service: FakeHookService,
+  abuse?: Parameters<typeof registerHookRoute>[1]['abuse'],
+) {
   const app = Fastify({ logger: false });
   registerHookRoute(app, {
     service: service as unknown as Parameters<typeof registerHookRoute>[1]['service'],
+    abuse,
   });
   return app;
 }
 
 describe('POST /api/hooks/:sessionId (US-15 route)', () => {
+  it('leaves measurable headroom for telemetry-heavy sessions', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const { perSession } = createHookAbuseControls();
+      for (let i = 0; i < 600; i += 1) {
+        const permit = perSession.enter(SESSION_ID);
+        expect(permit.allowed).toBe(true);
+        if (permit.allowed) permit.release();
+      }
+      expect(perSession.enter(SESSION_ID)).toMatchObject({ allowed: false, reason: 'rate' });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('rejects a request with NO Authorization header with 401 (NFR-SEC3)', async () => {
     const service = new FakeHookService();
     const app = buildApp(service);
@@ -170,6 +190,52 @@ describe('POST /api/hooks/:sessionId (US-15 route)', () => {
       });
       expect(res.statusCode).toBe(202);
       expect(service.calls).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rate-limits sustained per-session traffic with Retry-After', async () => {
+    const service = new FakeHookService();
+    const makeBudget = () =>
+      new RequestBudget({
+        maxRequests: 1,
+        windowMs: 60_000,
+        maxConcurrent: 2,
+        maxConcurrentPerKey: 2,
+      });
+    const app = buildApp(service, { perIp: makeBudget(), perSession: makeBudget() });
+    const request = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/hooks/${SESSION_ID}`,
+        headers: { authorization: `Bearer ${GOOD_TOKEN}` },
+        payload: { hook_event_name: 'Stop' },
+      });
+    try {
+      expect((await request()).statusCode).toBe(202);
+      const blocked = await request();
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.headers['retry-after']).toBe('60');
+      expect(blocked.json().error.code).toBe('too_many_requests');
+      expect(service.calls).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects hook bodies larger than the explicit endpoint limit', async () => {
+    const service = new FakeHookService();
+    const app = buildApp(service);
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/hooks/${SESSION_ID}`,
+        headers: { authorization: `Bearer ${GOOD_TOKEN}` },
+        payload: { output: 'x'.repeat(300 * 1024) },
+      });
+      expect(res.statusCode).toBe(413);
+      expect(service.calls).toHaveLength(0);
     } finally {
       await app.close();
     }

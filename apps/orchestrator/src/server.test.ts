@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { buildServer } from './server.js';
+import { RequestBudget } from './http/request-budget.js';
 
 describe('orchestrator health route', () => {
   const app = buildServer();
@@ -17,6 +18,48 @@ describe('orchestrator health route', () => {
     // Confirms @flock/shared is the single source of truth, imported here.
     expect(body.statuses).toContain('awaiting_input');
     expect(body.statuses).toContain('disconnected');
+  });
+});
+
+describe('global HTTP abuse bounds', () => {
+  it('rate-limits every route and releases concurrency after responses', async () => {
+    const budget = new RequestBudget({
+      maxRequests: 1,
+      windowMs: 60_000,
+      maxConcurrent: 1,
+      maxConcurrentPerKey: 1,
+    });
+    const app = buildServer({ requestBudget: budget });
+    try {
+      expect((await app.inject('/health')).statusCode).toBe(200);
+      expect(budget.snapshot().active).toBe(0);
+      const blocked = await app.inject('/health');
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.headers['retry-after']).toBe('60');
+      expect(blocked.json().error.code).toBe('too_many_requests');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns the shared error envelope for oversized bodies', async () => {
+    const app = buildServer({
+      hookEndpoint: {
+        handle: async () => ({ ok: true }),
+      },
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/hooks/11111111-1111-4111-8111-111111111111',
+        headers: { authorization: 'Bearer token' },
+        payload: { output: 'x'.repeat(300 * 1024) },
+      });
+      expect(response.statusCode).toBe(413);
+      expect(response.json().error.code).toBe('payload_too_large');
+    } finally {
+      await app.close();
+    }
   });
 });
 

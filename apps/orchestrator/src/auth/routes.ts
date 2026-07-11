@@ -27,6 +27,13 @@ import {
   type RequestContext,
 } from './service.js';
 import { badRequest } from '../http/reply.js';
+import {
+  RequestBudget,
+  makeRejectionReporter,
+  withinRequestBudget,
+} from '../http/request-budget.js';
+
+const AUTH_BODY_LIMIT = 16 * 1024;
 
 function ctxOf(request: { ip?: string; headers: Record<string, unknown> }): RequestContext {
   const ua = request.headers['user-agent'];
@@ -45,26 +52,42 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
   const { requireAuth, requireAdmin } = buildGuards(service);
   // In-memory brute-force throttle for the public credential endpoints (T6).
   const throttle = new LoginThrottle();
+  const setupBudget = new RequestBudget({
+    maxRequests: 10,
+    windowMs: 60 * 60_000,
+    maxConcurrent: 4,
+    maxConcurrentPerKey: 1,
+    onReject: makeRejectionReporter('auth-setup'),
+  });
+  const loginBudget = new RequestBudget({
+    maxRequests: 60,
+    windowMs: 60_000,
+    maxConcurrent: 16,
+    maxConcurrentPerKey: 4,
+    onReject: makeRejectionReporter('auth-login'),
+  });
 
   // --- US-4: first-run admin setup ---------------------------------------
-  app.post('/api/auth/setup', async (request, reply) => {
-    const parsed = SetupRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return badRequest(reply, 'username and a password (min 8 chars) are required.');
-    }
-    try {
-      const user = await service.setupInitialAdmin(parsed.data, ctxOf(request));
-      return reply.code(201).send({ user });
-    } catch (err) {
-      if (err instanceof AdminAlreadyExistsError) {
-        return reply.code(409).send({ error: { code: 'admin_exists', message: err.message } });
+  app.post('/api/auth/setup', { bodyLimit: AUTH_BODY_LIMIT }, async (request, reply) =>
+    withinRequestBudget(reply, setupBudget, request.ip, async () => {
+      const parsed = SetupRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return badRequest(reply, 'username and a password (min 8 chars) are required.');
       }
-      if (err instanceof UsernameTakenError) {
-        return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
+      try {
+        const user = await service.setupInitialAdmin(parsed.data, ctxOf(request));
+        return reply.code(201).send({ user });
+      } catch (err) {
+        if (err instanceof AdminAlreadyExistsError) {
+          return reply.code(409).send({ error: { code: 'admin_exists', message: err.message } });
+        }
+        if (err instanceof UsernameTakenError) {
+          return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
+        }
+        throw err;
       }
-      throw err;
-    }
-  });
+    }),
+  );
 
   // --- first-run status (public) -----------------------------------------
   // Lets the sign-in UI decide between "create first admin" and "sign in"
@@ -75,36 +98,41 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
   });
 
   // --- US-5: login -------------------------------------------------------
-  app.post('/api/auth/login', async (request, reply) => {
-    const parsed = LoginRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return badRequest(reply, 'username and password are required.');
-    }
-    // Brute-force throttle (T6): cap guesses per ip+username; locks after repeated
-    // failures, clears on success. Checked BEFORE the (expensive) argon2 verify.
-    const tkey = LoginThrottle.key(request.ip, parsed.data.username);
-    const gate = throttle.check(tkey);
-    if (!gate.allowed) {
-      void reply.header('retry-after', String(Math.ceil(gate.retryAfterMs / 1000)));
-      return reply.code(429).send({
-        error: { code: 'too_many_attempts', message: 'Too many login attempts. Try again later.' },
-      });
-    }
-    try {
-      const { sessionId, user } = await service.login(parsed.data, ctxOf(request));
-      throttle.recordSuccess(tkey);
-      void reply.header('set-cookie', buildSessionCookie(sessionId, SESSION_TTL_MS));
-      return reply.code(200).send({ user });
-    } catch (err) {
-      if (err instanceof InvalidCredentialsError) {
-        throttle.recordFailure(tkey);
-        return reply
-          .code(401)
-          .send({ error: { code: 'invalid_credentials', message: err.message } });
+  app.post('/api/auth/login', { bodyLimit: AUTH_BODY_LIMIT }, async (request, reply) =>
+    withinRequestBudget(reply, loginBudget, request.ip, async () => {
+      const parsed = LoginRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return badRequest(reply, 'username and password are required.');
       }
-      throw err;
-    }
-  });
+      // Brute-force throttle (T6): cap guesses per ip+username; locks after repeated
+      // failures, clears on success. Checked BEFORE the (expensive) argon2 verify.
+      const tkey = LoginThrottle.key(request.ip, parsed.data.username);
+      const gate = throttle.check(tkey);
+      if (!gate.allowed) {
+        void reply.header('retry-after', String(Math.ceil(gate.retryAfterMs / 1000)));
+        return reply.code(429).send({
+          error: {
+            code: 'too_many_requests',
+            message: 'Too many login attempts. Try again later.',
+          },
+        });
+      }
+      try {
+        const { sessionId, user } = await service.login(parsed.data, ctxOf(request));
+        throttle.recordSuccess(tkey);
+        void reply.header('set-cookie', buildSessionCookie(sessionId, SESSION_TTL_MS));
+        return reply.code(200).send({ user });
+      } catch (err) {
+        if (err instanceof InvalidCredentialsError) {
+          throttle.recordFailure(tkey);
+          return reply
+            .code(401)
+            .send({ error: { code: 'invalid_credentials', message: err.message } });
+        }
+        throw err;
+      }
+    }),
+  );
 
   // --- US-5: logout ------------------------------------------------------
   app.post('/api/auth/logout', async (request, reply) => {

@@ -25,8 +25,9 @@ import type { StatusMap } from '../status/map.js';
 
 export class OrchestrationError extends Error {
   constructor(
-    public readonly code: 'unauthorized' | 'not_found' | 'bad_request',
+    public readonly code: 'unauthorized' | 'not_found' | 'bad_request' | 'rate_limited',
     message: string,
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
   }
@@ -101,19 +102,50 @@ export class OrchestrationService {
 
   /** Per-project recent spawn timestamps for the sliding-window rate limit. */
   private readonly spawnTimes = new Map<string, number[]>();
+  private lastSpawnSweepAt = 0;
+  private readonly maxSpawnRateKeys = 5_000;
+
+  private pruneSpawnRates(now: number): void {
+    if (now - this.lastSpawnSweepAt < this.spawnRateWindowMs) return;
+    this.lastSpawnSweepAt = now;
+    const cutoff = now - this.spawnRateWindowMs;
+    for (const [projectId, timestamps] of this.spawnTimes) {
+      const recent = timestamps.filter((timestamp) => timestamp >= cutoff);
+      if (recent.length === 0) this.spawnTimes.delete(projectId);
+      else this.spawnTimes.set(projectId, recent);
+    }
+  }
+
+  private makeSpawnRateRoom(): void {
+    if (this.spawnTimes.size < this.maxSpawnRateKeys) return;
+    let oldestProject: string | undefined;
+    let oldestTimestamp = Number.POSITIVE_INFINITY;
+    for (const [projectId, timestamps] of this.spawnTimes) {
+      const timestamp = timestamps.at(-1) ?? Number.NEGATIVE_INFINITY;
+      if (timestamp < oldestTimestamp) {
+        oldestProject = projectId;
+        oldestTimestamp = timestamp;
+      }
+    }
+    if (oldestProject !== undefined) this.spawnTimes.delete(oldestProject);
+  }
 
   /** Throw if the project exceeded its spawn rate. The hook token grants the spawn
    *  verb, so this bounds a runaway/compromised agent's blast radius. */
   private checkSpawnRate(projectId: string): void {
-    const cutoff = this.now() - this.spawnRateWindowMs;
+    const now = this.now();
+    this.pruneSpawnRates(now);
+    const cutoff = now - this.spawnRateWindowMs;
     const recent = (this.spawnTimes.get(projectId) ?? []).filter((t) => t >= cutoff);
     if (recent.length >= this.spawnRateLimit) {
       throw new OrchestrationError(
-        'bad_request',
+        'rate_limited',
         `spawn rate limit reached (${this.spawnRateLimit} per ${Math.round(this.spawnRateWindowMs / 1000)}s) for this project`,
+        recent[0]! + this.spawnRateWindowMs - now,
       );
     }
-    recent.push(this.now());
+    if (!this.spawnTimes.has(projectId)) this.makeSpawnRateRoom();
+    recent.push(now);
     this.spawnTimes.set(projectId, recent);
   }
 

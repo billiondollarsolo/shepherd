@@ -35,9 +35,16 @@ import { registerNodeWorkspaceRoutes } from './nodes/node-workspace-route.js';
 import type { NodeWorkspaceService } from './nodes/node-workspace-service.js';
 import { registerProjectRoutes, type ProjectService } from './projects/index.js';
 import { registerMeRoutes } from './me/me-routes.js';
+import {
+  RequestBudget,
+  makeRejectionReporter,
+  replyRequestBudgetRejected,
+} from './http/request-budget.js';
 
 /** Optional collaborators wired into the server (added incrementally per phase). */
 export interface BuildServerDeps {
+  /** Optional global HTTP abuse budget override (production uses safe defaults). */
+  requestBudget?: RequestBudget;
   /**
    * Auth + user-management service (US-4/US-5/US-6). When provided, the
    * `/api/auth/*` and `/api/users` routes are registered. Omitted in the bare
@@ -206,6 +213,41 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   const app = Fastify({
     logger: underTest ? false : { level: process.env.LOG_LEVEL ?? 'info' },
     trustProxy,
+    // Hard ceiling for every API body. Routes accepting credentials, hooks, or
+    // agent commands install tighter limits at registration.
+    bodyLimit: 1024 * 1024,
+  });
+
+  // Baseline abuse bound for every HTTP endpoint, including public health/auth
+  // probes. Token and credential routes layer tighter semantic budgets on top.
+  const globalBudget =
+    deps.requestBudget ??
+    new RequestBudget({
+      maxRequests: 1_200,
+      windowMs: 60_000,
+      maxConcurrent: 256,
+      maxConcurrentPerKey: 64,
+      maxKeys: 10_000,
+      onReject: makeRejectionReporter('http-global'),
+    });
+  const releases = new WeakMap<object, () => void>();
+  const releaseRequest = (request: object) => {
+    releases.get(request)?.();
+    releases.delete(request);
+  };
+  app.addHook('onRequest', async (request, reply) => {
+    const decision = globalBudget.enter(request.ip);
+    if (!decision.allowed) return replyRequestBudgetRejected(reply, decision);
+    releases.set(request, decision.release);
+  });
+  app.addHook('onResponse', async (request) => {
+    releaseRequest(request);
+  });
+  app.addHook('onRequestAbort', async (request) => {
+    releaseRequest(request);
+  });
+  app.addHook('onTimeout', async (request) => {
+    releaseRequest(request);
   });
 
   // F2: every error leaves as the shared envelope `{ error: { code, message } }`,
@@ -226,11 +268,15 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     const code =
       status === 400
         ? 'bad_request'
-        : status === 401
-          ? 'unauthorized'
-          : status === 404
-            ? 'not_found'
-            : 'error';
+        : status === 413
+          ? 'payload_too_large'
+          : status === 429
+            ? 'too_many_requests'
+            : status === 401
+              ? 'unauthorized'
+              : status === 404
+                ? 'not_found'
+                : 'error';
     return reply.code(status).send(errorEnvelope(code, e.message ?? 'Request failed'));
   });
   app.setNotFoundHandler((req, reply) =>
