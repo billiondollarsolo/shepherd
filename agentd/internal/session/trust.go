@@ -228,10 +228,10 @@ func flockMcpServer(home string) map[string]any {
 }
 
 // acpFlockMcpServers builds the ACP `session/new` mcpServers list for the flock
-// server (ships the script + passes the session's hook creds as explicit env so it
+// server (ships the script + passes its separate capability as explicit env so it
 // authenticates even if the agent doesn't forward its own env). Empty if unavailable.
-func acpFlockMcpServers(hookURL, hookToken, home string, runtime *identity.Runtime) []any {
-	if hookURL == "" {
+func acpFlockMcpServers(hookURL, orchestrationToken, home string, runtime *identity.Runtime) []any {
+	if hookURL == "" || orchestrationToken == "" {
 		return nil
 	}
 	if home == "" {
@@ -248,7 +248,7 @@ func acpFlockMcpServers(hookURL, hookToken, home string, runtime *identity.Runti
 		"args":    entry["args"],
 		"env": []any{
 			map[string]any{"name": "FLOCK_HOOK_URL", "value": hookURL},
-			map[string]any{"name": "FLOCK_HOOK_TOKEN", "value": hookToken},
+			map[string]any{"name": "FLOCK_ORCHESTRATE_TOKEN", "value": orchestrationToken},
 		},
 	}}
 }

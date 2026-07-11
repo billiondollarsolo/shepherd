@@ -3,10 +3,10 @@
  * flock-mcp — a tiny, dependency-free MCP (Model Context Protocol) stdio server
  * that exposes Flock's agent-orchestration API as tools the host agent can
  * AUTO-DISCOVER and call. It is launched per session by the agent's MCP config
- * and authenticates with the session's own hook credentials:
+ * and authenticates with a separate, explicitly scoped orchestration credential:
  *
  *   FLOCK_HOOK_URL    http://<origin>/api/hooks/<callerId>  (origin + caller id)
- *   FLOCK_HOOK_TOKEN  the per-session bearer token
+ *   FLOCK_ORCHESTRATE_TOKEN  the optional per-session bearer capability
  *
  * Tools → endpoints (all project-scoped + capped server-side):
  *   flock_list_agents  → GET  /api/orchestrate/:caller/agents
@@ -27,7 +27,7 @@ const ENV = (() => {
   return {
     origin: m ? m[1] : '',
     callerId: m ? m[2] : '',
-    token: process.env.FLOCK_HOOK_TOKEN || '',
+    token: process.env.FLOCK_ORCHESTRATE_TOKEN || '',
   };
 })();
 

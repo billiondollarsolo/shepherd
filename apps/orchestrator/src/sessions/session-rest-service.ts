@@ -19,7 +19,7 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import type { CreateSessionRequest, SessionRecord } from '@flock/shared';
+import type { AgentCapabilityScope, CreateSessionRequest, SessionRecord } from '@flock/shared';
 
 import type { AuditLogger } from '../audit/audit.js';
 import type { Database } from '../db/client.js';
@@ -56,7 +56,16 @@ export interface SessionRestServiceDeps {
    * Per-session env injected into the launched agent (hook URL/token/config dir,
    * US-19). Resolver so the caller can mint session-scoped values. Optional.
    */
-  sessionEnv?: (session: SessionRecord, hookToken: string) => Promise<Record<string, string>>;
+  sessionEnv?: (
+    session: SessionRecord,
+    hookToken: string,
+    orchestrationToken?: string,
+  ) => Promise<Record<string, string>>;
+  /** Issues a separate optional orchestration credential. Empty scopes issue none. */
+  issueOrchestrationCapability?: (
+    session: SessionRecord,
+    scopes: readonly AgentCapabilityScope[],
+  ) => Promise<string | undefined>;
   /**
    * Called synchronously after the authoritative record is persisted, BEFORE the
    * tmux launch, so live channels (status map + hook binding + PTY) can track the
@@ -95,7 +104,9 @@ export class SessionRestService {
   private readonly sessionEnv?: (
     session: SessionRecord,
     hookToken: string,
+    orchestrationToken?: string,
   ) => Promise<Record<string, string>>;
+  private readonly issueOrchestrationCapability?: SessionRestServiceDeps['issueOrchestrationCapability'];
   private readonly onSessionCreated?: (session: SessionRecord, hookToken: string) => void;
   private readonly agentdLaunch?: (args: {
     session: SessionRecord;
@@ -112,6 +123,7 @@ export class SessionRestService {
     this.hashToken = deps.hashToken;
     this.audit = deps.audit;
     this.sessionEnv = deps.sessionEnv;
+    this.issueOrchestrationCapability = deps.issueOrchestrationCapability;
     this.onSessionCreated = deps.onSessionCreated;
     this.agentdLaunch = deps.agentdLaunch;
     this.logger = deps.logger ?? {
@@ -201,6 +213,21 @@ export class SessionRestService {
     }
     const persisted = rowToSession(row);
 
+    let orchestrationToken: string | undefined;
+    if (this.issueOrchestrationCapability) {
+      try {
+        orchestrationToken = await this.issueOrchestrationCapability(
+          persisted,
+          input.orchestrationScopes ?? [],
+        );
+      } catch (err) {
+        // The session is not live or visible yet. Roll back the registry row so
+        // an explicitly requested capability never degrades into ambiguous state.
+        await this.db.delete(agentSessions).where(eq(agentSessions.id, persisted.id));
+        throw err;
+      }
+    }
+
     // Track the session in the live channels (status map + hook binding + PTY)
     // BEFORE the agent launch, so the sidebar shows "starting" and the terminal
     // can attach the moment the daemon session exists.
@@ -236,7 +263,7 @@ export class SessionRestService {
         ? ['sh', '-lc', input.devCommand]
         : agentLaunchCommand(persisted.agentType, input.permissionMode, input.systemPrompt));
     const env = this.sessionEnv
-      ? await this.sessionEnv(persisted, hookToken).catch(() => undefined)
+      ? await this.sessionEnv(persisted, hookToken, orchestrationToken).catch(() => undefined)
       : undefined;
     // Launch path: flock-agentd owns the agent/terminal process. On a hard failure
     // it marks the session 'error' (the connection dot shows disconnected) — the

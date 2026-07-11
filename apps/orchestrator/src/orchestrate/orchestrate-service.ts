@@ -5,19 +5,13 @@
  *   - list   the agents in the caller's project (+ live status + latest message)
  *   - wait   block until a sibling reaches a status (idle/awaiting_input/done/…)
  *
- * Auth is the caller's PER-SESSION hook token (the same `FLOCK_HOOK_TOKEN` the
- * agent already has) — NOT the user cookie — and every call is SCOPED to the
- * caller's own project (an agent can never see or wait on another project).
- *
- * ⚠️ BLAST RADIUS: the hook token doubles as the orchestration-capability token,
- * so a session that can post status hooks can ALSO spawn/send/kill any sibling in
- * its OWN project (never another project). Mitigations: per-project concurrent cap
- * (`maxPerProject`) + a per-project spawn RATE limit (below). A future hardening
- * would issue a separate, narrower callback-only token; for now the project scope
- * + caps bound the damage.
+ * Auth is a separately issued, opaque, hashed orchestration capability — never
+ * the callback-only hook token or user cookie. Every verb requires its explicit
+ * durable scope and remains bound to the caller session, project, installation,
+ * expiry, and revocation state.
  */
 import { and, count, eq, isNull, isNotNull } from 'drizzle-orm';
-import type { Status } from '@flock/shared';
+import type { AgentCapabilityScope, Status } from '@flock/shared';
 
 import type { Database } from '../db/client.js';
 import { agentSessions } from '../db/schema.js';
@@ -39,6 +33,25 @@ export interface AgentSummary {
   status: Status | null;
   message: string | null;
 }
+
+export interface AuthorizedCaller {
+  projectId: string;
+  createdBy: string;
+  scopes: AgentCapabilityScope[];
+}
+
+export const ORCHESTRATION_SCOPES = {
+  list: 'agents:list:project',
+  wait: 'agents:read:project',
+  read: 'agents:read:project',
+  send: 'agents:send:project',
+  spawn: 'agents:spawn:project',
+  kill: 'agents:terminate:project',
+  restart: ['agents:terminate:project', 'agents:spawn:project'],
+} as const satisfies Record<
+  'list' | 'wait' | 'read' | 'send' | 'spawn' | 'kill' | 'restart',
+  AgentCapabilityScope | readonly AgentCapabilityScope[]
+>;
 
 /** Statuses an agent may wait on (the meaningful coordination points). */
 const WAITABLE: ReadonlySet<string> = new Set([
@@ -75,7 +88,11 @@ export class OrchestrationService {
   constructor(
     private readonly db: Database,
     private readonly statusMap: StatusMap,
-    private readonly verifyToken: (hash: string, token: string) => Promise<boolean>,
+    private readonly authorizeCapability: (
+      callerId: string,
+      token: string,
+      required: AgentCapabilityScope,
+    ) => Promise<AuthorizedCaller>,
     private readonly latestChats: () => Promise<Record<string, { role: string; text: string }>>,
     /** Launch a new agent in the project; returns the new session id. */
     private readonly spawnFn: (
@@ -130,8 +147,7 @@ export class OrchestrationService {
     if (oldestProject !== undefined) this.spawnTimes.delete(oldestProject);
   }
 
-  /** Throw if the project exceeded its spawn rate. The hook token grants the spawn
-   *  verb, so this bounds a runaway/compromised agent's blast radius. */
+  /** Throw if the project exceeded its spawn rate, bounding delegated spawn authority. */
   private checkSpawnRate(projectId: string): void {
     const now = this.now();
     this.pruneSpawnRates(now);
@@ -165,32 +181,22 @@ export class OrchestrationService {
     return { agentType: tgt.agentType };
   }
 
-  /** Verify the caller's hook token and return its project scope + owner. */
+  /** Verify a separate orchestration capability and return its durable scope. */
   private async authCaller(
     callerId: string,
     token: string,
-  ): Promise<{ projectId: string; createdBy: string }> {
-    const [row] = await this.db
-      .select({
-        projectId: agentSessions.projectId,
-        hash: agentSessions.hookTokenHash,
-        closedAt: agentSessions.closedAt,
-        createdBy: agentSessions.createdBy,
-      })
-      .from(agentSessions)
-      .where(eq(agentSessions.id, callerId))
-      .limit(1);
-    if (!row || row.closedAt || !row.createdBy)
-      throw new OrchestrationError('unauthorized', 'unknown or closed caller session');
-    if (!token || !(await this.verifyToken(row.hash, token))) {
+    required: AgentCapabilityScope,
+  ): Promise<AuthorizedCaller> {
+    try {
+      return await this.authorizeCapability(callerId, token, required);
+    } catch {
       throw new OrchestrationError('unauthorized', 'invalid session token');
     }
-    return { projectId: row.projectId, createdBy: row.createdBy };
   }
 
   /** The caller's sibling agents (same project): id, type, live status, latest message. */
   async listAgents(callerId: string, token: string): Promise<AgentSummary[]> {
-    const { projectId } = await this.authCaller(callerId, token);
+    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.list);
     const rows = await this.db
       .select({ id: agentSessions.id, agentType: agentSessions.agentType })
       .from(agentSessions)
@@ -212,7 +218,7 @@ export class OrchestrationService {
     status: string,
     timeoutMs: number,
   ): Promise<{ status: Status | null; reached: boolean }> {
-    const { projectId } = await this.authCaller(callerId, token);
+    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.wait);
     if (!WAITABLE.has(status))
       throw new OrchestrationError('bad_request', `cannot wait on status: ${status}`);
     const [tgt] = await this.db
@@ -241,7 +247,11 @@ export class OrchestrationService {
    *  caller typically then waits for it to be `idle`, sends it a task, and waits
    *  again for `idle`/`done`. */
   async spawn(callerId: string, token: string, agentType: string): Promise<{ id: string }> {
-    const { projectId, createdBy } = await this.authCaller(callerId, token);
+    const { projectId, createdBy } = await this.authCaller(
+      callerId,
+      token,
+      ORCHESTRATION_SCOPES.spawn,
+    );
     if (!agentType || typeof agentType !== 'string') {
       throw new OrchestrationError('bad_request', 'agentType is required');
     }
@@ -273,7 +283,7 @@ export class OrchestrationService {
     targetId: string,
     text: string,
   ): Promise<{ delivered: boolean }> {
-    const { projectId } = await this.authCaller(callerId, token);
+    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.send);
     if (typeof text !== 'string' || text.length === 0) {
       throw new OrchestrationError('bad_request', 'text is required');
     }
@@ -296,7 +306,7 @@ export class OrchestrationService {
     targetId: string,
     limit: number,
   ): Promise<{ messages: Array<{ role: string; text: string }> }> {
-    const { projectId } = await this.authCaller(callerId, token);
+    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.read);
     await this.requireTargetInProject(projectId, targetId);
     const lim = Math.min(Math.max(limit || 10, 1), 50);
     return { messages: await this.readOutputFn(targetId, lim) };
@@ -304,7 +314,7 @@ export class OrchestrationService {
 
   /** Terminate a sibling agent in the caller's project (clean up a finished worker). */
   async kill(callerId: string, token: string, targetId: string): Promise<{ killed: boolean }> {
-    const { projectId } = await this.authCaller(callerId, token);
+    const { projectId } = await this.authCaller(callerId, token, ORCHESTRATION_SCOPES.kill);
     await this.requireTargetInProject(projectId, targetId);
     return { killed: await this.killFn(targetId) };
   }
@@ -312,7 +322,14 @@ export class OrchestrationService {
   /** Restart a sibling: terminate it and spawn a fresh agent of the SAME type in the
    *  caller's project. Returns the new session id (the old one is gone). */
   async restart(callerId: string, token: string, targetId: string): Promise<{ id: string }> {
-    const { projectId, createdBy } = await this.authCaller(callerId, token);
+    const { projectId, createdBy, scopes } = await this.authCaller(
+      callerId,
+      token,
+      ORCHESTRATION_SCOPES.restart[0],
+    );
+    if (!scopes.includes(ORCHESTRATION_SCOPES.restart[1])) {
+      throw new OrchestrationError('unauthorized', 'restart also requires spawn capability');
+    }
     const { agentType } = await this.requireTargetInProject(projectId, targetId);
     await this.killFn(targetId);
     const id = await this.spawnFn(projectId, createdBy, agentType);

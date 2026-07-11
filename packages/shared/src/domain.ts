@@ -78,6 +78,15 @@ export type EventSource = z.infer<typeof EventSourceEnum>;
 export const SecretKindEnum = z.enum(['ssh_key', 'hook_token', 'node_env', 'agentd_control']);
 export type SecretKind = z.infer<typeof SecretKindEnum>;
 
+export const AgentCapabilityScopeEnum = z.enum([
+  'agents:list:project',
+  'agents:read:project',
+  'agents:send:project',
+  'agents:spawn:project',
+  'agents:terminate:project',
+]);
+export type AgentCapabilityScope = z.infer<typeof AgentCapabilityScopeEnum>;
+
 export const AuditActionEnum = z.enum([
   'login',
   'logout',

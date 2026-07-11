@@ -81,6 +81,8 @@ function makeService(
   opts: {
     nodeKind?: 'local' | 'ssh';
     agentdLaunch?: SessionRestServiceDeps['agentdLaunch'];
+    sessionEnv?: SessionRestServiceDeps['sessionEnv'];
+    issueOrchestrationCapability?: SessionRestServiceDeps['issueOrchestrationCapability'];
   } = {},
 ) {
   const nodeRows = [
@@ -93,6 +95,8 @@ function makeService(
     hashToken: async (t) => `hash:${t.slice(0, 6)}`,
     audit: new AuditLogger({ async write() {} }),
     agentdLaunch: opts.agentdLaunch,
+    sessionEnv: opts.sessionEnv,
+    issueOrchestrationCapability: opts.issueOrchestrationCapability,
     logger: { warn() {} },
   });
   return { service, db };
@@ -139,6 +143,34 @@ describe('SessionRestService.createSession', () => {
     const { service } = makeService({ nodeKind: 'ssh', agentdLaunch });
     const { session } = await service.createSession(REQ, { userId: USER_ID });
     expect(calls).toEqual([{ id: session.id, nodeKind: 'ssh' }]);
+  });
+
+  it('defaults to callback-only and injects a distinct token only for requested scopes', async () => {
+    const issued: string[][] = [];
+    const envCalls: Array<{ hook: string; orchestration?: string }> = [];
+    const { service } = makeService({
+      issueOrchestrationCapability: async (_session, scopes) => {
+        issued.push([...scopes]);
+        return scopes.length > 0 ? 'separate-orchestration-token' : undefined;
+      },
+      sessionEnv: async (_session, hook, orchestration) => {
+        envCalls.push({ hook, orchestration });
+        return {};
+      },
+    });
+    const callbackOnly = await service.createSession(REQ, { userId: USER_ID });
+    const delegated = await service.createSession(
+      { ...REQ, orchestrationScopes: ['agents:list:project'] },
+      { userId: USER_ID },
+    );
+
+    expect(issued).toEqual([[], ['agents:list:project']]);
+    expect(envCalls[0]).toEqual({ hook: callbackOnly.hookToken, orchestration: undefined });
+    expect(envCalls[1]).toEqual({
+      hook: delegated.hookToken,
+      orchestration: 'separate-orchestration-token',
+    });
+    expect(envCalls[1]!.hook).not.toBe(envCalls[1]!.orchestration);
   });
 
   it('still persists the record when the agentd launch throws (no throw out)', async () => {

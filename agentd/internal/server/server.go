@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -163,7 +165,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 	}
 	switch ctrl.Op {
 	case "open":
-		_, err := c.s.mgr.Open(session.Spec{
+		spec := session.Spec{
 			ID: ctrl.ID, Kind: ctrl.Kind, Cwd: ctrl.Cwd, Env: ctrl.Env,
 			Command: ctrl.Command, Mode: ctrl.Mode, Cols: ctrl.Cols, Rows: ctrl.Rows,
 			ConfigDirEnv: ctrl.ConfigDirEnv, ConfigFiles: ctrl.ConfigFiles,
@@ -172,7 +174,12 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			SandboxAllow:     ctrl.SandboxAllow,
 			ActivityStatus:   ctrl.ActivityStatus,
 			Identity:         c.s.runtime,
-		})
+		}
+		if err := c.s.validateSessionSpec(&spec); err != nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
+			return
+		}
+		_, err := c.s.mgr.Open(spec)
 		if err != nil {
 			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
 			return
@@ -226,6 +233,62 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			_ = c.s.layout.Set(ctrl.Workspace, ctrl.Layout)
 		}
 	}
+}
+
+// validateSessionSpec prevents the root daemon from being used as a cwd/symlink
+// confused deputy. Secure sessions must start inside the fixed runtime home, and
+// every extra sandbox path is constrained to the same canonical tree.
+func (s *Server) validateSessionSpec(spec *session.Spec) error {
+	if s.runtime == nil {
+		return nil
+	}
+	if spec.Cwd == "" {
+		return fmt.Errorf("secure session working directory is required")
+	}
+	root, err := filepath.EvalSymlinks(s.runtime.Home)
+	if err != nil {
+		return fmt.Errorf("resolve runtime home: %w", err)
+	}
+	cwd, err := canonicalDirectory(spec.Cwd)
+	if err != nil {
+		return fmt.Errorf("resolve session working directory: %w", err)
+	}
+	if !pathWithin(root, cwd) {
+		return fmt.Errorf("session working directory is outside the runtime workspace root")
+	}
+	spec.Cwd = cwd
+	for i, allowed := range spec.SandboxAllow {
+		canonical, resolveErr := canonicalDirectory(allowed)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve sandbox allow path: %w", resolveErr)
+		}
+		if !pathWithin(root, canonical) {
+			return fmt.Errorf("sandbox allow path is outside the runtime workspace root")
+		}
+		spec.SandboxAllow[i] = canonical
+	}
+	return nil
+}
+
+func canonicalDirectory(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("not a directory")
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func pathWithin(root, candidate string) bool {
+	rel, err := filepath.Rel(root, candidate)
+	return err == nil && rel != ".." && !filepath.IsAbs(rel) &&
+		!strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
 func (c *conn) reject(message string) {

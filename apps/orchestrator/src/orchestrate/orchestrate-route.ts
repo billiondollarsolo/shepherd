@@ -1,10 +1,10 @@
 /**
- * Agent-facing orchestration routes — authed by the caller's per-session HOOK
- * TOKEN (Bearer), NOT the user cookie, and scoped to the caller's project:
+ * Agent-facing orchestration routes — authed by a separate scoped capability
+ * (Bearer), NOT the callback token or user cookie, and bound to one project:
  *   GET /api/orchestrate/:callerId/agents              — sibling agents + status + msg
  *   GET /api/orchestrate/:callerId/wait/:targetId      — block until ?status= (or timeout)
- * The agent already has FLOCK_HOOK_URL (carries :callerId) + FLOCK_HOOK_TOKEN, so
- * it can call these with the same curl pattern it uses for hooks.
+ * The agent uses FLOCK_HOOK_URL only to derive its origin/caller id and presents
+ * FLOCK_ORCHESTRATE_TOKEN when the operator explicitly delegated scopes.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 

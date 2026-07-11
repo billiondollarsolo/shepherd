@@ -27,6 +27,7 @@ import {
 
 import {
   agentSessions,
+  agentCapabilities,
   auditLog,
   events,
   nodes,
@@ -48,6 +49,7 @@ describe('schema (§6) — all required tables exist', () => {
       nodes,
       projects,
       agentSessions,
+      agentCapabilities,
       events,
       pushSubscriptions,
       auditLog,
@@ -66,6 +68,7 @@ describe('schema (§6) — all required tables exist', () => {
         'nodes',
         'projects',
         'agentSessions',
+        'agentCapabilities',
         'events',
         'pushSubscriptions',
         'auditLog',

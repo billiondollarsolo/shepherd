@@ -1013,27 +1013,10 @@ func homeForSpec(spec Spec) string {
 // agentEnvironment builds the child environment while forcing identity fields
 // after all caller additions. Control credentials are always removed.
 func agentEnvironment(spec Spec) []string {
-	reserved := []string{
-		"FLOCK_AGENTD_SECRET=",
-		"FLOCK_AGENTD_CREDENTIAL=",
-		"FLOCK_AGENTD_CREDENTIAL_FILE=",
-		"HOME=",
-		"USER=",
-		"LOGNAME=",
-		"SHELL=",
-		"PATH=",
-	}
-	keep := func(entry string) bool {
-		for _, prefix := range reserved {
-			if strings.HasPrefix(entry, prefix) {
-				return false
-			}
-		}
-		return true
-	}
+	keep := func(entry string) bool { return !reservedAgentEnvKey(envKey(entry)) }
 	out := make([]string, 0, len(os.Environ())+len(spec.Env)+8)
 	for _, entry := range os.Environ() {
-		if keep(entry) {
+		if keep(entry) && (spec.Identity == nil || inheritedAgentEnvKey(envKey(entry))) {
 			out = append(out, entry)
 		}
 	}
@@ -1055,6 +1038,40 @@ func agentEnvironment(spec Spec) []string {
 		out = append(out, "HOME="+home)
 	}
 	return out
+}
+
+func envKey(entry string) string {
+	if i := strings.IndexByte(entry, '='); i >= 0 {
+		return entry[:i]
+	}
+	return entry
+}
+
+// Secure sessions inherit only inert locale/display settings from the daemon.
+// Application configuration must be supplied explicitly by the orchestrator;
+// database URLs, cloud credentials, sockets, and master keys never hitchhike
+// from the service manager.
+func inheritedAgentEnvKey(key string) bool {
+	switch key {
+	case "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "COLORTERM", "NO_COLOR":
+		return true
+	default:
+		return strings.HasPrefix(key, "LC_")
+	}
+}
+
+func reservedAgentEnvKey(key string) bool {
+	switch key {
+	case "FLOCK_AGENTD_SECRET", "FLOCK_AGENTD_CREDENTIAL", "FLOCK_AGENTD_CREDENTIAL_FILE",
+		"FLOCK_AGENTD_SECRET_FILE", "FLOCK_AGENTD_NODE_ID", "FLOCK_AGENTD_NODE_ID_FILE",
+		"FLOCK_MASTER_KEY", "FLOCK_MASTER_KEY_FILE", "DATABASE_URL", "DOCKER_HOST", "SSH_AUTH_SOCK",
+		"HOME", "USER", "LOGNAME", "SHELL", "PATH",
+		"LD_PRELOAD", "LD_LIBRARY_PATH", "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS",
+		"PROMPT_COMMAND", "NODE_OPTIONS":
+		return true
+	default:
+		return strings.HasPrefix(key, "DYLD_")
+	}
 }
 
 func pathContains(path, dir string) bool {

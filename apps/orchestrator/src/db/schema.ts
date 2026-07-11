@@ -292,6 +292,34 @@ export const agentSessions = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// agent_capabilities — opaque, hashed, revocable agent orchestration authority.
+// Callback-only hook credentials remain on agent_sessions and cannot authorize
+// these scopes. Browser responses expose neither tokens nor hashes.
+// ---------------------------------------------------------------------------
+export const agentCapabilities = pgTable(
+  'agent_capabilities',
+  {
+    id: id(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    installationId: text('installation_id').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    scopes: text('scopes').array().notNull(),
+    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => ({
+    bySession: index('agent_capabilities_session_id_idx').on(t.sessionId),
+    byProject: index('agent_capabilities_project_id_idx').on(t.projectId),
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // events — append-only, WRITE-BEHIND log (spec §6). Indexed by (session_id, seq).
 // ---------------------------------------------------------------------------
 export const events = pgTable(
@@ -408,6 +436,8 @@ export type NewAuditLogRow = typeof auditLog.$inferInsert;
 
 export type SecretRow = typeof secrets.$inferSelect;
 export type NewSecretRow = typeof secrets.$inferInsert;
+export type AgentCapabilityRow = typeof agentCapabilities.$inferSelect;
+export type NewAgentCapabilityRow = typeof agentCapabilities.$inferInsert;
 export type ProjectPensRow = typeof projectPens.$inferSelect;
 
 /** Full schema object for the Drizzle client. */
@@ -418,6 +448,7 @@ export const schema = {
   nodes,
   projects,
   agentSessions,
+  agentCapabilities,
   events,
   pushSubscriptions,
   auditLog,

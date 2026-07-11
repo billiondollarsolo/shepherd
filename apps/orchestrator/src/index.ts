@@ -49,9 +49,10 @@ import {
   isBareAgentProcessName,
 } from './sessions/agent-launch.js';
 import { contextPct, estimateCostUsd, lookupModel } from './sessions/model-info.js';
-import { hashHookToken, verifyHookToken } from './hooks/hook-token.js';
+import { hashHookToken } from './hooks/hook-token.js';
 import { OrchestrationService } from './orchestrate/orchestrate-service.js';
 import { registerOrchestrateRoute } from './orchestrate/orchestrate-route.js';
+import { AgentCapabilityService } from './orchestrate/capability-service.js';
 import { ConfigService } from './config/config-service.js';
 import { registerConfigRoutes } from './config/config-routes.js';
 import { readSessionCookie } from './auth/cookie.js';
@@ -249,6 +250,18 @@ export async function main(): Promise<void> {
           }
         : undefined,
   });
+  const installationId = (() => {
+    const explicit = process.env.FLOCK_INSTALLATION_ID?.trim();
+    if (explicit) return explicit;
+    const identityFile = process.env.FLOCK_AGENTD_NODE_ID_FILE;
+    if (identityFile) {
+      const value = readFileSync(identityFile, 'utf8').trim();
+      if (value) return value;
+    }
+    if (process.env.NODE_ENV !== 'production') return 'development-local';
+    throw new Error('FLOCK_INSTALLATION_ID or the protected local node identity is required');
+  })();
+  const agentCapabilities = new AgentCapabilityService({ db, installationId });
   // Derived agent status (daemon tails the agent transcript) → live status map +
   // per-session meta (token usage + current tool) shown in the paddock sidebar.
   // Per-session telemetry cache (everything except `plan`, which is routed to the
@@ -639,6 +652,8 @@ export async function main(): Promise<void> {
     db,
     hashToken: (t) => Promise.resolve(hashHookToken(t)),
     audit: auditLogger,
+    issueOrchestrationCapability: (session, scopes) =>
+      agentCapabilities.issue(session.id, session.projectId, scopes),
     // flock-agentd is the transport for ALL nodes (local + ssh). It is MANDATORY:
     // 'launched' on success, 'failed' on any error (the session then shows a
     // disconnected dot instead of a silent shell).
@@ -719,7 +734,7 @@ export async function main(): Promise<void> {
         statusDetail: session.statusDetail,
       });
     },
-    sessionEnv: async (session, hookToken) => {
+    sessionEnv: async (session, hookToken, orchestrationToken) => {
       // Over an SSH node the agent must curl the node-local reverse-tunnel port
       // (US-9); the tunnel forwards it back to the orchestrator. Locally it hits
       // the orchestrator origin directly. A null tunnel port (local node, or the
@@ -734,6 +749,7 @@ export async function main(): Promise<void> {
         FLOCK_HOOK_TOKEN: hookToken,
         // One-liner the agent hook templates call: POST the event JSON to Flock.
         FLOCK_HOOK_CMD: `curl -sS -m 5 -X POST -H "Authorization: Bearer ${hookToken}" -H "content-type: application/json" --data-binary`,
+        ...(orchestrationToken ? { FLOCK_ORCHESTRATE_TOKEN: orchestrationToken } : {}),
       };
     },
   });
@@ -746,6 +762,7 @@ export async function main(): Promise<void> {
   const terminateSession = new TerminateSessionService({
     registry: sessionRegistry,
     audit: auditLogger,
+    revokeCapabilities: (sessionId) => agentCapabilities.revokeSession(sessionId),
     terminator: {
       // `killSession` is the service's transport-agnostic seam; for agentd it
       // closes the daemon session (+ its `:shell` split, if any) by session id.
@@ -1033,12 +1050,12 @@ export async function main(): Promise<void> {
       : undefined,
   });
 
-  // Agent-facing orchestration API (hook-token authed, project-scoped): lets an
-  // agent observe + coordinate with its siblings (list / wait / spawn / send).
+  // Agent-facing orchestration API: separate durable capability, project scope,
+  // and explicit per-verb grants. Callback-only agents cannot enter this surface.
   const orchestration = new OrchestrationService(
     db,
     liveChannels.statusMap,
-    (hash, token) => Promise.resolve(verifyHookToken(hash, token)),
+    (callerId, token, required) => agentCapabilities.authorize(callerId, token, required),
     () => new EventReadService(db).latestChats(),
     // spawn: launch a sibling in the project (reuses the full create machinery).
     async (projectId, createdBy, agentType) => {

@@ -41,10 +41,14 @@ func TestRuntimeIdentityDropsPTYCredentialsAndForcesEnvironment(t *testing.T) {
 	runtime, workspace := privilegedRuntimeFixture(t)
 	t.Setenv("FLOCK_AGENTD_SECRET", "must-not-reach-agent")
 	t.Setenv("FLOCK_AGENTD_CREDENTIAL_FILE", "/root/control-credential")
+	t.Setenv("FLOCK_MASTER_KEY", "must-not-reach-agent-either")
+	t.Setenv("DATABASE_URL", "postgres://control-plane")
+	t.Setenv("LD_PRELOAD", "/root/hostile.so")
 
 	command := fmt.Sprintf(
 		"printf 'uid='; id -u; printf 'gid='; id -g; printf 'groups='; id -G; printf 'home=%%s\\nuser=%%s\\nsecret=%%s\\ncredential=%%s\\n' \"$HOME\" \"$USER\" \"${FLOCK_AGENTD_SECRET-}\" \"${FLOCK_AGENTD_CREDENTIAL_FILE-}\"",
 	)
+	command += "; printf 'master=%s\\ndatabase=%s\\nloader=%s\\n' \"${FLOCK_MASTER_KEY-}\" \"${DATABASE_URL-}\" \"${LD_PRELOAD-}\""
 	s, err := Open(Spec{
 		ID:       "runtime-identity",
 		Cwd:      workspace,
@@ -55,7 +59,7 @@ func TestRuntimeIdentityDropsPTYCredentialsAndForcesEnvironment(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer s.Close()
-	out := drain(t, s.Subscribe(), "credential=", 3*time.Second)
+	out := drain(t, s.Subscribe(), "loader=", 3*time.Second)
 
 	for _, expected := range []string{
 		"uid=" + strconv.FormatUint(uint64(runtime.UID), 10),
@@ -64,6 +68,9 @@ func TestRuntimeIdentityDropsPTYCredentialsAndForcesEnvironment(t *testing.T) {
 		"user=" + runtime.Username,
 		"secret=\r\n",
 		"credential=\r\n",
+		"master=\r\n",
+		"database=\r\n",
+		"loader=\r\n",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("missing %q in runtime output %q", expected, out)

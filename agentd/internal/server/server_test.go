@@ -2,12 +2,14 @@ package server
 
 import (
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"flock-agentd/internal/controlauth"
+	"flock-agentd/internal/identity"
 	"flock-agentd/internal/layout"
 	"flock-agentd/internal/proto"
 	"flock-agentd/internal/session"
@@ -141,6 +143,38 @@ func TestCapturedAuthenticateCannotBeReplayed(t *testing.T) {
 	}
 	mustControl(t, second, replayed)
 	readControlOp(t, second, "error", 2*time.Second)
+}
+
+func TestSecureWorkingDirectoryPolicyRejectsEscapeAndCanonicalizes(t *testing.T) {
+	root := t.TempDir()
+	workspace := filepath.Join(root, "workspace")
+	outside := t.TempDir()
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{runtime: &identity.Runtime{Home: root}}
+
+	valid := session.Spec{Cwd: filepath.Join(root, "workspace", ".")}
+	if err := srv.validateSessionSpec(&valid); err != nil {
+		t.Fatalf("valid workspace rejected: %v", err)
+	}
+	if valid.Cwd != workspace {
+		t.Fatalf("working directory was not canonicalized: %q", valid.Cwd)
+	}
+
+	for _, spec := range []session.Spec{
+		{},
+		{Cwd: outside},
+		{Cwd: filepath.Join(root, "escape")},
+		{Cwd: workspace, SandboxAllow: []string{outside}},
+	} {
+		if err := srv.validateSessionSpec(&spec); err == nil {
+			t.Fatalf("unsafe spec accepted: %+v", spec)
+		}
+	}
 }
 
 func mustNonce(t *testing.T) string {

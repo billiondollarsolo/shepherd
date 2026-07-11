@@ -86,6 +86,7 @@ export interface TerminateSessionServiceDeps {
   audit: AuditLogger;
   /** Optional browser-harness teardown (Phase 4/US-25); omitted in Phase 2. */
   browser?: BrowserHarnessTeardown;
+  revokeCapabilities?: (sessionId: string) => Promise<void>;
 }
 
 /** Raised when the session_id does not resolve to a record (→ 404, spec §10). */
@@ -101,12 +102,14 @@ export class TerminateSessionService {
   private readonly registry: TerminableSessionRegistry;
   private readonly audit: AuditLogger;
   private readonly browser?: BrowserHarnessTeardown;
+  private readonly revokeCapabilities?: (sessionId: string) => Promise<void>;
 
   constructor(deps: TerminateSessionServiceDeps) {
     this.terminator = deps.terminator;
     this.registry = deps.registry;
     this.audit = deps.audit;
     this.browser = deps.browser;
+    this.revokeCapabilities = deps.revokeCapabilities;
   }
 
   /**
@@ -154,6 +157,9 @@ export class TerminateSessionService {
     //    boot re-attach candidate set so a restart never resurrects it (FR-S4).
     const closedAt = new Date().toISOString();
     await this.registry.markClosed(session.id, closedAt);
+    // Authorization also checks closed_at, so a transient revocation-write
+    // failure still fails closed. Persist the explicit marker for audit/cleanup.
+    await this.revokeCapabilities?.(session.id);
 
     // 4) Append the security-relevant audit row (FR-A3). Off the live path.
     await this.audit.record({

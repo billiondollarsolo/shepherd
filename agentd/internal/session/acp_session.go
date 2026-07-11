@@ -112,6 +112,7 @@ func (s *Session) runACP(argv []string) {
 	}
 
 	hookURL, hookToken := hookEndpointFromEnv(s.spec.Env)
+	orchestrationToken := orchestrationTokenFromEnv(s.spec.Env)
 	ast := &acpState{hookURL: hookURL, hookToken: hookToken}
 	conn := acp.NewConn(stdout, stdin, acp.Handlers{
 		OnUpdate:     s.renderACPEvent,
@@ -139,7 +140,7 @@ func (s *Session) runACP(argv []string) {
 	sid, err := conn.NewSession(
 		ctx,
 		s.spec.Cwd,
-		acpFlockMcpServers(hookURL, hookToken, homeForSpec(s.spec), s.spec.Identity),
+		acpFlockMcpServers(hookURL, orchestrationToken, homeForSpec(s.spec), s.spec.Identity),
 	)
 	if err != nil {
 		s.acpFail(err)
@@ -365,6 +366,15 @@ func hookEndpointFromEnv(env []string) (url, token string) {
 		}
 	}
 	return url, token
+}
+
+func orchestrationTokenFromEnv(env []string) string {
+	for _, kv := range env {
+		if value, ok := strings.CutPrefix(kv, "FLOCK_ORCHESTRATE_TOKEN="); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 // toCRLF makes agent text safe for a terminal (bare LF → CRLF).

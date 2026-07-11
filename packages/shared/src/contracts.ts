@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { StatusEnum } from './status.js';
 import {
   AgentTypeEnum,
+  AgentCapabilityScopeEnum,
   SessionPermissionModeEnum,
   AuditActionEnum,
   AuditEntrySchema,
@@ -345,6 +346,9 @@ export const CreateSessionRequest = z
      * with no ACP entrypoint. Default: PTY.
      */
     transport: z.enum(['pty', 'acp']).optional(),
+    /** Optional, explicit Flock orchestration authority. Omitted means the agent
+     * receives callback-only credentials and cannot inspect/control siblings. */
+    orchestrationScopes: z.array(AgentCapabilityScopeEnum).max(5).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.agentType === 'dev' && !val.devCommand?.trim()) {

@@ -659,6 +659,13 @@ credential rejection, protocol mismatch, node failure, and ordinary reconnects.
 
 **Priority:** Critical
 
+**Implementation status:** In progress. Callback credentials no longer authorize
+orchestration. Optional orchestration credentials are separately generated, hashed,
+installation/session/project/expiry/revocation bound, default to absent, and enforce
+per-verb scopes. Agent/MCP wiring uses `FLOCK_ORCHESTRATE_TOKEN`; hook tokens fail the
+orchestration authorizer. Durable project policy and user-facing scope selection/
+visibility remain under S3.2.
+
 **Why**
 
 The current hook token doubles as a project-wide orchestration credential. A callback
@@ -732,6 +739,11 @@ arguments become the accidental authorization policy.
 ### S3.3 — Minimize and sanitize the agent environment
 
 **Priority:** High
+
+**Implementation status:** In progress. Secure sessions inherit only locale/display
+settings; identity fields are forced, control-plane/database/Docker/socket/loader
+variables are denied even when explicitly supplied, and root-boundary tests assert
+absence. Typed provider credential grants and per-session temporary directories remain.
 
 **Why**
 
