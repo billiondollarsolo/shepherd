@@ -47,6 +47,7 @@ describe('shared secrets contracts (US-3)', () => {
   it('validates secret kinds (from domain SecretKindEnum)', () => {
     expect(SecretKindEnum.parse('ssh_key')).toBe('ssh_key');
     expect(SecretKindEnum.parse('hook_token')).toBe('hook_token');
+    expect(SecretKindEnum.parse('agentd_control')).toBe('agentd_control');
     expect(() => SecretKindEnum.parse('nope')).toThrow();
   });
 });

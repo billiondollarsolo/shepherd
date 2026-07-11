@@ -15,7 +15,7 @@ import (
 	"io"
 )
 
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 
 // Frame types.
 const (
@@ -32,9 +32,15 @@ type Control struct {
 	Op string `json:"op"`
 
 	// hello / helloOk
-	ProtocolVersion int    `json:"protocolVersion,omitempty"`
-	DaemonVersion   string `json:"daemonVersion,omitempty"`
-	Secret          string `json:"secret,omitempty"`
+	ProtocolVersion int      `json:"protocolVersion,omitempty"`
+	DaemonVersion   string   `json:"daemonVersion,omitempty"`
+	Secret          string   `json:"secret,omitempty"`
+	NodeID          string   `json:"nodeId,omitempty"`
+	ClientNonce     string   `json:"clientNonce,omitempty"`
+	ServerNonce     string   `json:"serverNonce,omitempty"`
+	ServerMAC       string   `json:"serverMac,omitempty"`
+	ClientMAC       string   `json:"clientMac,omitempty"`
+	Capabilities    []string `json:"capabilities,omitempty"`
 
 	// session open / close / subscribe / resize / exit
 	ID      string   `json:"id,omitempty"`
@@ -44,9 +50,9 @@ type Control struct {
 	Command []string `json:"command,omitempty"`
 	// Mode selects the session transport: "" / "pty" (default) or "acp" (F6).
 	Mode string `json:"mode,omitempty"`
-	Cols    uint16   `json:"cols,omitempty"`
-	Rows    uint16   `json:"rows,omitempty"`
-	Code    int      `json:"code,omitempty"`
+	Cols uint16 `json:"cols,omitempty"`
+	Rows uint16 `json:"rows,omitempty"`
+	Code int    `json:"code,omitempty"`
 
 	// scoped hook-config injection (US-19), seeded on the node by Open.
 	ConfigDirEnv     string            `json:"configDirEnv,omitempty"`

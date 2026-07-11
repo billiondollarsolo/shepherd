@@ -113,6 +113,7 @@ func serve(args []string) {
 	addr := fs.String("addr", "", "loopback TCP addr for SSH direct-tcpip, e.g. 127.0.0.1:48222")
 	secret := fs.String("secret", os.Getenv("FLOCK_AGENTD_SECRET"), "shared secret (optional)")
 	secretFile := fs.String("secret-file", os.Getenv("FLOCK_AGENTD_SECRET_FILE"), "protected shared-secret file")
+	nodeID := fs.String("node-id", os.Getenv("FLOCK_AGENTD_NODE_ID"), "stable identity for this daemon")
 	stateDir := fs.String("state-dir", defaultStateDir(), "dir for persisted layouts")
 	runtimeUser := fs.String("runtime-user", "", "fixed non-root user for every agent process")
 	allowInsecureSameUser := fs.Bool(
@@ -154,6 +155,12 @@ func serve(args []string) {
 	if runtimeIdentity != nil && resolvedSecret == "" {
 		fatal("missing control credential", fmt.Errorf("--secret-file is required in secure mode"))
 	}
+	if strings.TrimSpace(*nodeID) == "" {
+		if runtimeIdentity != nil {
+			fatal("missing node identity", fmt.Errorf("--node-id is required in secure mode"))
+		}
+		*nodeID = "development-local"
+	}
 
 	// A loopback TCP listener (remote nodes, reached via SSH direct-tcpip) is the
 	// one surface another LOCAL user/process on the node could reach. Refuse to
@@ -185,7 +192,7 @@ func serve(args []string) {
 	if err != nil {
 		fatal("open layout store", err)
 	}
-	srv := server.New(mgr, resolveVersion(), resolvedSecret, layouts, runtimeIdentity)
+	srv := server.New(mgr, resolveVersion(), *nodeID, resolvedSecret, layouts, runtimeIdentity)
 
 	var lns []net.Listener
 

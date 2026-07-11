@@ -11,12 +11,15 @@ import path from 'node:path';
 import { NodeAgentdClient } from './agentd-client.js';
 import type { AgentdBootstrap } from './agentd-bootstrap.js';
 import type { AgentdHost } from './ssh-agentd-host.js';
+import type { NodeControlIdentity } from './node-control-credentials.js';
 
 export interface AgentdConnectionsDeps {
   /** Local daemon unix socket; defaults to the daemon's own default path. */
   socketPath?: string;
-  /** Optional shared secret (matches the daemon's --secret). */
-  secret?: string;
+  /** Loads the unique encrypted-at-rest identity for exactly one node. */
+  identityFor: (nodeId: string, kind: 'local' | 'ssh') => Promise<NodeControlIdentity>;
+  /** Temporary source-dev bridge for already-running v1 PTYs; never production. */
+  allowLegacyDevelopment?: boolean;
   /**
    * Derived agent-status push from any node's daemon (it tails the agent's
    * transcript). Wired into every client before the handshake so the daemon's
@@ -38,7 +41,7 @@ export class AgentdConnections {
   private readonly remotes = new Map<string, NodeAgentdClient>();
   private readonly remotePending = new Map<string, Promise<NodeAgentdClient>>();
 
-  constructor(private readonly deps: AgentdConnectionsDeps = {}) {}
+  constructor(private readonly deps: AgentdConnectionsDeps) {}
 
   /**
    * Peek the cached client for a remote node WITHOUT connecting. A non-null
@@ -70,7 +73,10 @@ export class AgentdConnections {
       const channel = await host.forwardOut('127.0.0.1', port);
       const client = new NodeAgentdClient(channel);
       try {
-        await client.hello(this.deps.secret);
+        const identity = await this.deps.identityFor(nodeId, 'ssh');
+        await client.hello(identity, {
+          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
+        });
         return true;
       } finally {
         client.dispose();
@@ -81,7 +87,7 @@ export class AgentdConnections {
   }
 
   /** Connect (once) to the local node's daemon and complete the handshake. */
-  async clientForLocal(): Promise<NodeAgentdClient> {
+  async clientForLocal(nodeId: string): Promise<NodeAgentdClient> {
     if (this.local) return this.local;
     if (this.localPending) return this.localPending;
     const socketPath = this.deps.socketPath ?? defaultLocalSocket();
@@ -94,7 +100,10 @@ export class AgentdConnections {
       const client = new NodeAgentdClient(sock);
       if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
       try {
-        await client.hello(this.deps.secret);
+        const identity = await this.deps.identityFor(nodeId, 'local');
+        await client.hello(identity, {
+          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
+        });
       } catch (err) {
         // T23: a failed handshake otherwise leaks the socket + frame decoder.
         client.dispose();
@@ -132,12 +141,15 @@ export class AgentdConnections {
     const pending = this.remotePending.get(nodeId);
     if (pending) return pending;
     const p = (async () => {
-      const endpoint = await bootstrap.ensureRunning(host);
+      const identity = await this.deps.identityFor(nodeId, 'ssh');
+      const endpoint = await bootstrap.ensureRunning(host, identity);
       const channel = await host.forwardOut(endpoint.host, endpoint.port);
       const client = new NodeAgentdClient(channel);
       if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
       try {
-        await client.hello(this.deps.secret);
+        await client.hello(identity, {
+          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
+        });
       } catch (err) {
         // T23: a failed handshake otherwise leaks the channel + frame decoder.
         client.dispose();

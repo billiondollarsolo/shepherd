@@ -75,7 +75,7 @@ export type SessionPermissionMode = z.infer<typeof SessionPermissionModeEnum>;
 export const EventSourceEnum = z.enum(['hook', 'osc', 'pty', 'orchestrator']);
 export type EventSource = z.infer<typeof EventSourceEnum>;
 
-export const SecretKindEnum = z.enum(['ssh_key', 'hook_token', 'node_env']);
+export const SecretKindEnum = z.enum(['ssh_key', 'hook_token', 'node_env', 'agentd_control']);
 export type SecretKind = z.infer<typeof SecretKindEnum>;
 
 export const AuditActionEnum = z.enum([

@@ -7,10 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"flock-agentd/internal/controlauth"
 	"flock-agentd/internal/layout"
 	"flock-agentd/internal/proto"
 	"flock-agentd/internal/session"
 )
+
+const testNodeID = "node-test-1234"
+const testSecret = "0123456789abcdef0123456789abcdef"
 
 func dialServer(t *testing.T) (net.Conn, *session.Manager) {
 	t.Helper()
@@ -25,7 +29,7 @@ func dialServerWith(t *testing.T, layouts LayoutStore) (net.Conn, *session.Manag
 		t.Fatalf("listen: %v", err)
 	}
 	mgr := session.NewManager()
-	srv := New(mgr, "test", "", layouts, nil)
+	srv := New(mgr, "test", testNodeID, testSecret, layouts, nil)
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = ln.Close(); mgr.CloseAll() })
 
@@ -86,17 +90,93 @@ func readDataUntil(t *testing.T, c net.Conn, sid, want string, timeout time.Dura
 
 func TestHelloHandshake(t *testing.T) {
 	cli, _ := dialServer(t)
-	mustControl(t, cli, proto.Control{Op: "hello"})
-	ok := readControlOp(t, cli, "helloOk", 2*time.Second)
+	ok := authenticate(t, cli)
 	if ok.ProtocolVersion != proto.ProtocolVersion || ok.DaemonVersion != "test" {
 		t.Fatalf("bad helloOk: %+v", ok)
 	}
 }
 
+func TestHandshakeRejectsWrongVersionNodeAndMAC(t *testing.T) {
+	tests := []proto.Control{
+		{Op: "hello", ProtocolVersion: proto.ProtocolVersion + 1, NodeID: testNodeID, ClientNonce: mustNonce(t)},
+		{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: "wrong-node", ClientNonce: mustNonce(t)},
+	}
+	for _, hello := range tests {
+		cli, _ := dialServer(t)
+		mustControl(t, cli, hello)
+		readControlOp(t, cli, "error", 2*time.Second)
+		_ = cli.Close()
+	}
+
+	cli, _ := dialServer(t)
+	nonce := mustNonce(t)
+	mustControl(t, cli, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: nonce})
+	challenge := readControlOp(t, cli, "challenge", 2*time.Second)
+	mustControl(t, cli, proto.Control{
+		Op: "authenticate", NodeID: testNodeID, ClientNonce: nonce,
+		ServerNonce: challenge.ServerNonce, ClientMAC: "invalid",
+	})
+	readControlOp(t, cli, "error", 2*time.Second)
+}
+
+func TestCapturedAuthenticateCannotBeReplayed(t *testing.T) {
+	clientNonce := mustNonce(t)
+	first, _ := dialServer(t)
+	mustControl(t, first, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce})
+	oldChallenge := readControlOp(t, first, "challenge", 2*time.Second)
+	replayed := proto.Control{
+		Op: "authenticate", NodeID: testNodeID, ClientNonce: clientNonce,
+		ServerNonce: oldChallenge.ServerNonce,
+		ClientMAC: controlauth.MAC(testSecret, "client", testNodeID, clientNonce,
+			oldChallenge.ServerNonce, oldChallenge.DaemonVersion, oldChallenge.Capabilities),
+	}
+	mustControl(t, first, replayed)
+	readControlOp(t, first, "helloOk", 2*time.Second)
+
+	second, _ := dialServer(t)
+	mustControl(t, second, proto.Control{Op: "hello", ProtocolVersion: proto.ProtocolVersion, NodeID: testNodeID, ClientNonce: clientNonce})
+	newChallenge := readControlOp(t, second, "challenge", 2*time.Second)
+	if newChallenge.ServerNonce == oldChallenge.ServerNonce {
+		t.Fatal("server reused authentication nonce")
+	}
+	mustControl(t, second, replayed)
+	readControlOp(t, second, "error", 2*time.Second)
+}
+
+func mustNonce(t *testing.T) string {
+	t.Helper()
+	nonce, err := controlauth.Nonce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return nonce
+}
+
+func authenticate(t *testing.T, cli net.Conn) proto.Control {
+	t.Helper()
+	clientNonce := mustNonce(t)
+	mustControl(t, cli, proto.Control{
+		Op: "hello", ProtocolVersion: proto.ProtocolVersion,
+		NodeID: testNodeID, ClientNonce: clientNonce,
+	})
+	challenge := readControlOp(t, cli, "challenge", 2*time.Second)
+	expectedServerMAC := controlauth.MAC(testSecret, "server", testNodeID, clientNonce,
+		challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities)
+	if !controlauth.Verify(expectedServerMAC, challenge.ServerMAC) {
+		t.Fatal("server did not authenticate")
+	}
+	mustControl(t, cli, proto.Control{
+		Op: "authenticate", NodeID: testNodeID, ClientNonce: clientNonce,
+		ServerNonce: challenge.ServerNonce,
+		ClientMAC: controlauth.MAC(testSecret, "client", testNodeID, clientNonce,
+			challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities),
+	})
+	return readControlOp(t, cli, "helloOk", 2*time.Second)
+}
+
 func TestOpenSubscribeOutput(t *testing.T) {
 	cli, _ := dialServer(t)
-	mustControl(t, cli, proto.Control{Op: "hello"})
-	readControlOp(t, cli, "helloOk", 2*time.Second)
+	authenticate(t, cli)
 
 	mustControl(t, cli, proto.Control{Op: "open", ID: "s1", Command: []string{"sh", "-c", "printf hi-agentd; sleep 1"}})
 	readControlOp(t, cli, "opened", 2*time.Second)
@@ -110,8 +190,7 @@ func TestOpenSubscribeOutput(t *testing.T) {
 
 func TestInputEchoedThroughPty(t *testing.T) {
 	cli, _ := dialServer(t)
-	mustControl(t, cli, proto.Control{Op: "hello"})
-	readControlOp(t, cli, "helloOk", 2*time.Second)
+	authenticate(t, cli)
 
 	// `cat` echoes stdin → output, proving the input path end-to-end.
 	mustControl(t, cli, proto.Control{Op: "open", ID: "c1", Command: []string{"cat"}})
@@ -129,8 +208,7 @@ func TestInputEchoedThroughPty(t *testing.T) {
 
 func TestListSessions(t *testing.T) {
 	cli, _ := dialServer(t)
-	mustControl(t, cli, proto.Control{Op: "hello"})
-	readControlOp(t, cli, "helloOk", 2*time.Second)
+	authenticate(t, cli)
 	mustControl(t, cli, proto.Control{Op: "open", ID: "L1", Kind: "shell", Command: []string{"sh", "-c", "sleep 2"}})
 	readControlOp(t, cli, "opened", 2*time.Second)
 
@@ -153,8 +231,7 @@ func TestLayoutGetSetOverWire(t *testing.T) {
 		t.Fatalf("open layout store: %v", err)
 	}
 	cli, _ := dialServerWith(t, store)
-	mustControl(t, cli, proto.Control{Op: "hello"})
-	readControlOp(t, cli, "helloOk", 2*time.Second)
+	authenticate(t, cli)
 
 	// Unknown workspace → empty layout.
 	mustControl(t, cli, proto.Control{Op: "getLayout", Workspace: "proj-a"})

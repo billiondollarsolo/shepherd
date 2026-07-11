@@ -10,6 +10,9 @@
  */
 import type { Duplex } from 'node:stream';
 
+import type { NodeControlIdentity } from './node-control-credentials.js';
+import { controlMac, controlNonce, validControlNonce, verifyControlMac } from './control-auth.js';
+
 import {
   AGENTD_PROTOCOL_VERSION,
   FrameType,
@@ -158,11 +161,77 @@ export class NodeAgentdClient {
     this.statusHandler = fn;
   }
 
-  /** Handshake: announce protocol/secret, get the daemon version. */
-  async hello(secret?: string): Promise<AgentdControl> {
-    this.send({ op: 'hello', protocolVersion: AGENTD_PROTOCOL_VERSION, secret });
+  /** Mutual nonce/MAC handshake. No plaintext credential crosses the channel. */
+  async hello(
+    identity: NodeControlIdentity,
+    options: { allowLegacyDevelopment?: boolean } = {},
+  ): Promise<AgentdControl> {
+    const clientNonce = controlNonce();
+    this.send({
+      op: 'hello',
+      protocolVersion: AGENTD_PROTOCOL_VERSION,
+      nodeId: identity.nodeId,
+      clientNonce,
+      // Explicit development migration only: an already-running v1 daemon
+      // rejects the v2 hello before it can be restarted without killing PTYs.
+      secret: options.allowLegacyDevelopment ? identity.credential : undefined,
+    });
+    const challenge = await this.await(
+      (c) => c.op === 'challenge' || c.op === 'helloOk' || c.op === 'error',
+    );
+    if (challenge.op === 'error') throw new Error(`agentd hello failed: ${challenge.message}`);
+    if (challenge.op === 'helloOk') {
+      if (options.allowLegacyDevelopment && challenge.protocolVersion === 1) return challenge;
+      throw new Error('agentd sent an unauthenticated handshake response');
+    }
+    const capabilities = challenge.capabilities ?? [];
+    if (
+      challenge.protocolVersion !== AGENTD_PROTOCOL_VERSION ||
+      challenge.nodeId !== identity.nodeId ||
+      challenge.clientNonce !== clientNonce ||
+      !challenge.serverNonce ||
+      !validControlNonce(challenge.serverNonce) ||
+      !challenge.daemonVersion ||
+      !challenge.serverMac
+    ) {
+      throw new Error('agentd returned an invalid authentication challenge');
+    }
+    const expected = controlMac({
+      credential: identity.credential,
+      role: 'server',
+      nodeId: identity.nodeId,
+      clientNonce,
+      serverNonce: challenge.serverNonce,
+      daemonVersion: challenge.daemonVersion,
+      capabilities,
+    });
+    if (!verifyControlMac(expected, challenge.serverMac)) {
+      throw new Error('agentd daemon authentication failed');
+    }
+    this.send({
+      op: 'authenticate',
+      nodeId: identity.nodeId,
+      clientNonce,
+      serverNonce: challenge.serverNonce,
+      clientMac: controlMac({
+        credential: identity.credential,
+        role: 'client',
+        nodeId: identity.nodeId,
+        clientNonce,
+        serverNonce: challenge.serverNonce,
+        daemonVersion: challenge.daemonVersion,
+        capabilities,
+      }),
+    });
     const ok = await this.await((c) => c.op === 'helloOk' || c.op === 'error');
-    if (ok.op === 'error') throw new Error(`agentd hello failed: ${ok.message}`);
+    if (ok.op === 'error') throw new Error(`agentd authentication failed: ${ok.message}`);
+    if (
+      ok.protocolVersion !== AGENTD_PROTOCOL_VERSION ||
+      ok.nodeId !== identity.nodeId ||
+      ok.daemonVersion !== challenge.daemonVersion
+    ) {
+      throw new Error('agentd authenticated identity changed during handshake');
+    }
     return ok;
   }
 

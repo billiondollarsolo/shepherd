@@ -149,7 +149,6 @@ RUN chmod +x /usr/local/bin/flock-agentd /usr/local/bin/flock-entrypoint.sh
 # The unix socket the daemon listens on and the orchestrator dials (must match;
 # the orchestrator reads FLOCK_AGENTD_SOCKET). /tmp is writable by the node user.
 ENV FLOCK_AGENTD_SOCKET=/run/flock-agentd/control.sock
-ENV FLOCK_AGENTD_SECRET_FILE=/var/lib/flock-agentd/control.key
 
 # Default internal port (overridable via env). TLS is terminated upstream.
 ENV PORT=8080

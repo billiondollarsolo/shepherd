@@ -4,7 +4,7 @@
  * carry JSON; PTY data frames carry [u16 sidLen][sid][bytes]. This lives in the
  * orchestrator (Node-only) — the browser never speaks to agentd.
  */
-export const AGENTD_PROTOCOL_VERSION = 1;
+export const AGENTD_PROTOCOL_VERSION = 2;
 
 export const FrameType = {
   Control: 0x01,
@@ -18,6 +18,12 @@ export interface AgentdControl {
   protocolVersion?: number;
   daemonVersion?: string;
   secret?: string;
+  nodeId?: string;
+  clientNonce?: string;
+  serverNonce?: string;
+  serverMac?: string;
+  clientMac?: string;
+  capabilities?: string[];
   id?: string;
   kind?: string;
   cwd?: string;

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { AgentdHost } from './ssh-agentd-host.js';
+import type { NodeControlIdentity } from './node-control-credentials.js';
 
 export interface AgentdPlatform {
   os: string;
@@ -23,8 +24,6 @@ export interface AgentdBinaryProvider {
 export interface AgentdBootstrapConfig {
   version: string;
   port: number;
-  /** Per-node credential; required and installed through SFTP, never shell argv. */
-  secret: string;
   binaries: AgentdBinaryProvider;
   runtimeUser?: string;
   logger?: { warn(msg: string): void };
@@ -44,18 +43,13 @@ const SERVICE_FILE = '/etc/systemd/system/flock-agentd.service';
 export class AgentdBootstrap {
   private readonly version: string;
   private readonly port: number;
-  private readonly secret: string;
   private readonly binaries: AgentdBinaryProvider;
   private readonly runtimeUser: string;
   private readonly logger: { warn(msg: string): void };
 
   constructor(cfg: AgentdBootstrapConfig) {
-    if (cfg.secret.length < 32) {
-      throw new Error('agentd: a per-node credential of at least 32 characters is required');
-    }
     this.version = cfg.version;
     this.port = cfg.port;
-    this.secret = cfg.secret;
     this.binaries = cfg.binaries;
     this.runtimeUser = cfg.runtimeUser ?? 'flock-agent';
     this.logger = cfg.logger ?? {
@@ -66,7 +60,10 @@ export class AgentdBootstrap {
     };
   }
 
-  async ensureRunning(host: AgentdHost): Promise<AgentdEndpoint> {
+  async ensureRunning(host: AgentdHost, identity: NodeControlIdentity): Promise<AgentdEndpoint> {
+    if (identity.credential.length < 32) {
+      throw new Error('agentd: a per-node credential of at least 32 characters is required');
+    }
     const installed = await this.installedVersion(host);
     const upgraded = installed !== this.version;
     if (upgraded) {
@@ -76,8 +73,8 @@ export class AgentdBootstrap {
     }
     const running = await this.isListening(host);
     if (upgraded || !running) {
-      await this.installCredential(host);
-      await this.installAndStartService(host);
+      await this.installCredential(host, identity.credential);
+      await this.installAndStartService(host, identity.nodeId);
     }
     return { host: '127.0.0.1', port: this.port };
   }
@@ -154,12 +151,12 @@ export class AgentdBootstrap {
   }
 
   /** Upload the secret as file content; it never appears in a remote command. */
-  private async installCredential(host: AgentdHost): Promise<void> {
+  private async installCredential(host: AgentdHost, credential: string): Promise<void> {
     const localDir = await mkdtemp(path.join(tmpdir(), 'flock-agentd-credential-'));
     const localPath = path.join(localDir, 'control.key');
     const remotePath = `${await this.remoteHome(host)}/.flock-agentd-control.new`;
     try {
-      await writeFile(localPath, `${this.secret}\n`, { mode: 0o600 });
+      await writeFile(localPath, `${credential}\n`, { mode: 0o600 });
       await host.uploadFile(localPath, remotePath, 0o600);
       await this.run(
         host,
@@ -176,7 +173,7 @@ export class AgentdBootstrap {
     }
   }
 
-  private serviceUnit(): string {
+  private serviceUnit(nodeId: string): string {
     return [
       '[Unit]',
       'Description=Flock privilege-separated agent daemon',
@@ -186,7 +183,7 @@ export class AgentdBootstrap {
       'Type=simple',
       'User=root',
       'Group=root',
-      `ExecStart=${SYSTEM_BIN} serve --socket '' --addr 127.0.0.1:${this.port} --state-dir ${STATE_DIR}/state --secret-file ${CREDENTIAL_FILE} --runtime-user ${this.runtimeUser}`,
+      `ExecStart=${SYSTEM_BIN} serve --socket '' --addr 127.0.0.1:${this.port} --state-dir ${STATE_DIR}/state --secret-file ${CREDENTIAL_FILE} --node-id ${nodeId} --runtime-user ${this.runtimeUser}`,
       'Restart=always',
       'RestartSec=2',
       'NoNewPrivileges=true',
@@ -210,8 +207,11 @@ export class AgentdBootstrap {
     ].join('\n');
   }
 
-  private async installAndStartService(host: AgentdHost): Promise<void> {
-    const unit = Buffer.from(this.serviceUnit(), 'utf8').toString('base64');
+  private async installAndStartService(host: AgentdHost, nodeId: string): Promise<void> {
+    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(nodeId)) {
+      throw new Error('agentd: invalid node identity');
+    }
+    const unit = Buffer.from(this.serviceUnit(nodeId), 'utf8').toString('base64');
     const script = [
       'set -e',
       'sudo -n true',

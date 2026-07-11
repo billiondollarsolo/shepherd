@@ -74,7 +74,7 @@ const PERMISSION_MODE_VALUES: EnumTuple = ['default', 'acceptEdits', 'plan', 'au
 const EVENT_SOURCE_VALUES: EnumTuple = ['hook', 'osc', 'pty', 'orchestrator'];
 // Mirrors shared SshAuthMethodEnum (named so the enum-drift guard can assert it).
 const SSH_AUTH_METHOD_VALUES: EnumTuple = ['key', 'password'];
-const SECRET_KIND_VALUES: EnumTuple = ['ssh_key', 'hook_token', 'node_env'];
+const SECRET_KIND_VALUES: EnumTuple = ['ssh_key', 'hook_token', 'node_env', 'agentd_control'];
 const AUDIT_ACTION_VALUES: EnumTuple = [
   'login',
   'logout',
@@ -181,6 +181,11 @@ export const nodes = pgTable(
     // merged (under) the per-session launch env for every agent on this node.
     // Null = no node-level env. set-null on secret delete (env just clears).
     envRef: uuid('env_ref').references(() => secrets.id, { onDelete: 'set null' }),
+    // Unique node-control credential, encrypted through the same keyring as SSH
+    // material. This column is internal and is never mapped to browser DTOs.
+    agentdCredentialRef: uuid('agentd_credential_ref').references(() => secrets.id, {
+      onDelete: 'set null',
+    }),
     // #3c node pools: an optional free-text group label (e.g. "gpu", "us-east")
     // for organizing the fleet + scoping opt-in auto-placement. Null = ungrouped.
     pool: text('pool'),
@@ -199,6 +204,7 @@ export const nodes = pgTable(
   },
   (t) => ({
     bySshKeyRef: index('nodes_ssh_key_ref_idx').on(t.sshKeyRef),
+    byAgentdCredentialRef: index('nodes_agentd_credential_ref_idx').on(t.agentdCredentialRef),
   }),
 );
 

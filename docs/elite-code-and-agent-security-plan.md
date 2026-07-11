@@ -548,6 +548,13 @@ secret from a child process running under the same UID.
 
 **Priority:** High
 
+**Implementation status:** In progress. Unique per-node credentials are encrypted
+at rest and mirrored to protected daemon files. Protocol v2 mutually authenticates
+node/client with fresh nonces and domain-separated HMAC-SHA-256, binds version,
+identity, daemon version, and capabilities, and has shared Go/TypeScript vectors,
+replay tests, a real cross-language socket smoke, and production-image validation.
+Credential rotation/revocation with an active-session reconnect remains outstanding.
+
 **Why**
 
 The current shared-secret hello is useful defense in depth, but a successful hello
@@ -583,6 +590,11 @@ failure.
 ### S2.3 — Harden agentd installation and binary upgrades
 
 **Priority:** High
+
+**Implementation status:** In progress. Architecture-specific binaries are selected,
+SHA-256 is verified before activation, install identity metadata is recorded, the
+prior binary is retained, and service-start failure triggers rollback. Clean remote
+VM, interrupted activation, arm64 runtime, and release-provenance exercises remain.
 
 **Why**
 

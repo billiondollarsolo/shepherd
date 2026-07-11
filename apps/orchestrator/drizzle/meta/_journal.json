@@ -92,6 +92,13 @@
       "when": 1783794000000,
       "tag": "0012_require_session_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0013_node_agentd_credentials",
+      "breakpoints": true
     }
   ]
 }

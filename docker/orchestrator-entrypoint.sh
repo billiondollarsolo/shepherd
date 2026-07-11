@@ -26,6 +26,8 @@ CONTROL_HOME=/home/flock-control
 AGENTD_STATE_DIR=/var/lib/flock-agentd
 CREDENTIAL_FILE="${FLOCK_AGENTD_SECRET_FILE:-$AGENTD_STATE_DIR/control.key}"
 export FLOCK_AGENTD_SECRET_FILE="$CREDENTIAL_FILE"
+NODE_ID_FILE="${FLOCK_AGENTD_NODE_ID_FILE:-$AGENTD_STATE_DIR/node-id}"
+export FLOCK_AGENTD_NODE_ID_FILE="$NODE_ID_FILE"
 
 install -d -o root -g "$CONTROL_GROUP" -m 0750 "$AGENTD_STATE_DIR" "$(dirname "$SOCKET")"
 if [ ! -s "$CREDENTIAL_FILE" ]; then
@@ -38,6 +40,16 @@ if [ ! -s "$CREDENTIAL_FILE" ]; then
 fi
 chown root:"$CONTROL_GROUP" "$CREDENTIAL_FILE"
 chmod 0640 "$CREDENTIAL_FILE"
+if [ ! -s "$NODE_ID_FILE" ]; then
+  echo "[entrypoint] generating stable local agentd identity"
+  node -e '
+    const fs = require("node:fs");
+    const crypto = require("node:crypto");
+    fs.writeFileSync(process.argv[1], crypto.randomUUID() + "\n", { mode: 0o640 });
+  ' "$NODE_ID_FILE"
+fi
+chown root:"$CONTROL_GROUP" "$NODE_ID_FILE"
+chmod 0640 "$NODE_ID_FILE"
 
 # Give only the control user access to the host Docker socket used by the
 # constrained browser lifecycle. The runtime agent user is never added.
@@ -87,10 +99,6 @@ for var in FLOCK_MASTER_KEY DATABASE_URL; do
   fi
 done
 
-# The control client reads the same local key. It remains out of agentd's
-# minimal environment and is stripped from every agent child as defense in depth.
-export FLOCK_AGENTD_SECRET="$(cat "$CREDENTIAL_FILE")"
-
 # Supervisor: restart the daemon if it ever exits (pairs with T2's crash-safety).
 (
   while true; do
@@ -100,6 +108,7 @@ export FLOCK_AGENTD_SECRET="$(cat "$CREDENTIAL_FILE")"
         --socket "$SOCKET" \
         --state-dir "$AGENTD_STATE_DIR/state" \
         --secret-file "$CREDENTIAL_FILE" \
+        --node-id "$(cat "$NODE_ID_FILE")" \
         --runtime-user "$RUNTIME_USER" \
         --control-group "$CONTROL_GROUP" || true
     echo "[entrypoint] flock-agentd exited — restarting in 1s"

@@ -5,7 +5,6 @@
 package server
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"flock-agentd/internal/controlauth"
 	"flock-agentd/internal/identity"
 	"flock-agentd/internal/metrics"
 	"flock-agentd/internal/proto"
@@ -29,7 +29,8 @@ const writeTimeout = 30 * time.Second
 type Server struct {
 	mgr     *session.Manager
 	version string
-	secret  string // optional shared secret (defense-in-depth atop SSH); "" = off
+	nodeID  string
+	secret  string
 	layout  LayoutStore
 	runtime *identity.Runtime
 }
@@ -40,9 +41,11 @@ type LayoutStore interface {
 	Set(workspace string, tree []byte) error
 }
 
-func New(mgr *session.Manager, version, secret string, layout LayoutStore, runtime *identity.Runtime) *Server {
-	return &Server{mgr: mgr, version: version, secret: secret, layout: layout, runtime: runtime}
+func New(mgr *session.Manager, version, nodeID, secret string, layout LayoutStore, runtime *identity.Runtime) *Server {
+	return &Server{mgr: mgr, version: version, nodeID: nodeID, secret: secret, layout: layout, runtime: runtime}
 }
+
+var controlCapabilities = []string{"pty", "resize", "scrollback", "status", "node-info", "layout", "acp"}
 
 // conn is the per-connection state.
 type conn struct {
@@ -53,6 +56,12 @@ type conn struct {
 	subs      map[string]*session.Subscription
 	statusSub *session.StatusSub
 	authed    bool
+	challenge *authChallenge
+}
+
+type authChallenge struct {
+	clientNonce string
+	serverNonce string
 }
 
 // HandleConn services one connection until it closes.
@@ -89,27 +98,67 @@ func (s *Server) HandleConn(raw net.Conn) {
 }
 
 func (c *conn) handleControl(ctrl proto.Control) {
-	// `hello` is the ONLY op allowed before authentication; handle it, then gate
-	// every other op behind one auth check (was repeated in each case).
+	// The v2 handshake authenticates the daemon first, then the client. The fresh
+	// server nonce makes a captured authenticate frame useless on a new link.
 	if ctrl.Op == "hello" {
-		if c.s.secret != "" &&
-			subtle.ConstantTimeCompare([]byte(ctrl.Secret), []byte(c.s.secret)) != 1 {
-			c.sendControl(proto.Control{Op: "error", Message: "unauthorized"})
-			_ = c.raw.Close()
+		if c.challenge != nil || c.authed || ctrl.ProtocolVersion != proto.ProtocolVersion {
+			c.reject("unsupported agentd protocol version")
 			return
 		}
+		if ctrl.NodeID != c.s.nodeID {
+			c.reject("node identity mismatch")
+			return
+		}
+		if !controlauth.ValidNonce(ctrl.ClientNonce) {
+			c.reject("invalid client nonce")
+			return
+		}
+		serverNonce, err := controlauth.Nonce()
+		if err != nil {
+			c.reject("authentication unavailable")
+			return
+		}
+		c.challenge = &authChallenge{clientNonce: ctrl.ClientNonce, serverNonce: serverNonce}
+		c.sendControl(proto.Control{
+			Op:              "challenge",
+			ProtocolVersion: proto.ProtocolVersion,
+			DaemonVersion:   c.s.version,
+			NodeID:          c.s.nodeID,
+			ClientNonce:     ctrl.ClientNonce,
+			ServerNonce:     serverNonce,
+			Capabilities:    controlCapabilities,
+			ServerMAC: controlauth.MAC(c.s.secret, "server", c.s.nodeID,
+				ctrl.ClientNonce, serverNonce, c.s.version, controlCapabilities),
+		})
+		return
+	}
+	if ctrl.Op == "authenticate" {
+		challenge := c.challenge
+		if challenge == nil || c.authed || ctrl.NodeID != c.s.nodeID ||
+			ctrl.ClientNonce != challenge.clientNonce || ctrl.ServerNonce != challenge.serverNonce {
+			c.reject("invalid authentication state")
+			return
+		}
+		expected := controlauth.MAC(c.s.secret, "client", c.s.nodeID,
+			challenge.clientNonce, challenge.serverNonce, c.s.version, controlCapabilities)
+		if !controlauth.Verify(expected, ctrl.ClientMAC) {
+			c.reject("unauthorized")
+			return
+		}
+		c.challenge = nil
 		c.authed = true
 		c.sendControl(proto.Control{
 			Op:              "helloOk",
 			ProtocolVersion: proto.ProtocolVersion,
 			DaemonVersion:   c.s.version,
+			NodeID:          c.s.nodeID,
+			Capabilities:    controlCapabilities,
 		})
-		// Stream derived agent status (replays the current snapshot first, then
-		// live changes) so the orchestrator's dots reflect what each agent is doing.
 		c.startStatusForwarder()
 		return
 	}
 	if !c.authed {
+		c.reject("authentication required")
 		return
 	}
 	switch ctrl.Op {
@@ -177,6 +226,11 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			_ = c.s.layout.Set(ctrl.Workspace, ctrl.Layout)
 		}
 	}
+}
+
+func (c *conn) reject(message string) {
+	c.sendControl(proto.Control{Op: "error", Message: message})
+	_ = c.raw.Close()
 }
 
 // stream replays scrollback then forwards live PTY output for one session.

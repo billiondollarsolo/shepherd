@@ -1,220 +1,169 @@
-# flock-agentd — node daemon design
+# flock-agentd architecture
 
-Status: **AS-BUILT (shipped).** This was a design doc; the daemon is now live and
-is the sole PTY/persistence layer — **tmux has been removed entirely** (no
-fallback). The wire contract lives in `apps/orchestrator/src/nodes/agentd/protocol.ts`
-(TS) ⇄ `agentd/internal/proto/proto.go` (Go); the daemon version is single-sourced
-in `agentd/VERSION`. The sections below are kept as the original design rationale;
-where they say "will" / "decision to confirm", read them as decided + implemented.
+Status: **as built**
 
----
+Protocol: **v2**
 
-## 1. Why
+Supported node OS: **Linux (amd64 and arm64)**
 
-The node side of Flock is currently a patchwork bent around tools never meant for
-it:
+`flock-agentd` is Flock's only PTY transport. It owns agent and shell processes,
+terminal input/output, resize, bounded scrollback, status extraction, and persisted
+layout state. The browser never connects to agentd directly; the orchestrator bridges
+authenticated browser WebSockets to one multiplexed agentd control connection per
+node.
 
-- **tmux** for PTY persistence + multiplexing → recurring xterm↔tmux↔WS friction:
-  Device-Attributes reply leaks (`0;276;0c`), `window-size` policy fights,
-  resize-to-client→resize-window indirection, per-attach probes, status-bar
-  artifacts. These are structural, not one-offs.
-- **reverse SSH tunnel** so agents can `curl` hook callbacks back.
-- **per-command `transport.exec`** for the file browser, git, diff, path picker —
-  one SSH round-trip per operation.
-- **OSC/PTY scraping + reconcile** for status, spread across modules.
+## Trust boundary
 
-Each is a separate mechanism layered on raw SSH. A single node-side process that
-owns all of it is simpler, faster, cleaner, and removes the entire class of
-terminal-emulation bugs (raw PTYs, direct resize, no tmux).
+Production uses three distinct roles:
 
-Orca proves the clean-terminal model (raw `node-pty` per pane, no tmux) — but Orca
-is a **local** app, so its PTYs live with the process and it needs no node-side
-persistence. Flock is **remote + must survive disconnect** (close your phone, the
-agent keeps running, reconnect later, layout intact). That persistence layer must
-live on the node: today it's tmux; flock-agentd is us owning it deliberately.
+- agentd starts as root so it can create a PTY and drop process credentials;
+- the orchestrator runs as a non-root control identity that can read the protected
+  node credential and connect to the control socket;
+- every coding tool, shell, MCP server, and repository subprocess runs as a fixed
+  unprivileged agent identity with cleared supplementary groups.
 
-## 2. Non-negotiable requirements
+The node credential, daemon state, and control socket are outside the agent user's
+home and permissions. Child environments force the runtime HOME/USER/LOGNAME/SHELL/
+PATH and remove control credential variables. Production startup fails closed if the
+daemon is not root, the runtime identity is missing/root, the credential file is
+unprotected, or a TCP listener is not a literal loopback address.
 
-1. **Reached over the SSH connection we already own** — daemon listens on node
-   **loopback only**; the orchestrator reaches it via an SSH `direct-tcpip`
-   channel (or a unix socket for the local node). No new inbound port, no
-   firewall changes; SSH provides authn + encryption. (We already run
-   `SupervisedSshConnection` + a reverse tunnel — same machinery.)
-2. **Survives orchestrator disconnect/restart** — daemon is long-lived; PTYs keep
-   running; on reconnect the orchestrator re-attaches and gets scrollback replay.
-3. **Survives node reboot / daemon crash** to tmux-parity: live PTY state is lost
-   (no process survives its parent dying — tmux doesn't either without resurrect),
-   BUT session metadata + layout are persisted to disk and restored; agent
-   sessions can be **respawned** and the layout rebuilt.
-4. **Server-authoritative layout** — the pane/split tree persists on the node, so
-   "go away and come back" restores the exact terminal layout, not just the PTYs.
-5. **Dumb-courier-friendly bootstrap** — a node still only needs SSH; the
-   orchestrator **ships + launches + upgrades** the daemon over SSH automatically.
-6. **The browser UI is unchanged** — the React Terminal / split pane-manager /
-   fit hardening / layout / file browser are reused as-is. The daemon changes only
-   what lives behind the existing `/ws/pty` (and later `/ws` data) endpoints.
+Source development may explicitly use `--allow-insecure-same-user`. It emits a
+security warning and provides no agent isolation. It is not a supported production
+mode.
 
-## 3. Language / runtime
+The accepted decision and threat boundary are recorded in
+`docs/decisions/agentd-privilege-separation.md` and
+`docs/decisions/security-threat-model.md`.
 
-**Recommendation: Go.** A daemon's hardest cost is distribution + supervision, and
-Go minimizes it: a single static ~5–10 MB binary, trivial cross-compile
-(`linux/amd64`, `linux/arm64`, `darwin/arm64`, …), no runtime deps, first-class
-concurrency for stream multiplexing, mature PTY (`github.com/creack/pty`) and
-systemd integration. The cost is a second language + a protocol contract boundary
-with the TS orchestrator.
+## Topology
 
-Alternative: **Node** (matches the codebase, lets us share `@flock/shared` types)
-— but `node-pty` is a native module needing per-arch prebuilds, and shipping a
-Node runtime to every node is exactly the distribution pain we want to avoid
-(SEA/pkg helps but is fiddly).
+```text
+browser -- HTTPS/WSS --> orchestrator/control identity
+                              |
+                              +-- protected Unix socket --> local agentd (root)
+                              |
+                              +-- SSH direct-tcpip ------> remote agentd (root,
+                                                           loopback listener)
 
-→ **DECISION TO CONFIRM.** Default to Go unless we value type-sharing over deploy
-simplicity. The protocol contract is defined once (see §6) and mirrored on both
-sides regardless.
-
-## 4. Topology
-
-```
- orchestrator (host)                         node (local or remote)
- ┌───────────────────┐    SSH direct-tcpip   ┌──────────────────────────┐
- │ NodeAgentClient   │◀────────────────────▶ │ flock-agentd (loopback)  │
- │  (per node)       │   (or unix socket)    │  ├─ session: agent (PTY)  │
- │  ▲                │                       │  ├─ session: shell-1 (PTY)│
- │  │ bridges to     │                       │  ├─ session: shell-2 (PTY)│
- │  │ /ws/pty (web)  │                       │  ├─ layout store (disk)   │
- └──┼────────────────┘                       │  ├─ scrollback rings      │
-    │                                        │  └─ (v2) fs/git/hooks     │
- browser xterm/splits                        └──────────────────────────┘
+agentd -- setuid/setgid + raw PTY --> flock-agent --> coding tool/repository code
 ```
 
-- **Remote node:** orchestrator opens an SSH `direct-tcpip` channel to
-  `127.0.0.1:<agentd-port>` over the existing `SupervisedSshConnection`
-  (ssh2 `forwardOut`). One channel per node; sessions are multiplexed with
-  tagged frames.
-- **Local node:** connect to a unix socket (`$XDG_RUNTIME_DIR/flock-agentd.sock`)
-  — no SSH.
-- The browser still talks to the orchestrator's `/ws/pty/:id`; the orchestrator's
-  `NodeAgentClient` bridges those bytes to/from the daemon session. The web side
-  doesn't know the daemon exists.
+Remote agentd ports are never published. SSH supplies transport encryption and pinned
+host identity; the v2 agentd handshake supplies independent node authentication and
+replay resistance. Local production uses a root/control-owned Unix socket (`0660`).
 
-## 5. Bootstrap, supervision, upgrade (the hard part — addressed up front)
+## Control authentication
 
-- **Probe:** on node connect, orchestrator opens the loopback channel; if it
-  fails → daemon not running.
-- **Install:** push the arch-matched binary over SSH (`sftp`/`cat > ~/.flock/bin/
-flock-agentd-<ver>`), `chmod +x`. The orchestrator carries binaries for each
-  supported `os/arch` (built in CI).
-- **Launch + supervise:** prefer `systemd --user` (with `loginctl enable-linger`
-  so it survives logout/reboot) → `Restart=always`. Fallback: `launchd` (macOS),
-  else `nohup … & disown` + a re-bootstrap on next connect. The unit runs
-  `flock-agentd serve`.
-  - **T26 — nohup reboot caveat (operational):** the `nohup` fallback does NOT
-    survive a node reboot, and recovery is **lazy, not proactive**: the periodic
-    health probe is connect-only (it flips the node dot to "down" but never
-    relaunches), so a rebooted nohup-fallback node stays "down" until the next
-    session create/open on it triggers `ensureRunning` → re-ship + relaunch. For
-    automatic reboot survival, give the node user a `systemd --user` bus (the
-    linger path, used whenever available). A periodic orchestrator-driven
-    re-assert would close the gap (future work; pairs with the local-daemon
-    supervisor from T2/T10). See `agentd-bootstrap.ts launch()`.
-- **Version negotiation:** every connection starts with `hello{protocolVersion,
-daemonVersion}`. On mismatch the orchestrator pushes the new binary and restarts
-  the unit (graceful: drain → re-exec; sessions' metadata persisted, PTYs
-  respawned only if the re-exec can't hand off fds — v1 accepts a restart blip,
-  documented).
-- **Security:** loopback-only bind + a per-node shared secret in the `hello`
-  (defense in depth on top of SSH). The daemon runs as the SSH user; it can do
-  anything that user can — same trust model as today's `transport.exec`.
+Every node receives a different 256-bit control credential. The orchestrator copy is
+AES-256-GCM encrypted in the `secrets` table and referenced internally from the node.
+The local daemon copy lives in the root-owned agentd state volume; remote copies are
+installed root-only over SFTP. Credentials are never returned in browser DTOs or
+placed in URLs.
 
-## 6. Protocol
+Protocol v2 uses mutual HMAC-SHA-256 challenge/response:
 
-Framed, multiplexed, one channel. Frame = `uint32 length | uint8 type | payload`.
+1. Client sends `hello` with protocol version, expected node identity, and a fresh
+   256-bit client nonce.
+2. Daemon rejects version/node mismatch, creates a fresh server nonce, and returns a
+   challenge binding both nonces, node identity, daemon version, and the ordered
+   capability list. A server-role MAC proves daemon credential possession.
+3. The client verifies that MAC and returns a separately domain-separated client-role
+   MAC over the same transcript.
+4. Only after successful verification does agentd return `helloOk`, start status
+   replay, or accept operations.
 
-- **Control frames** (JSON for v1; msgpack later): `hello`, `openSession`,
-  `closeSession`, `subscribe`/`unsubscribe`, `resize`, `listSessions`,
-  `getLayout`/`setLayout`, and event pushes `status`, `exit`, `hook`.
-- **Data frames** (binary, session-tagged): `ptyOutput{sessionId, bytes}`,
-  `ptyInput{sessionId, bytes}`. Per-session credit-based backpressure (absorbs
-  the old `BandwidthController` concern).
+A captured authenticate frame cannot be replayed on another connection because the
+new server nonce changes the transcript. Go and TypeScript share a fixed MAC test
+vector, and a cross-language socket smoke verifies negotiation and PTY use.
 
-The **contract is the single source of truth**: the TS side is
-`apps/orchestrator/src/nodes/agentd/protocol.ts` and the Go side mirrors it in
-`agentd/internal/proto/proto.go` (hand-written structs). This is the one artifact
-that is _never_ throwaway. (The original design proposed a `@flock/shared` module;
-as-built it lives in the orchestrator's agentd client package.)
+The wire sources of truth are:
 
-## 7. Session + scrollback + resize
+- `agentd/internal/proto/proto.go`
+- `agentd/internal/controlauth/controlauth.go`
+- `apps/orchestrator/src/nodes/agentd/protocol.ts`
+- `apps/orchestrator/src/nodes/agentd/control-auth.ts`
 
-- `openSession{kind: 'agent'|'shell', cwd, env, command}` → daemon spawns the
-  command in a **raw PTY**, returns `sessionId`. Agent sessions get the hook env
-  (pointed at the daemon itself in v2).
-- Each session keeps a **scrollback ring** (e.g. 2 MB, configurable). On
-  `subscribe` the daemon replays the ring then streams live → reconnect-resume,
-  reliable and native (replaces the tmux capture-pane hack).
-- `resize{sessionId, cols, rows}` → `pty.Setsize` → SIGWINCH. Direct; no tmux
-  window-size policy, no DA probe, no status bar. **This is the fix for every
-  terminal bug we hit.**
-- `exit{sessionId, code}` pushed when the process ends.
+## Framing and operations
 
-## 8. Layout (server-authoritative)
+One duplex stream multiplexes all sessions for a node. Every frame is:
 
-- The daemon stores a **workspace layout** per agent-session-group: a pane tree
-  (`{ direction, children: [paneLeaf | splitNode], sizes }`) where leaves bind to
-  `sessionId`s. Persisted to `~/.flock/state/<workspace>.json`.
-- `getLayout` on (re)connect → orchestrator → browser rebuilds the splits and
-  subscribes to each pane's session (scrollback replays). `setLayout` on user
-  edits (split/close/resize) syncs back. → true "come back and it's all there."
+```text
+uint32 big-endian body length | uint8 type | payload
+```
 
-## 9. What it absorbs (migration order)
+Control payloads are JSON. PTY payloads are binary and session-tagged. Frames are
+hard-capped at 16 MiB, writes have deadlines, connection panics are contained, and an
+invalid/oversized stream is closed.
 
-| Today                                | Becomes                                                        |
-| ------------------------------------ | -------------------------------------------------------------- |
-| tmux PTYs + capture-pane resume      | daemon raw PTYs + scrollback ring                              |
-| reverse SSH tunnel for hooks         | agent hooks `curl` daemon loopback → `hook` event frames       |
-| `transport.exec` fs/git/path-browser | daemon `fs.*`/`git.*` ops (streaming, `fs.watch`)              |
-| OSC/PTY status scraping + reconcile  | daemon parses PTY, pushes `status`; reconcile = `listSessions` |
+Authenticated operations currently include:
 
-## 10. v1 scope (tight: replace the broken thing + lay the foundation)
+- open, close, list, subscribe, and unsubscribe;
+- PTY input, output, resize, exit, and scrollback replay;
+- status and node metrics;
+- persisted workspace layout get/set;
+- PTY and structured ACP session modes.
 
-**In:** Go daemon; bootstrap-over-SSH (install/start/version) for Linux nodes;
-loopback listener; framed protocol over SSH `direct-tcpip` + local unix socket;
-PTY sessions (agent + shell) with input/output/resize/close; scrollback ring +
-reconnect-resume; server-authoritative layout get/set + disk persistence;
-orchestrator `NodeAgentClient` bridging the daemon to the existing `/ws/pty` so
-the **browser UI is untouched**.
+The daemon owns runtime identity selection. UID/GID is never accepted from the client.
 
-**Out (v2+):** fs/git/hooks/status migration; macOS/Windows; computer-use;
-node-reboot session resurrection polish; msgpack; codegen for the Go contract.
+## Local production lifecycle
 
-**Done = parity:** a Flock session's terminal + clean resizable splits run on the
-daemon over SSH, survive orchestrator restart with scrollback + layout intact, and
-the `0;276;0c` / short-pane / window-size bugs are gone by construction.
+The orchestrator image starts as root only to prepare protected state and supervise
+agentd. Its entrypoint:
 
-## 11. Reused vs replaced (so nothing is wasted)
+1. creates stable root/control-owned credential and node-identity files;
+2. starts agentd with a minimal environment;
+3. runs database migrations;
+4. starts the orchestrator as `flock-control`;
+5. lets agentd launch every session as `flock-agent`.
 
-- **Reused (the bulk):** all browser terminal/split/layout/fit code, file browser,
-  drag/drop, sidebar status, icon tabs, `SupervisedSshConnection`, the
-  per-session-token + auth model, the `/ws/pty` browser contract.
-- **Replaced (small):** tmux attach commands, the `:shell` resolve, the
-  `vt-reports` DA strip (no tmux probe → unneeded), resize-to-tmux plumbing, the
-  reverse-tunnel-for-hooks (eventually).
+Agent home/tool configuration and agentd control state use separate persistent
+volumes. The agent identity is never added to the control or Docker-socket groups.
 
-## 12. Open decisions to lock before building
+## Remote enrollment and upgrade
 
-1. **Language: Go (recommended) vs Node.** (§3)
-2. **Transport: SSH `direct-tcpip` to a loopback port (recommended) vs daemon-over-
-   SSH-stdio.** (§4)
-3. **Supervision: `systemd --user` + linger (recommended) vs custom watchdog.** (§5)
-4. **v1 OS targets: Linux-only first?** (yes, recommended.)
-5. **Persistence depth for v1: in-memory across orchestrator reconnect + metadata/
-   layout on disk; respawn (not live-restore) on daemon restart.** (confirm.)
+Remote enrollment is a root-owned system service. There is no user-service or `nohup`
+fallback because either would collapse the control/runtime identity boundary.
 
-## 13. Risks
+The orchestrator:
 
-- **Distribution/upgrade** is the real risk, not the PTY code → mitigated by
-  ship-over-SSH + version negotiation + systemd.
-- **Persistence-done-wrong** is worse than tmux → mitigated by scoping v1 to
-  orchestrator-reconnect persistence (the daemon staying up) and being explicit
-  that node-reboot loses live state (= tmux parity).
-- **Scope creep ("for everything")** → mitigated by the v1/v2 split: ship PTY +
-  layout parity first; migrate fs/git/hooks only after.
+1. detects Linux architecture;
+2. selects the matching shipped binary;
+3. calculates SHA-256 locally and verifies the uploaded bytes remotely;
+4. retains the previous binary, then atomically installs the candidate root-owned;
+5. uploads the per-node credential as file content (never shell text/argv);
+6. installs a hardened systemd unit that drops sessions to `flock-agent`;
+7. records version, checksum, architecture, and installation time;
+8. restarts and checks service health, restoring the previous binary on failure.
+
+Enrollment requires explicit passwordless access to only the administrative actions
+used by the bootstrap. A denied `sudo -n` fails visibly; Flock never falls back to an
+insecure same-user daemon.
+
+## Persistence semantics
+
+Agentd survives orchestrator and browser disconnects. A reconnected client lists
+existing sessions, subscribes, receives bounded scrollback, and resumes live output.
+Layout metadata persists on disk.
+
+A daemon crash or node reboot cannot preserve live PTY processes. Flock preserves its
+durable session registry/layout and reconciles the missing process state; it must not
+claim a vanished agent is still running.
+
+## Security validation
+
+Required regression coverage includes:
+
+- agent UID/GID/home/group and environment assertions;
+- denial reading the credential and daemon-only state;
+- denial connecting to the protected Unix socket;
+- positive connection as the control identity;
+- `/proc`, inherited descriptor, and environment review;
+- wrong-node, wrong-version, wrong-MAC, replay, malformed, and oversized-frame tests;
+- real Go-to-TypeScript protocol/PTY smoke;
+- production image process/permission inspection;
+- clean remote-VM enrollment, reboot, upgrade failure, and rollback exercises.
+
+The final remote-VM lifecycle exercises are tracked in
+`docs/elite-code-and-agent-security-plan.md` and remain release-gating evidence, not
+an assumption.

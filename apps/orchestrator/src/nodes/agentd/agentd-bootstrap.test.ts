@@ -51,16 +51,20 @@ const TEST_BINARY = fileURLToPath(new URL('../../../../../agentd/VERSION', impor
 const resolveBinary = vi.fn(async (_platform: AgentdPlatform) => TEST_BINARY);
 const binaries: AgentdBinaryProvider = { resolve: resolveBinary };
 const SECRET = 'node-specific-control-secret-at-least-32-bytes';
+const IDENTITY = { nodeId: 'node-test-1234', credential: SECRET };
 
 function make(version = '1.2.3') {
-  return new AgentdBootstrap({ version, port: 48222, binaries, secret: SECRET });
+  return new AgentdBootstrap({ version, port: 48222, binaries });
 }
 
 describe('AgentdBootstrap secure system service', () => {
-  it('requires a strong per-node credential', () => {
-    expect(
-      () => new AgentdBootstrap({ version: '1', port: 48222, binaries, secret: 'short' }),
-    ).toThrow(/per-node credential/);
+  it('requires a strong per-node credential', async () => {
+    await expect(
+      make().ensureRunning(new FakeHost([]), {
+        nodeId: IDENTITY.nodeId,
+        credential: 'short',
+      }),
+    ).rejects.toThrow(/per-node credential/);
   });
 
   it('reasserts a stopped matching installation without uploading the binary', async () => {
@@ -71,7 +75,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
     ]);
-    await expect(make().ensureRunning(host)).resolves.toEqual({
+    await expect(make().ensureRunning(host, IDENTITY)).resolves.toEqual({
       host: '127.0.0.1',
       port: 48222,
     });
@@ -89,7 +93,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
     ]);
     host.listening = true;
-    await make().ensureRunning(host);
+    await make().ensureRunning(host, IDENTITY);
     expect(host.uploads).toHaveLength(0);
     expect(host.execs.some((command) => command.includes('systemctl'))).toBe(false);
   });
@@ -103,7 +107,7 @@ describe('AgentdBootstrap secure system service', () => {
       { match: /uname/, result: { stdout: 'Linux\nx86_64\n' } },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
     ]);
-    await make().ensureRunning(host);
+    await make().ensureRunning(host, IDENTITY);
     const binary = host.uploads.find((upload) => upload.mode === 0o700);
     expect(binary).toMatchObject({
       local: TEST_BINARY,
@@ -124,7 +128,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
     ]);
-    await make().ensureRunning(host);
+    await make().ensureRunning(host, IDENTITY);
     const credential = host.uploads.find((upload) => upload.mode === 0o600);
     expect(credential?.remote).toBe('/home/admin/.flock-agentd-control.new');
     expect(credential?.content).toBe(`${SECRET}\n`);
@@ -140,7 +144,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
     ]);
-    await make().ensureRunning(host);
+    await make().ensureRunning(host, IDENTITY);
     const service = host.execs.find((command) => command.includes('flock-agentd.service'))!;
     const decodedUnit = Buffer.from(
       /printf %s '([^']+)' \| base64 -d/.exec(service)?.[1] ?? '',
@@ -151,6 +155,7 @@ describe('AgentdBootstrap secure system service', () => {
     expect(service).not.toContain('nohup');
     expect(decodedUnit).toContain('User=root');
     expect(decodedUnit).toContain('--runtime-user flock-agent');
+    expect(decodedUnit).toContain('--node-id node-test-1234');
     expect(decodedUnit).toContain("--socket '' --addr 127.0.0.1:48222");
     expect(decodedUnit).toContain('ProtectSystem=strict');
     expect(decodedUnit).toContain('CapabilityBoundingSet=');
@@ -165,7 +170,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
       { match: /uname/, result: { stdout: 'Linux\nmips\n' } },
     ]);
-    await expect(make().ensureRunning(host)).rejects.toThrow(/unsupported node platform/);
+    await expect(make().ensureRunning(host, IDENTITY)).rejects.toThrow(/unsupported node platform/);
   });
 
   it('fails closed when checksum verification or enrollment fails', async () => {
@@ -178,7 +183,9 @@ describe('AgentdBootstrap secure system service', () => {
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
       { match: /sha256sum/, result: { code: 1, stderr: 'checksum mismatch' } },
     ]);
-    await expect(make().ensureRunning(checksumHost)).rejects.toThrow(/remote command failed/);
+    await expect(make().ensureRunning(checksumHost, IDENTITY)).rejects.toThrow(
+      /remote command failed/,
+    );
 
     const serviceHost = new FakeHost([
       {
@@ -193,10 +200,11 @@ describe('AgentdBootstrap secure system service', () => {
       version: '1.2.3',
       port: 48222,
       binaries,
-      secret: SECRET,
       logger: { warn },
     });
-    await expect(bootstrap.ensureRunning(serviceHost)).rejects.toThrow(/enrollment failed/);
+    await expect(bootstrap.ensureRunning(serviceHost, IDENTITY)).rejects.toThrow(
+      /enrollment failed/,
+    );
     expect(warn).toHaveBeenCalled();
   });
 });

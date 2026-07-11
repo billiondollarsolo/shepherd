@@ -21,6 +21,7 @@ import { AgentdBootstrap } from './nodes/agentd/agentd-bootstrap.js';
 import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js';
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
+import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest, toPublicSession } from '@flock/shared';
 import { planEventFields } from './hooks/plan.js';
@@ -232,10 +233,22 @@ export async function main(): Promise<void> {
   // direct-tcpip channel. `localNodeId` is filled at boot (ensureLocalNode).
   // Pinned on; the `useAgentd` branches below are always taken.
   const useAgentd = true;
-  const agentdSecret = process.env.FLOCK_AGENTD_SECRET;
-  if (!agentdSecret || agentdSecret.length < 32) {
-    throw new Error('FLOCK_AGENTD_SECRET must contain a strong agentd control credential');
-  }
+  const developmentAgentdSecret = process.env.FLOCK_AGENTD_SECRET;
+  const nodeControlCredentials = new NodeControlCredentials({
+    db,
+    secrets,
+    localCredentialFile: process.env.FLOCK_AGENTD_SECRET_FILE,
+    localIdentityFile: process.env.FLOCK_AGENTD_NODE_ID_FILE,
+    developmentLocal:
+      process.env.NODE_ENV !== 'production' &&
+      developmentAgentdSecret &&
+      developmentAgentdSecret.length >= 32
+        ? {
+            nodeId: process.env.FLOCK_AGENTD_NODE_ID || 'development-local',
+            credential: developmentAgentdSecret,
+          }
+        : undefined,
+  });
   // Derived agent status (daemon tails the agent transcript) → live status map +
   // per-session meta (token usage + current tool) shown in the paddock sidebar.
   // Per-session telemetry cache (everything except `plan`, which is routed to the
@@ -251,7 +264,8 @@ export async function main(): Promise<void> {
   let forwardAgentdStatus: (id: string, state: string, meta: AgentdStatusMeta) => void = () => {};
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
-    secret: agentdSecret,
+    identityFor: (nodeId, kind) => nodeControlCredentials.forNode(nodeId, kind),
+    allowLegacyDevelopment: process.env.NODE_ENV !== 'production',
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
   });
   // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
@@ -260,7 +274,6 @@ export async function main(): Promise<void> {
   const agentdBootstrap = new AgentdBootstrap({
     version: resolveAgentdVersion(),
     port: agentdPort,
-    secret: agentdSecret,
     binaries: new FsAgentdBinaryProvider(
       process.env.FLOCK_AGENTD_DIST_DIR || path.resolve(process.cwd(), '../../agentd/dist'),
     ),
@@ -276,7 +289,7 @@ export async function main(): Promise<void> {
   ): Promise<NodeAgentdClient | null> => {
     if (nodeKind === 'local' || nodeId === localNodeId) {
       try {
-        return await agentdConns.clientForLocal();
+        return await agentdConns.clientForLocal(nodeId);
       } catch {
         return null;
       }
@@ -378,7 +391,7 @@ export async function main(): Promise<void> {
         let client = isLocal ? agentdConns.peekLocal() : agentdConns.peekRemote(nodeId);
         if (!client && isLocal) {
           try {
-            client = await agentdConns.clientForLocal();
+            client = await agentdConns.clientForLocal(localNodeId);
           } catch {
             client = null;
           }
@@ -786,7 +799,8 @@ export async function main(): Promise<void> {
           let liveSessionIds: Set<string> | null = null;
           try {
             const client =
-              agentdConns.peekLocal() ?? (await agentdConns.clientForLocal().catch(() => null));
+              agentdConns.peekLocal() ??
+              (await agentdConns.clientForLocal(localNodeId).catch(() => null));
             if (client) {
               liveSessionIds = new Set((await client.list()).map((x) => x.id));
             } else {
