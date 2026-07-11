@@ -17,7 +17,6 @@ import {
   ConnectionStatusEnum,
   EventSourceEnum,
   NodeKindEnum,
-  RoleEnum,
   SecretKindEnum,
   SessionPermissionModeEnum,
   SshAuthMethodEnum,
@@ -89,10 +88,6 @@ describe('enum columns are the single source of truth from @flock/shared', () =>
     expect(events.status.enumValues).toEqual([...STATUS_VALUES]);
   });
 
-  it('users.role matches the shared RoleEnum', () => {
-    expect(users.role.enumValues).toEqual([...RoleEnum.options]);
-  });
-
   it('nodes.kind / nodes.connection_status / nodes.ssh_auth_method match the shared enums', () => {
     expect(nodes.kind.enumValues).toEqual([...NodeKindEnum.options]);
     expect(nodes.connectionStatus.enumValues).toEqual([...ConnectionStatusEnum.options]);
@@ -139,11 +134,8 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     hookTokenHash: 'argon2id$hash$abc',
     status: 'running',
     statusDetail: null,
-    pinned: false,
     note: null,
     parentSessionId: null,
-    reviewedAt: null,
-    reviewedBy: null,
     permissionMode: 'default',
     orchestrationAuthority: 'callback_only',
     createdAt: now,
@@ -159,13 +151,6 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     expect(session.id).toBe(baseRow.id);
     expect(session.createdAt).toBe(now.toISOString());
     expect(session.permissionMode).toBe('default');
-    expect(session.reviewedAt).toBeNull();
-  });
-
-  it('maps reviewed metadata (reviewed_at) to ISO on the Session', () => {
-    const reviewedAt = new Date('2026-05-30T08:00:00.000Z');
-    const session = rowToSession({ ...baseRow, reviewedAt, reviewedBy: baseRow.createdBy });
-    expect(session.reviewedAt).toBe(reviewedAt.toISOString());
   });
 
   it('round-trips row -> shared -> row without losing identity', () => {

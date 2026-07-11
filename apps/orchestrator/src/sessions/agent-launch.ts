@@ -2,8 +2,8 @@
  * Agent launch commands — the argv Flock runs as a session's PTY program to
  * actually start the coding agent (FR-S1).
  *
- * Each first-class agent ships a CLI on PATH; `generic` gets a plain login shell
- * (no agent program — status comes via OSC/PTY, US-20). The command is launched
+ * Each first-class agent ships a CLI on PATH. Plain shell access is represented
+ * explicitly by `terminal`. The command is launched
  * by flock-agentd as the session's foreground process and its TUI streams over
  * the PTY⇄WS bridge.
  *
@@ -100,7 +100,7 @@ interface AgentCaps {
   readonly initialStatus: Status;
   /**
    * Derive live status from PTY OUTPUT ACTIVITY (the daemon's activity heuristic)
-   * — true only for agents with no hook AND no transcript source (gemini/generic);
+   * — true only for agents with no hook AND no transcript source;
    * claude/codex/opencode have better sources and must NOT use it (it would fight them).
    */
   readonly activityStatus: boolean;
@@ -175,8 +175,6 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     activityStatus: true,
   },
   amp: { command: ['amp'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
-  // generic: bare shell, status via PTY activity (no transcript/hook).
-  generic: { kind: 'agent', initialStatus: 'starting', activityStatus: true },
   // terminal: a plain shell; dev: devCommand (sh -lc) assembled by the session service.
   terminal: { kind: 'shell', initialStatus: 'running', activityStatus: false },
   dev: { kind: 'dev', initialStatus: 'running', activityStatus: false },

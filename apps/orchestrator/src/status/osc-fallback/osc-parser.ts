@@ -2,7 +2,7 @@
  * US-19 — OSC / BEL status parser.
  *
  * A streaming parser that scans a raw PTY byte stream for the terminal control
- * sequences that generic agents (Codex, OpenCode, plain shells with terminal
+ * sequences that hook-less agents and plain shells with terminal
  * integration) use to signal attention / completion, and maps them onto the
  * canonical {@link FallbackStatus} subset.
  *

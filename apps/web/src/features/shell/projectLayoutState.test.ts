@@ -215,13 +215,13 @@ describe('projectLayoutState (production reconcile)', () => {
     expect(isGrid2x2Layout(replaced.root)).toBe(true);
   });
 
-  it('caps rebuilt and legacy saved Pens at four sessions', () => {
+  it('caps rebuilt and malformed saved Pens at four sessions', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'];
     const rebuilt = reconcileProjectLayout('p1', ids, null, null)!;
     expect(collectLeaves(rebuilt.root)).toHaveLength(MAX_STAGE_SESSIONS);
 
-    const legacy = layoutFromSessions('p1', ids)!;
-    const repaired = reconcileProjectLayout('p1', ids, legacy, null)!;
+    const oversized = layoutFromSessions('p1', ids)!;
+    const repaired = reconcileProjectLayout('p1', ids, oversized, null)!;
     expect(collectLeaves(repaired.root)).toHaveLength(MAX_STAGE_SESSIONS);
     expect(collectLeaves(repaired.root).map((leaf) => leaf.sessionId)).toEqual(ids.slice(0, 4));
   });

@@ -26,9 +26,10 @@ describe('production wiring (herdr-aligned shell)', () => {
     expect(src).toMatch(/all-agents-btn/);
   });
 
-  it('StageLayout uses projectLayoutApi + ProjectLayoutView + prune/reconcile', () => {
+  it('StageLayout uses durable Pens + ProjectLayoutView + prune/reconcile', () => {
     const src = read('features/shell/StageLayout.tsx');
-    expect(src).toMatch(/fetchProjectLayout/);
+    expect(src).toMatch(/fetchProjectPens/);
+    expect(src).not.toMatch(/fetchProjectLayout/);
     expect(src).toMatch(/putProjectPens/);
     expect(src).toMatch(/ProjectLayoutView/);
     expect(src).toMatch(/reconcileProjectLayout|afterTerminateLayout/);

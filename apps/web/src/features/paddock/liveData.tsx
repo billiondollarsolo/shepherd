@@ -85,10 +85,6 @@ export function LiveDataProvider({ children }: { children: ReactNode }): JSX.Ele
 export function useLiveStatuses(): ReadonlyMap<string, Status> {
   return useContext(LiveStatusContext);
 }
-/** Last status-change timestamps (ms) from the live status WS. */
-export function useLiveStatusTransitions(): ReadonlyMap<string, number> {
-  return useContext(LiveStatusTransitionContext);
-}
 /** The agentd health snapshot (or null). */
 export function useAgentdHealth(): AgentdHealth | null {
   return useContext(AgentdHealthContext);

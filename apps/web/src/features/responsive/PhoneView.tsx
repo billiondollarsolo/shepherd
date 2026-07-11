@@ -573,5 +573,3 @@ export function PhoneView({
     </div>
   );
 }
-
-export default PhoneView;

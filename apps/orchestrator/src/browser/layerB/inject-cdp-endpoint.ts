@@ -1,11 +1,8 @@
 import {
-  DO_NOT_LAUNCH_BROWSER_INSTRUCTION,
-  LAYER_B_MECHANISM_V1,
   OpaqueCdpEndpoint,
   SESSION_BROWSER_CDP_ENV,
   SESSION_BROWSER_NO_LAUNCH_ENV,
   SESSION_BROWSER_NO_LAUNCH_VALUE,
-  type LayerBMechanism,
 } from '@flock/shared';
 
 /**
@@ -26,9 +23,6 @@ import {
  * unguessable GUID and NEVER a bare port. This module validates that before it
  * hands the value to the agent.
  */
-
-/** v1 Layer B driving mechanism (re-exported for callers wiring agent config). */
-export const LAYER_B_MECHANISM: LayerBMechanism = LAYER_B_MECHANISM_V1;
 
 /** Loopback host the per-session Chrome container is reverse-tunneled to. */
 const LAYER_B_LOOPBACK_HOST = 'flock-browser';
@@ -94,10 +88,3 @@ export function buildLayerBSessionEnv(session: LayerBSession): Partial<Record<st
     [SESSION_BROWSER_NO_LAUNCH_ENV]: SESSION_BROWSER_NO_LAUNCH_VALUE,
   };
 }
-
-/**
- * The human-readable directive seeded into the agent's config / prompt so it
- * does not launch its own browser (FR-B2). First-class agents honor the
- * {@link SESSION_BROWSER_NO_LAUNCH_ENV} env; generic agents get this string.
- */
-export const doNotLaunchBrowserInstruction = DO_NOT_LAUNCH_BROWSER_INSTRUCTION;

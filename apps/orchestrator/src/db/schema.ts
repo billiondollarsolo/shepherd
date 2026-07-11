@@ -53,7 +53,6 @@ const STATUS_VALUES: EnumTuple = [
   'error',
   'disconnected',
 ];
-const ROLE_VALUES: EnumTuple = ['admin', 'member'];
 const NODE_KIND_VALUES: EnumTuple = ['local', 'ssh'];
 const CONNECTION_STATUS_VALUES: EnumTuple = ['connected', 'connecting', 'disconnected', 'error'];
 const AGENT_TYPE_VALUES: EnumTuple = [
@@ -65,7 +64,6 @@ const AGENT_TYPE_VALUES: EnumTuple = [
   'aider',
   'cursor-agent',
   'amp',
-  'generic',
   'terminal',
   'dev',
 ];
@@ -96,7 +94,7 @@ const AUDIT_ACTION_VALUES: EnumTuple = [
   'browser_takeover',
   'browser_release',
   'secret_access',
-  'user_create',
+  'owner_setup',
 ];
 
 /** Postgres `bytea` column (secret ciphertext is binary; spec §6 secrets). */
@@ -115,17 +113,18 @@ const id = () =>
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
 // ---------------------------------------------------------------------------
-// users — operator accounts (spec §6: username, password_hash argon2id, role)
+// users — the installation owner account
 // ---------------------------------------------------------------------------
 export const users = pgTable('users', {
   id: id(),
+  /** Constant true + UNIQUE is a database-level single-owner invariant. */
+  installationOwner: boolean('installation_owner').notNull().default(true).unique(),
   username: text('username').notNull().unique(),
   /** Optional human display name (e.g. "Mike Johnson"); drives the avatar
    *  initials + greeting. Null = fall back to the username. */
   displayName: text('display_name'),
   /** argon2id hash; never plaintext, never serialized to clients. */
   passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ROLE_VALUES }).notNull(),
   createdAt: createdAt(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   isActive: boolean('is_active').notNull().default(true),
@@ -184,8 +183,7 @@ export const nodes = pgTable(
     sshKeyRef: uuid('ssh_key_ref').references(() => secrets.id, {
       onDelete: 'set null',
     }),
-    // 'key' | 'password' — how this ssh node authenticates. Null for local nodes
-    // (and legacy rows, which the connector treats as 'key').
+    // 'key' | 'password' — how this ssh node authenticates. Null for local nodes.
     sshAuthMethod: text('ssh_auth_method', { enum: SSH_AUTH_METHOD_VALUES }),
     // #3a per-node env: an encrypted JSON envelope ({KEY:value,…}) in `secrets`,
     // merged (under) the per-session launch env for every agent on this node.
@@ -276,7 +274,7 @@ export const agentSessions = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    /** claude-code | codex | opencode | generic | terminal | dev */
+    /** Supported coding-agent, terminal, or supervised dev-process type. */
     agentType: text('agent_type', { enum: AGENT_TYPE_VALUES }).notNull(),
     tmuxSessionName: text('tmux_session_name').notNull(),
     workingDir: text('working_dir').notNull(),
@@ -287,18 +285,12 @@ export const agentSessions = pgTable(
     /** Write-behind mirror of the in-memory authoritative status (§6.6). */
     status: text('status', { enum: STATUS_VALUES }).notNull(),
     statusDetail: text('status_detail'),
-    /** Supervisor pinned this session to the top of the paddock tree. */
-    pinned: boolean('pinned').notNull().default(false),
     /** Free-text supervisor note about this session; null = none. */
     note: text('note'),
     /** Collaboration lineage: the session that spawned/handed off to this one
      *  (durable teams graph; rehydrates the spatial graph on boot). No FK — a
      *  missing parent just drops the edge. */
     parentSessionId: uuid('parent_session_id'),
-    /** Server-durable "reviewed" marker (closes the supervision loop across
-     *  devices/restarts; was localStorage). Null = not reviewed. */
-    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
-    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
     /** T18: the autonomy level the agent was launched with (restart-as-is + UI badge). */
     permissionMode: text('permission_mode', { enum: PERMISSION_MODE_VALUES })
       .notNull()

@@ -1,7 +1,7 @@
 /**
  * US-39 — auth on ALL surfaces (NFR-SEC1, NFR-SEC6, spec §8.1/§8.2).
  *
- * US-5 gave us per-route `requireAuth`/`requireAdmin` guards. US-39 hardens the
+ * Per-route `requireAuth` guards establish the owner. The surface guard hardens the
  * posture to default-DENY across every surface so that:
  *   - all UI/API/WS require authentication (NFR-SEC6), and
  *   - the hook endpoint is the ONE exception, authed by its own per-session
@@ -52,7 +52,7 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   '/api/auth/login',
   '/api/auth/setup',
   '/api/auth/logout',
-  // First-run probe: reports whether the initial admin still needs creating, so
+  // First-run probe: reports whether the installation owner still needs creating, so
   // the sign-in UI can show the right screen before any session exists.
   '/api/auth/status',
   '/health',

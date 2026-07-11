@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
-import { makeRequireAdmin, makeRequireAuth } from '../auth/middleware.js';
+import { makeRequireAuth } from '../auth/middleware.js';
 import { NodePathError, NodeUnreachableError, type NodeFsService } from './node-fs-service.js';
 
 const NodeIdParams = z.object({ id: Uuid });
@@ -28,11 +28,8 @@ export function registerNodeFsRoute(
   deps: { service: NodeFsService; auth: AuthGuardDeps },
 ): void {
   const requireAuth = makeRequireAuth(deps.auth);
-  // T8: writing arbitrary files on ANY node (incl. ones the user has no session on)
-  // is code-execution-equivalent — gate the write endpoint to admins. Browse + read
-  // stay member-accessible (the path picker + file viewer). Members still get a real
-  // shell only on nodes where they own a session (their terminal), not via this API.
-  const requireAdmin = makeRequireAdmin(deps.auth);
+  // Writing arbitrary files on a node is code-execution-equivalent. Every endpoint
+  // remains owner-authenticated; agent capabilities cannot enter this human surface.
 
   app.get(
     '/api/nodes/:id/fs',
@@ -90,11 +87,11 @@ export function registerNodeFsRoute(
     },
   );
 
-  // Write a file's bytes (base64) — editor save + drag-and-drop upload. ADMIN-only
+  // Write a file's bytes (base64) — editor save + drag-and-drop upload. Owner-only
   // (T8): arbitrary file write on any node = code execution.
   app.put(
     '/api/nodes/:id/fs/file',
-    { preHandler: requireAdmin },
+    { preHandler: requireAuth },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const params = NodeIdParams.safeParse(request.params);
       if (!params.success) return badRequest(reply, 'a valid node id is required.');
@@ -109,11 +106,11 @@ export function registerNodeFsRoute(
     },
   );
 
-  // Create a directory (path picker "New folder"). ADMIN-only (T8): like the file
+  // Create a directory (path picker "New folder"). Owner-only (T8): like the file
   // write, a filesystem mutation on an arbitrary node is privileged.
   app.post(
     '/api/nodes/:id/fs/mkdir',
-    { preHandler: requireAdmin },
+    { preHandler: requireAuth },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const params = NodeIdParams.safeParse(request.params);
       if (!params.success) return badRequest(reply, 'a valid node id is required.');

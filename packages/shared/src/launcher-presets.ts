@@ -28,9 +28,3 @@ export const BUILTIN_LAUNCHER_PRESETS: readonly LauncherPreset[] = [
   { id: 'builtin-grok', name: 'Grok', agentType: 'grok' },
   { id: 'builtin-terminal', name: 'Shell', agentType: 'terminal' },
 ];
-
-export function mergePresetsWithBuiltins(userPresets: readonly LauncherPreset[]): LauncherPreset[] {
-  const ids = new Set(userPresets.map((p) => p.id));
-  const builtins = BUILTIN_LAUNCHER_PRESETS.filter((b) => !ids.has(b.id));
-  return [...userPresets, ...builtins];
-}

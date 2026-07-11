@@ -7,10 +7,10 @@ import { usePaddock } from '../../store/paddock';
 const mutate = vi.fn();
 const penAction = vi.fn();
 const sessions: Session[] = [
-  makeSession('pinned-idle', 'idle', true),
+  makeSession('idle', 'idle'),
   makeSession('working', 'running'),
   makeSession('waiting', 'awaiting_input'),
-  makeSession('other-project', 'running', false, 'project-2', 'node-2'),
+  makeSession('other-project', 'running', 'project-2', 'node-2'),
 ];
 const nodes: Node[] = [
   {
@@ -76,7 +76,6 @@ import { AgentsSwitcher } from './AgentsSwitcher';
 function makeSession(
   id: string,
   status: Session['status'],
-  pinned = false,
   projectId = 'project-1',
   nodeId = 'node-1',
 ): Session {
@@ -91,7 +90,6 @@ function makeSession(
     hookTokenHash: 'hash',
     status,
     statusDetail: null,
-    pinned,
     note: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     lastStatusAt: '2026-01-01T00:00:00.000Z',
@@ -157,7 +155,7 @@ describe('AgentsSwitcher controls', () => {
     expect(screen.queryByText('Pinned sessions')).toBeNull();
     expect(screen.queryByText('Currently working')).toBeNull();
     expect(screen.getByTestId('agent-row-working')).toBeInTheDocument();
-    expect(screen.getByTestId('agent-row-pinned-idle')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-row-idle')).toBeInTheDocument();
     expect(screen.getByTestId('agent-row-waiting')).toBeInTheDocument();
   });
 
@@ -186,7 +184,7 @@ describe('AgentsSwitcher controls', () => {
 
     expect(screen.getByTestId('agent-row-working')).toBeInTheDocument();
     expect(screen.getByTestId('agent-row-waiting')).toBeInTheDocument();
-    expect(screen.getByTestId('agent-row-pinned-idle')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-row-idle')).toBeInTheDocument();
     expect(screen.queryByTestId('agent-row-other-project')).toBeNull();
     expect(screen.getByTestId('agent-list-context')).toHaveTextContent('Project:Flock');
   });

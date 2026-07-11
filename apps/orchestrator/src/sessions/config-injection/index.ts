@@ -1,11 +1,7 @@
 /**
- * Session-scoped hook config injection (US-19).
- *
- * On session create, seed a per-session isolated config dir (env-pointed:
- * CLAUDE_CONFIG_DIR / CODEX_HOME / XDG_CONFIG_HOME) with Flock's hooks layered
- * over the user's real config WITHOUT clobbering it; remove it on teardown. The
- * scoped dir is keyed by the single authoritative session_id (spec §4.2).
+ * Native hook config injection (US-19). Agentd merges narrowly scoped Flock hook
+ * files into the runtime user's agent config; the callbacks remain inert without
+ * a per-session Flock token environment.
  */
-export * from './env-keys.js';
 export * from './hook-templates.js';
 export * from './config-injection.js';

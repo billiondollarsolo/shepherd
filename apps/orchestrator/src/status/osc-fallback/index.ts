@@ -2,7 +2,7 @@
  * OSC 9/777 + BEL + output-then-quiet fallback status source (US-20).
  *
  * Wires the OSC/BEL parser and the output-then-quiet heuristic together behind
- * one façade. The orchestrator feeds every raw PTY chunk for a generic
+ * one façade. The orchestrator feeds every raw PTY chunk for a hook-less
  * (non-first-class) session into {@link OscFallbackStatusSource.push}; the source
  * derives {@link StatusSignal}s and hands them to the caller-supplied sink, which
  * the status core reconciles into the in-memory status map (NFR-PERF1: never on

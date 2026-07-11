@@ -222,18 +222,13 @@ describe('SessionRestService.createSession', () => {
   });
 });
 
-describe('SessionRestService.updateSession (pin / note)', () => {
-  it('sets pinned + note and returns the updated session', async () => {
+describe('SessionRestService.updateSession (note)', () => {
+  it('sets and returns the note', async () => {
     const { service } = makeService();
     const { session } = await service.createSession(REQ, { userId: USER_ID });
-    expect(session.pinned).toBe(false);
     expect(session.note).toBeNull();
 
-    const updated = await service.updateSession(session.id, {
-      pinned: true,
-      note: 'refactoring auth',
-    });
-    expect(updated?.pinned).toBe(true);
+    const updated = await service.updateSession(session.id, { note: 'refactoring auth' });
     expect(updated?.note).toBe('refactoring auth');
   });
 
@@ -248,7 +243,7 @@ describe('SessionRestService.updateSession (pin / note)', () => {
   it('returns null for an unknown session id', async () => {
     const { service } = makeService(); // no session created → empty store
     const updated = await service.updateSession('00000000-0000-4000-8000-000000000000', {
-      pinned: true,
+      note: 'missing',
     });
     expect(updated).toBeNull();
   });

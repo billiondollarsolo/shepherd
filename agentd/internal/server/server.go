@@ -209,7 +209,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		spec := session.Spec{
 			ID: ctrl.ID, Kind: ctrl.Kind, Cwd: ctrl.Cwd, Env: ctrl.Env,
 			Command: ctrl.Command, Mode: ctrl.Mode, Cols: ctrl.Cols, Rows: ctrl.Rows,
-			ConfigDirEnv: ctrl.ConfigDirEnv, ConfigFiles: ctrl.ConfigFiles,
+			ConfigFiles:      ctrl.ConfigFiles,
 			ConfigBaseSubdir: ctrl.ConfigBaseSubdir,
 			Sandbox:          ctrl.Sandbox,
 			SandboxAllow:     ctrl.SandboxAllow,

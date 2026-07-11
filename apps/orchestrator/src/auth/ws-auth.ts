@@ -56,5 +56,3 @@ export function makeWsAuthorizer(deps: WsAuthDeps) {
     return owner !== null && owner === user.id;
   };
 }
-
-export type WsAuthorizer = ReturnType<typeof makeWsAuthorizer>;

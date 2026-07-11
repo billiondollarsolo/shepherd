@@ -99,5 +99,3 @@ export function BottomBar(): JSX.Element {
     </footer>
   );
 }
-
-export default BottomBar;

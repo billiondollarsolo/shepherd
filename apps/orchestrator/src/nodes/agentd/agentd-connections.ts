@@ -45,8 +45,6 @@ export interface AgentdConnectionsDeps {
   socketPath?: string;
   /** Loads the unique encrypted-at-rest identity for exactly one node. */
   identityFor: (nodeId: string, kind: 'local' | 'ssh') => Promise<NodeControlIdentity>;
-  /** Temporary source-dev bridge for already-running v1 PTYs; never production. */
-  allowLegacyDevelopment?: boolean;
   /**
    * Derived agent-status push from any node's daemon (it tails the agent's
    * transcript). Wired into every client before the handshake so the daemon's
@@ -146,9 +144,7 @@ export class AgentdConnections {
       const client = new NodeAgentdClient(channel);
       try {
         const identity = await this.deps.identityFor(nodeId, 'ssh');
-        await client.hello(identity, {
-          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
-        });
+        await client.hello(identity);
         this.connected(nodeId);
         return true;
       } finally {
@@ -175,9 +171,7 @@ export class AgentdConnections {
       if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
       try {
         const identity = await this.deps.identityFor(nodeId, 'local');
-        await client.hello(identity, {
-          allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
-        });
+        await client.hello(identity);
       } catch (err) {
         // T23: a failed handshake otherwise leaks the socket + frame decoder.
         client.dispose();
@@ -230,9 +224,7 @@ export class AgentdConnections {
         const client = new NodeAgentdClient(channel);
         if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
         try {
-          await client.hello(identity, {
-            allowLegacyDevelopment: this.deps.allowLegacyDevelopment,
-          });
+          await client.hello(identity);
         } catch (err) {
           // T23: a failed handshake otherwise leaks the channel + frame decoder.
           client.dispose();

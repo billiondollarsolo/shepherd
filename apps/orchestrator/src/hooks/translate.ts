@@ -59,10 +59,8 @@ export function translateHookEvent(body: unknown, agentType?: AgentType): Transl
       return translateGrokHook(body);
     case 'gemini':
       return translateGeminiHook(body);
-    case 'generic':
     case 'terminal':
-      // No structured hook payload: a generic agent reports via OSC/PTY (US-20),
-      // and a plain terminal reports nothing (it's just a shell).
+      // A plain terminal has no structured hook payload.
       return null;
     default:
       break;

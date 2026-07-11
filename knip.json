@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignore": ["codex/**"],
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["scripts/**/*.{js,mjs,ts}"]
+    },
+    "apps/orchestrator": {
+      "entry": ["src/**/*.test.ts", "src/**/*.int.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": [
+        "src/main.tsx",
+        "src/features/terminal/terminalHarness.tsx",
+        "src/**/*.test.{ts,tsx}",
+        "e2e/**/*.spec.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts"]
+    },
+    "packages/shared": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

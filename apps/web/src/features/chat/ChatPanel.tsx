@@ -100,5 +100,3 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
     </div>
   );
 }
-
-export default ChatPanel;

@@ -15,10 +15,11 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
-import { users, pushSubscriptions } from '../db/schema.js';
+import { pushSubscriptions } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 import { DrizzlePushSubscriptionStore } from './subscription-store.js';
+import { ensureIntegrationOwner } from '../../test/integration-owner.js';
 
 let handle: DbHandle;
 let store: DrizzlePushSubscriptionStore;
@@ -28,18 +29,12 @@ beforeAll(async () => {
   handle = createDb();
   store = new DrizzlePushSubscriptionStore(handle.db);
 
-  const username = `push-it-${randomUUID().slice(0, 8)}`;
-  const [row] = await handle.db
-    .insert(users)
-    .values({ username, passwordHash: 'x', role: 'admin' })
-    .returning();
-  userId = row!.id;
+  userId = (await ensureIntegrationOwner(handle.db, `push-it-${randomUUID().slice(0, 8)}`)).id;
 });
 
 afterAll(async () => {
   if (handle) {
     await handle.db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
-    await handle.db.delete(users).where(eq(users.id, userId));
     await handle.pool.end();
   }
 });

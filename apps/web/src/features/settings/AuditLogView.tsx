@@ -138,5 +138,3 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
     </section>
   );
 }
-
-export default AuditLogView;

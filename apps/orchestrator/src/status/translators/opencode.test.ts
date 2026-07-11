@@ -54,7 +54,7 @@ describe('translateOpenCodeHook — the money state (awaiting_input, FR-ST4)', (
     expect(t).toEqual({ status: 'awaiting_input', detail: 'Run shell command' });
   });
 
-  it('permission.request (legacy name, tolerated) -> awaiting_input with the prompt title', () => {
+  it('permission.request upstream variant -> awaiting_input with the prompt title', () => {
     const t = translateOpenCodeHook(fixture('permission-request'));
     expect(t).toEqual({ status: 'awaiting_input', detail: 'Run shell command' });
   });

@@ -381,41 +381,24 @@ func TestSubscribeNormalScreenReplaysRing(t *testing.T) {
 	}
 }
 
-// --- scoped hook-config seeding (US-19 / T1) ---------------------------------
+// --- native hook-config seeding (US-19 / T1) ---------------------------------
 
-func TestSeedScopedConfig(t *testing.T) {
+func TestSeedHookConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// Fake the node user's real config (credentials base to copy in).
-	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(home, ".claude", "creds.json"), []byte(`{"token":"x"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	spec := Spec{
 		ID:               "seed-test-1",
-		ConfigDirEnv:     "CLAUDE_CONFIG_DIR",
 		ConfigBaseSubdir: ".claude",
 		ConfigFiles: map[string]string{
 			"settings.json": `{"hooks":"sh __FLOCK_CONFIG_DIR__/flock-hook.sh"}`,
 			"flock-hook.sh": "#!/bin/sh\nexec curl @-\n",
 		},
 	}
-	dir, env, err := seedScopedConfig(spec)
-	if err != nil {
+	if err := seedHookConfig(spec); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	defer os.RemoveAll(dir)
-
-	if env != "CLAUDE_CONFIG_DIR="+dir {
-		t.Fatalf("env entry = %q, want CLAUDE_CONFIG_DIR=%s", env, dir)
-	}
-	// Base credentials copied in.
-	if b, err := os.ReadFile(filepath.Join(dir, "creds.json")); err != nil || string(b) != `{"token":"x"}` {
-		t.Fatalf("creds base not copied: %v %q", err, b)
-	}
+	dir := filepath.Join(home, ".claude")
 	// Placeholder substituted with the real dir.
 	settings, err := os.ReadFile(filepath.Join(dir, "settings.json"))
 	if err != nil {
@@ -425,7 +408,7 @@ func TestSeedScopedConfig(t *testing.T) {
 		t.Fatalf("placeholder not substituted: %s", settings)
 	}
 	if !strings.Contains(string(settings), dir) {
-		t.Fatalf("scoped dir not in settings: %s", settings)
+		t.Fatalf("native config dir not in settings: %s", settings)
 	}
 	// Forwarder script is executable.
 	fi, err := os.Stat(filepath.Join(dir, "flock-hook.sh"))
@@ -437,14 +420,13 @@ func TestSeedScopedConfig(t *testing.T) {
 	}
 }
 
-func TestSeedScopedConfigNoop(t *testing.T) {
-	dir, env, err := seedScopedConfig(Spec{ID: "x"}) // no ConfigDirEnv
-	if err != nil || dir != "" || env != "" {
-		t.Fatalf("expected no-op, got dir=%q env=%q err=%v", dir, env, err)
+func TestSeedHookConfigNoop(t *testing.T) {
+	if err := seedHookConfig(Spec{ID: "x"}); err != nil {
+		t.Fatalf("expected no-op, got err=%v", err)
 	}
 }
 
-func TestSeedScopedConfigMergesUserSettings(t *testing.T) {
+func TestSeedHookConfigMergesUserSettings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
@@ -456,11 +438,10 @@ func TestSeedScopedConfigMergesUserSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	flock := `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"sh __FLOCK_CONFIG_DIR__/flock-hook.sh"}]}],"Stop":[{"hooks":[{"type":"command","command":"sh __FLOCK_CONFIG_DIR__/flock-hook.sh"}]}]}}`
-	dir, _, err := seedScopedConfig(Spec{ID: "merge-1", ConfigDirEnv: "CLAUDE_CONFIG_DIR", ConfigBaseSubdir: ".claude", ConfigFiles: map[string]string{"settings.json": flock}})
-	if err != nil {
+	if err := seedHookConfig(Spec{ID: "merge-1", ConfigBaseSubdir: ".claude", ConfigFiles: map[string]string{"settings.json": flock}}); err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	dir := filepath.Join(home, ".claude")
 	b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
 	s := string(b)
 	if !strings.Contains(s, `"model"`) || !strings.Contains(s, "opus") {

@@ -186,8 +186,7 @@ export class SessionRestService {
     }
 
     const id = randomUUID();
-    // Stable per-session name (the daemon keys by session id; this is a legacy
-    // label still stored on the record + used as the terminate lookup key).
+    // Stable per-session process label stored on the record and used for termination.
     const tmuxSessionName = `flock-${id.replace(/[.:]/g, '-')}`;
     const workingDir = input.workingDir ?? project.workingDir;
     const policy = ProjectAgentPolicySchema.parse(project.agentPolicy);
@@ -215,9 +214,7 @@ export class SessionRestService {
       // `running` the moment its shell spawns (see initialSessionStatus).
       status: initialSessionStatus(input.agentType),
       statusDetail: null,
-      pinned: false,
       note: null,
-      reviewedAt: null,
       // T18: persist the autonomy level so it survives restart + shows in the UI.
       permissionMode: input.permissionMode ?? 'default',
       orchestrationAuthority,
@@ -316,29 +313,14 @@ export class SessionRestService {
   }
 
   /**
-   * Update supervisor-facing metadata (pin / note) on a session. Cosmetic
+   * Update the supervisor-facing note on a session. Cosmetic
    * registry fields only — never touches the live status or process. Returns the
    * updated session, or null when the id is unknown (→ 404). Omitted fields are
    * left unchanged; `note: null` clears the note.
    */
-  async updateSession(
-    id: string,
-    patch: { pinned?: boolean; note?: string | null; reviewed?: boolean },
-    ctx?: { userId?: string | null },
-  ): Promise<SessionRecord | null> {
-    const set: {
-      pinned?: boolean;
-      note?: string | null;
-      reviewedAt?: Date | null;
-      reviewedBy?: string | null;
-    } = {};
-    if (patch.pinned !== undefined) set.pinned = patch.pinned;
+  async updateSession(id: string, patch: { note?: string | null }): Promise<SessionRecord | null> {
+    const set: { note?: string | null } = {};
     if (patch.note !== undefined) set.note = patch.note;
-    if (patch.reviewed !== undefined) {
-      // Stamp who/when on review; clearing review wipes both.
-      set.reviewedAt = patch.reviewed ? new Date() : null;
-      set.reviewedBy = patch.reviewed ? (ctx?.userId ?? null) : null;
-    }
     if (Object.keys(set).length === 0) {
       const [row] = await this.db
         .select()

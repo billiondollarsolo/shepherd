@@ -97,5 +97,3 @@ export function CodeEditor({ value, filename, onChange, readOnly }: CodeEditorPr
     />
   );
 }
-
-export default CodeEditor;

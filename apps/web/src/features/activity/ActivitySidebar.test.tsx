@@ -26,7 +26,6 @@ const SESSION: Session = {
   hookTokenHash: 'super-secret-hash',
   status: 'awaiting_input',
   statusDetail: 'Approve edit to src/app.ts?',
-  pinned: false,
   note: null,
   createdAt: '2026-05-29T09:00:00.000Z',
   lastStatusAt: '2026-05-29T09:05:00.000Z',

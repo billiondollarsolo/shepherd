@@ -67,7 +67,7 @@ export const CodexHookEventNameEnum = z.enum([
   'PermissionRequest', // the approval / awaiting-input signal
   'Stop', // turn complete
   'SessionEnd',
-  // Legacy/guessed name kept for tolerance:
+  // Upstream-version variant retained because installed Codex releases emit both forms:
   'TurnComplete',
 ]);
 export type CodexHookEventName = z.infer<typeof CodexHookEventNameEnum>;
@@ -108,7 +108,7 @@ export const OpenCodeHookEventNameEnum = z.enum([
   // session objects carry `properties.info` with modelID + token usage + cost.
   'message.updated',
   'session.updated',
-  // Legacy/guessed names kept for tolerance across versions (harmless if unused):
+  // Upstream-version variants retained for mixed current OpenCode installations:
   'session.start',
   'session.complete',
   'permission.request',

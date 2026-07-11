@@ -9,9 +9,8 @@ describe('agentLaunchCommand', () => {
     expect(agentLaunchCommand('opencode')).toEqual(['opencode']);
   });
 
-  it('launches a bare default shell (no command) for generic + terminal', () => {
+  it('launches a bare default shell (no command) for terminal', () => {
     // undefined => tmux opens its default-shell with no explicit program.
-    expect(agentLaunchCommand('generic')).toBeUndefined();
     expect(agentLaunchCommand('terminal')).toBeUndefined();
   });
 
@@ -56,9 +55,8 @@ describe('agentLaunchCommand', () => {
     ]);
   });
 
-  it('ignores permission mode for opencode/generic/terminal (no launch flags)', () => {
+  it('ignores permission mode for opencode/terminal (no launch flags)', () => {
     expect(agentLaunchCommand('opencode', 'autonomous')).toEqual(['opencode']);
-    expect(agentLaunchCommand('generic', 'autonomous')).toBeUndefined();
     expect(agentLaunchCommand('terminal', 'autonomous')).toBeUndefined();
   });
 
@@ -94,7 +92,6 @@ describe('initialSessionStatus', () => {
     expect(initialSessionStatus('claude-code')).toBe('starting');
     expect(initialSessionStatus('codex')).toBe('starting');
     expect(initialSessionStatus('opencode')).toBe('starting');
-    expect(initialSessionStatus('generic')).toBe('starting');
   });
 
   it('starts a hook-less terminal at "running" (the shell is up immediately)', () => {
@@ -116,9 +113,9 @@ describe('agent capability table', () => {
     expect(agentSessionKind('dev')).toBe('dev');
   });
 
-  it('agentUsesActivityStatus only for generic (gemini now uses its v0.26+ hooks)', async () => {
+  it('agentUsesActivityStatus follows explicit per-agent status capabilities', async () => {
     const { agentUsesActivityStatus } = await import('./agent-launch.js');
-    expect(agentUsesActivityStatus('generic')).toBe(true);
+    expect(agentUsesActivityStatus('aider')).toBe(true);
     expect(agentUsesActivityStatus('gemini')).toBe(false);
     expect(agentUsesActivityStatus('claude-code')).toBe(false);
     expect(agentUsesActivityStatus('codex')).toBe(false);

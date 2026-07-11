@@ -24,7 +24,6 @@ const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
   username: 'op@example.com',
-  role: 'admin',
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,

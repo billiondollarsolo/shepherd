@@ -432,5 +432,3 @@ export function NodePage(): JSX.Element {
     </div>
   );
 }
-
-export default NodePage;

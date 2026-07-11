@@ -6,9 +6,10 @@ import { DEFAULT_PROJECT_AGENT_POLICY, type ProjectAgentPolicy } from '@flock/sh
 
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { agentSessions, nodes, projects, users } from '../db/schema.js';
+import { agentSessions, nodes, projects } from '../db/schema.js';
 import { StatusMap } from '../status/map.js';
 import { OrchestrationService } from './orchestrate-service.js';
+import { ensureIntegrationOwner } from '../../test/integration-owner.js';
 
 let handle: DbHandle;
 let userId: string;
@@ -20,15 +21,7 @@ let targetId: string;
 beforeAll(async () => {
   handle = createDb();
   await runMigrations(handle);
-  const [user] = await handle.db
-    .insert(users)
-    .values({
-      username: `policy-${randomUUID()}`,
-      passwordHash: 'argon2id$fixture',
-      role: 'admin',
-    })
-    .returning();
-  userId = user!.id;
+  userId = (await ensureIntegrationOwner(handle.db, `policy-${randomUUID()}`)).id;
   const [node] = await handle.db
     .insert(nodes)
     .values({ name: `policy-${randomUUID()}`, kind: 'local', connectionStatus: 'connected' })
@@ -70,7 +63,7 @@ function service(
   return new OrchestrationService(
     handle.db,
     new StatusMap(),
-    async (_caller, _token, required) => ({
+    async (_caller, _token, _required) => ({
       projectId,
       createdBy: userId,
       scopes: [

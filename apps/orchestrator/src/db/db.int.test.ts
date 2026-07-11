@@ -22,18 +22,26 @@ import type { DbHandle } from './client.js';
 import { runMigrations } from './migrate.js';
 import { rowToSession } from './mappers.js';
 import { agentSessions, events, nodes, projects, users } from './schema.js';
+import { ensureIntegrationOwner } from '../../test/integration-owner.js';
 
 let handle: DbHandle;
+let installationOwnerId: string;
 
 beforeAll(async () => {
   handle = createDb();
   // Idempotent: applying twice must not error (US-2 acceptance: idempotent migrate).
   await runMigrations(handle);
   await runMigrations(handle);
+  installationOwnerId = (
+    await ensureIntegrationOwner(handle.db, `owner-${randomUUID().slice(0, 8)}`)
+  ).id;
 });
 
 afterAll(async () => {
   if (handle) {
+    await handle.db.delete(agentSessions).where(eq(agentSessions.createdBy, installationOwnerId));
+    await handle.db.delete(nodes).where(eq(nodes.createdBy, installationOwnerId));
+    await handle.db.delete(users).where(eq(users.id, installationOwnerId));
     await handle.pool.end();
   }
 });
@@ -44,14 +52,6 @@ async function seedChain(): Promise<{
   projectId: string;
 }> {
   const { db } = handle;
-  const [admin] = await db
-    .insert(users)
-    .values({
-      username: `admin-${randomUUID().slice(0, 8)}`,
-      passwordHash: 'argon2id$placeholder',
-      role: 'admin',
-    })
-    .returning();
   const [node] = await db
     .insert(nodes)
     .values({
@@ -61,7 +61,7 @@ async function seedChain(): Promise<{
       port: 22,
       sshUser: 'flock',
       connectionStatus: 'connected',
-      createdBy: admin!.id,
+      createdBy: installationOwnerId,
     })
     .returning();
   const [project] = await db
@@ -72,7 +72,7 @@ async function seedChain(): Promise<{
       workingDir: '/home/flock/work/demo',
     })
     .returning();
-  return { ownerId: admin!.id, nodeId: node!.id, projectId: project!.id };
+  return { ownerId: installationOwnerId, nodeId: node!.id, projectId: project!.id };
 }
 
 describe('US-2 integration — node -> project -> agent_session chain', () => {

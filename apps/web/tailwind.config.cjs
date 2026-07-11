@@ -8,7 +8,7 @@ module.exports = {
       // (the --flock-* custom properties), which flip with light/dark. These
       // utility-class bindings just reference those variables.
       colors: {
-        // Legacy aliases (kept for backward compat; mapped to tokens in index.css).
+        // Compact semantic utilities mapped to first-class tokens in index.css.
         'flock-bg': 'var(--flock-bg)',
         'flock-surface': 'var(--flock-surface)',
         'flock-fg': 'var(--flock-fg)',

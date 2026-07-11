@@ -212,7 +212,7 @@ export function createLiveChannels(deps: LiveChannelsDeps): LiveChannels {
 
   // OSC/PTY status fallback (US-20): derive status from terminal ACTIVITY for a
   // session that hooks haven't moved off "starting" (e.g. an agent idling at a
-  // login/permission prompt, or a hook-less generic session). Only applied while
+  // login/permission prompt, or a hook-less agent session). Only applied while
   // the live status is still "starting" so it NEVER overrides an accurate
   // hook-driven transition for a working agent. Active while a terminal is
   // attached (output is flowing); per-session source cleaned up on untrack.

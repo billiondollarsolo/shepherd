@@ -1,11 +1,10 @@
 /**
  * Audit log read route (US-40, spec §8.1, FR-A3).
  *
- *   GET /api/audit   admin-only list of append-only audit rows (newest-first).
+ *   GET /api/audit   owner-authenticated append-only audit rows (newest-first).
  *
- * "Admin can read them" (US-40). The route is guarded by `requireAdmin`: an
- * unauthenticated caller gets 401, an authenticated non-admin gets 403, and an
- * admin gets 200 + the shared `ListAuditResponse`. The query is validated with
+ * The installation owner can read them. The route is guarded by authentication:
+ * an unauthenticated caller gets 401 and the owner gets the shared response. The query is validated with
  * the shared `ListAuditQuery` zod contract (never duplicated); a malformed query
  * is rejected with 400.
  *
@@ -18,7 +17,7 @@ import { ListAuditQuery } from '@flock/shared';
 import { badRequest } from '../http/reply.js';
 
 import type { AuthGuardDeps } from '../auth/middleware.js';
-import { makeRequireAdmin } from '../auth/middleware.js';
+import { makeRequireAuth } from '../auth/middleware.js';
 import type { AuditQueryService } from './audit-query-service.js';
 
 /**
@@ -30,17 +29,17 @@ export function registerAuditRoutes(
   app: FastifyInstance,
   deps: { service: AuditQueryService; auth: AuthGuardDeps },
 ): void {
-  const requireAdmin = makeRequireAdmin(deps.auth);
+  const requireAuth = makeRequireAuth(deps.auth);
 
   app.get(
     '/api/audit',
-    { preHandler: requireAdmin },
+    { preHandler: requireAuth },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const parsed = ListAuditQuery.safeParse(request.query);
       if (!parsed.success) {
         return badRequest(reply, 'invalid audit query.');
       }
-      // requireAdmin guarantees an authenticated admin reached here.
+      // The single-owner model guarantees the authenticated user owns the installation.
       const result = await deps.service.list(parsed.data);
       return reply.code(200).send(result);
     },

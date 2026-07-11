@@ -1,7 +1,7 @@
 /**
  * US-20 — Output-then-quiet fallback heuristic.
  *
- * For generic agents that emit neither Claude Code hooks nor OSC/BEL signals, we
+ * For hook-less agents that emit neither structured hooks nor OSC/BEL signals, we
  * infer activity purely from the rhythm of PTY output (spec §7.1 "Universal
  * fallback"):
  *

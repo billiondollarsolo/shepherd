@@ -153,7 +153,7 @@ export function AccountSection(): JSX.Element {
     <div>
       <SectionHeader title="Account" description="Who you're signed in as on this device." />
       <SettingCard>
-        <SettingRow title="Signed in as" desc={`Role: ${user.role}`}>
+        <SettingRow title="Signed in as" desc="Installation owner">
           <span className="text-sm text-flock-ink-primary">{user.username}</span>
         </SettingRow>
         <DisplayNameForm />

@@ -12,12 +12,34 @@ import type { CreateNodeRequest } from '@flock/shared';
 import { AuditLogger, type AuditSink } from '../audit/audit.js';
 import { Keyring } from '../secrets/keyring.js';
 import { SecretStore } from '../secrets/secret-store.js';
-import { NodeService, NodeValidationError, DEFAULT_SSH_PORT } from './node-service.js';
+import {
+  NodeService,
+  NodeValidationError,
+  DEFAULT_SSH_PORT,
+  parseCredential,
+} from './node-service.js';
 import { nodes } from '../db/schema.js';
 
 const USER_ID = '44444444-4444-4444-8444-444444444444';
 // 32-byte key (64 hex) for the test keyring so encrypt() works without env.
 const TEST_KEY = 'a'.repeat(64);
+
+describe('parseCredential', () => {
+  it('accepts the typed encrypted-envelope payload', () => {
+    expect(parseCredential(JSON.stringify({ privateKey: 'key', passphrase: 'phrase' }))).toEqual({
+      privateKey: 'key',
+      passphrase: 'phrase',
+      password: undefined,
+    });
+  });
+
+  it('fails closed for obsolete raw-key and malformed payloads', () => {
+    expect(() => parseCredential('-----BEGIN OPENSSH PRIVATE KEY-----')).toThrow(
+      NodeValidationError,
+    );
+    expect(() => parseCredential('[]')).toThrow(NodeValidationError);
+  });
+});
 
 function makeSecretStore(audit?: AuditLogger): SecretStore {
   return new SecretStore({ keyring: new Keyring({ FLOCK_MASTER_KEY: TEST_KEY }), audit });

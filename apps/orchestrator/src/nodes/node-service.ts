@@ -58,16 +58,17 @@ export interface SshCredential {
 }
 
 /**
- * Parse a decrypted credential secret into an {@link SshCredential}. Bundled
- * secrets are JSON; a legacy secret (a raw private-key string written before
- * bundling) is treated as `{ privateKey }` so old nodes keep connecting.
+ * Parse a decrypted credential secret into an {@link SshCredential}. Credential
+ * secrets always use the typed JSON envelope written by {@link storeCredential};
+ * malformed or obsolete plaintext fails closed instead of being reinterpreted.
  */
 export function parseCredential(plaintext: string): SshCredential {
   try {
-    const obj = JSON.parse(plaintext) as Record<string, unknown>;
-    if (obj && typeof obj === 'object') {
+    const obj = JSON.parse(plaintext) as unknown;
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const record = obj as Record<string, unknown>;
       const pick = (k: string): string | undefined =>
-        typeof obj[k] === 'string' && obj[k] ? (obj[k] as string) : undefined;
+        typeof record[k] === 'string' && record[k] ? record[k] : undefined;
       return {
         privateKey: pick('privateKey'),
         passphrase: pick('passphrase'),
@@ -75,9 +76,9 @@ export function parseCredential(plaintext: string): SshCredential {
       };
     }
   } catch {
-    /* not JSON → legacy raw-key string */
+    // Fall through to the typed validation error below.
   }
-  return { privateKey: plaintext };
+  throw new NodeValidationError('Stored SSH credential is not a valid credential envelope.');
 }
 
 /** Build the credential bundle a CREATE request implies (key vs password auth). */
@@ -158,8 +159,7 @@ export class NodeService {
   }
 
   /**
-   * Decrypt a node's credential bundle. Backward-compatible: a legacy secret that
-   * is a raw private-key string (pre-bundling) is read as `{ privateKey }`.
+   * Decrypt a node's typed credential bundle.
    * Returns `{}` if the secret is missing/unreadable so an edit can still proceed.
    */
   private async loadCredential(secretId: string): Promise<SshCredential> {

@@ -74,7 +74,6 @@ const AGENT_SHORT: Record<AgentType, string> = {
   aider: 'Aider',
   'cursor-agent': 'Cursor',
   amp: 'Amp',
-  generic: 'Agent',
   terminal: 'Terminal',
   dev: 'Dev',
 };
@@ -620,12 +619,12 @@ function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
  * A node in the COLLAPSED rail: an icon (Cpu/HardDrive + connection dot) whose
  * flyout panel (that node's open sessions + "Node details") opens on HOVER (a
  * peek that auto-closes when you leave) AND can be PINNED open via the icon click
- * or the header pin button — pinned stays open until you close it (button / click
+ * or the header keep-open button — it stays open until you close it (button / click
  * the icon again / Esc / click outside). VS Code-style peek, no layout shift.
  *
- * Open/pinned state is OWNED by the rail (single source of truth) so only one
+ * Hover/kept-open state is OWNED by the rail (single source of truth) so only one
  * flyout is ever open and hovering another node switches instantly. Uses
- * PopoverAnchor (not Trigger) so the icon's click is OURS (toggle pin), not
+ * PopoverAnchor (not Trigger) so the icon's click is OURS (keep open), not
  * Radix's built-in open toggle.
  */
 function NodeRailItem({
@@ -635,10 +634,10 @@ function NodeRailItem({
   onFocus,
   onOpenNode,
   open,
-  pinned,
+  keptOpen,
   onHoverOpen,
   onHoverCloseSoon,
-  onTogglePin,
+  onToggleKeepOpen,
   onDismiss,
 }: {
   node: FlockNode;
@@ -647,10 +646,10 @@ function NodeRailItem({
   onFocus: (id: string, projectId?: string | null) => void;
   onOpenNode: (id: string) => void;
   open: boolean;
-  pinned: boolean;
+  keptOpen: boolean;
   onHoverOpen: () => void;
   onHoverCloseSoon: () => void;
-  onTogglePin: () => void;
+  onToggleKeepOpen: () => void;
   onDismiss: () => void;
 }): JSX.Element {
   const NodeIcon = node.kind === 'local' ? Cpu : HardDrive;
@@ -659,11 +658,11 @@ function NodeRailItem({
       <PopoverAnchor asChild>
         <button
           type="button"
-          onClick={onTogglePin}
+          onClick={onToggleKeepOpen}
           onMouseEnter={onHoverOpen}
           onMouseLeave={onHoverCloseSoon}
           aria-label={`${node.name} (${node.connectionStatus})`}
-          aria-pressed={pinned}
+          aria-pressed={keptOpen}
           className="flex size-10 items-center justify-center rounded-md text-flock-ink-muted outline-none hover:bg-flock-surface-2 hover:text-flock-ink-primary focus-visible:bg-flock-surface-2 aria-pressed:bg-flock-surface-2 aria-pressed:text-flock-ink-primary"
         >
           <span className="relative inline-flex">
@@ -692,15 +691,15 @@ function NodeRailItem({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-flock-ink-primary">
             {node.name}
           </span>
-          {/* Pin (keep open) ⇄ Close — the persistent open/close button. */}
+          {/* Keep open ⇄ Close — persistent flyout state, unrelated to sessions. */}
           <button
             type="button"
-            onClick={pinned ? onDismiss : onTogglePin}
-            aria-label={pinned ? 'Close' : 'Keep open'}
-            title={pinned ? 'Close' : 'Keep open'}
-            className={`shrink-0 rounded p-0.5 hover:bg-flock-surface-2 hover:text-flock-ink-primary ${pinned ? 'text-flock-ink-primary' : 'text-flock-ink-muted'}`}
+            onClick={keptOpen ? onDismiss : onToggleKeepOpen}
+            aria-label={keptOpen ? 'Close' : 'Keep open'}
+            title={keptOpen ? 'Close' : 'Keep open'}
+            className={`shrink-0 rounded p-0.5 hover:bg-flock-surface-2 hover:text-flock-ink-primary ${keptOpen ? 'text-flock-ink-primary' : 'text-flock-ink-muted'}`}
           >
-            {pinned ? <X className="size-3.5" /> : <Pin className="size-3.5" />}
+            {keptOpen ? <X className="size-3.5" /> : <Pin className="size-3.5" />}
           </button>
         </div>
         <div className="mx-1 h-px bg-[var(--flock-border)]" />
@@ -801,11 +800,10 @@ export function Sidebar(): JSX.Element {
   // Collapsed-rail node flyout state, owned HERE (one source of truth) so only ONE
   // flyout is ever open. Two pieces:
   //  - hoverNodeId: the transient HOVER peek (auto-closes when you leave);
-  //  - pinnedNodeId: a PINNED flyout (icon click / pin button) that stays open
-  //    until explicitly closed. While something is pinned, hover is ignored.
-  // A node's flyout is open when it's pinned, OR (nothing pinned and) it's hovered.
+  //  - heldNodeId: a kept-open flyout that stays open until explicitly closed.
+  // While a flyout is held open, hover previews are ignored.
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
-  const [pinnedNodeId, setPinnedNodeId] = useState<string | null>(null);
+  const [heldNodeId, setHeldNodeId] = useState<string | null>(null);
   const flyoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(flyoutTimer.current), []);
   const hoverOpen = (id: string): void => {
@@ -818,24 +816,24 @@ export function Sidebar(): JSX.Element {
     clearTimeout(flyoutTimer.current);
     flyoutTimer.current = setTimeout(() => setHoverNodeId(null), 140);
   };
-  const togglePin = (id: string): void => {
+  const toggleKeepOpen = (id: string): void => {
     clearTimeout(flyoutTimer.current);
-    if (pinnedNodeId === id) {
-      // Un-pin; keep a hover peek so it doesn't snap shut under the cursor.
-      setPinnedNodeId(null);
+    if (heldNodeId === id) {
+      // Release; keep a hover peek so it doesn't snap shut under the cursor.
+      setHeldNodeId(null);
       setHoverNodeId(id);
     } else {
-      setPinnedNodeId(id);
+      setHeldNodeId(id);
       setHoverNodeId(null);
     }
   };
   const dismissFlyout = (): void => {
     clearTimeout(flyoutTimer.current);
-    setPinnedNodeId(null);
+    setHeldNodeId(null);
     setHoverNodeId(null);
   };
   const flyoutOpenFor = (id: string): boolean =>
-    pinnedNodeId === id || (pinnedNodeId === null && hoverNodeId === id);
+    heldNodeId === id || (heldNodeId === null && hoverNodeId === id);
 
   // Collapsed → an icon-only rail (hover tooltips). Same actions as the full
   // sidebar, plus the "needs you" sessions as pulsing status dots.
@@ -899,10 +897,10 @@ export function Sidebar(): JSX.Element {
               onFocus={select}
               onOpenNode={openNodeInfo}
               open={flyoutOpenFor(n.id)}
-              pinned={pinnedNodeId === n.id}
+              keptOpen={heldNodeId === n.id}
               onHoverOpen={() => hoverOpen(n.id)}
               onHoverCloseSoon={hoverCloseSoon}
-              onTogglePin={() => togglePin(n.id)}
+              onToggleKeepOpen={() => toggleKeepOpen(n.id)}
               onDismiss={dismissFlyout}
             />
           ))}

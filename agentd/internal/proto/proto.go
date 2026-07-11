@@ -26,7 +26,7 @@ const (
 
 const maxFrame = 16 << 20 // 16 MiB hard cap per frame
 
-// Control is the JSON control message. A single flat struct keeps v1 simple;
+// Control is the JSON control message. A single flat struct keeps framing simple;
 // `op` selects the meaning of the optional fields.
 type Control struct {
 	Op string `json:"op"`
@@ -34,7 +34,6 @@ type Control struct {
 	// hello / helloOk
 	ProtocolVersion int      `json:"protocolVersion,omitempty"`
 	DaemonVersion   string   `json:"daemonVersion,omitempty"`
-	Secret          string   `json:"secret,omitempty"`
 	NodeID          string   `json:"nodeId,omitempty"`
 	ClientNonce     string   `json:"clientNonce,omitempty"`
 	ServerNonce     string   `json:"serverNonce,omitempty"`
@@ -56,8 +55,7 @@ type Control struct {
 	Rows uint16 `json:"rows,omitempty"`
 	Code int    `json:"code,omitempty"`
 
-	// scoped hook-config injection (US-19), seeded on the node by Open.
-	ConfigDirEnv     string            `json:"configDirEnv,omitempty"`
+	// Native hook-config injection (US-19), seeded on the node by Open.
 	ConfigFiles      map[string]string `json:"configFiles,omitempty"`
 	ConfigBaseSubdir string            `json:"configBaseSubdir,omitempty"`
 	// T17 — Landlock FS sandbox for autonomous sessions (open: client→daemon).

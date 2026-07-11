@@ -40,8 +40,7 @@ export interface AgentdSessionSpec {
   mode?: string;
   cols?: number;
   rows?: number;
-  // scoped hook-config injection (US-19), seeded on the node by the daemon.
-  configDirEnv?: string;
+  // Native hook-config injection (US-19), seeded on the node by the daemon.
   configFiles?: Record<string, string>;
   configBaseSubdir?: string;
   // T17: Landlock FS sandbox for autonomous sessions (the daemon confines writes).
@@ -168,10 +167,7 @@ export class NodeAgentdClient {
   }
 
   /** Mutual nonce/MAC handshake. No plaintext credential crosses the channel. */
-  async hello(
-    identity: NodeControlIdentity,
-    options: { allowLegacyDevelopment?: boolean } = {},
-  ): Promise<AgentdControl> {
+  async hello(identity: NodeControlIdentity): Promise<AgentdControl> {
     const clientNonce = controlNonce();
     const credentialId = controlCredentialId(identity.credential);
     this.send({
@@ -180,16 +176,12 @@ export class NodeAgentdClient {
       nodeId: identity.nodeId,
       clientNonce,
       credentialId,
-      // Explicit development migration only: an already-running v1 daemon
-      // rejects the v2 hello before it can be restarted without killing PTYs.
-      secret: options.allowLegacyDevelopment ? identity.credential : undefined,
     });
     const challenge = await this.await(
       (c) => c.op === 'challenge' || c.op === 'helloOk' || c.op === 'error',
     );
     if (challenge.op === 'error') throw new Error(`agentd hello failed: ${challenge.message}`);
     if (challenge.op === 'helloOk') {
-      if (options.allowLegacyDevelopment && challenge.protocolVersion === 1) return challenge;
       throw new Error('agentd sent an unauthenticated handshake response');
     }
     const capabilities = challenge.capabilities ?? [];

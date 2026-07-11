@@ -29,10 +29,9 @@ import {
   isHookPath,
 } from './surface-guard.js';
 
-const ADMIN: User = {
+const OWNER: User = {
   id: '11111111-1111-1111-1111-111111111111',
-  username: 'admin',
-  role: 'admin',
+  username: 'owner',
   createdAt: new Date(0).toISOString(),
   lastLoginAt: null,
   isActive: true,
@@ -90,7 +89,7 @@ describe('path classification', () => {
     // Everything else is private by default.
     expect(isPublicPath('/api/auth/me')).toBe(false);
     expect(isPublicPath('/api/sessions')).toBe(false);
-    expect(isPublicPath('/api/users')).toBe(false);
+    expect(isPublicPath('/api/private-by-default')).toBe(false);
   });
 });
 
@@ -125,7 +124,7 @@ describe('makeSurfaceAuthGuard (HTTP default-deny)', () => {
   });
 
   it('allows an authenticated request through (no reply sent) and attaches the user', async () => {
-    const getUserBySession = vi.fn(async () => ADMIN);
+    const getUserBySession = vi.fn(async () => OWNER);
     const guard = makeSurfaceAuthGuard({ getUserBySession });
     const req = makeRequest({ url: '/api/sessions', cookie: 'flock_session=good' });
     const reply = makeReply();
@@ -133,7 +132,7 @@ describe('makeSurfaceAuthGuard (HTTP default-deny)', () => {
     await guard(req as never, reply as never);
 
     expect(reply.code).not.toHaveBeenCalled();
-    expect((req as { authUser?: User }).authUser).toBe(ADMIN);
+    expect((req as { authUser?: User }).authUser).toBe(OWNER);
   });
 
   it('lets the public login route through WITHOUT a cookie (so users can log in)', async () => {
@@ -189,14 +188,14 @@ describe('authenticateUpgrade (WebSocket)', () => {
   });
 
   it('accepts an upgrade with a valid session cookie and returns the user', async () => {
-    const getUserBySession = vi.fn(async () => ADMIN);
+    const getUserBySession = vi.fn(async () => OWNER);
     const result = await authenticateUpgrade(
       { getUserBySession },
       { headers: { cookie: 'flock_session=good' } },
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.user).toBe(ADMIN);
+      expect(result.user).toBe(OWNER);
     }
   });
 });

@@ -26,7 +26,6 @@ import SourceControlPanel from '../center/SourceControlPanel';
 import FilesPanel from '../files/FilesPanel';
 import SearchPanel from '../search/SearchPanel';
 import { ActivitySidebar } from '../activity';
-import { SimpleTooltip } from '../../components/ui';
 import { usePaddock, type RightTab } from '../../store/paddock';
 import { useSessionEvents, useSessionPlan, useUpdateSession } from '../../data/queries';
 
@@ -76,48 +75,6 @@ const CONTEXTS: ReadonlyArray<Context> = [
 function contextOf(tab: RightTab): Context {
   return CONTEXTS.find((c) => c.tabs.some((t) => t.id === tab)) ?? CONTEXTS[0]!;
 }
-/** A context's default leaf (what clicking the context opens). */
-export function primaryTab(contextId: string): RightTab {
-  return (CONTEXTS.find((c) => c.id === contextId) ?? CONTEXTS[0]!).tabs[0]!.id;
-}
-
-/**
- * RightRail — the COLLAPSED panel: a thin vertical bar of the 3 context icons.
- * Clicking one expands the panel straight to that context's primary view.
- */
-export function RightRail(): JSX.Element {
-  const tab = usePaddock((s) => s.rightTab);
-  const openRight = usePaddock((s) => s.openRight);
-  const activeCtx = contextOf(tab).id;
-  return (
-    <div
-      className="flex h-full w-9 shrink-0 flex-col items-center gap-1 border-l border-[var(--flock-border)] bg-flock-surface-1 py-2"
-      data-testid="right-rail"
-    >
-      {CONTEXTS.map((c) => {
-        const Icon = c.icon;
-        return (
-          <SimpleTooltip key={c.id} label={c.label} side="left">
-            <button
-              type="button"
-              onClick={() => openRight(c.tabs[0]!.id)}
-              aria-label={c.label}
-              data-testid={`right-rail-${c.id}`}
-              className={`rounded-md p-1.5 transition-colors ${
-                activeCtx === c.id
-                  ? 'bg-flock-accent/15 text-flock-accent ring-1 ring-flock-accent/30'
-                  : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
-              }`}
-            >
-              <Icon className="size-4" />
-            </button>
-          </SimpleTooltip>
-        );
-      })}
-    </div>
-  );
-}
-
 export function RightPanel({ session }: { session: Session }): JSX.Element {
   const tab = usePaddock((s) => s.rightTab);
   const openRight = usePaddock((s) => s.openRight);

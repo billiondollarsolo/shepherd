@@ -680,5 +680,3 @@ export function GridView(): JSX.Element {
     </div>
   );
 }
-
-export default GridView;

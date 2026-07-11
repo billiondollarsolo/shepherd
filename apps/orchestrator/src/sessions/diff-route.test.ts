@@ -28,7 +28,6 @@ const USER_ID = '44444444-4444-4444-8444-444444444444';
 const FAKE_USER: User = {
   id: USER_ID,
   username: 'op',
-  role: 'admin',
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,

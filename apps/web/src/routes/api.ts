@@ -7,7 +7,7 @@
  * orchestrator origin (VITE_API_URL); empty by default so a same-origin deploy
  * (TLS-terminated in front, NFR-SEC1) works without configuration.
  */
-import type { CreateUserRequest, LoginRequest, SetupRequest, User } from '@flock/shared';
+import type { LoginRequest, SetupRequest, User } from '@flock/shared';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
@@ -86,9 +86,4 @@ export function changePassword(input: {
   newPassword: string;
 }): Promise<void> {
   return request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(input) });
-}
-
-/** POST /api/users — admin invites a member (US-6). */
-export function inviteUser(input: CreateUserRequest): Promise<{ user: User }> {
-  return request('/api/users', { method: 'POST', body: JSON.stringify(input) });
 }

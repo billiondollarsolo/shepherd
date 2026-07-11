@@ -12,7 +12,6 @@ function mockFetch(impl: (url: string, init: RequestInit) => Partial<Response>) 
 const user = {
   id: '11111111-1111-4111-8111-111111111111',
   username: 'admin',
-  role: 'admin',
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,

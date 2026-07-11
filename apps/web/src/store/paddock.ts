@@ -136,23 +136,6 @@ function saveGridLayout(v: GridLayout): void {
   }
 }
 
-const REVIEWED_KEY = 'flock.reviewedSessions';
-function loadReviewed(): string[] {
-  try {
-    const raw = localStorage.getItem(REVIEWED_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-function saveReviewed(ids: string[]): void {
-  try {
-    localStorage.setItem(REVIEWED_KEY, JSON.stringify(ids));
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 export interface LayoutPreset {
   id: string;
   name: string;
@@ -225,7 +208,6 @@ export interface PaddockUiState {
   sidebarCollapsed: boolean;
   gridLayout: GridLayout;
   layoutPresets: LayoutPreset[];
-  reviewedSessions: string[];
   race: ActiveRace | null;
 
   rightTab: RightTab;
@@ -264,7 +246,6 @@ export interface PaddockUiState {
   saveLayoutPreset: (name: string, projectId: string, order: string[]) => void;
   applyLayoutPreset: (id: string) => void;
   deleteLayoutPreset: (id: string) => void;
-  setReviewed: (id: string, reviewed: boolean) => void;
   setRace: (race: ActiveRace) => void;
   endRace: () => void;
   openNodeInfo: (nodeId: string) => void;
@@ -307,7 +288,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   sidebarCollapsed: loadSidebarCollapsed(),
   gridLayout: loadGridLayout(),
   layoutPresets: loadLayoutPresets(),
-  reviewedSessions: loadReviewed(),
   race: null,
   rightTab: 'chat',
   // D5: tools closed by default (terminal-first stage)
@@ -448,14 +428,6 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       const next = s.layoutPresets.filter((x) => x.id !== id);
       saveLayoutPresets(next);
       return { layoutPresets: next };
-    }),
-  setReviewed: (id, reviewed) =>
-    set((s) => {
-      const next = reviewed
-        ? [...new Set([...s.reviewedSessions, id])]
-        : s.reviewedSessions.filter((x) => x !== id);
-      saveReviewed(next);
-      return { reviewedSessions: next };
     }),
   setRace: (race) => set({ race, dialog: null }),
   endRace: () => set({ race: null }),

@@ -143,10 +143,12 @@ describe('NodeAgentdClient v2 handshake', () => {
     client.dispose();
   });
 
-  it('does not accept the v1 direct hello response outside explicit development mode', async () => {
+  it('rejects a direct unauthenticated hello response', async () => {
     const client = await connectToFakeDaemon((control, socket) => {
       if (control.op === 'hello') {
-        socket.write(encodeControl({ op: 'helloOk', protocolVersion: 1, daemonVersion: 'legacy' }));
+        socket.write(
+          encodeControl({ op: 'helloOk', protocolVersion: 1, daemonVersion: 'unsupported' }),
+        );
       }
     });
     await expect(client.hello(identity)).rejects.toThrow(/unauthenticated handshake/);

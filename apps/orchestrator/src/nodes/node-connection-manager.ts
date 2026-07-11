@@ -16,7 +16,7 @@
  */
 import { eq } from 'drizzle-orm';
 
-import type { ConnectionStatus, Node as SharedNode } from '@flock/shared';
+import type { ConnectionStatus } from '@flock/shared';
 import { SECRET_NONCE_BYTES } from '@flock/shared';
 
 import type { Database } from '../db/client.js';
@@ -141,10 +141,12 @@ export class NodeConnectionManager {
       },
       { secretId: secret.id },
     );
-    // The secret is a bundled credential envelope ({privateKey,passphrase,password})
-    // — or a legacy raw key string. `sshAuthMethod` picks which fields to use.
+    // The secret is a typed credential envelope ({privateKey,passphrase,password}).
     const cred = parseCredential(credText);
-    const authMethod = (row.sshAuthMethod as 'key' | 'password' | null) ?? 'key';
+    const authMethod = row.sshAuthMethod;
+    if (authMethod !== 'key' && authMethod !== 'password') {
+      throw new Error(`SSH node ${nodeId} has no authentication method.`);
+    }
     const authConfig: Pick<SshConnectionConfig, 'privateKey' | 'passphrase' | 'password'> =
       authMethod === 'password'
         ? { password: cred.password }
@@ -309,11 +311,4 @@ export class NodeConnectionManager {
       this.logger.warn(`failed to persist status ${status} for node ${nodeId}`, err);
     }
   }
-}
-
-/** Map a {@link SharedNode} to a one-line connection summary (debug/logging). */
-export function nodeConnDescription(node: SharedNode): string {
-  return node.kind === 'ssh'
-    ? `${node.sshUser}@${node.host}:${node.port ?? DEFAULT_SSH_PORT}`
-    : 'local';
 }

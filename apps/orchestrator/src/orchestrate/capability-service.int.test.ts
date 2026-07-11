@@ -5,10 +5,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { agentCapabilities, agentSessions, nodes, projects, users } from '../db/schema.js';
+import { agentCapabilities, agentSessions, nodes, projects } from '../db/schema.js';
 import { hashHookToken } from '../hooks/hook-token.js';
 import { AgentCapabilityService } from './capability-service.js';
 import { DEFAULT_PROJECT_AGENT_POLICY } from '@flock/shared';
+import { ensureIntegrationOwner } from '../../test/integration-owner.js';
 
 let handle: DbHandle;
 let userId: string;
@@ -18,15 +19,7 @@ let nodeId: string;
 beforeAll(async () => {
   handle = createDb();
   await runMigrations(handle);
-  const [user] = await handle.db
-    .insert(users)
-    .values({
-      username: `cap-user-${randomUUID()}`,
-      passwordHash: 'argon2id$fixture',
-      role: 'admin',
-    })
-    .returning();
-  userId = user!.id;
+  userId = (await ensureIntegrationOwner(handle.db, `cap-user-${randomUUID()}`)).id;
   const [node] = await handle.db
     .insert(nodes)
     .values({ name: `cap-node-${randomUUID()}`, kind: 'local', connectionStatus: 'connected' })

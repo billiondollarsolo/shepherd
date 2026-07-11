@@ -44,5 +44,3 @@ export function useIsPhone(): boolean {
 
   return isPhone;
 }
-
-export default useIsPhone;

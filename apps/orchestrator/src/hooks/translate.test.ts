@@ -98,10 +98,8 @@ describe('translateHookEvent — no recognized mapping', () => {
     expect(translateHookEvent('not-an-object')).toBeNull();
   });
 
-  it('returns null for hook-less session types (generic, terminal)', () => {
-    // A generic agent reports via OSC/PTY and a terminal reports nothing — this
-    // endpoint has no structured payload to translate for either.
-    expect(translateHookEvent({ any: 'payload' }, 'generic')).toBeNull();
+  it('returns null for a hook-less terminal session', () => {
+    // A terminal reports no structured payload.
     expect(translateHookEvent({ any: 'payload' }, 'terminal')).toBeNull();
   });
 

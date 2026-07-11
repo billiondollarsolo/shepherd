@@ -3,8 +3,6 @@ export { Input, Textarea } from './input';
 export { Label } from './label';
 export {
   Dialog,
-  DialogTrigger,
-  DialogClose,
   DialogContent,
   DialogHeader,
   DialogFooter,
@@ -23,20 +21,9 @@ export {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
-  DropdownMenuGroup,
-  DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from './dropdown-menu';
 export { Popover, PopoverTrigger, PopoverAnchor, PopoverContent } from './popover';
-export {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
-} from './select';
-export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
+export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './select';
 export { ScrollArea } from './scroll-area';
-export { Skeleton } from './skeleton';
 export { Toaster, toast } from './sonner';

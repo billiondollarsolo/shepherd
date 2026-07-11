@@ -13,7 +13,6 @@ import {
   SshAuthMethodEnum,
   ProjectSchema,
   ProjectAgentPolicySchema,
-  RoleEnum,
   SessionSchema,
   UserSchema,
   Uuid,
@@ -33,7 +32,7 @@ import {
 
 // --- auth ------------------------------------------------------------------
 
-/** POST /api/auth/setup — first-run admin creation (409 once an admin exists). */
+/** POST /api/auth/setup — first-run owner creation (409 once an owner exists). */
 export const SetupRequest = z.object({
   username: z.string().min(1),
   password: z.string().min(8),
@@ -66,27 +65,11 @@ export type UpdateProfileResponse = z.infer<typeof UpdateProfileResponse>;
 
 /**
  * GET /api/auth/status — public first-run probe. `setupRequired` is true until
- * the initial admin exists, so the sign-in UI can show "create first admin"
+ * the installation owner exists, so the sign-in UI can show first-run setup
  * vs. "sign in" without a destructive POST.
  */
 export const AuthStatusResponse = z.object({ setupRequired: z.boolean() });
 export type AuthStatusResponse = z.infer<typeof AuthStatusResponse>;
-
-// --- users (admin) ---------------------------------------------------------
-
-/** POST /api/users — invite/create. */
-export const CreateUserRequest = z.object({
-  username: z.string().min(1),
-  password: z.string().min(8),
-  role: RoleEnum,
-});
-export type CreateUserRequest = z.infer<typeof CreateUserRequest>;
-export const CreateUserResponse = z.object({ user: UserSchema });
-export type CreateUserResponse = z.infer<typeof CreateUserResponse>;
-
-/** GET /api/users */
-export const ListUsersResponse = z.object({ users: z.array(UserSchema) });
-export type ListUsersResponse = z.infer<typeof ListUsersResponse>;
 
 // --- nodes -----------------------------------------------------------------
 
@@ -381,20 +364,17 @@ export const SessionIdParams = z.object({ id: Uuid });
 export type SessionIdParams = z.infer<typeof SessionIdParams>;
 
 /**
- * PATCH /api/sessions/:id — update supervisor-facing session metadata: pin it to
- * the top of the paddock tree and/or set a free-text note. Both optional; at
- * least one should be present. `note: null` clears the note. Does NOT touch the
+ * PATCH /api/sessions/:id — update the supervisor-facing free-text note.
+ * `note: null` clears the note. Does NOT touch the
  * live status / process — purely cosmetic registry fields. Returns the session.
  */
 export const UpdateSessionRequest = z
   .object({
-    pinned: z.boolean().optional(),
     /** Markdown-capable supervisor note (raised for herdr-aligned notes). */
     note: z.string().max(32000).nullable().optional(),
-    reviewed: z.boolean().optional(),
   })
-  .refine((v) => v.pinned !== undefined || v.note !== undefined || v.reviewed !== undefined, {
-    message: 'provide at least one of pinned, note, or reviewed.',
+  .refine((value) => value.note !== undefined, {
+    message: 'provide note to update.',
   });
 export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 

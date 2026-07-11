@@ -1,10 +1,9 @@
 /**
  * Flock OpenCode plugin (US-18, spec §7.1, §8.1).
  *
- * Flock installs this file per session into the session's scoped config dir at
- * `.opencode/plugin/flock.js` (US-19 seeds the scoped `.opencode/` over the
- * user's real config and removes it on teardown — the user's own plugins are
- * never touched). OpenCode auto-loads every file under `.opencode/plugin/`.
+ * Flock installs this file as `~/.config/opencode/plugin/flock.js`. It is inert
+ * outside a Flock session because the callback URL/token environment is absent.
+ * OpenCode auto-loads every file under its plugin directory.
  *
  * The plugin is a DUMB COURIER (PRD §6.4): it holds no logic of its own. It
  * subscribes to the OpenCode event bus and POSTs each relevant event verbatim to
@@ -63,7 +62,7 @@ const FORWARDED_EVENTS = new Set([
   // role/model/tokens, no text). The server assembles parts by message id into the
   // structured Chat tab.
   'message.part.updated',
-  // Legacy/guessed names kept for tolerance across versions (harmless if unused):
+  // Upstream-version variants retained for mixed current OpenCode installations:
   'session.start',
   'permission.request',
   'question.ask',

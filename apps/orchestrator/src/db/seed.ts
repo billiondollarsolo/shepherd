@@ -23,7 +23,6 @@ export async function seed(db: Database): Promise<void> {
       username: 'admin',
       // Placeholder hash; real argon2id hashing lands in US-4. Dev-only.
       passwordHash: 'dev-placeholder-not-a-real-hash',
-      role: 'admin',
     })
     .returning();
   if (!admin) throw new Error('[seed] failed to insert owner');

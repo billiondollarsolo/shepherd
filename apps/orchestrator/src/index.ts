@@ -43,7 +43,7 @@ import {
   DiffService,
   GitService,
 } from './sessions/index.js';
-import { renderScopedConfig } from './sessions/config-injection/index.js';
+import { renderHookConfig } from './sessions/config-injection/index.js';
 import {
   agentSessionKind,
   agentUsesActivityStatus,
@@ -73,7 +73,6 @@ import {
   type PushRouteDeps,
 } from './push/index.js';
 import { buildServer } from './server.js';
-import type { LauncherPreset, ProjectLayoutV1 } from '@flock/shared';
 import { parseProjectPens } from '@flock/shared';
 
 /**
@@ -147,7 +146,7 @@ function resolveAgentdVersion(): string {
  * can import `buildServer` without binding a port.
  *
  * Wires the durable system-of-record (Postgres) into the auth service so the
- * `/api/auth/*` and `/api/users` routes (US-4/US-5/US-6) are live. Postgres is
+ * `/api/auth/*` routes (US-4/US-5) are live. Postgres is
  * the system of record only — never the live status path (spec §6.6).
  */
 export async function main(): Promise<void> {
@@ -290,7 +289,6 @@ export async function main(): Promise<void> {
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
     identityFor: (nodeId, kind) => nodeControlCredentials.forNode(nodeId, kind),
-    allowLegacyDevelopment: process.env.NODE_ENV !== 'production',
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
     onAudit: recordNodeControlEvent,
   });
@@ -710,9 +708,7 @@ export async function main(): Promise<void> {
           // ACP sessions (Gemini) skip hook injection — status + chat come from the
           // ACP stream (`acp_bridge`), not hooks.
           const isAcp = mode === 'acp';
-          const scoped = isAcp
-            ? null
-            : await renderScopedConfig(session.agentType).catch(() => null);
+          const scoped = isAcp ? null : await renderHookConfig(session.agentType).catch(() => null);
           // T17: an `autonomous` agent (--dangerously-skip-permissions) must be
           // FS-confined. Enable the Landlock sandbox iff the node supports it;
           // otherwise warn loudly (the agent then runs with full write access).
@@ -750,7 +746,6 @@ export async function main(): Promise<void> {
                 Object.keys(mergedEnv).length > 0
                   ? Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`)
                   : undefined,
-              configDirEnv: scoped?.configDirEnv,
               configFiles: scoped?.files,
               configBaseSubdir: scoped?.configBaseSubdir,
             });
@@ -1007,11 +1002,6 @@ export async function main(): Promise<void> {
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
   // exception (spec §8.1). The AuthService satisfies the `getUserBySession`
   // seam directly. TLS is terminated by the upstream Caddy proxy (NFR-SEC1).
-  // Per-user launcher presets and project layouts. Presets/layouts remain
-  // in-process; Pen membership is persisted below.
-  const userPresets = new Map<string, LauncherPreset[]>();
-  const projectLayouts = new Map<string, ProjectLayoutV1>();
-
   const app = buildServer({
     auth,
     surfaceAuth: auth,
@@ -1022,14 +1012,6 @@ export async function main(): Promise<void> {
     projects,
     me: {
       auth,
-      getPresets: async (uid) => userPresets.get(uid) ?? [],
-      putPresets: async (uid, p) => {
-        userPresets.set(uid, p);
-      },
-      getLayout: async (id) => projectLayouts.get(id) ?? null,
-      putLayout: async (id, layout) => {
-        projectLayouts.set(id, layout);
-      },
       getPens: async (userId, projectId) => {
         const [row] = await db
           .select({ document: projectPensTable.document })

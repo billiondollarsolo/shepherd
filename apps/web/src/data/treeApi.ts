@@ -14,7 +14,6 @@ import type {
   GitCommitResponse,
   GitPushResponse,
   GitStatusResponse,
-  GitBranchesResponse,
   GitBranchResponse,
   GitPrResponse,
   ListNodeDirResponse,
@@ -93,9 +92,6 @@ export interface SearchOptions {
 }
 export function getNodeStack(nodeId: string, path: string): Promise<NodeStack> {
   return request(`/api/nodes/${encodeURIComponent(nodeId)}/stack?path=${encodeURIComponent(path)}`);
-}
-export function listNodeFiles(nodeId: string, path: string): Promise<{ files: string[] }> {
-  return request(`/api/nodes/${encodeURIComponent(nodeId)}/files?path=${encodeURIComponent(path)}`);
 }
 export function searchNode(
   nodeId: string,
@@ -241,24 +237,12 @@ export function terminateSession(id: string): Promise<void> {
 export function updateSession(id: string, patch: UpdateSessionRequest): Promise<SessionResponse> {
   return request(`/api/sessions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
-/** Kill a split-pane shell PTY (`<sessionId>:shell[-N]`) on the daemon. */
-export function terminatePtyPane(ptyId: string): Promise<void> {
-  return request(`/api/pty/${encodeURIComponent(ptyId)}`, { method: 'DELETE' });
-}
 export function listSessionEvents(id: string): Promise<{ events: Event[] }> {
   return request(`/api/sessions/${id}/events`);
 }
 /** Fleet-wide recent activity (cross-agent audit timeline). */
 export function listFleetActivity(limit = 60): Promise<{ events: Event[] }> {
   return request(`/api/activity/fleet?limit=${limit}`);
-}
-export function getLatestChats(): Promise<{
-  chats: Record<string, { role: string; text: string }>;
-}> {
-  return request('/api/chats/latest');
-}
-export function getTeams(): Promise<{ edges: Array<{ parent: string; child: string }> }> {
-  return request('/api/teams');
 }
 
 // --- config-as-code (flock.yml) ---
@@ -327,9 +311,6 @@ export function commitGit(id: string, message: string): Promise<GitCommitRespons
 export function pushGit(id: string): Promise<GitPushResponse> {
   // No body: a JSON content-type with an empty body would 400 in Fastify.
   return request(`/api/sessions/${id}/git/push`, { method: 'POST' });
-}
-export function branchesGit(id: string): Promise<GitBranchesResponse> {
-  return request(`/api/sessions/${id}/git/branches`);
 }
 export function createBranchGit(
   id: string,

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { EncryptedSecret, SECRET_AUTH_TAG_BYTES, SECRET_NONCE_BYTES } from '@flock/shared';
 import type { AuditLogger } from '../audit/audit.js';
 import { CURRENT_KEY_VERSION, Keyring } from './keyring.js';
@@ -141,17 +141,6 @@ export class SecretStore {
   async decryptToString(secret: EncryptedSecret, ctx: DecryptContext): Promise<string> {
     return (await this.decrypt(secret, ctx)).toString('utf8');
   }
-}
-
-/**
- * Constant-time comparison helper for hashed/token values (e.g. comparing a
- * presented hook token against a stored value). Returns false on length
- * mismatch without leaking timing. Exposed here so secret-adjacent code shares
- * one safe comparator.
- */
-export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.byteLength !== b.byteLength) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 export { CURRENT_KEY_VERSION };

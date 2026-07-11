@@ -106,5 +106,3 @@ export function CenterTabs({
     </div>
   );
 }
-
-export default CenterTabs;

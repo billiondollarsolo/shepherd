@@ -47,7 +47,7 @@ export interface BuildServerDeps {
   requestBudget?: RequestBudget;
   /**
    * Auth + user-management service (US-4/US-5/US-6). When provided, the
-   * `/api/auth/*` and `/api/users` routes are registered. Omitted in the bare
+   * `/api/auth/*` routes are registered. Omitted in the bare
    * health-only smoke test.
    */
   auth?: AuthService;
@@ -125,7 +125,7 @@ export interface BuildServerDeps {
   /**
    * Audit log read surface (US-40, FR-A3). When provided ALONGSIDE `auth`,
    * `GET /api/audit` is registered: it returns the append-only audit rows to an
-   * ADMIN (401 unauthenticated, 403 for a member). The read is a durable-store
+   * authenticated installation owner (401 unauthenticated). The read is a durable-store
    * read, never the live status path (spec §6.6).
    */
   audit?: AuditQueryService;
@@ -287,7 +287,7 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // every request (NFR-SEC6). It allow-lists the public auth + health routes
   // and skips the hook endpoint (its per-session token authorizes it, spec
   // §8.1); everything else needs a valid session cookie. The per-route
-  // `requireAuth`/`requireAdmin` guards still run on top for role checks.
+  // Per-route `requireAuth` guards still attach the installation owner.
   if (deps.surfaceAuth) {
     app.addHook('onRequest', makeSurfaceAuthGuard(deps.surfaceAuth));
   }
@@ -349,7 +349,7 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
       registerPushRoutes(app, deps.push);
     }
 
-    // US-40: the admin audit read route is admin-only (requireAdmin), so it
+    // Audit read remains owner-authenticated, so it
     // needs the auth service as its guard.
     if (deps.audit) {
       registerAuditRoutes(app, { service: deps.audit, auth: deps.auth });

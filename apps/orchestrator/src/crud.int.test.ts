@@ -20,12 +20,13 @@ import { AuditLogger } from './audit/audit.js';
 import { createDb } from './db/client.js';
 import type { DbHandle } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
-import { nodes, secrets, users } from './db/schema.js';
+import { nodes, secrets } from './db/schema.js';
 import { Keyring } from './secrets/keyring.js';
 import { SecretStore } from './secrets/secret-store.js';
 import { NodeService } from './nodes/node-service.js';
 import { ProjectService } from './projects/project-service.js';
 import { SessionRestService } from './sessions/session-rest-service.js';
+import { ensureIntegrationOwner } from '../test/integration-owner.js';
 
 let handle: DbHandle;
 let nodeService: NodeService;
@@ -40,15 +41,7 @@ let ACTOR: string;
 beforeAll(async () => {
   handle = createDb();
   await runMigrations(handle);
-  const [actor] = await handle.db
-    .insert(users)
-    .values({
-      username: `crud-actor-${randomUUID().slice(0, 8)}`,
-      passwordHash: 'argon2id$placeholder',
-      role: 'admin',
-    })
-    .returning();
-  ACTOR = actor!.id;
+  ACTOR = (await ensureIntegrationOwner(handle.db, `crud-actor-${randomUUID().slice(0, 8)}`)).id;
   const audit = new AuditLogger({ async write() {} });
   const secretStore = new SecretStore({
     keyring: new Keyring({ FLOCK_MASTER_KEY: TEST_KEY }),

@@ -1,17 +1,16 @@
 /**
- * Auth service (US-4/US-5/US-6, FR-A1/A2/A3).
+ * Single-owner auth service (FR-A1/A2/A3).
  *
  * Pure-ish data layer between the HTTP routes and Postgres. Owns:
- *   - first-run admin creation (409 once any admin exists)         [US-4]
+ *   - first-run installation-owner creation                        [US-4]
  *   - credential validation + login-session issuance               [US-5]
  *   - session-cookie validation (load the acting user)             [US-5]
  *   - logout (revoke the sessions_auth row)                        [US-5]
- *   - user invite/create (admin only, enforced at the route)      [US-6]
  *
  * Postgres here is the durable system of record (spec §6); auth is NOT on the
  * live status path so synchronous DB use is correct. Every security-relevant
  * action writes an append-only `audit_log` row through {@link AuditLogger}
- * (FR-A3): `login`, `logout`, `user_create`. The `secret_access` audit row is
+ * (FR-A3): `login`, `logout`, `owner_setup`. The `secret_access` audit row is
  * written by the SecretStore on decrypt (US-3); this service writes a
  * `secret_access` row when it reads the stored credential material to verify a
  * login, so credential reads are auditable too.
@@ -26,14 +25,14 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
  * as a 500. We pre-validate so a bad cookie resolves to "no session" → 401.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-import type { AuditAction, Role, User } from '@flock/shared';
+import type { AuditAction, User } from '@flock/shared';
 import type { Database } from '../db/client.js';
 import { sessionsAuth, users, type UserRow } from '../db/schema.js';
 import { hashPassword, verifyPassword } from './hashing.js';
 
 /**
  * Minimal audit recorder the auth service writes through (FR-A3). Typed with the
- * SHARED `AuditAction` (which includes `user_create`/`logout`) so this module is
+ * SHARED `AuditAction` so this module is
  * decoupled from the orchestrator audit module's narrower local union. The
  * concrete {@link AuthAuditEntry} maps 1:1 onto the `audit_log` columns.
  */
@@ -53,11 +52,11 @@ export interface AuthAuditRecorder {
 /** How long a login session lives before it must be re-established. */
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-/** Raised when first-run setup is attempted but an admin already exists (409). */
-export class AdminAlreadyExistsError extends Error {
+/** Raised when first-run setup is attempted after the owner exists (409). */
+export class OwnerAlreadyExistsError extends Error {
   constructor() {
-    super('An admin account already exists; setup is closed.');
-    this.name = 'AdminAlreadyExistsError';
+    super('The installation owner already exists; setup is closed.');
+    this.name = 'OwnerAlreadyExistsError';
   }
 }
 
@@ -89,7 +88,6 @@ export function rowToUser(row: UserRow): User {
     id: row.id,
     username: row.username,
     displayName: row.displayName ?? null,
-    role: row.role as Role,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
     isActive: row.isActive,
@@ -110,86 +108,48 @@ export class AuthService {
     this.audit = deps.audit;
   }
 
-  /** True once at least one admin account exists (gates first-run setup). */
-  async adminExists(): Promise<boolean> {
-    const rows = await this.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.role, 'admin'))
-      .limit(1);
+  /** True once the installation owner exists (gates first-run setup). */
+  async ownerExists(): Promise<boolean> {
+    const rows = await this.db.select({ id: users.id }).from(users).limit(1);
     return rows.length > 0;
   }
 
   /**
-   * US-4: create the initial admin. Throws {@link AdminAlreadyExistsError}
-   * (→ 409) if any admin already exists. Stores an argon2id hash only.
+   * Create the installation owner. Throws {@link OwnerAlreadyExistsError}
+   * (→ 409) if setup is already complete. Stores an argon2id hash only.
    */
-  async setupInitialAdmin(
+  async setupInitialOwner(
     input: { username: string; password: string },
     ctx: RequestContext = {},
   ): Promise<User> {
-    if (await this.adminExists()) {
-      throw new AdminAlreadyExistsError();
+    if (await this.ownerExists()) {
+      throw new OwnerAlreadyExistsError();
     }
     const passwordHash = await hashPassword(input.password);
     let row: UserRow;
     try {
       const [inserted] = await this.db
         .insert(users)
-        .values({ username: input.username, passwordHash, role: 'admin' })
+        .values({ username: input.username, passwordHash })
         .returning();
       row = inserted!;
     } catch {
-      // Unique-violation on username (race or duplicate setup attempt).
+      // The database singleton constraint closes the race between setup
+      // requests that both observed an empty users table before hashing.
+      if (await this.ownerExists()) {
+        throw new OwnerAlreadyExistsError();
+      }
       throw new UsernameTakenError(input.username);
     }
     await this.audit.record({
-      action: 'user_create',
+      action: 'owner_setup',
       userId: row.id,
       targetType: 'user',
       targetId: row.id,
       ip: ctx.ip ?? null,
-      detail: { role: 'admin', firstRun: true },
+      detail: { firstRun: true },
     });
     return rowToUser(row);
-  }
-
-  /**
-   * US-6: create a user (admin invites a member/admin). The route enforces the
-   * admin-only guard; this method records `user_create` attributed to the
-   * acting admin. Throws {@link UsernameTakenError} (→ 409) on collision.
-   */
-  async createUser(
-    input: { username: string; password: string; role: Role },
-    actor: { id: string },
-    ctx: RequestContext = {},
-  ): Promise<User> {
-    const passwordHash = await hashPassword(input.password);
-    let row: UserRow;
-    try {
-      const [inserted] = await this.db
-        .insert(users)
-        .values({ username: input.username, passwordHash, role: input.role })
-        .returning();
-      row = inserted!;
-    } catch {
-      throw new UsernameTakenError(input.username);
-    }
-    await this.audit.record({
-      action: 'user_create',
-      userId: actor.id,
-      targetType: 'user',
-      targetId: row.id,
-      ip: ctx.ip ?? null,
-      detail: { role: input.role },
-    });
-    return rowToUser(row);
-  }
-
-  /** List all users (admin route). Never includes password hashes. */
-  async listUsers(): Promise<User[]> {
-    const rows = await this.db.select().from(users);
-    return rows.map(rowToUser);
   }
 
   /**

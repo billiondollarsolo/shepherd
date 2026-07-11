@@ -88,5 +88,3 @@ export function RespondBar({ session }: { session: Session }): JSX.Element | nul
     </div>
   );
 }
-
-export default RespondBar;

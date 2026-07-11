@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchLauncherPresets, putLauncherPresets } from './launcherPresetsApi';
+import { fetchLauncherPresets } from './launcherPresetsApi';
 
 describe('launcherPresetsApi', () => {
   it('fetchLauncherPresets returns presets array', async () => {
@@ -16,13 +16,18 @@ describe('launcherPresetsApi', () => {
     expect(presets[0]?.agentType).toBe('claude-code');
   });
 
-  it('putLauncherPresets sends user presets', async () => {
-    const mine = [{ id: 'mine', name: 'Mine', agentType: 'codex' as const }];
-    const fetchImpl = vi.fn(async (_u: string, init?: RequestInit) => {
-      expect(init?.method).toBe('PUT');
-      return new Response(JSON.stringify({ presets: mine }), { status: 200 });
-    }) as unknown as typeof fetch;
-    const got = await putLauncherPresets(mine, fetchImpl);
-    expect(got.some((p) => p.id === 'mine')).toBe(true);
+  it('falls back to built-in presets when the endpoint is unavailable', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response('{}', { status: 503 }),
+    ) as unknown as typeof fetch;
+    const got = await fetchLauncherPresets(fetchImpl);
+    expect(got.map((preset) => preset.id)).toEqual([
+      'builtin-claude',
+      'builtin-codex',
+      'builtin-opencode',
+      'builtin-gemini',
+      'builtin-grok',
+      'builtin-terminal',
+    ]);
   });
 });

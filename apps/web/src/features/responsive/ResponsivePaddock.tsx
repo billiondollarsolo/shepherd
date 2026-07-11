@@ -102,5 +102,3 @@ function mergePhoneSessions(
       };
     });
 }
-
-export default ResponsivePaddock;

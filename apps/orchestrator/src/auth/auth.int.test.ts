@@ -1,15 +1,14 @@
 /**
- * Flock — Auth flow INTEGRATION test (US-4/US-5/US-6, runs under `pnpm test:int`).
+ * Flock — single-owner auth flow integration test (US-4/US-5).
  *
  * Exercises the real Fastify auth routes against the compose `postgres` service
  * (DATABASE_URL), end to end:
- *   1. US-4  setup creates the first admin; a SECOND setup returns 409.
+ *   1. US-4  setup creates the installation owner; a SECOND setup returns 409.
  *   2. US-5  login with good creds sets an httpOnly+Secure+SameSite cookie;
  *            bad creds -> 401; /api/auth/me requires a valid cookie (401 without).
- *   3. US-6  the admin invites a member via POST /api/users; the member can log
- *            in; the member is rejected (403) from the admin-only routes.
+ *   3. The database enforces exactly one owner even if route checks race.
  *   4. US-5  logout revokes the session row; the cookie then fails /me with 401.
- *   5. FR-A3 login + user_create + logout audit rows are written.
+ *   5. FR-A3 owner_setup + login + logout audit rows are written.
  *
  * Postgres is the system of record only — never the live status path (§6.6).
  */
@@ -30,8 +29,7 @@ let handle: DbHandle;
 let app: ReturnType<typeof buildServer>;
 
 const suffix = randomUUID().slice(0, 8);
-const ADMIN = { username: `admin-${suffix}`, password: 'admin-password-1' };
-const MEMBER = { username: `member-${suffix}`, password: 'member-password-1' };
+const OWNER = { username: `owner-${suffix}`, password: 'owner-password-1' };
 const createdUserIds: string[] = [];
 
 /** Pull the session id out of a Set-Cookie response header. */
@@ -44,7 +42,7 @@ function cookieFromResponse(setCookie: string | string[] | undefined): string {
 beforeAll(async () => {
   handle = createDb();
   await runMigrations(handle);
-  // First-run setup is GLOBAL ("admin when none exists"); make it deterministic
+  // First-run setup is global; make it deterministic
   // by clearing the users table (test DB only) so this run's setup is genuinely
   // the first run. Sessions must be removed first because production ownership
   // intentionally uses ON DELETE RESTRICT.
@@ -79,17 +77,17 @@ describe('first-run status probe', () => {
   });
 });
 
-describe('US-4 first-run admin setup', () => {
-  it('creates the initial admin (201) and stores an argon2id hash, not plaintext', async () => {
+describe('US-4 first-run owner setup', () => {
+  it('creates the installation owner (201) and stores an argon2id hash, not plaintext', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/setup',
-      payload: ADMIN,
+      payload: OWNER,
     });
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.user.username).toBe(ADMIN.username);
-    expect(body.user.role).toBe('admin');
+    expect(body.user.username).toBe(OWNER.username);
+    expect(body.user).not.toHaveProperty('role');
     expect(JSON.stringify(body)).not.toContain('password');
     createdUserIds.push(body.user.id);
 
@@ -97,32 +95,32 @@ describe('US-4 first-run admin setup', () => {
     const row = rows.find((r) => r.id === body.user.id);
     expect(row).toBeDefined();
     expect(row!.passwordHash).toMatch(/^\$argon2id\$/);
-    expect(row!.passwordHash).not.toContain(ADMIN.password);
+    expect(row!.passwordHash).not.toContain(OWNER.password);
   });
 
-  it('returns 409 on a second setup once an admin exists', async () => {
+  it('returns 409 on a second setup once the owner exists', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/setup',
       payload: { username: `other-${suffix}`, password: 'whatever-12' },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe('admin_exists');
+    expect(res.json().error.code).toBe('owner_exists');
   });
 
-  it('GET /api/auth/status now reports setupRequired:false (admin exists)', async () => {
+  it('GET /api/auth/status now reports setupRequired:false (owner exists)', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
     expect(res.statusCode).toBe(200);
     expect(res.json().setupRequired).toBe(false);
   });
 });
 
-describe('US-5 login / session cookies / roles', () => {
+describe('US-5 login / session cookies', () => {
   it('rejects bad credentials with 401 (no cookie set)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: { username: ADMIN.username, password: 'wrong' },
+      payload: { username: OWNER.username, password: 'wrong' },
     });
     expect(res.statusCode).toBe(401);
     expect(res.headers['set-cookie']).toBeUndefined();
@@ -132,7 +130,7 @@ describe('US-5 login / session cookies / roles', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: ADMIN,
+      payload: OWNER,
     });
     expect(res.statusCode).toBe(200);
     const setCookie = res.headers['set-cookie'];
@@ -149,7 +147,7 @@ describe('US-5 login / session cookies / roles', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: ADMIN,
+      payload: OWNER,
     });
     const cookie = cookieFromResponse(login.headers['set-cookie']);
     const me = await app.inject({
@@ -158,7 +156,7 @@ describe('US-5 login / session cookies / roles', () => {
       headers: { cookie },
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json().user.username).toBe(ADMIN.username);
+    expect(me.json().user.username).toBe(OWNER.username);
   });
 
   it('a malformed session cookie is 401, not a 500 (uuid parse must not leak)', async () => {
@@ -172,66 +170,17 @@ describe('US-5 login / session cookies / roles', () => {
   });
 });
 
-describe('US-6 user invite (admin) + role enforcement', () => {
-  async function adminCookie(): Promise<string> {
-    const login = await app.inject({
-      method: 'POST',
-      url: '/api/auth/login',
-      payload: ADMIN,
-    });
-    return cookieFromResponse(login.headers['set-cookie']);
-  }
+describe('single-owner database invariant', () => {
+  it('rejects a second user row independently of route-level setup checks', async () => {
+    await expect(
+      handle.db.insert(users).values({
+        username: `second-owner-${suffix}`,
+        passwordHash: 'argon2id$fixture',
+      }),
+    ).rejects.toThrow();
 
-  it('an unauthenticated caller cannot create a user (401)', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/users',
-      payload: { ...MEMBER, role: 'member' },
-    });
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('the admin invites a member (201)', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/users',
-      headers: { cookie: await adminCookie() },
-      payload: { ...MEMBER, role: 'member' },
-    });
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.user.role).toBe('member');
-    createdUserIds.push(body.user.id);
-  });
-
-  it('the member can log in but is rejected (403) from admin-only routes', async () => {
-    const login = await app.inject({
-      method: 'POST',
-      url: '/api/auth/login',
-      payload: MEMBER,
-    });
-    expect(login.statusCode).toBe(200);
-    const cookie = cookieFromResponse(login.headers['set-cookie']);
-
-    const listUsers = await app.inject({
-      method: 'GET',
-      url: '/api/users',
-      headers: { cookie },
-    });
-    expect(listUsers.statusCode).toBe(403);
-
-    const createUser = await app.inject({
-      method: 'POST',
-      url: '/api/users',
-      headers: { cookie },
-      payload: { username: `x-${suffix}`, password: 'password-123', role: 'member' },
-    });
-    expect(createUser.statusCode).toBe(403);
-
-    // ...but the member CAN read their own identity.
-    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
-    expect(me.statusCode).toBe(200);
-    expect(me.json().user.role).toBe('member');
+    const rows = await handle.db.select({ id: users.id }).from(users);
+    expect(rows).toHaveLength(1);
   });
 });
 
@@ -240,7 +189,7 @@ describe('US-5 logout revokes the session', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: ADMIN,
+      payload: OWNER,
     });
     const cookie = cookieFromResponse(login.headers['set-cookie']);
 
@@ -257,14 +206,14 @@ describe('US-5 logout revokes the session', () => {
 });
 
 describe('FR-A3 audit rows', () => {
-  it('login, user_create, and logout actions were recorded', async () => {
+  it('owner_setup, login, and logout actions were recorded', async () => {
     const rows = await handle.db
       .select()
       .from(auditLog)
       .where(inArray(auditLog.userId, createdUserIds));
     const actions = new Set(rows.map((r) => r.action));
     expect(actions.has('login')).toBe(true);
-    expect(actions.has('user_create')).toBe(true);
+    expect(actions.has('owner_setup')).toBe(true);
     expect(actions.has('logout')).toBe(true);
   });
 });

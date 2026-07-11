@@ -71,7 +71,6 @@ const AGENT_LABELS: Record<AgentType, string> = {
   aider: 'Aider',
   'cursor-agent': 'Cursor Agent',
   amp: 'Amp',
-  generic: 'Generic (OSC/PTY)',
   terminal: 'Terminal (plain shell)',
   dev: 'Dev server (auto-restart)',
 };
@@ -107,7 +106,6 @@ const REQUIRED_BIN: Record<AgentType, string | null> = {
   aider: 'aider',
   'cursor-agent': 'cursor-agent',
   amp: 'amp',
-  generic: null,
   terminal: null,
   dev: null,
 };
@@ -131,7 +129,7 @@ const MODE_HINTS: Record<SessionPermissionMode, string> = {
  * per-agent flag mapping (agent-launch.ts). The options used to be the same four
  * for every CLI agent, but they aren't interchangeable: Gemini has no read-only
  * "plan" mode (it maps to the same as default), so offering it was misleading.
- * Agents not listed (opencode = in-app perms, generic/terminal/dev) show no picker.
+ * Agents not listed (opencode = in-app perms, terminal/dev) show no picker.
  */
 const MODES_BY_AGENT: Partial<Record<AgentType, readonly SessionPermissionMode[]>> = {
   'claude-code': ['default', 'acceptEdits', 'plan', 'autonomous'],
@@ -700,7 +698,7 @@ function AddSessionDialog(): JSX.Element {
     const ok = (a: AgentType): boolean =>
       REQUIRED_BIN[a] === null || detected.has(REQUIRED_BIN[a] as string);
     if (ok(agentType)) return;
-    const next = (Object.keys(AGENT_LABELS) as AgentType[]).find((a) => a !== 'generic' && ok(a));
+    const next = (Object.keys(AGENT_LABELS) as AgentType[]).find(ok);
     if (next && next !== agentType) setAgentType(next);
   }, [detectionKnown, detected, agentType]);
 
@@ -786,19 +784,15 @@ function AddSessionDialog(): JSX.Element {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {/* `generic` is hidden: it's a bare shell, redundant with `terminal`.
-                Kept in the model for any legacy sessions, just not offered here. */}
-            {(Object.keys(AGENT_LABELS) as AgentType[])
-              .filter((a) => a !== 'generic')
-              .map((a) => {
-                const avail = agentAvailable(a);
-                return (
-                  <SelectItem key={a} value={a} disabled={!avail}>
-                    {AGENT_LABELS[a]}
-                    {avail ? '' : ' · not installed on node'}
-                  </SelectItem>
-                );
-              })}
+            {(Object.keys(AGENT_LABELS) as AgentType[]).map((a) => {
+              const avail = agentAvailable(a);
+              return (
+                <SelectItem key={a} value={a} disabled={!avail}>
+                  {AGENT_LABELS[a]}
+                  {avail ? '' : ' · not installed on node'}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </Field>

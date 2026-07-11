@@ -10,7 +10,6 @@ const user: User = {
   id: 'u1',
   username: 'admin',
   displayName: null,
-  role: 'admin',
   createdAt: new Date().toISOString(),
   lastLoginAt: null,
   isActive: true,

@@ -51,17 +51,11 @@ type Spec struct {
 	// every PTY/ACP process drops to this fixed non-root UID/GID/group set.
 	Identity *identity.Runtime
 
-	// --- scoped hook-config injection (US-19), seeded ON THE NODE ---
-	// When ConfigDirEnv is set, Open() creates a per-session scoped config dir on
-	// THIS node's filesystem, copies the node user's real config (ConfigBaseSubdir,
-	// $HOME-relative) in as a base, writes ConfigFiles into it (substituting the
-	// literal "__FLOCK_CONFIG_DIR__" placeholder with the scoped dir's absolute
-	// path), and exports ConfigDirEnv=<scopedDir> to the agent — so the agent reads
-	// Flock's hook wiring without the orchestrator ever touching the node's fs and
-	// without clobbering the user's real config. Removed on Close. Empty = no-op.
-	ConfigDirEnv     string            // e.g. "CLAUDE_CONFIG_DIR" / "CODEX_HOME" / "XDG_CONFIG_HOME"
+	// --- native hook-config injection (US-19), seeded ON THE NODE ---
+	// Flock merges its hook files into the runtime user's real agent config. The
+	// hook forwarder is inert outside a Flock session because its token env is absent.
 	ConfigFiles      map[string]string // relpath -> content (relpath may include subdirs)
-	ConfigBaseSubdir string            // $HOME-relative dir to copy as base ("" = none), e.g. ".claude"
+	ConfigBaseSubdir string            // $HOME-relative install target, e.g. ".claude"
 
 	// --- Landlock FS sandbox for autonomous sessions (T17) ---
 	// When Sandbox is true (the orchestrator sets it only for `autonomous` sessions
@@ -120,8 +114,7 @@ type Session struct {
 	closed    bool // explicit Close() — stop supervising
 	finalized bool // supervision ended; no more output ever
 
-	configDir string // scoped hook-config dir seeded for this session (rm on Close); "" = none
-	tempDir   string // private per-session TMPDIR (rm when the session finalizes)
+	tempDir string // private per-session TMPDIR (rm when the session finalizes)
 
 	// droppedOutputBytes contains only counts, never terminal content.
 	droppedOutputBytes atomic.Uint64
@@ -154,21 +147,14 @@ func Open(spec Spec) (*Session, error) {
 		closeCh: make(chan struct{}),
 		done:    make(chan struct{}),
 	}
-	// Seed the scoped hook-config dir on this node BEFORE spawning, so the env var
-	// pointing at it is present in the very first process env (US-19, T1).
-	if dir, env, err := seedScopedConfig(spec); err != nil {
+	// Seed native hook config on this node before the first process starts.
+	if err := seedHookConfig(spec); err != nil {
 		// Best-effort: a config-seed failure must not block the agent launching —
 		// it just means no hooks for this session. Log to stderr (captured).
-		fmt.Fprintf(os.Stderr, "[flock-agentd] scoped config seed failed for %s: %v\n", spec.ID, err)
-	} else if dir != "" {
-		s.configDir = dir
-		s.spec.Env = append(s.spec.Env, env)
+		fmt.Fprintf(os.Stderr, "[flock-agentd] hook config seed failed for %s: %v\n", spec.ID, err)
 	}
-	ensureConfigOwnership(s.spec, s.configDir)
+	ensureConfigOwnership(s.spec)
 	if dir, err := seedSessionTemp(s.spec); err != nil {
-		if s.configDir != "" {
-			_ = os.RemoveAll(s.configDir)
-		}
 		return nil, fmt.Errorf("create private session temp directory: %w", err)
 	} else {
 		s.tempDir = dir
@@ -176,9 +162,6 @@ func Open(spec Spec) (*Session, error) {
 	}
 	if err := s.startProcess(); err != nil {
 		_ = os.RemoveAll(s.tempDir)
-		if s.configDir != "" {
-			_ = os.RemoveAll(s.configDir)
-		}
 		return nil, err
 	}
 	go s.supervise()
@@ -519,14 +502,9 @@ func (s *Session) finalize() {
 		close(ch)
 	}
 	s.subs = map[int]chan []byte{}
-	dir := s.configDir
-	s.configDir = ""
 	tempDir := s.tempDir
 	s.tempDir = ""
 	s.mu.Unlock()
-	if dir != "" {
-		_ = os.RemoveAll(dir) // remove the scoped hook-config on session end
-	}
 	if tempDir != "" {
 		_ = os.RemoveAll(tempDir)
 	}
@@ -786,61 +764,27 @@ func seedSessionTemp(spec Spec) (string, error) {
 	return dir, nil
 }
 
-// seedScopedConfig builds the per-session scoped hook-config dir on THIS node
-// (US-19, T1). Returns the dir + the `ENV=dir` entry to append to the spawn env,
-// or ("","",nil) when no scoped config was requested. The user's real config is
-// copied in as a base (never edited); Flock's files are layered on top with the
-// "__FLOCK_CONFIG_DIR__" placeholder replaced by the absolute scoped path.
-func seedScopedConfig(spec Spec) (dir string, envEntry string, err error) {
+// seedHookConfig merges Flock's inert-without-token hook files into the runtime
+// user's native agent configuration directory.
+func seedHookConfig(spec Spec) error {
 	if len(spec.ConfigFiles) == 0 {
-		return "", "", nil
+		return nil
 	}
-
-	// NATIVE install (no ConfigDirEnv): write Flock's hook files straight into the
-	// agent's REAL config dir ($HOME/<ConfigBaseSubdir>) and DON'T override the
-	// config dir — so the agent uses its native config, auth, transcript, and
-	// onboarding (the node is treated as a pre-configured machine). No scoped dir,
-	// no env entry, nothing to clean up on close; the forwarder/plugin no-op
-	// without the per-session FLOCK_HOOK_* env, so non-Flock runs are unaffected.
-	if spec.ConfigDirEnv == "" {
-		home := homeForSpec(spec)
-		if home == "" {
-			return "", "", fmt.Errorf("runtime home is unavailable")
-		}
-		target := filepath.Join(home, spec.ConfigBaseSubdir)
-		if mderr := os.MkdirAll(target, 0o700); mderr != nil {
-			return "", "", mderr
-		}
-		return "", "", writeConfigFiles(target, spec.ConfigFiles)
+	home := homeForSpec(spec)
+	if home == "" {
+		return fmt.Errorf("runtime home is unavailable")
 	}
-
-	// SCOPED install (legacy isolation): a per-session COPY of the user's config dir
-	// with Flock's files layered on top, reached via ConfigDirEnv=<scoped dir>.
-	dir = filepath.Join(os.TempDir(), "flock-session-config-"+spec.ID)
-	_ = os.RemoveAll(dir) // clear any stale dir from a prior crashed run
-	if err = os.MkdirAll(dir, 0o700); err != nil {
-		return "", "", err
+	target := filepath.Join(home, spec.ConfigBaseSubdir)
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		return err
 	}
-	if spec.ConfigBaseSubdir != "" {
-		if home := homeForSpec(spec); home != "" {
-			src := filepath.Join(home, spec.ConfigBaseSubdir)
-			if fi, serr := os.Stat(src); serr == nil && fi.IsDir() {
-				if cerr := copyDir(src, dir); cerr != nil {
-					fmt.Fprintf(os.Stderr, "[flock-agentd] config base copy %s: %v\n", src, cerr)
-				}
-			}
-		}
-	}
-	if err = writeConfigFiles(dir, spec.ConfigFiles); err != nil {
-		return "", "", err
-	}
-	return dir, spec.ConfigDirEnv + "=" + dir, nil
+	return writeConfigFiles(target, spec.ConfigFiles)
 }
 
 // writeConfigFiles writes Flock's hook files into targetDir, replacing the
 // __FLOCK_CONFIG_DIR__ placeholder with targetDir and DEEP-MERGING into any
-// existing JSON (so the user's own settings/hooks are preserved, and re-running on
-// a native dir is idempotent). Shared by the native + scoped install paths.
+// existing JSON (so the user's own settings/hooks are preserved, and re-running is
+// idempotent).
 func writeConfigFiles(targetDir string, files map[string]string) error {
 	for rel, content := range files {
 		full := filepath.Join(targetDir, rel)
@@ -905,7 +849,7 @@ func mergeHooksMap(userHooks, flockHooks any) any {
 	for event, fEntries := range fm {
 		fArr, _ := fEntries.([]any)
 		existing, _ := um[event].([]any)
-		// Append only entries not already present. The SAME scoped config is
+		// Append only entries not already present. The same native config is
 		// re-seeded on every session open, so a plain append would accumulate
 		// duplicate Flock hooks on disk (→ the agent fires the forwarder N times =
 		// N duplicate hook events). Idempotent merge keeps the user's own hooks AND
@@ -935,44 +879,8 @@ func containsJSONEqual(arr []any, v any) bool {
 	return false
 }
 
-// copyDir recursively copies regular files + dirs from src into dst (best-effort;
-// symlinks/special files are skipped). Used to layer the node user's real agent
-// config as a base under the scoped dir.
-func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip unreadable entries rather than abort the whole copy
-		}
-		rel, rerr := filepath.Rel(src, path)
-		if rerr != nil {
-			return nil
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o700)
-		}
-		if !d.Type().IsRegular() {
-			return nil // skip symlinks/sockets/etc.
-		}
-		data, rderr := os.ReadFile(path)
-		if rderr != nil {
-			return nil
-		}
-		info, _ := d.Info()
-		mode := os.FileMode(0o600)
-		if info != nil {
-			mode = info.Mode().Perm()
-		}
-		return os.WriteFile(target, data, mode)
-	})
-}
-
-func ensureConfigOwnership(spec Spec, scopedDir string) {
+func ensureConfigOwnership(spec Spec) {
 	if spec.Identity == nil {
-		return
-	}
-	if scopedDir != "" {
-		_ = chownTree(scopedDir, spec.Identity)
 		return
 	}
 	if len(spec.ConfigFiles) == 0 {

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { User, ProjectLayoutV1, ProjectPensV1 } from '@flock/shared';
+import type { User, ProjectPensV1 } from '@flock/shared';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { registerMeRoutes } from './me-routes.js';
@@ -8,7 +8,6 @@ import { registerMeRoutes } from './me-routes.js';
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
   username: 'alice',
-  role: 'admin',
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,
@@ -20,29 +19,17 @@ const authStub: AuthGuardDeps = {
 };
 const COOKIE = { cookie: `${SESSION_COOKIE}=good-cookie` };
 
-describe('me routes — presets / layout / Pens', () => {
-  const layouts = new Map<string, ProjectLayoutV1>();
+describe('me routes — built-in presets / durable Pens', () => {
   const pens = new Map<string, ProjectPensV1>();
-  const presets = new Map<string, unknown[]>();
 
   beforeEach(() => {
-    layouts.clear();
     pens.clear();
-    presets.clear();
   });
 
   function buildApp() {
     const f = Fastify({ logger: false });
     registerMeRoutes(f, {
       auth: authStub,
-      getPresets: async (uid) => (presets.get(uid) as never) ?? [],
-      putPresets: async (uid, p) => {
-        presets.set(uid, p);
-      },
-      getLayout: async (id) => layouts.get(id) ?? null,
-      putLayout: async (id, layout) => {
-        layouts.set(id, layout);
-      },
       getPens: async (_userId, id) => pens.get(id) ?? null,
       putPens: async (_userId, id, value) => {
         pens.set(id, value);
@@ -61,7 +48,7 @@ describe('me routes — presets / layout / Pens', () => {
     }
   });
 
-  it('launcher presets include builtins and accept user presets', async () => {
+  it('launcher presets expose builtins and no misleading write API', async () => {
     const f = buildApp();
     try {
       const get = await f.inject({
@@ -75,7 +62,7 @@ describe('me routes — presets / layout / Pens', () => {
         get.json().presets.some((p: { agentType: string }) => p.agentType === 'claude-code'),
       ).toBe(true);
 
-      const put = await f.inject({
+      const removedPut = await f.inject({
         method: 'PUT',
         url: '/api/me/launcher-presets',
         headers: COOKIE,
@@ -83,43 +70,29 @@ describe('me routes — presets / layout / Pens', () => {
           presets: [{ id: 'mine', name: 'My Claude', agentType: 'claude-code' }],
         },
       });
-      expect(put.statusCode).toBe(200);
-      expect(put.json().presets.some((p: { id: string }) => p.id === 'mine')).toBe(true);
+      expect(removedPut.statusCode).toBe(404);
     } finally {
       await f.close();
     }
   });
 
-  it('project layout PUT/GET with project-scoped body', async () => {
+  it('does not expose the obsolete project-layout API', async () => {
     const f = buildApp();
     try {
-      const layout = {
-        version: 1 as const,
-        projectId: 'proj-1',
-        focusedLeafId: 'leaf-a',
-        zoomedLeafId: null,
-        root: {
-          type: 'leaf' as const,
-          id: 'leaf-a',
-          kind: 'session' as const,
-          sessionId: 'sess-a',
-        },
-      };
       const put = await f.inject({
         method: 'PUT',
         url: '/api/projects/proj-1/layout',
         headers: COOKIE,
-        payload: layout,
+        payload: {},
       });
-      expect(put.statusCode).toBe(200);
-      expect(put.json().layout.focusedLeafId).toBe('leaf-a');
+      expect(put.statusCode).toBe(404);
 
       const get = await f.inject({
         method: 'GET',
         url: '/api/projects/proj-1/layout',
         headers: COOKIE,
       });
-      expect(get.json().layout.root.sessionId).toBe('sess-a');
+      expect(get.statusCode).toBe(404);
     } finally {
       await f.close();
     }

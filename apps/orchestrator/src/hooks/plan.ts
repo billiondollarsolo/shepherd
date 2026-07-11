@@ -120,7 +120,6 @@ export function extractPlan(body: unknown, agentType?: AgentType): ExtractedPlan
     case 'codex':
     case 'grok':
     case 'gemini':
-    case 'generic':
     case 'terminal':
       // No recognized plan/todo tool in the hook stream for these today.
       // Codex plan arrives via the transcript/status channel (`update_plan`).

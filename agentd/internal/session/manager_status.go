@@ -162,10 +162,9 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	// web Chat tab fills in for NATIVE (PTY) sessions — no ACP needed. Uses the
 	// session's own hook env (same vars the agent gets); "" → no-op.
 	hookURL, hookToken := hookEndpointFromEnv(spec.Env)
-	// Pass the session's scoped agent-config dir so the transcript tailer follows
-	// claude/codex's transcript into the Flock-seeded CLAUDE_CONFIG_DIR / CODEX_HOME
-	// (where they actually write it) instead of the default ~/.claude · ~/.codex.
-	go status.Watch(ctx, agent, spec.Cwd, s.configDir, startedAt, claim, func(u status.Update) {
+	// Native config remains in the agent's standard home, so no alternate transcript
+	// root is needed.
+	go status.Watch(ctx, agent, spec.Cwd, "", startedAt, claim, func(u status.Update) {
 		m.emitStatus(StatusEvent{ID: id, Update: u})
 	}, func(role, text string) {
 		postChatEvent(hookURL, hookToken, role, text)

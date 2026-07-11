@@ -18,7 +18,6 @@ const PROJECT_ID = '33333333-3333-4333-8333-333333333333';
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
   username: 'op',
-  role: 'admin',
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,
@@ -42,9 +41,7 @@ function fakeSession(over: Partial<SessionRecord> = {}): SessionRecord {
     hookTokenHash: 'hash:abc',
     status: 'starting',
     statusDetail: null,
-    pinned: false,
     note: null,
-    reviewedAt: null,
     permissionMode: 'default',
     orchestrationAuthority: 'callback_only',
     createdAt: '2026-05-29T00:00:00.000Z',

@@ -13,9 +13,6 @@ import { StatusEnum } from './status.js';
 // Primitive value enums
 // ---------------------------------------------------------------------------
 
-export const RoleEnum = z.enum(['admin', 'member']);
-export type Role = z.infer<typeof RoleEnum>;
-
 export const NodeKindEnum = z.enum(['local', 'ssh']);
 export type NodeKind = z.infer<typeof NodeKindEnum>;
 
@@ -48,7 +45,6 @@ export const AgentTypeEnum = z.enum([
   'aider', // Aider (pip) — `aider`
   'cursor-agent', // Cursor's headless agent CLI — `cursor-agent`
   'amp', // Sourcegraph Amp CLI — `amp`
-  'generic',
   // A plain shell session — no agent program, just the node's default shell over
   // the PTY bridge (like SSHing in). Same infra as agent sessions; no hooks.
   'terminal',
@@ -67,7 +63,7 @@ export type AgentType = z.infer<typeof AgentTypeEnum>;
  *   - `plan`        read-only planning, no writes.
  *   - `autonomous`  no prompts at all ("YOLO": Claude --dangerously-skip-permissions
  *                   / Codex bypass) — only sane on an isolated/sandboxed node.
- * Irrelevant for `generic`/`terminal` (no agent program → no flags).
+ * Irrelevant for `terminal` (no agent program → no flags).
  */
 export const SessionPermissionModeEnum = z.enum(['default', 'acceptEdits', 'plan', 'autonomous']);
 export type SessionPermissionMode = z.infer<typeof SessionPermissionModeEnum>;
@@ -159,7 +155,7 @@ export const AuditActionEnum = z.enum([
   'browser_takeover',
   'browser_release',
   'secret_access',
-  'user_create',
+  'owner_setup',
 ]);
 export type AuditAction = z.infer<typeof AuditActionEnum>;
 
@@ -181,7 +177,6 @@ export const UserSchema = z.object({
   username: z.string().min(1),
   /** Optional human display name; null = use the username. */
   displayName: z.string().nullable(),
-  role: RoleEnum,
   createdAt: IsoTimestamp,
   lastLoginAt: IsoTimestamp.nullable(),
   isActive: z.boolean(),
@@ -240,13 +235,8 @@ export const SessionRecordSchema = z.object({
   hookTokenHash: z.string().min(1),
   status: StatusEnum,
   statusDetail: z.string().nullable(),
-  /** Pinned sessions sort to the top of the paddock tree (supervisor focus). */
-  pinned: z.boolean(),
   /** Free-text supervisor note about this session (what it's working on); null = none. */
   note: z.string().nullable(),
-  /** When the supervisor marked this session reviewed (ISO); null = not reviewed.
-   *  Server-durable so "Ready to review" is consistent across devices + restarts. */
-  reviewedAt: z.string().nullable(),
   /**
    * The autonomy level the agent was launched with (T18). Persisted so it
    * survives restarts and is visible to a supervisor (an `autonomous` agent is a

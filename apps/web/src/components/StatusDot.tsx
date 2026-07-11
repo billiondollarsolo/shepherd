@@ -35,5 +35,3 @@ export function StatusDot({ status, pulse, className }: StatusDotProps): JSX.Ele
     />
   );
 }
-
-export default StatusDot;

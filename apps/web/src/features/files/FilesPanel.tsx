@@ -24,7 +24,9 @@ import { usePaddock } from '../../store/paddock';
 import { useNodeFsTree, useNodeFile, useWriteNodeFile } from '../../data/queries';
 import { decodeFileContent, textToBase64 } from './base64';
 // Lazy: CodeMirror is a large bundle — only load it when a file is actually opened.
-const CodeEditor = lazy(() => import('./CodeEditor'));
+const CodeEditor = lazy(() =>
+  import('./CodeEditor').then(({ CodeEditor: Editor }) => ({ default: Editor })),
+);
 
 /** Quote a path for the shell if it contains anything beyond safe chars. */
 function shellQuote(p: string): string {

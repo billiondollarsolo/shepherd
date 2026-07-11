@@ -35,7 +35,6 @@ function mk(id: string, projectId = 'P'): Session {
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,
-    pinned: false,
     note: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     lastStatusAt: '2026-01-01T00:00:00.000Z',

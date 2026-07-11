@@ -91,7 +91,7 @@ function preserveStoredLayout(
       .slice(0, MAX_STAGE_SESSIONS),
   );
 
-  // Drop terminated sessions and legacy panes beyond the four-slot cap while
+  // Drop terminated sessions and malformed persisted panes beyond the four-slot cap while
   // preserving the remaining split ratios.
   if ([...storedSet].some((id) => !retainedSet.has(id))) {
     base = pruneLayoutSessions(stored, retainedSet);

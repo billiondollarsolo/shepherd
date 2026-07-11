@@ -2,7 +2,7 @@
  * OpenCode hook-plugin location (US-19).
  *
  * The Claude settings.json and Codex hooks.toml are NOT templated here — they are
- * built inline by `renderScopedConfig` (the agentd-seeded path) and shipped to the
+ * built inline by `renderHookConfig` (the agentd-seeded path) and shipped to the
  * node. The OpenCode plugin, by contrast, is a real source file: its authoritative
  * copy is `status/translators/templates/opencode-plugin/flock.js`, which Flock
  * reads verbatim at seed time (single source of truth, no duplicate).

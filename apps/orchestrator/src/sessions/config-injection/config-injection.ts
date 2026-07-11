@@ -1,23 +1,14 @@
 /**
- * Session-scoped hook config injection (US-19).
+ * Native hook config injection (US-19).
  *
  * THE PROBLEM (PRD open-Q #3): to get first-class lifecycle hooks from Claude
  * Code / Codex / OpenCode we must add hook config to the agent's config, but we
  * must NOT clobber the user's real `~/.claude` / `~/.codex` / `~/.config`.
  *
  * THE SOLUTION (spec §3 "Hook injection", decision row): on session create,
- * seed a PER-SESSION isolated config directory, layer the user's real config in
- * as a read-only base, then overlay ONLY Flock's hook wiring on top. Point the
- * agent at the scoped dir via an env var (CLAUDE_CONFIG_DIR / CODEX_HOME /
- * XDG_CONFIG_HOME). On teardown, remove the scoped dir. The user's own files are
- * never written to — only READ (copied) — so they are provably untouched.
- *
- * This is reversible and isolated:
- *   - reversible: nothing on the user's real config path is mutated;
- *   - isolated:   the scoped dir is keyed by the SINGLE session_id (spec §4.2),
- *                 the same id that names the tmux session, scopes the hook
- *                 token, and binds the browser endpoint — so it tears down with
- *                 the rest of the session's resources and never collides.
+ * merge a narrowly named Flock hook file/plugin into the runtime user's native
+ * configuration. The installed forwarder is inert unless a Flock session supplies
+ * its private callback environment, so ordinary agent launches are unaffected.
  *
  * DUMB NODES (spec §6.4): this is orchestrator-side logic. The node never runs
  * any of it; it only ever runs the argv the orchestrator hands it, with the
@@ -31,23 +22,12 @@ import type { AgentType } from '@flock/shared';
 import { OPENCODE_PLUGIN_FILENAME, openCodePluginSourcePath } from './hook-templates.js';
 
 /**
- * The rendered scoped-config payload the orchestrator hands to flock-agentd, which
- * seeds it ON THE NODE (T1): agentd creates the dir, copies the node user's real
- * config (`configBaseSubdir`), writes `files` (replacing the literal
- * `__FLOCK_CONFIG_DIR__` placeholder with the scoped dir path), and exports
- * `configDirEnv`=<dir> to the agent. Works uniformly for local + SSH nodes — the
+ * The rendered config payload the orchestrator hands to flock-agentd, which
+ * seeds it ON THE NODE (T1): agentd writes `files` beneath `configBaseSubdir`
+ * and replaces `__FLOCK_CONFIG_DIR__` with the native config path. The
  * orchestrator writes nothing to any filesystem.
  */
-export interface RenderedScopedConfig {
-  /**
-   * The env var that redirects the agent's config dir to a per-session SCOPED copy
-   * (legacy isolation). OMITTED for the NATIVE model: Flock installs its hook files
-   * directly into the agent's real config dir (`configBaseSubdir`) and does NOT
-   * override the config dir — so the agent uses its native config + auth + transcript
-   * (the node is treated as a pre-configured machine). Hooks no-op without the
-   * per-session FLOCK_HOOK_* env, so a non-Flock run of the agent is unaffected.
-   */
-  configDirEnv?: string;
+export interface RenderedHookConfig {
   files: Record<string, string>;
   /** Agent's real config dir under $HOME (e.g. `.claude`, `.config`) — install target. */
   configBaseSubdir: string;
@@ -74,12 +54,10 @@ const HOOK_FORWARDER_SH = [
 const HOOK_CMD = 'sh __FLOCK_CONFIG_DIR__/flock-hook.sh';
 
 /**
- * Render the scoped hook-config for an agent type for agentd to seed on the node.
- * Returns null for agents with no first-class hook config (generic/terminal/dev).
+ * Render the hook config for an agent type for agentd to seed on the node.
+ * Returns null for agents with no first-class hook config (terminal/dev).
  */
-export async function renderScopedConfig(
-  agentType: AgentType,
-): Promise<RenderedScopedConfig | null> {
+export async function renderHookConfig(agentType: AgentType): Promise<RenderedHookConfig | null> {
   switch (agentType) {
     case 'claude-code': {
       const settings = {
@@ -94,7 +72,7 @@ export async function renderScopedConfig(
           SessionEnd: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
         },
       };
-      // NATIVE install (no configDirEnv): merge these hooks into the real
+      // Merge these hooks into the real
       // ~/.claude so claude uses native auth/transcript/onboarding. The merge
       // preserves the user's own hooks; the forwarder no-ops without FLOCK_HOOK_*.
       return {
@@ -106,7 +84,7 @@ export async function renderScopedConfig(
       };
     }
     case 'codex':
-      // NO scoped config for codex — its auth + rollout transcript MUST live in the
+      // No injected config for codex — its auth + rollout transcript MUST live in the
       // real ~/.codex (scoping CODEX_HOME stranded `codex login` creds in a throwaway
       // dir and hid the rollout from the daemon's tailer). Status/tokens/model/plan
       // are transcript-derived (the daemon tails ~/.codex/sessions), which is solid.
@@ -122,7 +100,7 @@ export async function renderScopedConfig(
       // captured on a node (then add the configBaseSubdir '.codex' files here).
       return null;
     case 'opencode': {
-      // NATIVE install (no configDirEnv): drop the plugin into the real
+      // Drop the plugin into the real
       // ~/.config/opencode/plugin so opencode uses native auth/config. The plugin
       // already no-ops without FLOCK_HOOK_URL/TOKEN, so non-Flock runs are clean.
       const plugin = await readFile(openCodePluginSourcePath(), 'utf8');

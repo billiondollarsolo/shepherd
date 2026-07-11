@@ -46,8 +46,6 @@ import {
   listProjects,
   listSessionEvents,
   listFleetActivity,
-  getLatestChats,
-  getTeams,
   listSessions,
   pushGit,
   stageGitFiles,
@@ -165,24 +163,6 @@ export function useFleetActivity(enabled = true): UseQueryResult<FlockEvent[]> {
     enabled,
     queryFn: async () => (await listFleetActivity(80)).events,
     refetchInterval: 8_000,
-  });
-}
-
-/** Latest chat message per session for the Paddock fleet cards (one query; polled). */
-export function useLatestChats(): UseQueryResult<Record<string, { role: string; text: string }>> {
-  return useQuery({
-    queryKey: ['chats-latest'],
-    queryFn: async () => (await getLatestChats()).chats,
-    refetchInterval: 5_000,
-  });
-}
-
-/** Live agent-collaboration edges (who spawned whom) for the Paddock teams view. */
-export function useTeams(): UseQueryResult<Array<{ parent: string; child: string }>> {
-  return useQuery({
-    queryKey: ['teams'],
-    queryFn: async () => (await getTeams()).edges,
-    refetchInterval: 5_000,
   });
 }
 

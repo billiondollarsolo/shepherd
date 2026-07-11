@@ -21,8 +21,8 @@ from spec Appendix A.3.
 - `index.ts` — barrel re-exporting the public API.
 
 `src/index.css` `@import`s `./styles/theme.css` (before the `@tailwind`
-directives) and maps the legacy `--flock-bg`/`-surface`/`-fg`/`-muted`/
-`-attention`/`-error` aliases onto the new first-class tokens, so existing
+directives) and maps compact semantic `--flock-bg`/`-surface`/`-fg`/`-muted`/
+`-attention`/`-error` utilities onto the first-class tokens, so active
 components theme automatically. `tailwind.config.cjs` exposes the tokens as
 utility colours (`bg-flock-surface-1`, `text-flock-ink-primary`,
 `bg-status-awaiting`, `ring-status-error`, …) and binds `font-sans`/`font-mono`

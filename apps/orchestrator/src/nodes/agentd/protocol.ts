@@ -17,7 +17,6 @@ export interface AgentdControl {
   op: string;
   protocolVersion?: number;
   daemonVersion?: string;
-  secret?: string;
   nodeId?: string;
   clientNonce?: string;
   serverNonce?: string;
@@ -56,8 +55,7 @@ export interface AgentdControl {
   sandboxAllow?: string[];
   // T61: derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
   activityStatus?: boolean;
-  // scoped hook-config injection (US-19) on `open` (client→daemon).
-  configDirEnv?: string;
+  // Native hook-config injection (US-19) on `open` (client→daemon).
   configFiles?: Record<string, string>;
   configBaseSubdir?: string;
 }

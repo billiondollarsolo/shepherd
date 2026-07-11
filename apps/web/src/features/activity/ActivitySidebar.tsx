@@ -250,5 +250,3 @@ function PlanSection({ plan }: { plan: SessionPlan | null }): JSX.Element {
     </section>
   );
 }
-
-export default ActivitySidebar;

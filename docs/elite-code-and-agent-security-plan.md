@@ -840,6 +840,18 @@ path protocol tests cannot prove an agent is contained.
 
 ## Phase 4 — Dead code and compatibility purge
 
+**Implementation status:** Complete. Session review/pin fields and columns, the
+legacy project-layout API/map/client, in-memory custom launcher presets, human roles,
+invite/user-list endpoints, the hidden generic agent, raw SSH credential decoding,
+the v1 agentd handshake bridge, duplicate MCP source, and obsolete scoped-config
+isolation have been removed. Pens are the only durable stage layout and surface
+retryable read failures. A database uniqueness invariant enforces one installation
+owner. Migrations 0016–0018 preserve active data while removing obsolete columns and
+normalizing generic sessions. Knip is now a zero-finding quality gate; eleven orphan
+barrels, duplicate exports, dead helpers, and five unused dependencies were removed.
+The live development database was backed up and migrated successfully; all TypeScript
+unit tests, PostgreSQL/SSH integration tests, and Go race tests pass.
+
 ### Q4.1 — Remove obsolete session pin/review surfaces
 
 **Priority:** Medium

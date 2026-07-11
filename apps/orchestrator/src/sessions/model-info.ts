@@ -26,7 +26,7 @@ const K = 1000;
 const MODEL_TABLE: Record<string, ModelInfo> = {
   // Anthropic Claude 4.x. The `[1m]` / `-1m` long-context variants are handled by
   // the explicit 1m keys below (longer prefix → matched first).
-  // Opus 4.5+ cut prices to $5/$25 (deprecated Opus 4/4.1 were $15/$75); current
+  // Opus 4.5+ cut prices to $5/$25 (older Opus 4/4.1 were $15/$75); current
   // models are 4.5–4.8, so price the prefix at the current rate.
   'claude-opus-4': { contextLimit: 200 * K, inputPer1M: 5, outputPer1M: 25 },
   'claude-opus-4-8[1m]': { contextLimit: 1000 * K, inputPer1M: 5, outputPer1M: 25 },
@@ -85,11 +85,6 @@ function table(): Record<string, ModelInfo> {
     }
   }
   return effectiveTable;
-}
-
-/** Test seam: drop the memoized override table so a new env/file is re-read. */
-export function resetModelInfoCache(): void {
-  effectiveTable = undefined;
 }
 
 /** Resolve a model id to its info by longest-prefix match (case-insensitive). */

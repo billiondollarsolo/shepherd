@@ -11,7 +11,6 @@ import { usePaddock, type PenAction, type PenSummary } from '../../store/paddock
 import { useSessions } from '../../data/queries';
 import { TerminalArea } from '../terminal/TerminalArea';
 import { ProjectLayoutView } from './ProjectLayoutView';
-import { fetchProjectLayout } from './projectLayoutApi';
 import { fetchProjectPens, putProjectPens } from './projectPensApi';
 import {
   applySelectionZoom,
@@ -40,31 +39,16 @@ function layoutFor(
   );
 }
 
-function migratePens(
-  projectId: string,
-  openIds: readonly string[],
-  legacy: ProjectLayoutV1 | null,
-): ProjectPensV1 {
-  const legacyIds = legacy
-    ? layoutSessionIds(legacy.root)
-        .filter((id) => openIds.includes(id))
-        .slice(0, MAX_PEN_SIZE)
-    : [];
-  const assigned = new Set(legacyIds);
+function initialPens(projectId: string, openIds: readonly string[]): ProjectPensV1 {
   const chunks: string[][] = [];
-  if (legacyIds.length > 0) chunks.push(legacyIds);
-  const remaining = openIds.filter((id) => !assigned.has(id));
-  for (let index = 0; index < remaining.length; index += MAX_PEN_SIZE) {
-    chunks.push(remaining.slice(index, index + MAX_PEN_SIZE));
+  for (let index = 0; index < openIds.length; index += MAX_PEN_SIZE) {
+    chunks.push(openIds.slice(index, index + MAX_PEN_SIZE));
   }
   if (chunks.length === 0 && openIds[0]) chunks.push([openIds[0]]);
   const pens = chunks.map((ids, index) => ({
     id: penId(index),
     name: `Pen ${index + 1}`,
-    layout:
-      index === 0 && legacy && legacyIds.length === layoutSessionIds(legacy.root).length
-        ? { ...legacy, zoomedLeafId: null }
-        : layoutFor(projectId, ids),
+    layout: layoutFor(projectId, ids),
   }));
   return { version: 1, projectId, activePenId: pens[0]?.id ?? 'pen-1', pens };
 }
@@ -128,30 +112,37 @@ export function StageLayout(): JSX.Element {
   );
   const [document, setDocument] = useState<ProjectPensV1 | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [loadNonce, setLoadNonce] = useState(0);
   const lastPersisted = useRef('');
 
   useEffect(() => {
     if (!projectId || openIds.length === 0) {
       setDocument(null);
+      setLoadError(false);
       setReady(true);
       return;
     }
     let cancelled = false;
+    setDocument(null);
     setReady(false);
-    void Promise.all([fetchProjectPens(projectId), fetchProjectLayout(projectId)]).then(
-      ([stored, legacy]) => {
+    setLoadError(false);
+    void fetchProjectPens(projectId)
+      .then((stored) => {
         if (cancelled) return;
-        const next = stored
-          ? reconcilePens(stored, openIds)
-          : migratePens(projectId, openIds, legacy);
+        const next = stored ? reconcilePens(stored, openIds) : initialPens(projectId, openIds);
         setDocument(next);
         setReady(true);
-      },
-    );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadError(true);
+        setReady(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [projectId, openKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, openKey, loadNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setPenState(projectId, summaries(document), document?.activePenId ?? null);
@@ -332,6 +323,20 @@ export function StageLayout(): JSX.Element {
     );
   }
   if (!ready || !document) {
+    if (loadError) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-flock-ink-muted">
+          <span>Could not load this project’s Pens.</span>
+          <button
+            type="button"
+            className="rounded-md border border-[var(--flock-border)] px-3 py-1.5 text-flock-ink-primary hover:bg-flock-surface-2"
+            onClick={() => setLoadNonce((value) => value + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
         Preparing project Pens…

@@ -34,10 +34,10 @@
 }
 
 /*
- * Legacy aliases — earlier skeleton code (and tailwind.config.cjs) referenced
+ * Active semantic convenience tokens used by compact views and Tailwind utilities:
  * --flock-bg / --flock-surface / --flock-fg / --flock-muted / --flock-attention
- * / --flock-error. Map them onto the new first-class tokens so existing
- * components stay correct AND theme automatically (these resolve through the
+ * / --flock-error. They map onto the first-class tokens so compact utilities
+ * stay readable and theme automatically (these resolve through the
  * theme-scoped --flock-* vars, so they flip with light/dark too).
  */
 :root {

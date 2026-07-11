@@ -1,12 +1,10 @@
 /**
- * Auth + user-management routes (US-4/US-5/US-6, spec §8.1, FR-A1/A2/A3).
+ * Single-owner authentication routes (spec §8.1, FR-A1/A2/A3).
  *
- *   POST /api/auth/setup   first-run admin; 409 once an admin exists      [US-4]
+ *   POST /api/auth/setup   first-run installation owner                   [US-4]
  *   POST /api/auth/login   validate creds, set httpOnly+Secure cookie     [US-5]
  *   POST /api/auth/logout  revoke the sessions_auth row, clear cookie     [US-5]
  *   GET  /api/auth/me      current user (401 without a valid cookie)      [US-5]
- *   POST /api/users        admin-only invite/create (403 for member)      [US-6]
- *   GET  /api/users        admin-only list                               [US-6]
  *
  * Bodies are validated with the shared zod contracts from `@flock/shared`
  * (never duplicated). The login cookie is httpOnly + Secure + SameSite=Strict
@@ -14,12 +12,12 @@
  * synchronous DB use through {@link AuthService} is correct.
  */
 import type { FastifyInstance } from 'fastify';
-import { CreateUserRequest, LoginRequest, SetupRequest, UpdateProfileRequest } from '@flock/shared';
+import { LoginRequest, SetupRequest, UpdateProfileRequest } from '@flock/shared';
 import { buildClearSessionCookie, buildSessionCookie, readSessionCookie } from './cookie.js';
-import { buildGuards } from './middleware.js';
+import { makeRequireAuth } from './middleware.js';
 import { LoginThrottle } from './login-throttle.js';
 import {
-  AdminAlreadyExistsError,
+  OwnerAlreadyExistsError,
   InvalidCredentialsError,
   SESSION_TTL_MS,
   UsernameTakenError,
@@ -44,12 +42,12 @@ function ctxOf(request: { ip?: string; headers: Record<string, unknown> }): Requ
 }
 
 /**
- * Register the auth + users routes against an {@link AuthService}. Exposed as a
+ * Register the owner-auth routes against an {@link AuthService}. Exposed as a
  * plain function (not an auto-loaded plugin) so `buildServer` wires it with the
  * concrete service and so tests can register it on an isolated Fastify app.
  */
 export function registerAuthRoutes(app: FastifyInstance, service: AuthService): void {
-  const { requireAuth, requireAdmin } = buildGuards(service);
+  const requireAuth = makeRequireAuth(service);
   // In-memory brute-force throttle for the public credential endpoints (T6).
   const throttle = new LoginThrottle();
   const setupBudget = new RequestBudget({
@@ -67,7 +65,7 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
     onReject: makeRejectionReporter('auth-login'),
   });
 
-  // --- US-4: first-run admin setup ---------------------------------------
+  // --- US-4: first-run owner setup ---------------------------------------
   app.post('/api/auth/setup', { bodyLimit: AUTH_BODY_LIMIT }, async (request, reply) =>
     withinRequestBudget(reply, setupBudget, request.ip, async () => {
       const parsed = SetupRequest.safeParse(request.body);
@@ -75,11 +73,11 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
         return badRequest(reply, 'username and a password (min 8 chars) are required.');
       }
       try {
-        const user = await service.setupInitialAdmin(parsed.data, ctxOf(request));
+        const user = await service.setupInitialOwner(parsed.data, ctxOf(request));
         return reply.code(201).send({ user });
       } catch (err) {
-        if (err instanceof AdminAlreadyExistsError) {
-          return reply.code(409).send({ error: { code: 'admin_exists', message: err.message } });
+        if (err instanceof OwnerAlreadyExistsError) {
+          return reply.code(409).send({ error: { code: 'owner_exists', message: err.message } });
         }
         if (err instanceof UsernameTakenError) {
           return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
@@ -90,10 +88,10 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
   );
 
   // --- first-run status (public) -----------------------------------------
-  // Lets the sign-in UI decide between "create first admin" and "sign in"
+  // Lets the sign-in UI decide between "create owner" and "sign in"
   // without a destructive probe. Public: callable before any session exists.
   app.get('/api/auth/status', async (_request, reply) => {
-    const setupRequired = !(await service.adminExists());
+    const setupRequired = !(await service.ownerExists());
     return reply.code(200).send({ setupRequired });
   });
 
@@ -188,35 +186,5 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       }
       throw err;
     }
-  });
-
-  // --- US-6: invite/create a user (admin) --------------------------------
-  app.post('/api/users', { preHandler: requireAdmin }, async (request, reply) => {
-    const parsed = CreateUserRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return badRequest(
-        reply,
-        'username, a password (min 8 chars), and a role (admin|member) are required.',
-      );
-    }
-    try {
-      const user = await service.createUser(
-        parsed.data,
-        { id: request.authUser!.id },
-        ctxOf(request),
-      );
-      return reply.code(201).send({ user });
-    } catch (err) {
-      if (err instanceof UsernameTakenError) {
-        return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
-      }
-      throw err;
-    }
-  });
-
-  // --- US-6: list users (admin) ------------------------------------------
-  app.get('/api/users', { preHandler: requireAdmin }, async (_request, reply) => {
-    const users = await service.listUsers();
-    return reply.code(200).send({ users });
   });
 }
