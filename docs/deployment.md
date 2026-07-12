@@ -168,6 +168,33 @@ Back up the Flock master key separately from encrypted
 [vault backups](backup-and-recovery.md). Losing it makes encrypted node credentials
 unrecoverable; exposing it makes those envelopes decryptable.
 
+### Prepare a remote node
+
+Run the production preparation script once as root on each Linux amd64/arm64 host,
+using the public half of the SSH key that Flock will use:
+
+```bash
+sudo ./scripts/flock-node-prepare.sh \
+  --public-key-file /path/to/flock-control.pub \
+  --workspace /srv/flock/workspaces \
+  --install-agents
+
+sudo ./scripts/flock-node-prepare.sh --check --workspace /srv/flock/workspaces
+```
+
+The script is idempotent. It creates `flock-control` for SSH/control operations,
+creates the locked `flock-agent` runtime identity, installs a single validating root
+helper with a narrow sudo rule, and makes the workspace runtime-owned. The optional
+agent installation uses the official latest Claude/OpenCode installers and a
+runtime-user-local Codex npm prefix. Provider login remains manual and belongs to
+`flock-agent`; Flock never creates or captures provider accounts.
+
+Register the node with SSH user `flock-control`. Its detail page runs the same
+read-only preflight and reports platform support, SSH forwarding, installation disk
+space, preparation, daemon version, workspace access, and detected agent versions. A
+missing preparation or unwritable project directory blocks readiness instead of
+failing later as a blank terminal.
+
 ## Dev vs prod stacks
 
 - **Production:** `docker-compose.yml` pulls versioned GHCR images. Pin
@@ -197,7 +224,33 @@ docker compose config >/dev/null && echo "compose OK"
 `flock-agentd` is versioned (`agentd/VERSION` — the single source of truth). Release
 orchestrator images include Linux amd64 and arm64 daemon binaries. The
 orchestrator ships the expected version to each node and, on a version mismatch,
-re-ships + restarts the daemon automatically. To roll out a new daemon: bump
+re-ships + restarts the daemon automatically. A node with live sessions keeps its
+authenticated existing daemon and reports the rollout as deferred. Once sessions
+drain, the next node operation activates the candidate. Candidates are installed by
+atomic rename, must pass the real authenticated protocol handshake, and restore the
+retained previous binary if that validation fails. To roll out a new daemon: bump
 the synchronized Flock version, rebuild the image (or pull the new release), and redeploy —
 the rollout happens on next connect. (Keep `FLOCK_AGENTD_VERSION` unset so it
 resolves from the shipped `agentd/VERSION`; only set it to pin an explicit override.)
+
+## Upgrade an installation
+
+Use the backup-gated helper from the deployment directory:
+
+```bash
+install -m 0600 /dev/null /tmp/flock-vault-password
+$EDITOR /tmp/flock-vault-password
+FLOCK_VAULT_PASSWORD_FILE=/tmp/flock-vault-password \
+  ./scripts/flock-upgrade.sh 0.3.1
+```
+
+The helper verifies Compose, creates and verifies an encrypted pre-upgrade vault,
+pulls exact versioned images, updates `FLOCK_VERSION`, clears any stale browser-image
+override so session Chrome follows the same release, starts the stack, applies the
+normal idempotent migrations, and verifies readiness. `--skip-backup` exists only as
+an explicit operator escape hatch.
+
+Flock does not pretend forward database migrations are automatically reversible. On
+failure the helper retains the prior `.env` and reports the verified vault; use the
+documented restore procedure rather than blindly starting an older image against a
+newer schema.

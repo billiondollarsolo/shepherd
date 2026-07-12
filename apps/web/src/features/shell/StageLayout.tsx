@@ -3,7 +3,6 @@ import {
   effectiveStageProjectId,
   layoutArrangeMode,
   layoutSessionIds,
-  type ArrangeMode,
   type ProjectLayoutV1,
   type ProjectPensV1,
   ProjectPensResponseSchema,
@@ -14,64 +13,8 @@ import { TerminalArea } from '../terminal/TerminalArea';
 import { ProjectLayoutView } from './ProjectLayoutView';
 import { fetchProjectPens, putProjectPens } from './projectPensApi';
 import { ApiError } from '../../lib/apiClient';
-import {
-  applySelectionZoom,
-  rearrangeProjectLayout,
-  reconcileProjectLayout,
-} from './projectLayoutState';
-
-const MAX_PEN_SIZE = 4;
-
-function penId(index: number): string {
-  return `pen-${index + 1}`;
-}
-
-function layoutFor(
-  projectId: string,
-  ids: readonly string[],
-  mode: ArrangeMode = 'grid2x2',
-  focus?: string | null,
-): ProjectLayoutV1 {
-  return (
-    rearrangeProjectLayout(projectId, ids, mode, focus) ??
-    // Callers always provide at least one id.
-    (() => {
-      throw new Error('cannot build an empty Pen');
-    })()
-  );
-}
-
-function initialPens(projectId: string, openIds: readonly string[]): ProjectPensV1 {
-  const chunks: string[][] = [];
-  for (let index = 0; index < openIds.length; index += MAX_PEN_SIZE) {
-    chunks.push(openIds.slice(index, index + MAX_PEN_SIZE));
-  }
-  if (chunks.length === 0 && openIds[0]) chunks.push([openIds[0]]);
-  const pens = chunks.map((ids, index) => ({
-    id: penId(index),
-    name: `Pen ${index + 1}`,
-    layout: layoutFor(projectId, ids),
-  }));
-  return { version: 1, projectId, activePenId: pens[0]?.id ?? 'pen-1', pens };
-}
-
-function reconcilePens(document: ProjectPensV1, openIds: readonly string[]): ProjectPensV1 {
-  const open = new Set(openIds);
-  const pens = document.pens.flatMap((pen) => {
-    const ids = layoutSessionIds(pen.layout.root)
-      .filter((id) => open.has(id))
-      .slice(0, 4);
-    if (ids.length === 0) return [];
-    const layout = reconcileProjectLayout(document.projectId, ids, pen.layout, null, {
-      direction: layoutArrangeMode(pen.layout.root),
-    });
-    return layout ? [{ ...pen, layout: { ...layout, zoomedLeafId: null } }] : [];
-  });
-  const activePenId = pens.some((pen) => pen.id === document.activePenId)
-    ? document.activePenId
-    : (pens[0]?.id ?? 'pen-1');
-  return { ...document, pens, activePenId };
-}
+import { applySelectionZoom } from './projectLayoutState';
+import { initialPens, layoutForSessions, MAX_PEN_SIZE, reconcilePens } from './penPlacement';
 
 function summaries(document: ProjectPensV1 | null): PenSummary[] {
   return (
@@ -102,7 +45,12 @@ export function StageLayout(): JSX.Element {
   const openInProject = useMemo(
     () =>
       projectId
-        ? sessions.filter((session) => session.closedAt === null && session.projectId === projectId)
+        ? sessions
+            .filter((session) => session.closedAt === null && session.projectId === projectId)
+            .sort(
+              (left, right) =>
+                left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+            )
         : [],
     [sessions, projectId],
   );
@@ -221,10 +169,15 @@ export function StageLayout(): JSX.Element {
           };
         }
         if (action.type === 'delete' && action.penId) {
+          const deleted = current.pens.find((pen) => pen.id === action.penId);
+          const newlyIndependent = deleted ? layoutSessionIds(deleted.layout.root) : [];
           const pens = current.pens.filter((pen) => pen.id !== action.penId);
           return {
             ...current,
             pens,
+            independentSessionIds: [
+              ...new Set([...current.independentSessionIds, ...newlyIndependent]),
+            ],
             activePenId:
               current.activePenId === action.penId
                 ? (pens[0]?.id ?? current.activePenId)
@@ -242,16 +195,23 @@ export function StageLayout(): JSX.Element {
                 ? null
                 : {
                     ...pen,
-                    layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)),
+                    layout: layoutForSessions(projectId!, ids, layoutArrangeMode(pen.layout.root)),
                   };
             })
             .filter((pen): pen is NonNullable<typeof pen> => pen !== null);
           pens.push({
             id,
             name: `Pen ${pens.length + 1}`,
-            layout: layoutFor(projectId!, [sessionId]),
+            layout: layoutForSessions(projectId!, [sessionId]),
           });
-          return { ...current, pens, activePenId: id };
+          return {
+            ...current,
+            pens,
+            activePenId: id,
+            independentSessionIds: current.independentSessionIds.filter(
+              (value) => value !== sessionId,
+            ),
+          };
         }
         if (action.type === 'arrange' && action.penId && action.mode) {
           return {
@@ -260,7 +220,11 @@ export function StageLayout(): JSX.Element {
               pen.id === action.penId
                 ? {
                     ...pen,
-                    layout: layoutFor(projectId!, layoutSessionIds(pen.layout.root), action.mode),
+                    layout: layoutForSessions(
+                      projectId!,
+                      layoutSessionIds(pen.layout.root),
+                      action.mode,
+                    ),
                   }
                 : pen,
             ),
@@ -292,7 +256,11 @@ export function StageLayout(): JSX.Element {
               pen.id === source.id
                 ? {
                     ...pen,
-                    layout: layoutFor(projectId!, ordered, layoutArrangeMode(pen.layout.root)),
+                    layout: layoutForSessions(
+                      projectId!,
+                      ordered,
+                      layoutArrangeMode(pen.layout.root),
+                    ),
                   }
                 : pen,
             ),
@@ -302,20 +270,34 @@ export function StageLayout(): JSX.Element {
           const ids = layoutSessionIds(pen.layout.root).filter((id) => id !== action.sessionId);
           return ids.length === 0
             ? []
-            : [{ ...pen, layout: layoutFor(projectId!, ids, layoutArrangeMode(pen.layout.root)) }];
+            : [
+                {
+                  ...pen,
+                  layout: layoutForSessions(projectId!, ids, layoutArrangeMode(pen.layout.root)),
+                },
+              ];
         });
         if (action.type === 'remove') {
           const activePenId = without.some((pen) => pen.id === current.activePenId)
             ? current.activePenId
             : (without[0]?.id ?? current.activePenId);
-          return { ...current, pens: without, activePenId };
+          return {
+            ...current,
+            pens: without,
+            activePenId,
+            independentSessionIds: [
+              ...new Set([...current.independentSessionIds, action.sessionId]),
+            ],
+          };
         }
         if (!target) return current;
         const targetAfterRemoval = without.find((pen) => pen.id === target.id);
         if (!targetAfterRemoval) return current;
         let targetIds = layoutSessionIds(targetAfterRemoval.layout.root);
+        let displacedSessionId: string | null = null;
         if (targetIds.length >= MAX_PEN_SIZE) {
           if (!action.targetSessionId) return current;
+          displacedSessionId = action.targetSessionId;
           targetIds = targetIds.map((id) =>
             id === action.targetSessionId ? action.sessionId! : id,
           );
@@ -326,7 +308,7 @@ export function StageLayout(): JSX.Element {
           pen.id === target.id
             ? {
                 ...pen,
-                layout: layoutFor(
+                layout: layoutForSessions(
                   projectId!,
                   targetIds,
                   layoutArrangeMode(pen.layout.root),
@@ -335,7 +317,15 @@ export function StageLayout(): JSX.Element {
               }
             : pen,
         );
-        return { ...current, pens, activePenId: target.id };
+        return {
+          ...current,
+          pens,
+          activePenId: target.id,
+          independentSessionIds: [
+            ...current.independentSessionIds.filter((value) => value !== action.sessionId),
+            ...(displacedSessionId ? [displacedSessionId] : []),
+          ],
+        };
       });
       if (projectId) selectProject(projectId);
     },

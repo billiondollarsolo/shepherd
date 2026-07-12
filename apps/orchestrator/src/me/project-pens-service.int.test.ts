@@ -25,6 +25,7 @@ function document(sessionId: string): ProjectPensV1 {
         layout: singleSessionLayout(projectId, sessionId),
       },
     ],
+    independentSessionIds: [],
   };
 }
 

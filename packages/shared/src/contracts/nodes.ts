@@ -109,6 +109,23 @@ export const NodeStatusResponse = z.object({
 });
 export type NodeStatusResponse = z.infer<typeof NodeStatusResponse>;
 
+export const NodePreflightCheckSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  status: z.enum(['pass', 'warning', 'fail']),
+  detail: z.string().min(1),
+});
+export type NodePreflightCheck = z.infer<typeof NodePreflightCheckSchema>;
+
+/** Read-only readiness report for a local or SSH execution node. */
+export const NodePreflightResponseSchema = z.object({
+  nodeId: Uuid,
+  generatedAt: IsoTimestamp,
+  ready: z.boolean(),
+  checks: z.array(NodePreflightCheckSchema),
+});
+export type NodePreflightResponse = z.infer<typeof NodePreflightResponseSchema>;
+
 // --- node filesystem browse (pick a working dir without typing it) ----------
 
 /**

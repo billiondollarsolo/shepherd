@@ -180,6 +180,23 @@ worker; the orchestrator and coding agents never receive the raw Docker socket. 
 (or `https://localhost`) and
 complete admin setup.
 
+Prepare a remote Linux node before adding it to Flock:
+
+```bash
+sudo ./scripts/flock-node-prepare.sh \
+  --public-key-file /path/to/flock-control.pub \
+  --workspace /srv/flock/workspaces \
+  --install-agents
+```
+
+The node page then validates identities, workspace permissions, daemon version, and
+launchable agent CLIs. For versioned Compose upgrades, use the verified-backup gate:
+
+```bash
+FLOCK_VAULT_PASSWORD_FILE=/secure/flock-vault-password \
+  ./scripts/flock-upgrade.sh 0.3.1
+```
+
 > **Must set in `.env`:** `PUBLIC_BASE_URL` to the URL users open in the browser
 > (for example, `https://flock.example.com`) and `FLOCK_ALLOWED_ORIGINS` to the
 > exact browser origin(s) allowed to open authenticated WebSockets. Match

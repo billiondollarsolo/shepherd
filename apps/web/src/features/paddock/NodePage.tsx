@@ -1,4 +1,5 @@
 /** Operational node dashboard: metrics → projects/Git/agents → host details. */
+import { useState } from 'react';
 import {
   ArrowDown,
   ArrowLeft,
@@ -13,11 +14,29 @@ import {
   ShieldCheck,
   SquareTerminal,
 } from 'lucide-react';
-import { displayStatus, type NodeInfo } from '@flock/shared';
+import { displayStatus, type NodeInfo, type NodePreflightResponse } from '@flock/shared';
 import type { LucideIcon } from 'lucide-react';
 import type { BadgeProps } from '../../components/ui';
-import { Badge, Button, ScrollArea } from '../../components/ui';
-import { useFleetGit, useNodeInfo, useNodes, useProjects, useSessions } from '../../data/queries';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  ScrollArea,
+} from '../../components/ui';
+import {
+  useFleetGit,
+  useNodeInfo,
+  useNodePreflight,
+  useNodes,
+  useProjects,
+  useSessions,
+  useUpgradeNodeAgentd,
+} from '../../data/queries';
 import type { AgentdHealth } from '../../data/treeApi';
 import { usePaddock } from '../../store/paddock';
 import { formatGB } from '../../lib/utils';
@@ -101,9 +120,11 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 function ControlPlaneCard({
   control,
   failure,
+  lifecycle,
 }: {
   control: NodeInfo['control'];
   failure: AgentdHealth['nodes'][string]['failure'];
+  lifecycle: NodeInfo['lifecycle'];
 }): JSX.Element {
   if (!control) {
     return (
@@ -149,6 +170,15 @@ function ControlPlaneCard({
       <Field label="Sessions closed" value={String(control.sessionsClosed)} />
       <Field label="Credential rotations" value={String(control.credentialRotations)} />
       <Field label="Dropped output" value={`${control.droppedOutputBytes} bytes`} />
+      {lifecycle?.upgrade ? (
+        <div className="mt-2 rounded-md border border-status-awaiting/40 bg-status-awaiting/10 p-2">
+          <Badge variant="warning">{lifecycle.upgrade.status.replace('_', ' ')}</Badge>
+          <p className="mt-1 text-xs text-flock-ink-primary">{lifecycle.upgrade.message}</p>
+          <p className="mt-1 font-mono text-2xs text-flock-ink-muted">
+            {lifecycle.upgrade.installedVersion} → {lifecycle.upgrade.expectedVersion}
+          </p>
+        </div>
+      ) : null}
       {anomalies > 0 ? (
         <div className="mt-2 border-t border-[var(--flock-border)] pt-2">
           <Field label="Authentication failures" value={String(control.authFailures)} />
@@ -156,6 +186,59 @@ function ControlPlaneCard({
           <Field label="Write timeouts" value={String(control.writeTimeouts)} />
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+function ReadinessCard({
+  report,
+  canUpgrade,
+  onUpgrade,
+}: {
+  report: NodePreflightResponse | undefined;
+  canUpgrade: boolean;
+  onUpgrade: () => void;
+}): JSX.Element {
+  const upgradeAvailable = report?.checks.some(
+    (item) =>
+      (item.id === 'daemon-version' && item.status === 'warning') ||
+      (item.id === 'preparation' && item.status === 'fail'),
+  );
+  return (
+    <Card title="Node readiness">
+      {!report ? (
+        <p className="text-sm text-flock-ink-muted">Readiness checks are unavailable.</p>
+      ) : (
+        <div className="space-y-2">
+          <Badge variant={report.ready ? 'success' : 'danger'}>
+            {report.ready ? 'Ready' : 'Action required'}
+          </Badge>
+          <ul className="space-y-1.5">
+            {report.checks.map((item) => (
+              <li key={item.id} className="flex items-start gap-2 text-xs">
+                <span
+                  className={`mt-1 size-1.5 shrink-0 rounded-full ${
+                    item.status === 'pass'
+                      ? 'bg-status-running'
+                      : item.status === 'warning'
+                        ? 'bg-status-awaiting'
+                        : 'bg-status-error'
+                  }`}
+                />
+                <span className="min-w-0">
+                  <span className="font-medium text-flock-ink-primary">{item.label}</span>
+                  <span className="block break-words text-flock-ink-muted">{item.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {canUpgrade && upgradeAvailable ? (
+            <Button size="sm" variant="secondary" className="mt-2" onClick={onUpgrade}>
+              Upgrade daemon…
+            </Button>
+          ) : null}
+        </div>
+      )}
     </Card>
   );
 }
@@ -171,6 +254,9 @@ export function NodePage(): JSX.Element {
   const { data: sessions = [] } = useSessions();
   const node = nodes.find((candidate) => candidate.id === nodeId) ?? null;
   const { data: info, isLoading, isError } = useNodeInfo(nodeId);
+  const { data: preflight } = useNodePreflight(nodeId);
+  const upgradeAgentd = useUpgradeNodeAgentd();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const nodeSessions = sessions.filter(
     (session) => session.nodeId === nodeId && session.closedAt === null,
   );
@@ -401,6 +487,13 @@ export function NodePage(): JSX.Element {
             <ControlPlaneCard
               control={info?.control}
               failure={nodeId ? agentdHealth?.nodes[nodeId]?.failure : undefined}
+              lifecycle={info?.lifecycle}
+            />
+
+            <ReadinessCard
+              report={preflight}
+              canUpgrade={node?.kind === 'ssh'}
+              onUpgrade={() => setUpgradeOpen(true)}
             />
 
             <Card title="Detected agent CLIs">
@@ -429,6 +522,35 @@ export function NodePage(): JSX.Element {
           </section>
         </div>
       </ScrollArea>
+      <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upgrade node daemon?</DialogTitle>
+            <DialogDescription>
+              Flock refuses while known sessions are active. Use this to retry a deferred or
+              protocol-blocked rollout; a failed candidate is automatically rolled back.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUpgradeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!nodeId || upgradeAgentd.isPending}
+              onClick={() => {
+                if (!nodeId) return;
+                void upgradeAgentd
+                  .mutateAsync(nodeId)
+                  .then(() => setUpgradeOpen(false))
+                  .catch(() => undefined);
+              }}
+            >
+              {upgradeAgentd.isPending ? 'Upgrading…' : 'Upgrade daemon'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

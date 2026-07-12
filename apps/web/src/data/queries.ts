@@ -52,14 +52,15 @@ import {
   terminateSession,
   unstageGitFiles,
   updateSession,
+  upgradeNodeAgentd,
 } from './treeApi';
 import type { UpdateSessionRequest } from '@flock/shared';
 import type { ListNodeDirResponse, NodeFileReadResponse, NodeFsTreeResponse } from '@flock/shared';
 import { getNodeFsTree, makeNodeDir, readNodeFile, writeNodeFile } from './treeApi';
 import { getAgentdStatus, type AgentdHealth } from './treeApi';
 import { getNodeStack, type NodeStack } from './treeApi';
-import { getNodeInfo } from './treeApi';
-import type { NodeInfo } from '@flock/shared';
+import { getNodeInfo, getNodePreflight } from './treeApi';
+import type { NodeInfo, NodePreflightResponse } from '@flock/shared';
 import { ApiError } from '../routes/api';
 import { toast } from '../components/ui/sonner';
 
@@ -263,6 +264,32 @@ export function useNodeInfo(nodeId: string | null): UseQueryResult<NodeInfo> {
     queryFn: () => getNodeInfo(nodeId as string),
     refetchInterval: 4000,
     retry: false,
+  });
+}
+
+export function useNodePreflight(nodeId: string | null): UseQueryResult<NodePreflightResponse> {
+  return useQuery({
+    queryKey: ['node-preflight', nodeId ?? ''],
+    enabled: nodeId != null,
+    queryFn: () => getNodePreflight(nodeId as string),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useUpgradeNodeAgentd() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (nodeId: string) => upgradeNodeAgentd(nodeId),
+    onSuccess: async ({ nodeId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['node-info', nodeId] }),
+        queryClient.invalidateQueries({ queryKey: ['node-preflight', nodeId] }),
+        queryClient.invalidateQueries({ queryKey: qk.agentdStatus }),
+      ]);
+      toast.success('Node daemon upgrade completed.');
+    },
+    onError: (error) => toast.error(errMessage(error, 'Node daemon upgrade failed.')),
   });
 }
 

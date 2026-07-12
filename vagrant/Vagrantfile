@@ -42,6 +42,9 @@ Vagrant.configure("2") do |config|
 
       # Same software as docker/Dockerfile.node; installs the agent CLIs and
       # authorizes the privilege-separated control identity with the orchestrator pubkey.
+      node.vm.provision "file",
+        source: "../scripts/flock-node-prepare.sh",
+        destination: "/tmp/flock-node-prepare.sh"
       node.vm.provision "shell", path: "provision.sh", args: [PUBKEY]
     end
   end

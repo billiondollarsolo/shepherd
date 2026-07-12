@@ -22,15 +22,12 @@ apt-get update -y
 apt-get install -y --no-install-recommends \
   openssh-server tmux curl ca-certificates git build-essential locales sudo
 
-# Separate the SSH control identity from the account that runs coding agents.
-# `flock-control` is trusted infrastructure: Flock uses its passwordless sudo to
-# install/upgrade the root-owned daemon service. Agent PTYs are always dropped to
-# `flock-agent`, which has no sudo and cannot read the control credential.
-id flock-control >/dev/null 2>&1 || useradd -m -s /bin/bash flock-control
-id flock-agent >/dev/null 2>&1 || useradd -m -s /bin/bash flock-agent
-printf '%s\n' 'flock-control ALL=(root) NOPASSWD: ALL' > /etc/sudoers.d/flock-control
-chown root:root /etc/sudoers.d/flock-control
-chmod 0440 /etc/sudoers.d/flock-control
+# Use the same production preparation path operators run on real nodes. This
+# creates the separated identities, constrained root helper, SSH authorization,
+# and runtime-owned workspace without the old NOPASSWD:ALL test shortcut.
+prepare_args=(--workspace /home/flock-agent/scratch)
+if [ -n "$PUBKEY" ]; then prepare_args+=(--public-key "$PUBKEY"); fi
+bash /tmp/flock-node-prepare.sh "${prepare_args[@]}"
 
 # UTF-8 locale (the Docker nodes' POSIX-locale tmux glyph bug — keep VMs clean).
 locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
@@ -60,16 +57,7 @@ npm install -g opencode-ai || echo "WARN: opencode install skipped"
 su - flock-agent -c 'curl -fsSL https://x.ai/cli/install.sh | bash' || echo "WARN: grok install skipped"
 
 # The agent user's home lives on the VM's persistent disk, so an in-session
-# `claude login` STAYS logged in across reboots (the whole realism win).
-install -d -m 700 -o flock-control -g flock-control /home/flock-control/.ssh
-install -d -m 0750 -o flock-agent -g flock-agent /home/flock-agent/scratch
-if [ -n "$PUBKEY" ]; then
-  echo "$PUBKEY" > /home/flock-control/.ssh/authorized_keys
-  chown flock-control:flock-control /home/flock-control/.ssh/authorized_keys
-  chmod 600 /home/flock-control/.ssh/authorized_keys
-else
-  echo "WARN: no FLOCK_PUBKEY provided — flock-control has no authorized_keys" >&2
-fi
+# `claude login` stays logged in across reboots.
 
 # Key-only sshd (matches the Docker node).
 sed -ri 's/^#?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config

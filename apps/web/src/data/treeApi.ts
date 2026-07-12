@@ -22,6 +22,7 @@ import {
   NodeFileWriteResponse as NodeFileWriteResponseSchema,
   NodeFsTreeResponse as NodeFsTreeResponseSchema,
   NodeInfoSchema,
+  NodePreflightResponseSchema,
   NodeMakeDirResponse as NodeMakeDirResponseSchema,
   NodeResponse as NodeResponseSchema,
   ProjectResponse as ProjectResponseSchema,
@@ -43,6 +44,7 @@ import {
   type ListSessionsResponse,
   type Node as FlockNode,
   type NodeInfo,
+  type NodePreflightResponse,
   type NodeFileReadResponse,
   type NodeFileWriteResponse,
   type NodeMakeDirResponse,
@@ -135,6 +137,23 @@ export function getAgentdStatus(): Promise<AgentdHealth> {
 /** GET /api/nodes/:id/info — live host metrics + detected agents for one node. */
 export function getNodeInfo(nodeId: string): Promise<NodeInfo> {
   return apiRequest(`/api/nodes/${nodeId}/info`, { schema: NodeInfoSchema });
+}
+
+/** GET /api/nodes/:id/preflight — read-only node preparation/readiness checks. */
+export function getNodePreflight(nodeId: string): Promise<NodePreflightResponse> {
+  return apiRequest(`/api/nodes/${nodeId}/preflight`, { schema: NodePreflightResponseSchema });
+}
+
+const UpgradeNodeAgentdResponseSchema = z.object({
+  nodeId: z.string().uuid(),
+  upgraded: z.literal(true),
+});
+export function upgradeNodeAgentd(nodeId: string): Promise<{ nodeId: string; upgraded: true }> {
+  return apiRequest(`/api/nodes/${nodeId}/upgrade-agentd`, {
+    method: 'POST',
+    body: JSON.stringify({ confirm: 'UPGRADE' }),
+    schema: UpgradeNodeAgentdResponseSchema,
+  });
 }
 
 // --- nodes ---

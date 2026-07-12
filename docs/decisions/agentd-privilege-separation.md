@@ -44,9 +44,11 @@ in explicitly and emits a security warning; this mode provides no agent isolatio
 - No control credential or control socket descriptor is inherited by the child.
 - SSH host identity must be confirmed during enrollment. Subsequent mismatch fails
   without automatic re-pinning.
-- After enrollment, upgrades travel over the authenticated control protocol. Agentd
-  verifies version, architecture, checksum, and release identity before atomically
-  activating a candidate and retains the prior healthy binary for rollback.
+- Enrollment and binary delivery travel over the pinned SSH connection through the
+  constrained `flock-node-admin` helper. The existing authenticated daemon is queried
+  before rollout; active sessions defer the upgrade. The candidate is architecture-
+  selected, checksum-verified, atomically activated, and must pass the authenticated
+  control handshake or the retained prior binary is restored.
 
 ### Local Docker node
 

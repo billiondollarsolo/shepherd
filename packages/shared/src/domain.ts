@@ -361,5 +361,19 @@ export const NodeInfoSchema = z.object({
       credentialRotations: z.number().int().nonnegative(),
     })
     .optional(),
+  lifecycle: z
+    .object({
+      expectedDaemonVersion: z.string(),
+      upgrade: z
+        .object({
+          status: z.enum(['deferred', 'rolled_back']),
+          installedVersion: z.string(),
+          expectedVersion: z.string(),
+          activeSessions: z.number().int().nonnegative(),
+          message: z.string(),
+        })
+        .nullable(),
+    })
+    .optional(),
 });
 export type NodeInfo = z.infer<typeof NodeInfoSchema>;

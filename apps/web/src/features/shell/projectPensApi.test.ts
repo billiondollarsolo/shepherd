@@ -7,6 +7,7 @@ const pens: ProjectPensV1 = {
   projectId: 'p1',
   activePenId: 'pen-1',
   pens: [{ id: 'pen-1', name: 'Pen 1', layout: singleSessionLayout('p1', 's1') }],
+  independentSessionIds: [],
 };
 
 describe('projectPensApi', () => {

@@ -39,16 +39,18 @@ const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
 if (!compose.includes(`FLOCK_VERSION:-${canonical}`)) {
   throw new Error(`docker-compose.yml does not default to Flock ${canonical}`);
 }
-if (!compose.includes(`flock-session-chrome:${canonical}`)) {
-  throw new Error(`docker-compose.yml does not default session Chrome to ${canonical}`);
+if (!compose.includes(`flock-session-chrome:\${FLOCK_VERSION:-${canonical}}`)) {
+  throw new Error(
+    `docker-compose.yml does not couple session Chrome to FLOCK_VERSION ${canonical}`,
+  );
 }
 
 const envExample = readFileSync(resolve(root, '.env.example'), 'utf8');
 if (!envExample.includes(`FLOCK_VERSION=${canonical}`)) {
   throw new Error(`.env.example does not pin FLOCK_VERSION=${canonical}`);
 }
-if (!envExample.includes(`flock-session-chrome:${canonical}`)) {
-  throw new Error(`.env.example does not pin session Chrome to ${canonical}`);
+if (!envExample.includes('BROWSER_IMAGE=')) {
+  throw new Error('.env.example does not expose the optional BROWSER_IMAGE override');
 }
 
 const changelog = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8');

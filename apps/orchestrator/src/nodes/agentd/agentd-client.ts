@@ -166,6 +166,11 @@ export class NodeAgentdClient {
     this.statusHandler = fn;
   }
 
+  /** Observe the underlying control-link lifecycle without exposing the socket. */
+  onLinkClose(fn: () => void): void {
+    this.sock.on('close', fn);
+  }
+
   /** Mutual nonce/MAC handshake. No plaintext credential crosses the channel. */
   async hello(identity: NodeControlIdentity): Promise<AgentdControl> {
     const clientNonce = controlNonce();

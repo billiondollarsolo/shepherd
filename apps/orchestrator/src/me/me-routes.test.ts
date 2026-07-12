@@ -130,6 +130,7 @@ describe('me routes — built-in presets / durable Pens', () => {
           { id: 'pen-1', name: 'Pen 1', layout: leaf('a') },
           { id: 'pen-2', name: 'Pen 2', layout: leaf('b') },
         ],
+        independentSessionIds: [],
       };
       const put = await f.inject({
         method: 'PUT',

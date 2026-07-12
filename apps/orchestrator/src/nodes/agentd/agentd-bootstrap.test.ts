@@ -82,7 +82,8 @@ describe('AgentdBootstrap secure system service', () => {
     expect(host.execs.some((command) => command.includes('uname'))).toBe(false);
     expect(host.uploads.filter((upload) => upload.mode === 0o700)).toHaveLength(0);
     expect(host.uploads.filter((upload) => upload.mode === 0o600)).toHaveLength(1);
-    expect(host.execs.some((command) => command.includes('systemctl enable'))).toBe(true);
+    expect(host.execs.some((command) => command.includes('install-service'))).toBe(true);
+    expect(host.execs.some((command) => command.includes('flock-node-admin restart'))).toBe(true);
   });
 
   it('leaves a healthy matching daemon and live sessions untouched', async () => {
@@ -96,6 +97,24 @@ describe('AgentdBootstrap secure system service', () => {
     await make().ensureRunning(host, IDENTITY);
     expect(host.uploads).toHaveLength(0);
     expect(host.execs.some((command) => command.includes('systemctl'))).toBe(false);
+  });
+
+  it('migrates an unmanaged service without replacing a matching binary', async () => {
+    const host = new FakeHost([
+      {
+        match: /^\/usr\/local\/lib\/flock-agentd\/flock-agentd version/,
+        result: { stdout: '1.2.3\n' },
+      },
+      { match: /service-status/, result: { code: 1 } },
+      { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
+    ]);
+    host.listening = true;
+    await make().ensureRunning(host, IDENTITY);
+    expect(host.uploads.filter((upload) => upload.mode === 0o700)).toHaveLength(0);
+    expect(host.execs).toContain(
+      "sudo -n /usr/local/sbin/flock-node-admin install-service 'node-test-1234' 48222\n" +
+        'sudo -n /usr/local/sbin/flock-node-admin restart service',
+    );
   });
 
   it('verifies and atomically installs the architecture-matched binary', async () => {
@@ -114,10 +133,9 @@ describe('AgentdBootstrap secure system service', () => {
       remote: '/home/admin/.flock-agentd-binary.new',
     });
     expect(resolveBinary).toHaveBeenCalledWith({ os: 'linux', arch: 'amd64' });
-    const install = host.execs.find((command) => command.includes('sha256sum'));
-    expect(install).toContain('sudo -n install');
-    expect(install).toContain('flock-agentd.previous');
-    expect(install).toContain('install.json');
+    const install = host.execs.find((command) => command.includes('install-binary'));
+    expect(install).toContain('sudo -n /usr/local/sbin/flock-node-admin install-binary');
+    expect(install).toMatch(/[a-f0-9]{64}/);
   });
 
   it('emits stable install lifecycle events without credential material', async () => {
@@ -156,7 +174,7 @@ describe('AgentdBootstrap secure system service', () => {
     expect(credential?.remote).toBe('/home/admin/.flock-agentd-control.new');
     expect(credential?.content).toBe(`${SECRET}\n`);
     expect(host.execs.join('\n')).not.toContain(SECRET);
-    expect(host.execs.join('\n')).toContain('install -o root -g root -m 0400');
+    expect(host.execs.join('\n')).toContain('flock-node-admin install-credential');
   });
 
   it('installs a root service that drops agents to a non-admin runtime user', async () => {
@@ -168,21 +186,11 @@ describe('AgentdBootstrap secure system service', () => {
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
     ]);
     await make().ensureRunning(host, IDENTITY);
-    const service = host.execs.find((command) => command.includes('flock-agentd.service'))!;
-    const decodedUnit = Buffer.from(
-      /printf %s '([^']+)' \| base64 -d/.exec(service)?.[1] ?? '',
-      'base64',
-    ).toString('utf8');
-    expect(service).toContain('useradd --system --create-home');
+    const service = host.execs.find((command) => command.includes('install-service'))!;
+    expect(service).toContain('flock-node-admin install-service');
     expect(service).not.toContain('systemctl --user');
     expect(service).not.toContain('nohup');
-    expect(decodedUnit).toContain('User=root');
-    expect(decodedUnit).toContain('--runtime-user flock-agent');
-    expect(decodedUnit).toContain('--node-id node-test-1234');
-    expect(decodedUnit).toContain("--socket '' --addr 127.0.0.1:48222");
-    expect(decodedUnit).toContain('ProtectSystem=strict');
-    expect(decodedUnit).toContain('CapabilityBoundingSet=');
-    expect(service).toContain('flock-agentd.previous');
+    expect(service).toContain("install-service 'node-test-1234' 48222");
   });
 
   it('rejects unsupported platforms', async () => {
@@ -204,7 +212,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
       { match: /uname/, result: { stdout: 'Linux\nx86_64\n' } },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
-      { match: /sha256sum/, result: { code: 1, stderr: 'checksum mismatch' } },
+      { match: /install-binary/, result: { code: 1, stderr: 'checksum mismatch' } },
     ]);
     await expect(make().ensureRunning(checksumHost, IDENTITY)).rejects.toThrow(
       /remote command failed/,
@@ -216,7 +224,7 @@ describe('AgentdBootstrap secure system service', () => {
         result: { stdout: '1.2.3\n' },
       },
       { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
-      { match: /flock-agentd\.service/, result: { code: 1, stderr: 'sudo denied' } },
+      { match: /install-service/, result: { code: 1, stderr: 'sudo denied' } },
     ]);
     const warn = vi.fn();
     const bootstrap = new AgentdBootstrap({
@@ -229,5 +237,38 @@ describe('AgentdBootstrap secure system service', () => {
       /enrollment failed/,
     );
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('reports rollout state without mutating the host', async () => {
+    const host = new FakeHost([
+      {
+        match: /^\/usr\/local\/lib\/flock-agentd\/flock-agentd version/,
+        result: { stdout: '1.0.0\n' },
+      },
+    ]);
+    host.listening = true;
+    await expect(make().inspect(host)).resolves.toEqual({
+      installedVersion: '1.0.0',
+      expectedVersion: '1.2.3',
+      running: true,
+      servicePrepared: true,
+      binaryUpgradeRequired: true,
+      upgradeRequired: true,
+    });
+    expect(host.uploads).toEqual([]);
+  });
+
+  it('rolls back through the constrained node helper', async () => {
+    const events: string[] = [];
+    const bootstrap = new AgentdBootstrap({
+      version: '1.2.3',
+      port: 48222,
+      binaries,
+      onEvent: (_nodeId, event) => events.push(event),
+    });
+    const host = new FakeHost([]);
+    await bootstrap.rollback(host, IDENTITY.nodeId);
+    expect(host.execs).toContain('sudo -n /usr/local/sbin/flock-node-admin rollback');
+    expect(events).toEqual(['rolled_back']);
   });
 });

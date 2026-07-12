@@ -47,7 +47,7 @@ test('command palette toggles the bottom shell drawer', async ({ page }) => {
   await expect(page.getByTestId('region-drawer')).toHaveCount(0);
 });
 
-test('a direct agent route renders an independent session outside every Pen', async ({ page }) => {
+test('a direct agent route renders an explicitly Independent session', async ({ page }) => {
   const nodeId = '11111111-1111-4111-8111-111111111111';
   const projectId = '22222222-2222-4222-8222-222222222222';
   const sessionId = '33333333-3333-4333-8333-333333333333';
@@ -130,7 +130,13 @@ test('a direct agent route renders an independent session outside every Pen', as
   await page.route(`**/api/projects/${projectId}/pens`, (route) =>
     route.fulfill(
       json({
-        pens: { version: 1, projectId, activePenId: 'pen-1', pens: [] },
+        pens: {
+          version: 1,
+          projectId,
+          activePenId: 'pen-1',
+          pens: [],
+          independentSessionIds: [sessionId],
+        },
         revision: 1,
       }),
     ),

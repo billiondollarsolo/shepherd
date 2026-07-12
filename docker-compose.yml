@@ -148,7 +148,7 @@ services:
       # user's screencast browser pane. MUST be the matching Flock
       # session-chrome release image; it bridges CDP to the published port
       # (plain Chrome binds the debugger to loopback only).
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-session-chrome:${FLOCK_VERSION:-0.3.0}}
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
       BROWSER_WORKER_URL: http://browser-worker:8090
       BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
@@ -200,7 +200,7 @@ services:
       NODE_ENV: production
       BROWSER_WORKER_PORT: 8090
       BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-session-chrome:${FLOCK_VERSION:-0.3.0}}
       BROWSER_NETWORK: flock_internal
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
       BROWSER_MEMORY_BYTES: ${BROWSER_MEMORY_BYTES:-1073741824}

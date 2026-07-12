@@ -13,6 +13,9 @@ export const ProjectPensV1Schema = z.object({
   projectId: z.string().min(1),
   activePenId: z.string().min(1),
   pens: z.array(ProjectPenV1Schema),
+  /** Open sessions deliberately left outside every Pen. The default upgrades
+   * older v1 documents without inventing a compatibility branch. */
+  independentSessionIds: z.array(z.string().min(1)).default([]),
 });
 export type ProjectPensV1 = z.infer<typeof ProjectPensV1Schema>;
 

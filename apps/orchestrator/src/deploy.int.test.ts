@@ -30,6 +30,8 @@ const browserWorkerEntrypoint = resolve(repoRoot, 'docker', 'browser-worker-entr
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
 const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
+const nodePrepare = resolve(repoRoot, 'scripts', 'flock-node-prepare.sh');
+const upgradeScript = resolve(repoRoot, 'scripts', 'flock-upgrade.sh');
 
 function read(path: string): string {
   return readFileSync(path, 'utf8');
@@ -250,11 +252,12 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).not.toMatch(/WARN: (codex|opencode) install skipped/);
   });
 
-  it('installs latest Claude Code at first start without redistributing its binary', () => {
+  it('checks latest Claude Code on every start without redistributing its binary', () => {
     const entry = read(orchEntrypoint);
     expect(orch).not.toMatch(/RUN[\s\S]*claude\.ai\/install\.sh/);
     expect(entry).toMatch(/claude\.ai\/install\.sh[\s\S]*bash -s -- latest/);
     expect(entry).toMatch(/FLOCK_INSTALL_CLAUDE_CODE:-1/);
+    expect(entry).not.toMatch(/! -x "\$CLAUDE_BIN"/);
   });
 
   it('runs migrations before starting the server (via the entrypoint, T10)', () => {
@@ -282,6 +285,30 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/for arch in amd64 arm64/);
     expect(orch).toMatch(/flock-agentd-linux-\$arch/);
     expect(orch).toMatch(/\/app\/agentd\/dist/);
+  });
+});
+
+describe('production node and stack lifecycle', () => {
+  it('ships an idempotent privilege-separated node preparation path', () => {
+    const script = read(nodePrepare);
+    expect(script).toMatch(/flock-control/);
+    expect(script).toMatch(/flock-agent/);
+    expect(script).toMatch(/flock-node-admin/);
+    expect(script).toMatch(/NOPASSWD: %s/);
+    expect(script).not.toMatch(/NOPASSWD:\s*ALL/);
+    expect(script).toMatch(/check-workspace/);
+    expect(script).toMatch(/agent-version/);
+    expect(script).toMatch(/mv -f "\$SYSTEM_BIN\.candidate" "\$SYSTEM_BIN"/);
+  });
+
+  it('ships a backup-gated version-coupled stack upgrade command', () => {
+    const script = read(upgradeScript);
+    expect(script).toMatch(/vault create/);
+    expect(script).toMatch(/vault verify/);
+    expect(script).toMatch(/FLOCK_VERSION/);
+    expect(script).toMatch(/BROWSER_IMAGE=/);
+    expect(script).toMatch(/\/ready/);
+    expect(script).not.toMatch(/docker compose down -v/);
   });
 });
 

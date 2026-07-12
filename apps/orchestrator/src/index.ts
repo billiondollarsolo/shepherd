@@ -13,9 +13,9 @@ import { AuditQueryService, DrizzleAuditReadStore } from './audit/index.js';
 import { AuditLogger } from './audit/index.js';
 import { getDb, closeDb } from './db/index.js';
 import { SecretStore } from './secrets/index.js';
-import { NodeService, NodeFsService } from './nodes/index.js';
+import { NodeService, NodeFsService, preflightRemoteNode } from './nodes/index.js';
 import { NodeWorkspaceService } from './nodes/node-workspace-service.js';
-import { AgentdConnections } from './nodes/agentd/agentd-connections.js';
+import { AgentdActiveSessionsError, AgentdConnections } from './nodes/agentd/agentd-connections.js';
 import { AgentdPtyTransport } from './nodes/agentd/agentd-pty-transport.js';
 import { AgentdBootstrap } from './nodes/agentd/agentd-bootstrap.js';
 import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js';
@@ -23,6 +23,7 @@ import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
 import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.js';
 import { registerNodeCredentialRotationRoute } from './nodes/agentd/credential-rotation-route.js';
+import { registerNodeAgentdUpgradeRoute } from './nodes/agentd/agentd-upgrade-route.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest } from '@flock/shared';
 import { forgetPlan, planEventFields } from './hooks/plan.js';
@@ -282,8 +283,9 @@ export async function main(): Promise<void> {
   // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
   // as a root-owned system service, then drops sessions to flock-agent.
   const agentdPort = Number(process.env.FLOCK_AGENTD_PORT || 48222);
+  const expectedAgentdVersion = resolveAgentdVersion();
   const agentdBootstrap = new AgentdBootstrap({
-    version: resolveAgentdVersion(),
+    version: expectedAgentdVersion,
     port: agentdPort,
     binaries: new FsAgentdBinaryProvider(
       process.env.FLOCK_AGENTD_DIST_DIR || path.resolve(process.cwd(), '../../agentd/dist'),
@@ -479,11 +481,72 @@ export async function main(): Promise<void> {
     const client = await agentdClientForNode(node.id, node.kind);
     if (!client) return null;
     try {
-      return await client.nodeInfo();
+      const info = (await client.nodeInfo()) as Record<string, unknown>;
+      return {
+        ...info,
+        lifecycle: {
+          expectedDaemonVersion: expectedAgentdVersion,
+          upgrade: agentdConns.upgradeFor(nodeId),
+        },
+      };
     } catch {
       diagnostics.increment('agentd.node_info_failures');
       return null;
     }
+  };
+
+  const nodePreflight = async (nodeId: string): Promise<unknown | null> => {
+    const node = await nodes.getNode(nodeId);
+    if (!node) return null;
+    if (node.kind === 'local') {
+      const info = (await nodeInfo(nodeId)) as {
+        agents?: Array<{ name: string }>;
+        control?: { daemonVersion?: string };
+      } | null;
+      if (!info) return null;
+      const agents = info.agents ?? [];
+      const checks = [
+        {
+          id: 'preparation',
+          label: 'Flock node preparation',
+          status: 'pass',
+          detail: 'Local identities and permissions are managed by the Flock image.',
+        },
+        {
+          id: 'daemon-version',
+          label: 'Node daemon',
+          status: info.control?.daemonVersion === expectedAgentdVersion ? 'pass' : 'fail',
+          detail: `Expected flock-agentd ${expectedAgentdVersion}; running ${info.control?.daemonVersion ?? 'unknown'}.`,
+        },
+        {
+          id: 'agent:any',
+          label: 'Launchable coding agent',
+          status: agents.length > 0 ? 'pass' : 'fail',
+          detail:
+            agents.length > 0
+              ? `Detected ${agents.map((agent) => agent.name).join(', ')}.`
+              : 'No supported coding-agent CLI was detected.',
+        },
+      ] as const;
+      return {
+        nodeId,
+        generatedAt: new Date().toISOString(),
+        ready: checks.every((item) => item.status !== 'fail'),
+        checks,
+      };
+    }
+    const connected = await connections.waitForConnected(nodeId, 8_000);
+    if (!connected) return null;
+    const [host, nodeProjects] = await Promise.all([
+      connections.agentdHostFor(nodeId),
+      projects.listProjects(nodeId),
+    ]);
+    return preflightRemoteNode({
+      nodeId,
+      host,
+      expectedAgentdVersion,
+      workspaces: nodeProjects.map((project) => project.workingDir),
+    });
   };
 
   // Whether a node can enforce the Landlock sandbox (T17). Static per node, so the
@@ -1056,6 +1119,7 @@ export async function main(): Promise<void> {
       }
     },
     nodeInfo: useAgentd ? nodeInfo : undefined,
+    nodePreflight: useAgentd ? nodePreflight : undefined,
     // Kill a split-pane shell on the daemon when the user closes the pane, then
     // drop the orchestrator's PtySession so a re-split builds a FRESH shell
     // (otherwise the daemon shell lingers and re-attaches with stale scrollback).
@@ -1092,6 +1156,39 @@ export async function main(): Promise<void> {
         detail: { mode: 'secure' },
       });
       return 'rotated';
+    },
+  });
+
+  registerNodeAgentdUpgradeRoute(app, {
+    auth,
+    upgrade: async (nodeId, context) => {
+      const node = await nodes.getNode(nodeId);
+      if (!node) return { status: 'not_found' };
+      if (node.kind !== 'ssh') return { status: 'not_remote' };
+      if (!(await connections.waitForConnected(nodeId, 8_000))) {
+        return { status: 'unavailable' };
+      }
+      try {
+        const host = await connections.agentdHostFor(nodeId);
+        await agentdConns.clientForRemote(nodeId, host, agentdBootstrap, {
+          forceUpgrade: true,
+        });
+      } catch (error) {
+        if (error instanceof AgentdActiveSessionsError) {
+          return { status: 'active_sessions', count: error.count };
+        }
+        recordFailure('agentd', 'forced-upgrade', error, { nodeId });
+        return { status: 'unavailable' };
+      }
+      await auditLogger.record({
+        action: 'node_control_event',
+        userId: context.userId,
+        targetType: 'node',
+        targetId: nodeId,
+        ip: context.ip,
+        detail: { event: 'upgrade_requested', expectedVersion: expectedAgentdVersion },
+      });
+      return { status: 'upgraded' };
     },
   });
 

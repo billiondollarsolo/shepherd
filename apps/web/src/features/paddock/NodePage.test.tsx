@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '../../components/ui';
@@ -12,6 +12,7 @@ let mockFailure:
     }
   | undefined;
 let withInfo = true;
+let upgradeAvailable = false;
 
 vi.mock('../../data/queries', () => ({
   useNodes: () => ({
@@ -19,7 +20,7 @@ vi.mock('../../data/queries', () => ({
       {
         id: 'node-1',
         name: 'workstation',
-        kind: 'local',
+        kind: upgradeAvailable ? 'ssh' : 'local',
         connectionStatus: 'connected',
         createdAt: '2026-07-01T00:00:00.000Z',
       },
@@ -28,6 +29,22 @@ vi.mock('../../data/queries', () => ({
   useProjects: () => ({ data: [] }),
   useSessions: () => ({ data: [] }),
   useFleetGit: () => new Map(),
+  useNodePreflight: () => ({
+    data: {
+      nodeId: '11111111-1111-4111-8111-111111111111',
+      generatedAt: '2026-07-12T00:00:00.000Z',
+      ready: !upgradeAvailable,
+      checks: [
+        {
+          id: 'preparation',
+          label: 'Flock node preparation',
+          status: upgradeAvailable ? 'fail' : 'pass',
+          detail: upgradeAvailable ? 'Managed service migration required.' : 'Prepared.',
+        },
+      ],
+    },
+  }),
+  useUpgradeNodeAgentd: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useNodeInfo: () => ({
     data: withInfo
       ? {
@@ -81,6 +98,7 @@ describe('NodePage control diagnostics', () => {
   beforeEach(() => {
     withInfo = true;
     mockFailure = undefined;
+    upgradeAvailable = false;
     usePaddock.setState({ nodeInfoNodeId: 'node-1' });
   });
 
@@ -116,5 +134,17 @@ describe('NodePage control diagnostics', () => {
       screen.getByText('The daemon rejected the node control credential.'),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('secret');
+  });
+
+  it('confirms a daemon migration instead of running it from a single click', () => {
+    upgradeAvailable = true;
+    render(
+      <TooltipProvider>
+        <NodePage />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade daemon…' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Upgrade node daemon?');
+    expect(screen.getByRole('button', { name: 'Upgrade daemon' })).toBeInTheDocument();
   });
 });

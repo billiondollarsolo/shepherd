@@ -22,6 +22,21 @@ export interface AgentdConnectionFailure {
   at: string;
 }
 
+export interface AgentdUpgradeState {
+  status: 'deferred' | 'rolled_back';
+  installedVersion: string;
+  expectedVersion: string;
+  activeSessions: number;
+  message: string;
+}
+
+export class AgentdActiveSessionsError extends Error {
+  constructor(readonly count: number) {
+    super(`agentd upgrade requires ${count} active session(s) to finish`);
+    this.name = 'AgentdActiveSessionsError';
+  }
+}
+
 const FAILURE_MESSAGES: Record<AgentdFailureCode, string> = {
   network: 'The daemon control channel is unreachable.',
   authentication: 'The daemon rejected the node control credential.',
@@ -76,6 +91,7 @@ export class AgentdConnections {
   private readonly remotes = new Map<string, NodeAgentdClient>();
   private readonly remotePending = new Map<string, Promise<NodeAgentdClient>>();
   private readonly failures = new Map<string, AgentdConnectionFailure>();
+  private readonly upgrades = new Map<string, AgentdUpgradeState>();
   private readonly connectedNodes = new Set<string>();
 
   constructor(private readonly deps: AgentdConnectionsDeps) {}
@@ -98,6 +114,11 @@ export class AgentdConnections {
   /** Last redacted failure for a node, cleared after a successful authenticated link. */
   failureFor(nodeId: string): AgentdConnectionFailure | null {
     return this.failures.get(nodeId) ?? null;
+  }
+
+  /** Pending/failed-safe rollout state for operator-facing node readiness. */
+  upgradeFor(nodeId: string): AgentdUpgradeState | null {
+    return this.upgrades.get(nodeId) ?? null;
   }
 
   private recordFailure(nodeId: string, error: unknown): void {
@@ -211,33 +232,108 @@ export class AgentdConnections {
     nodeId: string,
     host: AgentdHost,
     bootstrap: AgentdBootstrap,
+    options: { forceUpgrade?: boolean } = {},
   ): Promise<NodeAgentdClient> {
     const existing = this.remotes.get(nodeId);
-    if (existing) return existing;
+    if (existing) {
+      if (options.forceUpgrade) {
+        const active = await existing.list();
+        if (active.length > 0) throw new AgentdActiveSessionsError(active.length);
+        existing.dispose();
+        this.remotes.delete(nodeId);
+        this.upgrades.delete(nodeId);
+      } else {
+        const pending = this.upgrades.get(nodeId);
+        if (pending?.status !== 'deferred') return existing;
+        const active = await existing.list().catch(() => null);
+        if (active === null || active.length > 0) {
+          if (active) pending.activeSessions = active.length;
+          return existing;
+        }
+        // The final session drained. Drop the old connection so this call performs
+        // the deferred rollout before another session can be launched.
+        existing.dispose();
+        this.remotes.delete(nodeId);
+      }
+    }
     const pending = this.remotePending.get(nodeId);
     if (pending) return pending;
     const p = (async () => {
       try {
         const identity = await this.deps.identityFor(nodeId, 'ssh');
-        const endpoint = await bootstrap.ensureRunning(host, identity);
-        const channel = await host.forwardOut(endpoint.host, endpoint.port);
-        const client = new NodeAgentdClient(channel);
-        if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
-        try {
-          await client.hello(identity);
-        } catch (err) {
-          // T23: a failed handshake otherwise leaks the channel + frame decoder.
-          client.dispose();
-          channel.destroy();
-          throw err;
-        }
-        channel.on('close', () => {
-          if (this.remotes.get(nodeId) === client) {
-            this.remotes.delete(nodeId);
-            this.recordFailure(nodeId, new Error('agentd connection closed'));
+        const before = await bootstrap.inspect(host, identity.nodeId);
+        const connect = async (): Promise<NodeAgentdClient> => {
+          const endpoint = bootstrap.endpoint();
+          const channel = await host.forwardOut(endpoint.host, endpoint.port);
+          const client = new NodeAgentdClient(channel);
+          if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
+          try {
+            await client.hello(identity);
+            return client;
+          } catch (error) {
+            client.dispose();
+            channel.destroy();
+            throw error;
           }
-        });
-        this.remotes.set(nodeId, client);
+        };
+
+        if (before.upgradeRequired && before.running && !options.forceUpgrade) {
+          // Always ask the authenticated old daemon before replacing it. If it
+          // has sessions, keep using it and expose a pending rollout. A protocol
+          // mismatch fails closed: Flock will not kill sessions it cannot count.
+          const current = await connect();
+          const active = await current.list();
+          if (active.length > 0) {
+            this.upgrades.set(nodeId, {
+              status: 'deferred',
+              installedVersion: before.installedVersion,
+              expectedVersion: before.expectedVersion,
+              activeSessions: active.length,
+              message: 'Node daemon rollout deferred until active sessions finish.',
+            });
+            this.cacheRemote(nodeId, current);
+            this.connected(nodeId);
+            return current;
+          }
+          current.dispose();
+        }
+
+        let client: NodeAgentdClient;
+        try {
+          const endpoint = await bootstrap.ensureRunning(host, identity);
+          const channel = await host.forwardOut(endpoint.host, endpoint.port);
+          const candidate = new NodeAgentdClient(channel);
+          if (this.deps.onStatus) candidate.onStatus(this.deps.onStatus);
+          try {
+            const hello = await candidate.hello(identity);
+            if (before.upgradeRequired && hello.daemonVersion !== before.expectedVersion) {
+              throw new Error(
+                `agentd candidate reported version ${hello.daemonVersion ?? 'unknown'}; expected ${before.expectedVersion}`,
+              );
+            }
+            client = candidate;
+            this.upgrades.delete(nodeId);
+          } catch (error) {
+            candidate.dispose();
+            channel.destroy();
+            throw error;
+          }
+        } catch (error) {
+          if (!before.binaryUpgradeRequired || !before.installedVersion) throw error;
+          // systemd-active is not enough: a candidate must complete the real
+          // authenticated protocol handshake. Restore the known previous binary
+          // and return its healthy client when that validation fails.
+          await bootstrap.rollback(host, nodeId);
+          client = await connect();
+          this.upgrades.set(nodeId, {
+            status: 'rolled_back',
+            installedVersion: before.installedVersion,
+            expectedVersion: before.expectedVersion,
+            activeSessions: 0,
+            message: 'Daemon candidate failed authenticated health validation and was rolled back.',
+          });
+        }
+        this.cacheRemote(nodeId, client);
         this.connected(nodeId);
         return client;
       } catch (error) {
@@ -251,5 +347,15 @@ export class AgentdConnections {
     } finally {
       this.remotePending.delete(nodeId);
     }
+  }
+
+  private cacheRemote(nodeId: string, client: NodeAgentdClient): void {
+    client.onLinkClose(() => {
+      if (this.remotes.get(nodeId) === client) {
+        this.remotes.delete(nodeId);
+        this.recordFailure(nodeId, new Error('agentd connection closed'));
+      }
+    });
+    this.remotes.set(nodeId, client);
   }
 }

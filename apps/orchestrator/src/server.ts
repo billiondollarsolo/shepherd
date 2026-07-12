@@ -115,6 +115,8 @@ export interface BuildServerDeps {
    * bottom status bar). Returns null when the node's daemon link is down.
    */
   nodeInfo?: (nodeId: string) => Promise<unknown | null>;
+  /** Read-only preparation/workspace/tool readiness for one execution node. */
+  nodePreflight?: (nodeId: string) => Promise<unknown | null>;
   /**
    * Terminate a single split-pane PTY by its id (`<sessionId>:shell[-N]`). When
    * provided, `DELETE /api/pty/:id` kills that throwaway shell on the daemon so
@@ -422,6 +424,20 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
           .send({ error: { code: 'node_unreachable', message: 'node daemon link is down.' } });
       }
       return reply.code(200).send(info);
+    });
+  }
+
+  if (deps.nodePreflight) {
+    const nodePreflight = deps.nodePreflight;
+    app.get('/api/nodes/:id/preflight', async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      const result = await nodePreflight(id);
+      if (result == null) {
+        return reply
+          .code(503)
+          .send({ error: { code: 'node_unreachable', message: 'node preflight unavailable.' } });
+      }
+      return reply.code(200).send(result);
     });
   }
 

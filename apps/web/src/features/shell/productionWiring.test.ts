@@ -28,13 +28,15 @@ describe('production wiring (herdr-aligned shell)', () => {
 
   it('StageLayout uses durable Pens + ProjectLayoutView + prune/reconcile', () => {
     const src = read('features/shell/StageLayout.tsx');
+    const placement = read('features/shell/penPlacement.ts');
     expect(src).toMatch(/fetchProjectPens/);
     expect(src).not.toMatch(/fetchProjectLayout/);
     expect(src).toMatch(/putProjectPens/);
     expect(src).toMatch(/ProjectLayoutView/);
-    expect(src).toMatch(/reconcileProjectLayout|afterTerminateLayout/);
+    expect(src).toMatch(/reconcilePens/);
+    expect(placement).toMatch(/reconcileProjectLayout/);
     expect(src).toMatch(/applySelectionZoom/);
-    expect(src).toMatch(/onArrangeMode|rearrangeProjectLayout/);
+    expect(`${src}\n${placement}`).toMatch(/onArrangeMode|rearrangeProjectLayout/);
   });
 
   it('ProjectLayoutView exposes arrange row/col/2x2 controls', () => {

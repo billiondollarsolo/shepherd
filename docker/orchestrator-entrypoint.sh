@@ -51,16 +51,20 @@ fi
 chown root:"$CONTROL_GROUP" "$NODE_ID_FILE"
 chmod 0640 "$NODE_ID_FILE"
 
-# Claude Code is commercially licensed rather than open source. Install its
-# latest release from Anthropic on first container start instead of
-# redistributing the binary inside Flock's public image. A transient installer
-# outage must not prevent the orchestrator, terminal, Codex, or OpenCode from
-# starting; a later container restart retries automatically.
+# Claude Code is commercially licensed rather than open source. Ask the official
+# installer for the latest release on every container start: the runtime home is
+# persistent, so an "install only when missing" check would silently pin an old
+# release across Flock upgrades. A transient outage never blocks Flock; an
+# existing binary remains usable and the next restart retries.
 CLAUDE_BIN="$RUNTIME_HOME/.local/bin/claude"
-if [ "${FLOCK_INSTALL_CLAUDE_CODE:-1}" != "0" ] && [ ! -x "$CLAUDE_BIN" ]; then
-  echo "[entrypoint] installing latest Claude Code for the local node"
+if [ "${FLOCK_INSTALL_CLAUDE_CODE:-1}" != "0" ]; then
+  echo "[entrypoint] ensuring latest Claude Code for the local node"
   if ! gosu "$RUNTIME_USER" env HOME="$RUNTIME_HOME" sh -lc 'curl -fsSL https://claude.ai/install.sh | bash -s -- latest'; then
-    echo "[entrypoint] WARN: Claude Code installation failed; retry on restart or install it manually" >&2
+    if [ -x "$CLAUDE_BIN" ]; then
+      echo "[entrypoint] WARN: Claude Code update failed; keeping the installed version" >&2
+    else
+      echo "[entrypoint] WARN: Claude Code installation failed; retry on restart or install it manually" >&2
+    fi
   fi
 fi
 
