@@ -1,6 +1,10 @@
-import type { NodePreflightCheck, NodePreflightResponse } from '@flock/shared';
+import type { AgentdCompatibility, NodePreflightCheck, NodePreflightResponse } from '@flock/shared';
 
 import type { AgentdHost } from './agentd/ssh-agentd-host.js';
+import {
+  evaluateAgentdCompatibility,
+  type ResolvedAgentdCompatibilityPolicy,
+} from './agentd/agentd-compatibility.js';
 
 const ADMIN_HELPER = '/usr/local/sbin/flock-node-admin';
 const SYSTEM_BIN = '/usr/local/lib/flock-agentd/flock-agentd';
@@ -9,7 +13,8 @@ const SUPPORTED_AGENTS = ['claude', 'codex', 'opencode', 'gemini', 'grok'] as co
 export interface RemoteNodePreflightInput {
   nodeId: string;
   host: AgentdHost;
-  expectedAgentdVersion: string;
+  compatibilityPolicy: ResolvedAgentdCompatibilityPolicy;
+  authenticatedCompatibility?: AgentdCompatibility | null;
   workspaces: readonly string[];
 }
 
@@ -95,20 +100,22 @@ export async function preflightRemoteNode(
   );
 
   const installedVersion = installed.code === 0 ? installed.stdout.trim() : '';
+  const daemonCompatibility =
+    input.authenticatedCompatibility ??
+    evaluateAgentdCompatibility(input.compatibilityPolicy, {
+      installedVersion,
+      servicePrepared: prepared.code === 0,
+    });
   checks.push(
     check(
       'daemon-version',
       'Node daemon',
-      !installedVersion
-        ? 'warning'
-        : installedVersion === input.expectedAgentdVersion
-          ? 'pass'
-          : 'warning',
-      !installedVersion
-        ? `Not installed yet; Flock will install ${input.expectedAgentdVersion}.`
-        : installedVersion === input.expectedAgentdVersion
-          ? `flock-agentd ${installedVersion}`
-          : `Upgrade pending: ${installedVersion} → ${input.expectedAgentdVersion}.`,
+      daemonCompatibility.state === 'compatible'
+        ? 'pass'
+        : daemonCompatibility.state === 'recommended'
+          ? 'warning'
+          : 'fail',
+      daemonCompatibility.detail,
     ),
   );
 
@@ -171,6 +178,7 @@ export async function preflightRemoteNode(
     nodeId: input.nodeId,
     generatedAt: new Date().toISOString(),
     ready: checks.every((item) => item.status !== 'fail'),
+    daemonCompatibility,
     checks,
   };
 }

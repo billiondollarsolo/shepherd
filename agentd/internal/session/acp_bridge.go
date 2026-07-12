@@ -3,8 +3,8 @@ package session
 import (
 	"encoding/json"
 
-	"flock-agentd/internal/acp"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/acp"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 // acp_bridge wires the ACP structured transport (internal/acp, roadmap F6) into

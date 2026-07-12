@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 // hookOwnedAgentNames are CLIs whose live status is owned by Flock hooks

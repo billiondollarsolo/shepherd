@@ -374,14 +374,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
+          module_tag="agentd/$TAG"
+          if git ls-remote --exit-code --tags origin "refs/tags/$module_tag" >/dev/null 2>&1; then
+            git fetch --tags origin "refs/tags/$module_tag:refs/tags/$module_tag"
+            test "$(git rev-list -n 1 "$module_tag")" = "$GITHUB_SHA"
+          else
+            git tag "$module_tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$module_tag"
+          fi
           prerelease=''
           if printf '%s' "$TAG" | grep -q -- '-'; then prerelease='--prerelease'; fi
           # shellcheck disable=SC2086
           {
             printf '## Tested coding-agent versions\n\n```text\n'
             cat release-smoke/agent-versions.txt
-            printf '```\n\nClaude Code is installed from the latest channel at first start and its exact running version is shown in Settings → Operations.\n'
+            printf '```\n\nClaude Code is installed from the latest channel at first start and its exact running version is shown in Settings → Operations.\n\n'
+            printf '## Node daemon compatibility\n\n```json\n'
+            cat agentd/COMPATIBILITY.json
+            printf '```\n\nNodes report whether this policy makes their daemon compatible, recommended to upgrade, or required to upgrade.\n'
           } > release-tool-versions.md
           # shellcheck disable=SC2086
           gh release create "$TAG" --verify-tag --generate-notes --notes-file release-tool-versions.md --title "Flock ${TAG#v}" $prerelease
-          gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt
+          cp agentd/COMPATIBILITY.json agentd-compatibility.json
+          gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt agentd-compatibility.json

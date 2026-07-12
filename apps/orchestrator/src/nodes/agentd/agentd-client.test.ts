@@ -112,9 +112,9 @@ describe('NodeAgentdClient v2 handshake', () => {
       }
     });
     await expect(client.hello(identity)).resolves.toMatchObject({
-      op: 'helloOk',
-      nodeId: identity.nodeId,
       daemonVersion,
+      protocolVersion: AGENTD_PROTOCOL_VERSION,
+      capabilities,
     });
     await expect(
       client.rotateCredential('new-credential-value-0123456789abcdef'),

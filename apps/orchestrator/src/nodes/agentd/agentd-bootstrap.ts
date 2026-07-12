@@ -9,8 +9,14 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { AgentdCompatibility } from '@flock/shared';
+
 import type { AgentdHost } from './ssh-agentd-host.js';
 import type { NodeControlIdentity } from './node-control-credentials.js';
+import {
+  evaluateAgentdCompatibility,
+  type ResolvedAgentdCompatibilityPolicy,
+} from './agentd-compatibility.js';
 
 export interface AgentdPlatform {
   os: string;
@@ -23,6 +29,7 @@ export interface AgentdBinaryProvider {
 
 export interface AgentdBootstrapConfig {
   version: string;
+  compatibilityPolicy?: ResolvedAgentdCompatibilityPolicy;
   port: number;
   binaries: AgentdBinaryProvider;
   logger?: { warn(msg: string): void };
@@ -44,6 +51,7 @@ export interface AgentdInstallState {
   servicePrepared: boolean;
   binaryUpgradeRequired: boolean;
   upgradeRequired: boolean;
+  compatibility: AgentdCompatibility;
 }
 
 const SYSTEM_BIN = '/usr/local/lib/flock-agentd/flock-agentd';
@@ -51,6 +59,7 @@ const ADMIN_HELPER = '/usr/local/sbin/flock-node-admin';
 
 export class AgentdBootstrap {
   private readonly version: string;
+  private readonly compatibilityPolicy: ResolvedAgentdCompatibilityPolicy;
   private readonly port: number;
   private readonly binaries: AgentdBinaryProvider;
   private readonly logger: { warn(msg: string): void };
@@ -58,6 +67,15 @@ export class AgentdBootstrap {
 
   constructor(cfg: AgentdBootstrapConfig) {
     this.version = cfg.version;
+    this.compatibilityPolicy = cfg.compatibilityPolicy ?? {
+      schemaVersion: 1,
+      preferredDaemonVersion: cfg.version,
+      minimumDaemonVersion: cfg.version,
+      preferredProtocolVersion: 2,
+      supportedProtocolVersions: [2],
+      requiredCapabilities: ['pty'],
+      supportWindow: { minorReleases: 1, minimumDays: 90 },
+    };
     this.port = cfg.port;
     this.binaries = cfg.binaries;
     this.logger = cfg.logger ?? {
@@ -69,7 +87,11 @@ export class AgentdBootstrap {
     this.onEvent = cfg.onEvent;
   }
 
-  async ensureRunning(host: AgentdHost, identity: NodeControlIdentity): Promise<AgentdEndpoint> {
+  async ensureRunning(
+    host: AgentdHost,
+    identity: NodeControlIdentity,
+    options: { forceBinaryReplacement?: boolean } = {},
+  ): Promise<AgentdEndpoint> {
     if (identity.credential.length < 32) {
       throw new Error('agentd: a per-node credential of at least 32 characters is required');
     }
@@ -77,7 +99,12 @@ export class AgentdBootstrap {
       this.installedVersion(host),
       this.servicePrepared(host, identity.nodeId),
     ]);
-    const binaryUpgradeRequired = installed !== this.version;
+    const compatibility = evaluateAgentdCompatibility(this.compatibilityPolicy, {
+      installedVersion: installed,
+      servicePrepared,
+    });
+    const binaryUpgradeRequired =
+      compatibility.binaryReplacement || options.forceBinaryReplacement === true;
     if (binaryUpgradeRequired) {
       const platform = await this.detectPlatform(host);
       const local = await this.binaries.resolve(platform);
@@ -100,19 +127,31 @@ export class AgentdBootstrap {
       this.isListening(host),
       nodeId ? this.servicePrepared(host, nodeId) : Promise.resolve(true),
     ]);
-    const binaryUpgradeRequired = installedVersion !== this.version;
+    const compatibility = evaluateAgentdCompatibility(this.compatibilityPolicy, {
+      installedVersion,
+      servicePrepared,
+    });
     return {
       installedVersion,
       expectedVersion: this.version,
       running,
       servicePrepared,
-      binaryUpgradeRequired,
-      upgradeRequired: binaryUpgradeRequired || !servicePrepared,
+      binaryUpgradeRequired: compatibility.binaryReplacement,
+      upgradeRequired: compatibility.binaryReplacement || !servicePrepared,
+      compatibility,
     };
   }
 
   endpoint(): AgentdEndpoint {
     return { host: '127.0.0.1', port: this.port };
+  }
+
+  policy(): ResolvedAgentdCompatibilityPolicy {
+    return {
+      ...this.compatibilityPolicy,
+      supportedProtocolVersions: [...this.compatibilityPolicy.supportedProtocolVersions],
+      requiredCapabilities: [...this.compatibilityPolicy.requiredCapabilities],
+    };
   }
 
   /** Restore the retained daemon and re-activate it after post-start validation fails. */

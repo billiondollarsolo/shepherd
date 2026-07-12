@@ -54,6 +54,12 @@ export interface AgentdSubscription {
   close(): void;
 }
 
+export interface AuthenticatedAgentdIdentity {
+  daemonVersion: string;
+  protocolVersion: number;
+  capabilities: string[];
+}
+
 interface ControlWaiter {
   match: (c: AgentdControl) => boolean;
   resolve: (c: AgentdControl) => void;
@@ -70,6 +76,8 @@ export class NodeAgentdClient {
   private readonly waiters: ControlWaiter[] = [];
   private statusHandler?: (id: string, state: string, meta: AgentdStatusMeta) => void;
   private closed = false;
+  private authenticatedIdentity: AuthenticatedAgentdIdentity | null = null;
+  private openBlockedReason: string | null = null;
 
   constructor(private readonly sock: Duplex) {
     sock.on('data', (chunk: Buffer) => this.onChunk(chunk));
@@ -172,12 +180,15 @@ export class NodeAgentdClient {
   }
 
   /** Mutual nonce/MAC handshake. No plaintext credential crosses the channel. */
-  async hello(identity: NodeControlIdentity): Promise<AgentdControl> {
+  async hello(
+    identity: NodeControlIdentity,
+    protocolVersion = AGENTD_PROTOCOL_VERSION,
+  ): Promise<AuthenticatedAgentdIdentity> {
     const clientNonce = controlNonce();
     const credentialId = controlCredentialId(identity.credential);
     this.send({
       op: 'hello',
-      protocolVersion: AGENTD_PROTOCOL_VERSION,
+      protocolVersion,
       nodeId: identity.nodeId,
       clientNonce,
       credentialId,
@@ -191,7 +202,7 @@ export class NodeAgentdClient {
     }
     const capabilities = challenge.capabilities ?? [];
     if (
-      challenge.protocolVersion !== AGENTD_PROTOCOL_VERSION ||
+      challenge.protocolVersion !== protocolVersion ||
       challenge.nodeId !== identity.nodeId ||
       challenge.credentialId !== credentialId ||
       challenge.clientNonce !== clientNonce ||
@@ -232,13 +243,29 @@ export class NodeAgentdClient {
     const ok = await this.await((c) => c.op === 'helloOk' || c.op === 'error');
     if (ok.op === 'error') throw new Error(`agentd authentication failed: ${ok.message}`);
     if (
-      ok.protocolVersion !== AGENTD_PROTOCOL_VERSION ||
+      ok.protocolVersion !== protocolVersion ||
       ok.nodeId !== identity.nodeId ||
-      ok.daemonVersion !== challenge.daemonVersion
+      ok.daemonVersion !== challenge.daemonVersion ||
+      JSON.stringify(ok.capabilities ?? []) !== JSON.stringify(capabilities)
     ) {
       throw new Error('agentd authenticated identity changed during handshake');
     }
-    return ok;
+    this.authenticatedIdentity = {
+      daemonVersion: challenge.daemonVersion,
+      protocolVersion,
+      capabilities: [...capabilities],
+    };
+    return this.authenticatedIdentity;
+  }
+
+  /** Authenticated daemon facts; null until mutual authentication completes. */
+  identity(): AuthenticatedAgentdIdentity | null {
+    return this.authenticatedIdentity ? { ...this.authenticatedIdentity } : null;
+  }
+
+  /** Keep existing sessions attachable while preventing work on a mandatory-old daemon. */
+  blockNewSessions(reason: string | null): void {
+    this.openBlockedReason = reason;
   }
 
   /** Rotate this node's key over an already authenticated control connection. */
@@ -258,6 +285,7 @@ export class NodeAgentdClient {
 
   /** Open (or re-attach to) a session. Idempotent on the daemon side. */
   async open(spec: AgentdSessionSpec): Promise<void> {
+    if (this.openBlockedReason) throw new Error(this.openBlockedReason);
     this.send({ op: 'open', ...spec });
     const r = await this.await((c) => (c.op === 'opened' || c.op === 'error') && c.id === spec.id);
     if (r.op === 'error') throw new Error(`agentd open ${spec.id} failed: ${r.message}`);

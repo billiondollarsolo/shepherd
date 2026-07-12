@@ -22,8 +22,8 @@ import (
 	"syscall"
 	"time"
 
-	"flock-agentd/internal/identity"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 
 	"github.com/creack/pty"
 )

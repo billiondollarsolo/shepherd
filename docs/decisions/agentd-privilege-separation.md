@@ -71,9 +71,14 @@ in explicitly and emits a security warning; this mode provides no agent isolatio
 - Captured authentication messages are not replayable.
 - Protocol or node-identity mismatch fails before status snapshots or session
   operations are accepted.
+- Unix socket permissions are defense in depth, not a separate trust protocol. Every
+  transport performs the nonce/MAC handshake; only explicit same-user development mode
+  may use an empty credential.
 - Credential rotation supports overlap for one bounded transition and is audited.
 - Node-level authentication authorizes the orchestrator connection only. Public agent
   capabilities are a separate protocol and never authenticate to agentd.
+- Go clients import the versioned `agentd/proto`, `agentd/controlauth`, and generated
+  `agentd/compatibility` packages. Hand-copied wire contracts are unsupported.
 
 ## Alternatives considered
 

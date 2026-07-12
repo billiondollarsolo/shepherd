@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "minimumDaemonVersion": "0.3.0",
+  "preferredProtocolVersion": 2,
+  "supportedProtocolVersions": [2],
+  "requiredCapabilities": ["pty", "resize", "scrollback", "status", "node-info"],
+  "supportWindow": {
+    "minorReleases": 1,
+    "minimumDays": 90
+  }
+}

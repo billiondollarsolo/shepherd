@@ -535,7 +535,7 @@ model limit); optionally per-tool timing and surfaced error messages.
 compaction / how much has this burned"); the data (tokens, model in the transcript)
 is already on the node — just not extracted/surfaced. Table-stakes vs competitors.
 **Where:** `agentd/internal/status/{status,claude,codex}.go` (`Update` = State/Tokens/
-Tool only); `agentd/internal/proto/proto.go` (`Control`); orchestrator
+Tool only); `agentd/proto/proto.go` (`Control`); orchestrator
 `agentdSessionMeta` (`index.ts:139-340`); web grid footer + bottom bar + node/Activity.
 **How:** Extend `Update`/`Control` with `model`, `contextPct` (and cost from
 tokens×model price, computable in the orchestrator); parse model from transcript;

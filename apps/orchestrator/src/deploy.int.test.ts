@@ -285,6 +285,7 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/for arch in amd64 arm64/);
     expect(orch).toMatch(/flock-agentd-linux-\$arch/);
     expect(orch).toMatch(/\/app\/agentd\/dist/);
+    expect(orch).toMatch(/COMPATIBILITY\.json \/app\/agentd\/COMPATIBILITY\.json/);
   });
 });
 
@@ -308,6 +309,10 @@ describe('production node and stack lifecycle', () => {
     expect(script).toMatch(/FLOCK_VERSION/);
     expect(script).toMatch(/BROWSER_IMAGE=/);
     expect(script).toMatch(/\/ready/);
+    expect(script).toMatch(/agentd-compatibility\.json/);
+    expect(script).toMatch(/--acknowledge-node-policy-change/);
+    expect(script).toMatch(/removedProtocols/);
+    expect(script).toMatch(/addedCapabilities/);
     expect(script).not.toMatch(/docker compose down -v/);
   });
 });

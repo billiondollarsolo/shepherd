@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"flock-agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 )
 
 func privilegedRuntimeFixture(t *testing.T) (*identity.Runtime, string) {

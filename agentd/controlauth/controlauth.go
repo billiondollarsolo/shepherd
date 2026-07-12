@@ -1,4 +1,4 @@
-// Package controlauth implements the replay-resistant agentd v2 handshake.
+// Package controlauth implements the public replay-resistant agentd v2 handshake.
 package controlauth
 
 import (

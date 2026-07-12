@@ -34,6 +34,21 @@ vi.mock('../../data/queries', () => ({
       nodeId: '11111111-1111-4111-8111-111111111111',
       generatedAt: '2026-07-12T00:00:00.000Z',
       ready: !upgradeAvailable,
+      daemonCompatibility: {
+        state: upgradeAvailable ? 'recommended' : 'compatible',
+        reason: upgradeAvailable ? 'service-migration' : 'current',
+        installedVersion: '0.3.0',
+        preferredVersion: '0.3.0',
+        minimumVersion: '0.3.0',
+        protocolVersion: 2,
+        supportedProtocolVersions: [2],
+        missingCapabilities: [],
+        servicePrepared: !upgradeAvailable,
+        binaryReplacement: false,
+        detail: upgradeAvailable
+          ? 'The managed service needs migration.'
+          : 'Daemon satisfies the current compatibility policy.',
+      },
       checks: [
         {
           id: 'preparation',
@@ -62,6 +77,23 @@ vi.mock('../../data/queries', () => ({
           load15: 0.3,
           uptimeSec: 60,
           agents: [],
+          lifecycle: {
+            expectedDaemonVersion: '0.3.0',
+            daemonCompatibility: {
+              state: 'compatible',
+              reason: 'current',
+              installedVersion: '0.3.0',
+              preferredVersion: '0.3.0',
+              minimumVersion: '0.3.0',
+              protocolVersion: 2,
+              supportedProtocolVersions: [2],
+              missingCapabilities: [],
+              servicePrepared: true,
+              binaryReplacement: false,
+              detail: 'Daemon satisfies the current compatibility policy.',
+            },
+            upgrade: null,
+          },
           control: {
             mode: 'secure',
             protocol: 2,

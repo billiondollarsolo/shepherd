@@ -1,10 +1,12 @@
 /**
- * TS mirror of the flock-agentd wire format (Go side: agentd/internal/proto).
+ * TS mirror of the flock-agentd wire format (Go side: agentd/proto).
  * Frame: [uint32 len][len bytes], body[0] = type, rest = payload. Control frames
  * carry JSON; PTY data frames carry [u16 sidLen][sid][bytes]. This lives in the
  * orchestrator (Node-only) — the browser never speaks to agentd.
  */
 export const AGENTD_PROTOCOL_VERSION = 2;
+/** Protocol codecs intentionally retained by this orchestrator build. */
+export const AGENTD_CLIENT_PROTOCOL_VERSIONS = [2] as const;
 
 export const FrameType = {
   Control: 0x01,

@@ -247,7 +247,7 @@ describe('AgentdBootstrap secure system service', () => {
       },
     ]);
     host.listening = true;
-    await expect(make().inspect(host)).resolves.toEqual({
+    await expect(make().inspect(host)).resolves.toMatchObject({
       installedVersion: '1.0.0',
       expectedVersion: '1.2.3',
       running: true,

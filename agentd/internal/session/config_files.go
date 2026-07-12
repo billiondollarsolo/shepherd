@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"flock-agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 )
 
 func seedHookConfig(spec Spec) error {

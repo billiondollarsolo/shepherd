@@ -148,7 +148,7 @@ pnpm test:e2e                       # Playwright — for web-surface changes
   - **Why:** REST is Zod-validated but the live WS frames and the Go↔TS agentd proto are
     hand-typed in two places — the biggest correctness gap vs Synara.
   - **Scope:** `packages/shared/src/` (new canonical schemas), `apps/orchestrator/src/live-channels.ts`,
-    `agentd/internal/proto/proto.go`, `packages/shared/src/agentd.ts`.
+    `agentd/proto/proto.go`, `apps/orchestrator/src/nodes/agentd/protocol.ts`.
   - **Approach:** define every live WS message + control frame as a Zod schema in shared;
     validate on decode at both ends; generate (or conformance-test) the Go structs against
     the shared schema so the Go↔TS seam can't drift.

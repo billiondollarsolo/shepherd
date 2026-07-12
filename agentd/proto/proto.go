@@ -1,6 +1,6 @@
-// Package proto is the flock-agentd wire format: length-prefixed frames carrying
+// Package proto is the public flock-agentd wire contract: length-prefixed frames carrying
 // either a JSON control message or session-tagged binary PTY data. The TS
-// orchestrator mirrors this (see packages/shared/src/agentd.ts). One framed,
+// orchestrator mirrors this (see apps/orchestrator/src/nodes/agentd/protocol.ts). One framed,
 // multiplexed stream runs over an SSH direct-tcpip channel (remote) or a unix
 // socket (local).
 //

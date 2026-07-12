@@ -4,7 +4,12 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: FLOCK_VAULT_PASSWORD_FILE=/secure/path ./scripts/flock-upgrade.sh VERSION [--skip-backup]
+Usage: FLOCK_VAULT_PASSWORD_FILE=/secure/path ./scripts/flock-upgrade.sh VERSION [OPTIONS]
+
+Options:
+  --acknowledge-node-policy-change  Continue when the target raises daemon requirements.
+  --skip-backup                     Continue without the recommended verified vault.
+  --skip-compatibility-check        Continue when release metadata cannot be fetched.
 
 Pulls one immutable Flock release, couples all Flock images to that version,
 runs the stack's normal migrations, and verifies readiness. A verified encrypted
@@ -20,8 +25,17 @@ TARGET="${1:-}"
 [[ -n "$TARGET" ]] || { usage >&2; exit 2; }
 shift
 SKIP_BACKUP=0
-if [[ "${1:-}" == --skip-backup ]]; then SKIP_BACKUP=1; shift; fi
-(($# == 0)) || { usage >&2; exit 2; }
+SKIP_COMPATIBILITY=0
+ACK_NODE_POLICY=0
+while (($# > 0)); do
+  case "$1" in
+    --skip-backup) SKIP_BACKUP=1 ;;
+    --skip-compatibility-check) SKIP_COMPATIBILITY=1 ;;
+    --acknowledge-node-policy-change) ACK_NODE_POLICY=1 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  shift
+done
 [[ "$TARGET" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]] || {
   echo "VERSION must be semantic, for example 0.3.1." >&2
   exit 2
@@ -35,6 +49,61 @@ OLD_VERSION="$(sed -n 's/^FLOCK_VERSION=//p' .env | tail -n 1)"
 if [[ "$OLD_VERSION" == "$TARGET" ]]; then
   echo "Flock is already pinned to $TARGET."
   exit 0
+fi
+
+TARGET_COMPATIBILITY="$(mktemp "${TMPDIR:-/tmp}/flock-agentd-compatibility.XXXXXX")"
+cleanup() { rm -f "$TARGET_COMPATIBILITY" "${tmp:-}"; }
+trap cleanup EXIT
+if ((SKIP_COMPATIBILITY == 0)); then
+  command -v curl >/dev/null || {
+    echo "curl is required for the release compatibility preflight." >&2
+    exit 1
+  }
+  COMPATIBILITY_URL="${FLOCK_COMPATIBILITY_URL:-https://github.com/billiondollarsolo/flock/releases/download/v$TARGET/agentd-compatibility.json}"
+  echo "Fetching target node compatibility policy..."
+  curl --fail --silent --show-error --location "$COMPATIBILITY_URL" > "$TARGET_COMPATIBILITY"
+  set +e
+  COMPATIBILITY_REPORT="$({ docker compose exec -T orchestrator node -e '
+    const fs = require("node:fs");
+    const current = JSON.parse(fs.readFileSync("/app/agentd/COMPATIBILITY.json", "utf8"));
+    const target = JSON.parse(fs.readFileSync(0, "utf8"));
+    const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/;
+    const parse = (value) => {
+      const match = semver.exec(value || "");
+      if (!match) throw new Error(`invalid minimumDaemonVersion: ${value}`);
+      return match.slice(1).map(Number);
+    };
+    const compare = (a, b) => {
+      for (let i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i] - b[i];
+      return 0;
+    };
+    if (target.schemaVersion !== 1 || !Array.isArray(target.supportedProtocolVersions) ||
+        !target.supportedProtocolVersions.includes(target.preferredProtocolVersion) ||
+        !Array.isArray(target.requiredCapabilities)) {
+      throw new Error("target compatibility manifest is invalid");
+    }
+    const floorRaised = compare(parse(target.minimumDaemonVersion), parse(current.minimumDaemonVersion)) > 0;
+    const removedProtocols = current.supportedProtocolVersions.filter((v) => !target.supportedProtocolVersions.includes(v));
+    const addedCapabilities = target.requiredCapabilities.filter((v) => !current.requiredCapabilities.includes(v));
+    console.log(`Target node policy: daemon >=${target.minimumDaemonVersion}; protocols ${target.supportedProtocolVersions.join("/")}; required capabilities ${target.requiredCapabilities.join(", ")}.`);
+    if (floorRaised || removedProtocols.length || addedCapabilities.length) {
+      console.log(`Node policy changed: floor raised=${floorRaised}; removed protocols=${removedProtocols.join(",") || "none"}; new required capabilities=${addedCapabilities.join(",") || "none"}.`);
+      process.exit(42);
+    }
+  ' < "$TARGET_COMPATIBILITY"; } 2>&1)"
+  COMPATIBILITY_STATUS=$?
+  set -e
+  printf '%s\n' "$COMPATIBILITY_REPORT"
+  if ((COMPATIBILITY_STATUS == 42 && ACK_NODE_POLICY == 0)); then
+    echo "The target can make node daemon upgrades mandatory. Review its release notes and rerun with --acknowledge-node-policy-change." >&2
+    exit 1
+  fi
+  if ((COMPATIBILITY_STATUS != 0 && COMPATIBILITY_STATUS != 42)); then
+    echo "Could not validate the target compatibility policy. Use --skip-compatibility-check only after manual review." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: target node compatibility was not checked." >&2
 fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -69,7 +138,6 @@ echo "Pulling immutable Flock $TARGET images..."
 FLOCK_VERSION="$TARGET" BROWSER_IMAGE='' docker compose pull
 
 tmp="$(mktemp .env.upgrade.XXXXXX)"
-trap 'rm -f "$tmp"' EXIT
 awk -v target="$TARGET" '
   /^FLOCK_VERSION=/ { print "FLOCK_VERSION=" target; version=1; next }
   /^BROWSER_IMAGE=/ { print "BROWSER_IMAGE="; browser=1; next }

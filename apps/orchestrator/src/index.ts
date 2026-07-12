@@ -24,6 +24,10 @@ import type { AgentdStatusMeta } from './nodes/agentd/protocol.js';
 import { NodeControlCredentials } from './nodes/agentd/node-control-credentials.js';
 import { registerNodeCredentialRotationRoute } from './nodes/agentd/credential-rotation-route.js';
 import { registerNodeAgentdUpgradeRoute } from './nodes/agentd/agentd-upgrade-route.js';
+import {
+  evaluateAgentdCompatibility,
+  loadAgentdCompatibilityPolicy,
+} from './nodes/agentd/agentd-compatibility.js';
 import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
 import { CreateSessionRequest } from '@flock/shared';
 import { forgetPlan, planEventFields } from './hooks/plan.js';
@@ -274,8 +278,16 @@ export async function main(): Promise<void> {
       })
       .catch((error) => recordFailure('audit', 'node-control-event', error, { nodeId }));
   };
+  const expectedAgentdVersion = resolveAgentdVersion();
+  const agentdCompatibilityPolicy = loadAgentdCompatibilityPolicy(expectedAgentdVersion);
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
+    supportedProtocolVersions: [
+      agentdCompatibilityPolicy.preferredProtocolVersion,
+      ...agentdCompatibilityPolicy.supportedProtocolVersions.filter(
+        (version) => version !== agentdCompatibilityPolicy.preferredProtocolVersion,
+      ),
+    ],
     identityFor: (nodeId, kind) => nodeControlCredentials.forNode(nodeId, kind),
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
     onAudit: recordNodeControlEvent,
@@ -283,9 +295,9 @@ export async function main(): Promise<void> {
   // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
   // as a root-owned system service, then drops sessions to flock-agent.
   const agentdPort = Number(process.env.FLOCK_AGENTD_PORT || 48222);
-  const expectedAgentdVersion = resolveAgentdVersion();
   const agentdBootstrap = new AgentdBootstrap({
     version: expectedAgentdVersion,
+    compatibilityPolicy: agentdCompatibilityPolicy,
     port: agentdPort,
     binaries: new FsAgentdBinaryProvider(
       process.env.FLOCK_AGENTD_DIST_DIR || path.resolve(process.cwd(), '../../agentd/dist'),
@@ -482,10 +494,21 @@ export async function main(): Promise<void> {
     if (!client) return null;
     try {
       const info = (await client.nodeInfo()) as Record<string, unknown>;
+      const authenticated = client.identity();
+      const daemonCompatibility =
+        agentdConns.compatibilityFor(nodeId) ??
+        evaluateAgentdCompatibility(agentdCompatibilityPolicy, {
+          installedVersion: authenticated?.daemonVersion ?? '',
+          protocolVersion: authenticated?.protocolVersion,
+          capabilities: authenticated?.capabilities,
+          runtimeVerified: authenticated !== null,
+          servicePrepared: true,
+        });
       return {
         ...info,
         lifecycle: {
           expectedDaemonVersion: expectedAgentdVersion,
+          daemonCompatibility,
           upgrade: agentdConns.upgradeFor(nodeId),
         },
       };
@@ -502,9 +525,16 @@ export async function main(): Promise<void> {
       const info = (await nodeInfo(nodeId)) as {
         agents?: Array<{ name: string }>;
         control?: { daemonVersion?: string };
+        lifecycle?: { daemonCompatibility?: ReturnType<typeof evaluateAgentdCompatibility> };
       } | null;
       if (!info) return null;
       const agents = info.agents ?? [];
+      const daemonCompatibility =
+        info.lifecycle?.daemonCompatibility ??
+        evaluateAgentdCompatibility(agentdCompatibilityPolicy, {
+          installedVersion: info.control?.daemonVersion ?? '',
+          servicePrepared: true,
+        });
       const checks = [
         {
           id: 'preparation',
@@ -515,8 +545,13 @@ export async function main(): Promise<void> {
         {
           id: 'daemon-version',
           label: 'Node daemon',
-          status: info.control?.daemonVersion === expectedAgentdVersion ? 'pass' : 'fail',
-          detail: `Expected flock-agentd ${expectedAgentdVersion}; running ${info.control?.daemonVersion ?? 'unknown'}.`,
+          status:
+            daemonCompatibility.state === 'compatible'
+              ? 'pass'
+              : daemonCompatibility.state === 'recommended'
+                ? 'warning'
+                : 'fail',
+          detail: daemonCompatibility.detail,
         },
         {
           id: 'agent:any',
@@ -532,11 +567,13 @@ export async function main(): Promise<void> {
         nodeId,
         generatedAt: new Date().toISOString(),
         ready: checks.every((item) => item.status !== 'fail'),
+        daemonCompatibility,
         checks,
       };
     }
     const connected = await connections.waitForConnected(nodeId, 8_000);
     if (!connected) return null;
+    await agentdClientForNode(nodeId, node.kind);
     const [host, nodeProjects] = await Promise.all([
       connections.agentdHostFor(nodeId),
       projects.listProjects(nodeId),
@@ -544,7 +581,8 @@ export async function main(): Promise<void> {
     return preflightRemoteNode({
       nodeId,
       host,
-      expectedAgentdVersion,
+      compatibilityPolicy: agentdCompatibilityPolicy,
+      authenticatedCompatibility: agentdConns.compatibilityFor(nodeId),
       workspaces: nodeProjects.map((project) => project.workingDir),
     });
   };

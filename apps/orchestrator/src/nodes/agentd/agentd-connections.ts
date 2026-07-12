@@ -8,10 +8,15 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { AgentdCompatibility } from '@flock/shared';
+
 import { NodeAgentdClient } from './agentd-client.js';
 import type { AgentdBootstrap } from './agentd-bootstrap.js';
 import type { AgentdHost } from './ssh-agentd-host.js';
 import type { NodeControlIdentity } from './node-control-credentials.js';
+import { evaluateAgentdCompatibility } from './agentd-compatibility.js';
+import type { AuthenticatedAgentdIdentity } from './agentd-client.js';
+import { AGENTD_PROTOCOL_VERSION } from './protocol.js';
 
 export type AgentdFailureCode = 'network' | 'authentication' | 'protocol' | 'enrollment';
 
@@ -28,6 +33,7 @@ export interface AgentdUpgradeState {
   expectedVersion: string;
   activeSessions: number;
   message: string;
+  requirement: 'recommended' | 'required';
 }
 
 export class AgentdActiveSessionsError extends Error {
@@ -58,6 +64,8 @@ export function classifyAgentdFailure(error: unknown): AgentdFailureCode {
 export interface AgentdConnectionsDeps {
   /** Local daemon unix socket; defaults to the daemon's own default path. */
   socketPath?: string;
+  /** Preferred-first protocol codecs retained by this orchestrator release. */
+  supportedProtocolVersions?: readonly number[];
   /** Loads the unique encrypted-at-rest identity for exactly one node. */
   identityFor: (nodeId: string, kind: 'local' | 'ssh') => Promise<NodeControlIdentity>;
   /**
@@ -92,6 +100,7 @@ export class AgentdConnections {
   private readonly remotePending = new Map<string, Promise<NodeAgentdClient>>();
   private readonly failures = new Map<string, AgentdConnectionFailure>();
   private readonly upgrades = new Map<string, AgentdUpgradeState>();
+  private readonly compatibilities = new Map<string, AgentdCompatibility>();
   private readonly connectedNodes = new Set<string>();
 
   constructor(private readonly deps: AgentdConnectionsDeps) {}
@@ -119,6 +128,11 @@ export class AgentdConnections {
   /** Pending/failed-safe rollout state for operator-facing node readiness. */
   upgradeFor(nodeId: string): AgentdUpgradeState | null {
     return this.upgrades.get(nodeId) ?? null;
+  }
+
+  /** Last authenticated compatibility result for node lifecycle/readiness UI. */
+  compatibilityFor(nodeId: string): AgentdCompatibility | null {
+    return this.compatibilities.get(nodeId) ?? null;
   }
 
   private recordFailure(nodeId: string, error: unknown): void {
@@ -160,21 +174,26 @@ export class AgentdConnections {
    */
   async probeRemote(nodeId: string, host: AgentdHost, port: number): Promise<boolean> {
     if (this.remotes.get(nodeId)) return true; // an active session link proves it
-    try {
-      const channel = await host.forwardOut('127.0.0.1', port);
-      const client = new NodeAgentdClient(channel);
+    const protocols = this.deps.supportedProtocolVersions ?? [AGENTD_PROTOCOL_VERSION];
+    let lastError: unknown;
+    for (const protocolVersion of protocols) {
+      let client: NodeAgentdClient | null = null;
       try {
+        const channel = await host.forwardOut('127.0.0.1', port);
+        client = new NodeAgentdClient(channel);
         const identity = await this.deps.identityFor(nodeId, 'ssh');
-        await client.hello(identity);
+        await client.hello(identity, protocolVersion);
         this.connected(nodeId);
         return true;
+      } catch (error) {
+        lastError = error;
+        if (!/unsupported agentd protocol version/i.test(String(error))) break;
       } finally {
-        client.dispose();
+        client?.dispose();
       }
-    } catch (error) {
-      this.recordFailure(nodeId, error);
-      return false;
     }
+    this.recordFailure(nodeId, lastError);
+    return false;
   }
 
   /** Connect (once) to the local node's daemon and complete the handshake. */
@@ -242,6 +261,7 @@ export class AgentdConnections {
         existing.dispose();
         this.remotes.delete(nodeId);
         this.upgrades.delete(nodeId);
+        this.compatibilities.delete(nodeId);
       } else {
         const pending = this.upgrades.get(nodeId);
         if (pending?.status !== 'deferred') return existing;
@@ -254,6 +274,7 @@ export class AgentdConnections {
         // the deferred rollout before another session can be launched.
         existing.dispose();
         this.remotes.delete(nodeId);
+        this.compatibilities.delete(nodeId);
       }
     }
     const pending = this.remotePending.get(nodeId);
@@ -262,56 +283,118 @@ export class AgentdConnections {
       try {
         const identity = await this.deps.identityFor(nodeId, 'ssh');
         const before = await bootstrap.inspect(host, identity.nodeId);
-        const connect = async (): Promise<NodeAgentdClient> => {
-          const endpoint = bootstrap.endpoint();
-          const channel = await host.forwardOut(endpoint.host, endpoint.port);
-          const client = new NodeAgentdClient(channel);
-          if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
-          try {
-            await client.hello(identity);
-            return client;
-          } catch (error) {
-            client.dispose();
-            channel.destroy();
-            throw error;
+        const policy = bootstrap.policy();
+        const protocols = [
+          policy.preferredProtocolVersion,
+          ...policy.supportedProtocolVersions.filter(
+            (version) => version !== policy.preferredProtocolVersion,
+          ),
+        ];
+        const connect = async (): Promise<{
+          client: NodeAgentdClient;
+          identity: AuthenticatedAgentdIdentity;
+        }> => {
+          let lastProtocolError: unknown;
+          for (const protocolVersion of protocols) {
+            const endpoint = bootstrap.endpoint();
+            const channel = await host.forwardOut(endpoint.host, endpoint.port);
+            const client = new NodeAgentdClient(channel);
+            if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
+            try {
+              const authenticated = await client.hello(identity, protocolVersion);
+              return { client, identity: authenticated };
+            } catch (error) {
+              client.dispose();
+              channel.destroy();
+              if (!/unsupported agentd protocol version/i.test(String(error))) throw error;
+              lastProtocolError = error;
+            }
           }
+          throw lastProtocolError ?? new Error('no supported agentd protocol is available');
         };
 
-        if (before.upgradeRequired && before.running && !options.forceUpgrade) {
-          // Always ask the authenticated old daemon before replacing it. If it
-          // has sessions, keep using it and expose a pending rollout. A protocol
-          // mismatch fails closed: Flock will not kill sessions it cannot count.
+        let forceCandidateReplacement = false;
+        if (before.running) {
+          // Authenticate and evaluate the running daemon before any mutation.
+          // A protocol mismatch fails closed: Flock will not kill sessions it
+          // cannot count. A newer compatible binary is never downgraded.
           const current = await connect();
-          const active = await current.list();
+          const compatibility = evaluateAgentdCompatibility(policy, {
+            installedVersion: current.identity.daemonVersion,
+            protocolVersion: current.identity.protocolVersion,
+            capabilities: current.identity.capabilities,
+            runtimeVerified: true,
+            servicePrepared: before.servicePrepared,
+          });
+          this.compatibilities.set(nodeId, compatibility);
+          const rolloutNeeded =
+            before.upgradeRequired ||
+            compatibility.binaryReplacement ||
+            compatibility.state === 'required';
+          if (!rolloutNeeded) {
+            this.upgrades.delete(nodeId);
+            this.cacheRemote(nodeId, current.client);
+            this.connected(nodeId);
+            return current.client;
+          }
+          const active = await current.client.list();
           if (active.length > 0) {
+            if (options.forceUpgrade) throw new AgentdActiveSessionsError(active.length);
+            if (compatibility.state === 'required') {
+              current.client.blockNewSessions(
+                'This node daemon must be upgraded before starting new sessions.',
+              );
+            }
             this.upgrades.set(nodeId, {
               status: 'deferred',
-              installedVersion: before.installedVersion,
+              installedVersion: current.identity.daemonVersion,
               expectedVersion: before.expectedVersion,
               activeSessions: active.length,
+              requirement: compatibility.state === 'required' ? 'required' : 'recommended',
               message: 'Node daemon rollout deferred until active sessions finish.',
             });
-            this.cacheRemote(nodeId, current);
+            this.cacheRemote(nodeId, current.client);
             this.connected(nodeId);
-            return current;
+            return current.client;
           }
-          current.dispose();
+          current.client.dispose();
+          if (compatibility.state === 'required' && !compatibility.binaryReplacement) {
+            throw new Error(
+              `${compatibility.detail} Automatic downgrade of a newer daemon is blocked.`,
+            );
+          }
+          forceCandidateReplacement =
+            compatibility.state === 'required' && compatibility.binaryReplacement;
         }
 
         let client: NodeAgentdClient;
         try {
-          const endpoint = await bootstrap.ensureRunning(host, identity);
+          const endpoint = await bootstrap.ensureRunning(host, identity, {
+            forceBinaryReplacement: forceCandidateReplacement,
+          });
           const channel = await host.forwardOut(endpoint.host, endpoint.port);
           const candidate = new NodeAgentdClient(channel);
           if (this.deps.onStatus) candidate.onStatus(this.deps.onStatus);
           try {
-            const hello = await candidate.hello(identity);
-            if (before.upgradeRequired && hello.daemonVersion !== before.expectedVersion) {
+            const hello = await candidate.hello(identity, policy.preferredProtocolVersion);
+            if (
+              (before.binaryUpgradeRequired || forceCandidateReplacement) &&
+              hello.daemonVersion !== before.expectedVersion
+            ) {
               throw new Error(
                 `agentd candidate reported version ${hello.daemonVersion ?? 'unknown'}; expected ${before.expectedVersion}`,
               );
             }
+            const compatibility = evaluateAgentdCompatibility(policy, {
+              installedVersion: hello.daemonVersion,
+              protocolVersion: hello.protocolVersion,
+              capabilities: hello.capabilities,
+              runtimeVerified: true,
+              servicePrepared: true,
+            });
+            if (compatibility.state === 'required') throw new Error(compatibility.detail);
             client = candidate;
+            this.compatibilities.set(nodeId, compatibility);
             this.upgrades.delete(nodeId);
           } catch (error) {
             candidate.dispose();
@@ -319,17 +402,37 @@ export class AgentdConnections {
             throw error;
           }
         } catch (error) {
-          if (!before.binaryUpgradeRequired || !before.installedVersion) throw error;
+          if (
+            (!before.binaryUpgradeRequired && !forceCandidateReplacement) ||
+            !before.installedVersion
+          ) {
+            throw error;
+          }
           // systemd-active is not enough: a candidate must complete the real
           // authenticated protocol handshake. Restore the known previous binary
           // and return its healthy client when that validation fails.
           await bootstrap.rollback(host, nodeId);
-          client = await connect();
+          const restored = await connect();
+          client = restored.client;
+          const restoredCompatibility = evaluateAgentdCompatibility(policy, {
+            installedVersion: restored.identity.daemonVersion,
+            protocolVersion: restored.identity.protocolVersion,
+            capabilities: restored.identity.capabilities,
+            runtimeVerified: true,
+            servicePrepared: before.servicePrepared,
+          });
+          if (restoredCompatibility.state === 'required') {
+            client.blockNewSessions(
+              'This node daemon must be upgraded before starting new sessions.',
+            );
+          }
+          this.compatibilities.set(nodeId, restoredCompatibility);
           this.upgrades.set(nodeId, {
             status: 'rolled_back',
             installedVersion: before.installedVersion,
             expectedVersion: before.expectedVersion,
             activeSessions: 0,
+            requirement: before.compatibility.state === 'required' ? 'required' : 'recommended',
             message: 'Daemon candidate failed authenticated health validation and was rolled back.',
           });
         }
@@ -353,6 +456,7 @@ export class AgentdConnections {
     client.onLinkClose(() => {
       if (this.remotes.get(nodeId) === client) {
         this.remotes.delete(nodeId);
+        this.compatibilities.delete(nodeId);
         this.recordFailure(nodeId, new Error('agentd connection closed'));
       }
     });

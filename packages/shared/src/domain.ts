@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { StatusEnum } from './status.js';
+import { AgentdCompatibilitySchema } from './agentd-compatibility.js';
 
 /**
  * Domain types (spec §6 data model, §4.2 single authoritative session record).
@@ -364,6 +365,7 @@ export const NodeInfoSchema = z.object({
   lifecycle: z
     .object({
       expectedDaemonVersion: z.string(),
+      daemonCompatibility: AgentdCompatibilitySchema,
       upgrade: z
         .object({
           status: z.enum(['deferred', 'rolled_back']),
@@ -371,6 +373,7 @@ export const NodeInfoSchema = z.object({
           expectedVersion: z.string(),
           activeSessions: z.number().int().nonnegative(),
           message: z.string(),
+          requirement: z.enum(['recommended', 'required']),
         })
         .nullable(),
     })

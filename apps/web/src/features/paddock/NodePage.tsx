@@ -146,6 +146,13 @@ function ControlPlaneCard({
 
   const secure = control.mode === 'secure';
   const anomalies = control.authFailures + control.malformedFrames + control.writeTimeouts;
+  const compatibility = lifecycle?.daemonCompatibility;
+  const compatibilityVariant: BadgeProps['variant'] =
+    compatibility?.state === 'compatible'
+      ? 'success'
+      : compatibility?.state === 'recommended'
+        ? 'warning'
+        : 'danger';
   return (
     <Card title="Control plane">
       <div className="mb-2 flex items-center gap-2">
@@ -165,6 +172,26 @@ function ControlPlaneCard({
       </div>
       <Field label="Daemon" value={control.daemonVersion} />
       <Field label="Protocol" value={`v${control.protocol}`} />
+      {compatibility ? (
+        <div className="my-2 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 p-2">
+          <Badge variant={compatibilityVariant}>
+            {compatibility.state === 'compatible'
+              ? 'Compatible'
+              : compatibility.state === 'recommended'
+                ? 'Upgrade recommended'
+                : 'Upgrade required'}
+          </Badge>
+          <p className="mt-1 text-xs text-flock-ink-primary">{compatibility.detail}</p>
+          <p className="mt-1 font-mono text-2xs text-flock-ink-muted">
+            preferred {compatibility.preferredVersion} · minimum {compatibility.minimumVersion}
+          </p>
+          {compatibility.missingCapabilities.length > 0 ? (
+            <p className="mt-1 break-words font-mono text-2xs text-status-error">
+              missing {compatibility.missingCapabilities.join(', ')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <Field label="Connections" value={String(control.connections)} />
       <Field label="Sessions opened" value={String(control.sessionsOpened)} />
       <Field label="Sessions closed" value={String(control.sessionsClosed)} />
@@ -199,11 +226,9 @@ function ReadinessCard({
   canUpgrade: boolean;
   onUpgrade: () => void;
 }): JSX.Element {
-  const upgradeAvailable = report?.checks.some(
-    (item) =>
-      (item.id === 'daemon-version' && item.status === 'warning') ||
-      (item.id === 'preparation' && item.status === 'fail'),
-  );
+  const upgradeAvailable =
+    report?.daemonCompatibility.state !== 'compatible' ||
+    report?.checks.some((item) => item.id === 'preparation' && item.status === 'fail');
   return (
     <Card title="Node readiness">
       {!report ? (
@@ -212,6 +237,22 @@ function ReadinessCard({
         <div className="space-y-2">
           <Badge variant={report.ready ? 'success' : 'danger'}>
             {report.ready ? 'Ready' : 'Action required'}
+          </Badge>
+          <Badge
+            variant={
+              report.daemonCompatibility.state === 'compatible'
+                ? 'success'
+                : report.daemonCompatibility.state === 'recommended'
+                  ? 'warning'
+                  : 'danger'
+            }
+            className="ml-2"
+          >
+            {report.daemonCompatibility.state === 'compatible'
+              ? 'Daemon compatible'
+              : report.daemonCompatibility.state === 'recommended'
+                ? 'Daemon update recommended'
+                : 'Daemon update required'}
           </Badge>
           <ul className="space-y-1.5">
             {report.checks.map((item) => (
@@ -234,7 +275,9 @@ function ReadinessCard({
           </ul>
           {canUpgrade && upgradeAvailable ? (
             <Button size="sm" variant="secondary" className="mt-2" onClick={onUpgrade}>
-              Upgrade daemon…
+              {report.daemonCompatibility.state === 'required'
+                ? 'Required daemon upgrade…'
+                : 'Upgrade daemon…'}
             </Button>
           ) : null}
         </div>
@@ -525,10 +568,17 @@ export function NodePage(): JSX.Element {
       <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upgrade node daemon?</DialogTitle>
+            <DialogTitle>
+              {preflight?.daemonCompatibility.state === 'required'
+                ? 'Required node daemon upgrade'
+                : 'Upgrade node daemon?'}
+            </DialogTitle>
             <DialogDescription>
-              Flock refuses while known sessions are active. Use this to retry a deferred or
-              protocol-blocked rollout; a failed candidate is automatically rolled back.
+              {preflight?.daemonCompatibility.state === 'required'
+                ? `${preflight.daemonCompatibility.detail} `
+                : ''}
+              Flock refuses while known sessions are active. A failed candidate is automatically
+              rolled back, and a newer compatible daemon is never downgraded.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

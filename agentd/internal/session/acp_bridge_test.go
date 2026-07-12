@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"flock-agentd/internal/acp"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/acp"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 func TestAcpEventToUpdate(t *testing.T) {

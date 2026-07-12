@@ -17,7 +17,15 @@ class Host implements AgentdHost {
 
 const input = {
   nodeId: '11111111-1111-4111-8111-111111111111',
-  expectedAgentdVersion: '0.3.0',
+  compatibilityPolicy: {
+    schemaVersion: 1 as const,
+    preferredDaemonVersion: '0.3.0',
+    minimumDaemonVersion: '0.2.0',
+    preferredProtocolVersion: 2,
+    supportedProtocolVersions: [2],
+    requiredCapabilities: ['pty'],
+    supportWindow: { minorReleases: 1, minimumDays: 90 },
+  },
   workspaces: ['/srv/flock/workspaces/demo'],
 };
 

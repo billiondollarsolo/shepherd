@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"flock-agentd/internal/acp"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/acp"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 // acp_session.go — an interactive session over the structured Agent Client

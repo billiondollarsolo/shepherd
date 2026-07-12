@@ -1,4 +1,4 @@
-module flock-agentd
+module github.com/billiondollarsolo/flock/agentd
 
 go 1.25.0
 

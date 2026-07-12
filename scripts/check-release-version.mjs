@@ -1,12 +1,97 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..');
+execFileSync(process.execPath, [
+  resolve(root, 'scripts/generate-agentd-compatibility.mjs'),
+  '--check',
+]);
 const canonical = readFileSync(resolve(root, 'agentd/VERSION'), 'utf8').trim();
 const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 
 if (!semver.test(canonical)) {
   throw new Error(`agentd/VERSION is not valid SemVer: ${canonical}`);
+}
+
+const compatibility = JSON.parse(readFileSync(resolve(root, 'agentd/COMPATIBILITY.json'), 'utf8'));
+const agentdGoMod = readFileSync(resolve(root, 'agentd/go.mod'), 'utf8');
+if (!agentdGoMod.startsWith('module github.com/billiondollarsolo/flock/agentd\n')) {
+  throw new Error('agentd/go.mod does not expose the published nested module path');
+}
+const protocols = compatibility.supportedProtocolVersions;
+const capabilities = compatibility.requiredCapabilities;
+if (compatibility.schemaVersion !== 1) {
+  throw new Error('agentd/COMPATIBILITY.json has an unsupported schemaVersion');
+}
+if (!semver.test(compatibility.minimumDaemonVersion ?? '')) {
+  throw new Error('agentd compatibility minimumDaemonVersion is not valid SemVer');
+}
+const coreVersion = (value) => value.split(/[+-]/, 1)[0].split('.').map(Number);
+const compareCore = (left, right) => {
+  const a = coreVersion(left);
+  const b = coreVersion(right);
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
+  }
+  return 0;
+};
+if (compareCore(compatibility.minimumDaemonVersion, canonical) > 0) {
+  throw new Error('agentd compatibility minimum exceeds the release daemon version');
+}
+if (
+  !Array.isArray(protocols) ||
+  protocols.length === 0 ||
+  protocols.some((version) => !Number.isInteger(version) || version <= 0) ||
+  new Set(protocols).size !== protocols.length ||
+  !protocols.includes(compatibility.preferredProtocolVersion)
+) {
+  throw new Error('agentd compatibility protocol metadata is invalid');
+}
+if (
+  !Array.isArray(capabilities) ||
+  capabilities.length === 0 ||
+  capabilities.some((capability) => typeof capability !== 'string' || !capability) ||
+  new Set(capabilities).size !== capabilities.length
+) {
+  throw new Error('agentd compatibility capability metadata is invalid');
+}
+if (
+  !Number.isInteger(compatibility.supportWindow?.minorReleases) ||
+  compatibility.supportWindow.minorReleases < 1 ||
+  !Number.isInteger(compatibility.supportWindow?.minimumDays) ||
+  compatibility.supportWindow.minimumDays < 1
+) {
+  throw new Error('agentd compatibility support window is invalid');
+}
+const goProtocol = readFileSync(resolve(root, 'agentd/proto/proto.go'), 'utf8');
+const tsProtocol = readFileSync(
+  resolve(root, 'apps/orchestrator/src/nodes/agentd/protocol.ts'),
+  'utf8',
+);
+const goPreferred = Number(goProtocol.match(/const ProtocolVersion = (\d+)/)?.[1]);
+const tsPreferred = Number(tsProtocol.match(/AGENTD_PROTOCOL_VERSION = (\d+)/)?.[1]);
+const retainedClientProtocols = Array.from(
+  tsProtocol.match(/AGENTD_CLIENT_PROTOCOL_VERSIONS = \[([^\]]+)\]/)?.[1]?.matchAll(/\d+/g) ?? [],
+  (match) => Number(match[0]),
+);
+if (
+  goPreferred !== compatibility.preferredProtocolVersion ||
+  tsPreferred !== compatibility.preferredProtocolVersion
+) {
+  throw new Error('agentd preferred protocol is not synchronized across the release');
+}
+if (
+  retainedClientProtocols.length !== protocols.length ||
+  protocols.some((version) => !retainedClientProtocols.includes(version))
+) {
+  throw new Error('agentd compatibility lists a protocol without a retained client codec');
+}
+const serverSource = readFileSync(resolve(root, 'agentd/internal/server/server.go'), 'utf8');
+for (const capability of capabilities) {
+  if (!serverSource.includes(`"${capability}"`)) {
+    throw new Error(`agentd does not advertise required capability ${capability}`);
+  }
 }
 
 const manifests = [
@@ -63,4 +148,6 @@ if (expected && expected !== canonical) {
   throw new Error(`release/tag version ${expected} does not match repository ${canonical}`);
 }
 
-console.log(`Flock version ${canonical} is synchronized.`);
+console.log(
+  `Flock version ${canonical} is synchronized; agentd >=${compatibility.minimumDaemonVersion}, protocol ${protocols.join('/')}.`,
+);

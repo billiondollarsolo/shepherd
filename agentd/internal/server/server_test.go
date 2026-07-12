@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"flock-agentd/internal/controlauth"
-	"flock-agentd/internal/identity"
-	"flock-agentd/internal/layout"
-	"flock-agentd/internal/proto"
-	"flock-agentd/internal/session"
+	"github.com/billiondollarsolo/flock/agentd/controlauth"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/layout"
+	"github.com/billiondollarsolo/flock/agentd/internal/session"
+	"github.com/billiondollarsolo/flock/agentd/proto"
 )
 
 const testNodeID = "node-test-1234"

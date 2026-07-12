@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"flock-agentd/internal/agentpath"
+	"github.com/billiondollarsolo/flock/agentd/internal/agentpath"
 )
 
 func defaultShell(spec Spec) string {

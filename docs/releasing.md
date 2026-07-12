@@ -9,7 +9,9 @@ GitHub Container Registry (GHCR):
 
 The release workflow builds Linux amd64 and arm64 images, publishes semantic
 version tags, generates SBOM/provenance attestations, and updates `latest` only for
-non-prereleases.
+non-prereleases. Every GitHub Release also publishes `agentd-compatibility.json` and
+includes the same policy in its notes, so operators can inspect mandatory node
+requirements before pulling the stack.
 
 ## One-time public-repository setup
 
@@ -34,10 +36,17 @@ Before the first public release:
 Update all version-bearing files together:
 
 - `agentd/VERSION` (canonical version)
+- `agentd/COMPATIBILITY.json` (minimum daemon, supported protocols, and required capabilities)
 - root and workspace `package.json` files
 - `agentd/internal/session/flock-mcp.mjs`
 - `.env.example` and versioned image defaults in `docker-compose.yml`
 - `CHANGELOG.md`
+
+When the minimum daemon version, protocol range, or required capabilities change,
+release notes must call out whether node upgrades are recommended or mandatory.
+Supporting an older protocol requires its implementation and integration fixture to
+remain in-tree; listing it in the manifest alone is not sufficient. Never lower the
+preferred daemon to force a downgrade of a newer compatible node.
 
 Then run:
 
@@ -70,6 +79,9 @@ docker build -f docker/Dockerfile.session-chrome -t flock-session-chrome:test .
 Before a destructive migration or upgrade, create and verify a vault using
 [backup-and-recovery.md](backup-and-recovery.md). A release candidate is not ready if
 the current vault cannot restore into an isolated database with the matching master key.
+The upgrade helper compares the target release's `agentd-compatibility.json` with the
+running image and requires explicit acknowledgement when the support floor, protocol
+set, or required capabilities become stricter.
 
 ## Publish
 
@@ -78,7 +90,10 @@ the current vault cannot restore into an isolated database with the matching mas
    when immutable releases are enabled.
 3. Publish the release. `.github/workflows/release-images.yml` verifies that the tag
    matches the repository version and belongs to `main`, reruns the release gates,
-   then builds and pushes all images.
+   then builds and pushes all images. After every candidate passes, the workflow also
+   creates the immutable nested Go module tag `agentd/v<version>` at the same commit.
+   Go consumers import `github.com/billiondollarsolo/flock/agentd`; never move or
+   recreate that tag.
 4. For the first publication of each GHCR package, open the package settings and set
    visibility to **Public**. Package visibility is separate from repository visibility.
 
@@ -113,3 +128,18 @@ the running installation, including a first-start Claude installation or a user 
 - Establish an incident-response path and a regular dependency/base-image update
   cadence. Dependabot opens the update pull requests; maintainers still need to review
   and release them.
+
+## Compatibility and support window
+
+The checked-in compatibility manifest is the release contract for remote node
+daemons. Flock distinguishes compatible nodes, recommended maintenance, and mandatory
+upgrades using authenticated protocol/capability facts plus semantic versions. The
+default support promise is one minor release line and 90 days after replacement,
+whichever is longer. Before 1.0, an intentional exception must be explicit in release
+notes.
+
+Database migrations follow expand/migrate/contract sequencing across the supported
+rollback window. Do not ship destructive contraction while the oldest supported
+application version may still be restored. Application, web, browser-worker, and
+daemon artifacts remain immutable and version-coupled; external coding-agent CLIs are
+reported integrations and require their own matrix tests.

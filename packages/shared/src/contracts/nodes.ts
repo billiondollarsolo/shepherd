@@ -7,6 +7,7 @@ import {
   SshAuthMethodEnum,
   Uuid,
 } from '../domain.js';
+import { AgentdCompatibilitySchema } from '../agentd-compatibility.js';
 
 // --- nodes -----------------------------------------------------------------
 
@@ -122,6 +123,7 @@ export const NodePreflightResponseSchema = z.object({
   nodeId: Uuid,
   generatedAt: IsoTimestamp,
   ready: z.boolean(),
+  daemonCompatibility: AgentdCompatibilitySchema,
   checks: z.array(NodePreflightCheckSchema),
 });
 export type NodePreflightResponse = z.infer<typeof NodePreflightResponseSchema>;

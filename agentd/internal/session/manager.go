@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"flock-agentd/internal/metrics"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 // Manager is the registry of live sessions on this node. Sessions persist here

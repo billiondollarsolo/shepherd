@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"flock-agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 )
 
 // Per-path locks + atomic writes for the agent config files we mutate. Several

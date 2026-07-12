@@ -221,17 +221,31 @@ docker compose config >/dev/null && echo "compose OK"
 
 ## Upgrading the node daemon
 
-`flock-agentd` is versioned (`agentd/VERSION` — the single source of truth). Release
-orchestrator images include Linux amd64 and arm64 daemon binaries. The
-orchestrator ships the expected version to each node and, on a version mismatch,
-re-ships + restarts the daemon automatically. A node with live sessions keeps its
-authenticated existing daemon and reports the rollout as deferred. Once sessions
-drain, the next node operation activates the candidate. Candidates are installed by
-atomic rename, must pass the real authenticated protocol handshake, and restore the
-retained previous binary if that validation fails. To roll out a new daemon: bump
-the synchronized Flock version, rebuild the image (or pull the new release), and redeploy —
-the rollout happens on next connect. (Keep `FLOCK_AGENTD_VERSION` unset so it
-resolves from the shipped `agentd/VERSION`; only set it to pin an explicit override.)
+`flock-agentd` is versioned (`agentd/VERSION` is the preferred binary) and governed
+by `agentd/COMPATIBILITY.json` (minimum daemon, supported protocols, and required
+authenticated capabilities). Release orchestrator images include Linux amd64 and
+arm64 daemon binaries.
+
+Flock reports one of three states:
+
+- **Compatible:** keep the daemon. A newer compatible daemon is never downgraded.
+- **Upgrade recommended:** the daemon is supported but older than preferred, or its
+  managed service needs migration.
+- **Upgrade required:** the daemon is below the supported floor, speaks no supported
+  protocol, has invalid version metadata, or lacks a required capability.
+
+A node with live sessions keeps its authenticated existing daemon and reports the
+rollout as deferred. Once sessions drain, the next node operation activates the
+candidate. If Flock cannot authenticate the old protocol and count sessions, it fails
+closed instead of assuming the node is idle. Candidates are installed by atomic
+rename, must pass the real authenticated protocol handshake, and restore the retained
+previous binary if validation fails.
+
+To roll out a new daemon, update the synchronized release and compatibility manifest,
+rebuild the image (or pull the new release), and redeploy. Keep
+`FLOCK_AGENTD_VERSION` unset so it resolves from the shipped `agentd/VERSION`; only
+set it to pin an explicit development override. The complete lifecycle policy is in
+[agentd-compatibility-and-upgrade-plan.md](agentd-compatibility-and-upgrade-plan.md).
 
 ## Upgrade an installation
 
@@ -244,13 +258,25 @@ FLOCK_VAULT_PASSWORD_FILE=/tmp/flock-vault-password \
   ./scripts/flock-upgrade.sh 0.3.1
 ```
 
-The helper verifies Compose, creates and verifies an encrypted pre-upgrade vault,
-pulls exact versioned images, updates `FLOCK_VERSION`, clears any stale browser-image
+The helper fetches the target release's HTTPS-published compatibility asset and
+compares it with the running image before changing anything. If the target raises the
+minimum daemon, removes a protocol, or requires a new capability, the command stops
+and explains that some nodes may require mandatory upgrades. After reviewing the
+release notes, rerun with `--acknowledge-node-policy-change`. Exact per-node state is
+shown on each node page from its authenticated daemon handshake.
+
+It then verifies Compose, creates and verifies an encrypted pre-upgrade vault, pulls
+exact versioned images, updates `FLOCK_VERSION`, clears any stale browser-image
 override so session Chrome follows the same release, starts the stack, applies the
-normal idempotent migrations, and verifies readiness. `--skip-backup` exists only as
-an explicit operator escape hatch.
+normal idempotent migrations, and verifies readiness. `--skip-backup` and
+`--skip-compatibility-check` exist only as explicit operator escape hatches.
 
 Flock does not pretend forward database migrations are automatically reversible. On
 failure the helper retains the prior `.env` and reports the verified vault; use the
 documented restore procedure rather than blindly starting an older image against a
 newer schema.
+
+Schema changes use expand/migrate/contract sequencing for the documented support
+window. Do not contract data needed by a still-supported rollback release. Flock's
+orchestrator, web, and browser images remain on one immutable release version; remote
+daemon compatibility is the deliberate exception governed by the manifest above.

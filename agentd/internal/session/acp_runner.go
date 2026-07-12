@@ -4,8 +4,8 @@ import (
 	"context"
 	"os/exec"
 
-	"flock-agentd/internal/acp"
-	"flock-agentd/internal/status"
+	"github.com/billiondollarsolo/flock/agentd/internal/acp"
+	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
 // runACPOverConn drives one turn of an already-connected ACP session and pushes

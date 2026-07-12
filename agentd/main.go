@@ -18,12 +18,12 @@ import (
 	"syscall"
 	"time"
 
-	"flock-agentd/internal/identity"
-	"flock-agentd/internal/layout"
-	"flock-agentd/internal/metrics"
-	"flock-agentd/internal/sandbox"
-	"flock-agentd/internal/server"
-	"flock-agentd/internal/session"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/layout"
+	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
+	"github.com/billiondollarsolo/flock/agentd/internal/sandbox"
+	"github.com/billiondollarsolo/flock/agentd/internal/server"
+	"github.com/billiondollarsolo/flock/agentd/internal/session"
 )
 
 // T14 — single source of truth for the version. The VERSION file is read by the
@@ -163,10 +163,10 @@ func serve(args []string) {
 	}
 
 	// A loopback TCP listener (remote nodes, reached via SSH direct-tcpip) is the
-	// one surface another LOCAL user/process on the node could reach. Refuse to
-	// open it without a shared secret — otherwise anyone who can reach
-	// 127.0.0.1:<port> could open/close/drive every session. The unix socket
-	// (local node) is already protected by 0600 file perms, so it needs no secret.
+	// surface another LOCAL user/process on the node could reach. Refuse to open
+	// it without a shared secret. Unix permissions remain a first boundary, but
+	// every transport still performs the same mutual-MAC handshake; only explicit
+	// insecure same-user development mode may use an empty credential.
 	if *addr != "" && resolvedSecret == "" {
 		fatal("refusing TCP listener", fmt.Errorf(
 			"a --secret (or FLOCK_AGENTD_SECRET) is required when --addr is set; refusing to expose an unauthenticated control port"))

@@ -16,11 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"flock-agentd/internal/controlauth"
-	"flock-agentd/internal/identity"
-	"flock-agentd/internal/metrics"
-	"flock-agentd/internal/proto"
-	"flock-agentd/internal/session"
+	"github.com/billiondollarsolo/flock/agentd/controlauth"
+	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
+	"github.com/billiondollarsolo/flock/agentd/internal/session"
+	"github.com/billiondollarsolo/flock/agentd/proto"
 )
 
 // writeTimeout bounds every frame write. A client whose TCP receive window fills

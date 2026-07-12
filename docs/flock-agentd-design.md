@@ -87,8 +87,8 @@ returned or logged.
 
 The wire sources of truth are:
 
-- `agentd/internal/proto/proto.go`
-- `agentd/internal/controlauth/controlauth.go`
+- `agentd/proto/proto.go`
+- `agentd/controlauth/controlauth.go`
 - `apps/orchestrator/src/nodes/agentd/protocol.ts`
 - `apps/orchestrator/src/nodes/agentd/control-auth.ts`
 

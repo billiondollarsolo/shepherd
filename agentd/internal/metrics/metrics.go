@@ -18,8 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"flock-agentd/internal/agentpath"
-	"flock-agentd/internal/sandbox"
+	"github.com/billiondollarsolo/flock/agentd/internal/agentpath"
+	"github.com/billiondollarsolo/flock/agentd/internal/sandbox"
 )
 
 // AgentInfo is a coding-agent CLI detected on the node.
