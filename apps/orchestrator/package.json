@@ -39,7 +39,7 @@
     "argon2": "0.41.1",
     "chrome-remote-interface": "0.33.3",
     "cookie": "1.0.2",
-    "dockerode": "4.0.2",
+    "dockerode": "5.0.1",
     "drizzle-orm": "0.45.2",
     "fastify": "5.8.5",
     "node-pty": "1.0.0",
