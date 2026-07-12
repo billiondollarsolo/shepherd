@@ -46,3 +46,98 @@ test('command palette toggles the bottom shell drawer', async ({ page }) => {
   await page.getByRole('option', { name: /toggle shell drawer/i }).click();
   await expect(page.getByTestId('region-drawer')).toHaveCount(0);
 });
+
+test('a direct agent route renders an independent session outside every Pen', async ({ page }) => {
+  const nodeId = '11111111-1111-4111-8111-111111111111';
+  const projectId = '22222222-2222-4222-8222-222222222222';
+  const sessionId = '33333333-3333-4333-8333-333333333333';
+  const now = '2026-07-12T00:00:00.000Z';
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+
+  await page.route('**/api/nodes', (route) =>
+    route.fulfill(
+      json({
+        nodes: [
+          {
+            id: nodeId,
+            name: 'node-1',
+            kind: 'ssh',
+            host: 'node-1.example',
+            port: 22,
+            sshUser: 'flock-control',
+            sshKeyRef: null,
+            sshAuthMethod: 'key',
+            pool: null,
+            connectionStatus: 'connected',
+            lastSeenAt: now,
+            createdBy: null,
+            createdAt: now,
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route('**/api/projects', (route) =>
+    route.fulfill(
+      json({
+        projects: [
+          {
+            id: projectId,
+            nodeId,
+            name: 'demo',
+            workingDir: '/srv/demo',
+            agentPolicy: {
+              defaultAuthority: 'callback_only',
+              maxAuthority: 'manage',
+              maxConcurrentAgents: 12,
+              spawnRateLimitPerMinute: 10,
+              maxSendBytes: 16_384,
+              maxReadMessages: 100,
+            },
+            createdAt: now,
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route('**/api/sessions', (route) =>
+    route.fulfill(
+      json({
+        sessions: [
+          {
+            id: sessionId,
+            nodeId,
+            projectId,
+            agentType: 'claude-code',
+            workingDir: '/srv/demo',
+            status: 'idle',
+            statusDetail: null,
+            note: null,
+            permissionMode: 'default',
+            orchestrationAuthority: 'callback_only',
+            createdAt: now,
+            lastStatusAt: now,
+            closedAt: null,
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route(`**/api/projects/${projectId}/pens`, (route) =>
+    route.fulfill(
+      json({
+        pens: { version: 1, projectId, activePenId: 'pen-1', pens: [] },
+        revision: 1,
+      }),
+    ),
+  );
+
+  await page.goto(`/agents/${sessionId}`);
+
+  await expect(page.getByTestId('terminal-area')).toBeVisible();
+  await expect(page.getByText('Drag an agent into a new Pen from the sidebar.')).toHaveCount(0);
+});

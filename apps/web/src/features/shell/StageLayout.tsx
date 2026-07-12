@@ -377,16 +377,11 @@ export function StageLayout(): JSX.Element {
   }
   const activePen =
     document.pens.find((pen) => pen.id === document.activePenId) ?? document.pens[0];
-  if (!activePen) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
-        Drag an agent into a new Pen from the sidebar.
-      </div>
-    );
-  }
-  const activeIds = layoutSessionIds(activePen.layout.root);
+  const activeIds = activePen ? layoutSessionIds(activePen.layout.root) : [];
   const selectedOutside =
-    selected && selected.projectId === projectId && !activeIds.includes(selected.id);
+    selected &&
+    selected.projectId === projectId &&
+    (!activePen || !activeIds.includes(selected.id));
   if (selectedOutside) {
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -396,12 +391,19 @@ export function StageLayout(): JSX.Element {
             className="rounded px-2 py-1 hover:bg-flock-surface-2"
             onClick={() => selectProject(projectId)}
           >
-            Back to {activePen.name}
+            Back to {activePen?.name ?? 'project'}
           </button>
         </div>
         <div className="min-h-0 flex-1">
           <TerminalArea session={selected} register />
         </div>
+      </div>
+    );
+  }
+  if (!activePen) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-flock-ink-muted">
+        Drag an agent into a new Pen from the sidebar.
       </div>
     );
   }
