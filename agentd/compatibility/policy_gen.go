@@ -1,4 +1,5 @@
 // Code generated from agentd/COMPATIBILITY.json; DO NOT EDIT.
+// Regenerate with: go generate ./compatibility
 
 // Package compatibility exposes the release-owned flock-agentd compatibility policy.
 package compatibility

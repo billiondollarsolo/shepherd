@@ -95,6 +95,9 @@ cleanup() {
   # tsx watch / vite spawn grandchildren; sweep the process group.
   pkill -P $$ 2>/dev/null || true
   wait 2>/dev/null || true
+  # The published credential must not outlive the daemon it authenticates, or the
+  # next client adopts a secret no running agentd holds.
+  [[ -n "${AGENTD_CREDENTIAL_FILE:-}" ]] && rm -f "$AGENTD_CREDENTIAL_FILE"
   log "Stopped."
 }
 trap cleanup INT TERM EXIT
@@ -105,6 +108,17 @@ trap cleanup INT TERM EXIT
 # orchestrator's FLOCK_AGENTD_SECRET (read from the env file).
 AGENTD_SECRET="$(grep -E '^FLOCK_AGENTD_SECRET=' "$ENV_FILE" | cut -d= -f2- || true)"
 AGENTD_NODE_ID="${FLOCK_AGENTD_NODE_ID:-development-local}"
+
+# Publish the control credential to the well-known owner-only file. Passed only
+# through the daemon's environment it is invisible to every other process on the
+# machine, so a local client (flock-tui) cannot adopt a daemon it did not start —
+# it just gets "unknown control credential". The daemon still reads the secret
+# from its env; this file is how everyone else finds it.
+AGENTD_CREDENTIAL_FILE="${XDG_RUNTIME_DIR:-/tmp}/flock-agentd.secret"
+if [[ -n "$AGENTD_SECRET" ]]; then
+  ( umask 077; printf '%s\n' "$AGENTD_SECRET" > "$AGENTD_CREDENTIAL_FILE" )
+  log "agentd credential → $AGENTD_CREDENTIAL_FILE (0600; flock-tui adopts it automatically)"
+fi
 log "Building + starting flock-agentd (local node)…"
 AGENTD_BIN=""
 if command -v go >/dev/null 2>&1; then
