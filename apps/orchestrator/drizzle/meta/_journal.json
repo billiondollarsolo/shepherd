@@ -155,6 +155,13 @@
       "when": 1783828800000,
       "tag": "0021_remove_session_lineage",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783832400000,
+      "tag": "0022_claim_preowner_nodes",
+      "breakpoints": true
     }
   ]
 }

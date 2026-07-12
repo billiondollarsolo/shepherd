@@ -198,7 +198,8 @@ export const NodeSchema = z.object({
   pool: z.string().nullable(),
   connectionStatus: ConnectionStatusEnum,
   lastSeenAt: IsoTimestamp.nullable(),
-  createdBy: Uuid,
+  /** Null only during first-run boot before the installation owner exists. */
+  createdBy: Uuid.nullable(),
   createdAt: IsoTimestamp,
 });
 export type Node = z.infer<typeof NodeSchema>;

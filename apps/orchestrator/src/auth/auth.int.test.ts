@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { agentSessions, auditLog, sessionsAuth, users } from '../db/schema.js';
+import { agentSessions, auditLog, nodes, sessionsAuth, users } from '../db/schema.js';
 import { buildServer } from '../server.js';
 import { AuthService } from './service.js';
 import { makeDbAuthAuditRecorder } from './audit-sink.js';
@@ -96,6 +96,10 @@ describe('US-4 first-run owner setup', () => {
     expect(row).toBeDefined();
     expect(row!.passwordHash).toMatch(/^\$argon2id\$/);
     expect(row!.passwordHash).not.toContain(OWNER.password);
+
+    const nodeRows = await handle.db.select({ createdBy: nodes.createdBy }).from(nodes);
+    expect(nodeRows.length).toBeGreaterThan(0);
+    expect(nodeRows.every((node) => node.createdBy === body.user.id)).toBe(true);
   });
 
   it('returns 409 on a second setup once the owner exists', async () => {

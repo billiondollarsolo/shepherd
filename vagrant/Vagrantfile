@@ -6,7 +6,7 @@
 # vouch for —
 #   - agent permission/sandbox modes (Codex landlock/seccomp, Claude guards) run
 #     for real instead of silently no-opping inside an unprivileged container;
-#   - credential persistence (~/.claude) across reboots is the disk's default.
+#   - credential persistence (~flock-agent/.claude) across reboots is the disk's default.
 # Use the Docker nodes for fast everyday dev; bring a VM up when validating modes.
 #
 # Driven by scripts/sim-nodes-vm.sh (gen key → up → register in Flock), mirroring
@@ -16,7 +16,7 @@
 #   FLOCK_VM_NODES      node count          (default 2)
 #   FLOCK_VM_BOX        libvirt base box    (default generic/ubuntu2204)
 #   FLOCK_VM_MEM/CPUS   per-VM resources    (default 8192 MB / 4 vCPU)
-#   FLOCK_PUBKEY        orchestrator pubkey installed for the `flock` user
+#   FLOCK_PUBKEY        orchestrator pubkey installed for `flock-control`
 #
 # NETWORKING: unlike VirtualBox, the libvirt provider does NOT honor
 # `forwarded_port` to a host loopback port — each VM gets an IP on libvirt's
@@ -41,7 +41,7 @@ Vagrant.configure("2") do |config|
       end
 
       # Same software as docker/Dockerfile.node; installs the agent CLIs and
-      # authorizes the `flock` user with the orchestrator pubkey.
+      # authorizes the privilege-separated control identity with the orchestrator pubkey.
       node.vm.provision "shell", path: "provision.sh", args: [PUBKEY]
     end
   end

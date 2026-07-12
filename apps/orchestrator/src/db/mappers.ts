@@ -106,7 +106,7 @@ export function rowToNode(row: NodeRow): SharedNode {
     pool: row.pool ?? null,
     connectionStatus: row.connectionStatus as SharedNode['connectionStatus'],
     lastSeenAt: toIsoOrNull(row.lastSeenAt),
-    createdBy: row.createdBy ?? '',
+    createdBy: row.createdBy,
     createdAt: toIso(row.createdAt),
   };
 }

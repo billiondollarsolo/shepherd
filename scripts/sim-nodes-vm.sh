@@ -89,7 +89,7 @@ register_nodes() {
     log "Registering $name ($ip:22)…"
     body=$(curl -sS -b "$COOKIES" -X POST "$API/api/nodes" \
       -H 'content-type: application/json' \
-      -d "{\"name\":\"$name\",\"kind\":\"ssh\",\"host\":\"$ip\",\"port\":22,\"sshUser\":\"flock\",\"sshPrivateKey\":$key_json}")
+      -d "{\"name\":\"$name\",\"kind\":\"ssh\",\"host\":\"$ip\",\"port\":22,\"sshUser\":\"flock-control\",\"sshPrivateKey\":$key_json}")
     code=$(echo "$body" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("ok" if d.get("node") else d.get("error",{}).get("message","?"))' 2>/dev/null || echo "parse-error")
     log "  → $code"
   done
@@ -106,7 +106,7 @@ cmd_up() {
     for _ in $(seq 1 60); do
       local ip; ip=$(node_ip "$i")
       if [ -n "$ip" ] && ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout=2 -o BatchMode=yes "flock@$ip" 'echo ok' >/dev/null 2>&1; then
+            -o ConnectTimeout=2 -o BatchMode=yes "flock-control@$ip" 'echo ok' >/dev/null 2>&1; then
         log "  node-vm-$i: SSH ready ($ip)"; break
       fi
       sleep 2

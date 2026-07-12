@@ -10,7 +10,7 @@ import {
   StatusUpdateMessage,
 } from './contracts.js';
 import { ClaudeHookPayload, CodexHookPayload, OpenCodeHookPayload } from './hooks.js';
-import { SessionSchema, type SessionRecord } from './domain.js';
+import { NodeSchema, SessionSchema, type SessionRecord } from './domain.js';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -37,6 +37,25 @@ function sampleSession(): SessionRecord {
 }
 
 describe('REST contract round-trips (spec §8.1)', () => {
+  it('allows the boot-seeded local node to be unowned before first-run setup', () => {
+    const node = NodeSchema.parse({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'local',
+      kind: 'local',
+      host: null,
+      port: null,
+      sshUser: null,
+      sshKeyRef: null,
+      sshAuthMethod: null,
+      pool: null,
+      connectionStatus: 'connected',
+      lastSeenAt: null,
+      createdBy: null,
+      createdAt: '2026-07-11T00:00:00.000Z',
+    });
+    expect(node.createdBy).toBeNull();
+  });
+
   it('CreateSessionResponse strips agent-only token and internal record fields', () => {
     const value = { session: sampleSession(), hookToken: 'plaintext-once' };
     const parsed = CreateSessionResponse.parse(value);

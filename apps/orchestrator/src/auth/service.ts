@@ -27,7 +27,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import type { AuditAction, User } from '@flock/shared';
 import type { Database } from '../db/client.js';
-import { sessionsAuth, users, type UserRow } from '../db/schema.js';
+import { nodes, sessionsAuth, users, type UserRow } from '../db/schema.js';
 import { hashPassword, verifyPassword } from './hashing.js';
 
 /**
@@ -141,6 +141,10 @@ export class AuthService {
       }
       throw new UsernameTakenError(input.username);
     }
+    // The local node is seeded before first-run owner setup so the installation
+    // has a stable node identity. Claim that pre-owner row immediately; otherwise
+    // the authenticated browser receives a node with no owner until a restart.
+    await this.db.update(nodes).set({ createdBy: row.id }).where(isNull(nodes.createdBy));
     await this.audit.record({
       action: 'owner_setup',
       userId: row.id,
