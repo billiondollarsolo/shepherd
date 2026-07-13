@@ -102,7 +102,7 @@ export async function collectDiagnostics(deps: DiagnosticsDependencies): Promise
       disk,
       browserRuntime: {
         status: dockerAccess,
-        image: env.FLOCK_BROWSER_IMAGE ?? 'flock-session-chrome:latest',
+        image: env.FLOCK_BROWSER_IMAGE ?? 'shepherd-session-chrome:latest',
         network: env.FLOCK_BROWSER_NETWORK ?? 'flock-internal',
       },
       push: { status: env.VAPID_PUBLIC_KEY ? 'configured' : 'not_configured' },

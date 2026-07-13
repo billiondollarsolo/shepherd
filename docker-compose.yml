@@ -93,7 +93,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-orchestrator:${FLOCK_VERSION:-0.3.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.3.0}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -148,7 +148,7 @@ services:
       # user's screencast browser pane. MUST be the matching Shepherd
       # session-chrome release image; it bridges CDP to the published port
       # (plain Chrome binds the debugger to loopback only).
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-session-chrome:${FLOCK_VERSION:-0.3.0}}
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-session-chrome:${FLOCK_VERSION:-0.3.0}}
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
       BROWSER_WORKER_URL: http://browser-worker:8090
       BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
@@ -193,14 +193,14 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-orchestrator:${FLOCK_VERSION:-0.3.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.3.0}
     restart: unless-stopped
     entrypoint: ['/usr/local/bin/flock-browser-worker-entrypoint.sh']
     environment:
       NODE_ENV: production
       BROWSER_WORKER_PORT: 8090
       BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-session-chrome:${FLOCK_VERSION:-0.3.0}}
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-session-chrome:${FLOCK_VERSION:-0.3.0}}
       BROWSER_NETWORK: flock_internal
       BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
       BROWSER_MEMORY_BYTES: ${BROWSER_MEMORY_BYTES:-1073741824}
@@ -227,7 +227,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-web:${FLOCK_VERSION:-0.3.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.3.0}
     restart: unless-stopped
     depends_on:
       - orchestrator

@@ -4,7 +4,7 @@
 # No secrets baked in (NFR-DEP2): runtime config is fetched from the
 # orchestrator API, not compiled into the bundle.
 # Build context is the repo root.
-#   docker build -f docker/Dockerfile.web -t flock-web .
+#   docker build -f docker/Dockerfile.web -t shepherd-web .
 # =============================================================================
 
 # ---- Stage 1: base toolchain (Node 22 + pnpm via corepack) ------------------

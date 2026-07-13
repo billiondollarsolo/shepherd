@@ -3,7 +3,7 @@
 # Multi-stage: deps -> build -> runtime. No secrets baked in (NFR-DEP2);
 # everything sensitive is supplied at runtime via env / Docker secrets.
 # Build context is the repo root.
-#   docker build -f docker/Dockerfile.orchestrator -t flock-orchestrator .
+#   docker build -f docker/Dockerfile.orchestrator -t shepherd-orchestrator .
 # =============================================================================
 
 # ---- Stage 0: build flock-agentd (T10) --------------------------------------

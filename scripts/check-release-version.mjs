@@ -124,7 +124,7 @@ const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
 if (!compose.includes(`FLOCK_VERSION:-${canonical}`)) {
   throw new Error(`docker-compose.yml does not default to Shepherd ${canonical}`);
 }
-if (!compose.includes(`flock-session-chrome:\${FLOCK_VERSION:-${canonical}}`)) {
+if (!compose.includes(`shepherd-session-chrome:\${FLOCK_VERSION:-${canonical}}`)) {
   throw new Error(
     `docker-compose.yml does not couple session Chrome to FLOCK_VERSION ${canonical}`,
   );

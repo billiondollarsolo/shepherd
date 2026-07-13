@@ -56,4 +56,5 @@ authoritative reading path.
 
 > **A note on terminology.** The product is **Shepherd**; the web dashboard's internal
 > name is the **paddock**. Older docs may say “Flock,” “Conductor,” or “cockpit.” Literal
-> `flock-*` identifiers remain current during the surface-name transition.
+> Compatibility-sensitive `flock-*` identifiers remain current during the surface-name
+> transition; public container images use `shepherd-*`.

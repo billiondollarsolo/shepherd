@@ -95,7 +95,7 @@ export async function main(): Promise<void> {
     docker,
     resolveCdp: resolveNetworkCdp,
     config: {
-      image: process.env.BROWSER_IMAGE ?? 'flock/session-chrome:latest',
+      image: process.env.BROWSER_IMAGE ?? 'shepherd-session-chrome:latest',
       networkName: process.env.BROWSER_NETWORK ?? 'flock_internal',
       maxConcurrent: Number(process.env.BROWSER_MAX_CONCURRENT ?? 4),
       memoryBytes: Number(process.env.BROWSER_MEMORY_BYTES ?? 1024 * 1024 * 1024),

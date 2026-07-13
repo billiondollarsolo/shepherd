@@ -116,11 +116,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: flock-orchestrator
+          - image: shepherd-orchestrator
             dockerfile: docker/Dockerfile.orchestrator
-          - image: flock-web
+          - image: shepherd-web
             dockerfile: docker/Dockerfile.web
-          - image: flock-session-chrome
+          - image: shepherd-session-chrome
             dockerfile: docker/Dockerfile.session-chrome
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
@@ -215,14 +215,14 @@ jobs:
 
       - name: Pull exact candidates
         run: |
-          for image in flock-orchestrator flock-web flock-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
             docker pull "$FLOCK_IMAGE_REGISTRY/$image:$CANDIDATE_TAG"
           done
 
       - name: Start clean candidate stack
         env:
           FLOCK_VERSION: ${{ env.CANDIDATE_TAG }}
-          BROWSER_IMAGE: ${{ env.FLOCK_IMAGE_REGISTRY }}/flock-session-chrome:${{ env.CANDIDATE_TAG }}
+          BROWSER_IMAGE: ${{ env.FLOCK_IMAGE_REGISTRY }}/shepherd-session-chrome:${{ env.CANDIDATE_TAG }}
         run: docker compose up -d --no-build --wait postgres browser-worker orchestrator web caddy
 
       - name: Verify migrations, readiness, setup, login, and API
@@ -332,12 +332,12 @@ jobs:
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
-          for image in flock-orchestrator flock-web flock-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
             digest="$(cat "digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
             annotations=''
-            if [ "$image" = flock-orchestrator ]; then
+            if [ "$image" = shepherd-orchestrator ]; then
               codex_version="$(sed -n '1s/.* //p' release-smoke/agent-versions.txt)"
               opencode_version="$(sed -n '2s/.* //p' release-smoke/agent-versions.txt)"
               annotations="--annotation index:io.flock.agent.codex-version=$codex_version --annotation index:io.flock.agent.opencode-version=$opencode_version"
@@ -361,7 +361,7 @@ jobs:
           docker logout ghcr.io
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
-          for image in flock-orchestrator flock-web flock-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
             if ! manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"; then
               printf '::error::%s must be public before this release can be published. Set Package settings → Change visibility → Public, then rerun failed jobs.\n' "$REGISTRY/$image"
               exit 1

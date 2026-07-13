@@ -114,7 +114,7 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
         config: {
           // The Shepherd session-chrome image bridges CDP to a published port (plain
           // Chrome images bind the debugger to loopback only). See docker/Dockerfile.session-chrome.
-          image: deps.image ?? process.env.BROWSER_IMAGE ?? 'flock/session-chrome:latest',
+          image: deps.image ?? process.env.BROWSER_IMAGE ?? 'shepherd-session-chrome:latest',
           maxConcurrent: deps.maxConcurrent ?? Number(process.env.BROWSER_MAX_CONCURRENT ?? 4),
           // T15(c): per-container resource caps (0 = leave unset). Defaults applied by
           // DEFAULT_LAYER_A_CONFIG; override per-deploy via env.

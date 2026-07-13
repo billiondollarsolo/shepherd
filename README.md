@@ -61,7 +61,7 @@ openssl rand -base64 48 > secrets/browser_worker_token
 chmod 600 secrets/*
 
 docker compose pull
-docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
+docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0
 docker compose up -d --wait
 ```
 
@@ -172,12 +172,12 @@ stop an agent.
 
 Each release publishes provenance-attested, SBOM-enabled multi-platform images:
 
-- `ghcr.io/billiondollarsolo/flock-orchestrator`
-- `ghcr.io/billiondollarsolo/flock-web`
-- `ghcr.io/billiondollarsolo/flock-session-chrome`
+- `ghcr.io/billiondollarsolo/shepherd-orchestrator`
+- `ghcr.io/billiondollarsolo/shepherd-web`
+- `ghcr.io/billiondollarsolo/shepherd-session-chrome`
 
-Production Compose pins `FLOCK_VERSION`; avoid mutable `latest` tags. Image names keep
-the `flock-*` prefix for deployment compatibility during the Shepherd name transition.
+Production Compose pins `FLOCK_VERSION`; avoid mutable `latest` tags. Public image names
+use the canonical `shepherd-*` product namespace.
 
 ## Local development
 
@@ -237,9 +237,9 @@ the [changelog](CHANGELOG.md) before upgrading. The application, browser worker,
 app, and preferred node daemon are released together; the UI reports when a node daemon
 is compatible, recommended to upgrade, or required to upgrade.
 
-Shepherd was previously named Flock. The repository is now `shepherd`, while existing
-technical identifiers—including `flock-*` images, services, commands, environment
-variables, storage, and the published Go module path—remain stable for compatibility.
+Shepherd was previously named Flock. The repository and public container images now use
+the `shepherd` name, while compatibility-sensitive services, commands, environment
+variables, storage, and the published Go module path retain their `flock` identifiers.
 
 Shepherd is available under the [MIT License](LICENSE). Bundled font attribution is in
 [Third-party notices](THIRD_PARTY_NOTICES.md).

@@ -28,13 +28,13 @@ run inside containers or are built there; nothing is installed on the host itsel
 
 `docker compose up` brings up five services:
 
-| Service          | Image                                                    | Role                                                                                                                                                  |
-| ---------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `caddy`          | `caddy:2-alpine` (digest-pinned)                         | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
-| `postgres`       | `postgres:16-bookworm` (digest-pinned)                   | Durable system of record. **Never** on the live status path.                                                                                          |
-| `orchestrator`   | `ghcr.io/billiondollarsolo/flock-orchestrator:<version>` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node.                       |
-| `browser-worker` | orchestrator image, restricted entrypoint                | The only Docker-socket holder; exposes a token-authenticated create/stop/reap API with fixed browser policy.                                          |
-| `web`            | `ghcr.io/billiondollarsolo/flock-web:<version>`          | The static React/Vite PWA, served by nginx.                                                                                                           |
+| Service          | Image                                                       | Role                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`          | `caddy:2-alpine` (digest-pinned)                            | TLS-terminating reverse proxy on host `80`/`443`; routes `/` → `web`, `/api` + `/ws` → `orchestrator`. ACME certs persist in the `caddy_data` volume. |
+| `postgres`       | `postgres:16-bookworm` (digest-pinned)                      | Durable system of record. **Never** on the live status path.                                                                                          |
+| `orchestrator`   | `ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>` | The brain: status model, hooks, SSH/agentd, browser lifecycle, auth. Also runs the bundled **flock-agentd** for the local node.                       |
+| `browser-worker` | orchestrator image, restricted entrypoint                   | The only Docker-socket holder; exposes a token-authenticated create/stop/reap API with fixed browser policy.                                          |
+| `web`            | `ghcr.io/billiondollarsolo/shepherd-web:<version>`          | The static React/Vite PWA, served by nginx.                                                                                                           |
 
 The orchestrator image includes the latest available Codex and OpenCode releases when
 the image is built. On first container start, the entrypoint installs the latest Claude
@@ -47,12 +47,12 @@ image or mounted home directory supplies a user-managed Claude Code version.
 container is launched **per session at runtime** by `browser-worker` and destroyed on
 teardown. The orchestrator calls only its narrow lifecycle API and has no Docker socket.
 
-> **Prerequisite:** browser panes need the **`flock-session-chrome`** image (a custom
+> **Prerequisite:** browser panes need the **`shepherd-session-chrome`** image (a custom
 > Chrome that bridges CDP to a published port; stock Chrome images bind the debugger to
 > loopback only). Pull the version matching the Shepherd stack before using browser panes:
 >
 > ```
-> docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
+> docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0
 > ```
 >
 > Override the name with `BROWSER_IMAGE`. Without it, sessions still work but the
@@ -74,7 +74,7 @@ chmod 600 secrets/*
 
 # 3. Pull the pinned release images (FLOCK_VERSION in .env), then bring it up
 docker compose pull
-docker pull "${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0}"
+docker pull "${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0}"
 docker compose up -d
 
 # 4. Watch it boot
@@ -200,7 +200,7 @@ failing later as a blank terminal.
 - **Production:** `docker-compose.yml` pulls versioned GHCR images. Pin
   `FLOCK_VERSION`; do not deploy the mutable `latest` tag.
 - **Build release images locally:** use `docker compose build` for orchestrator/web
-  and `docker build -f docker/Dockerfile.session-chrome -t flock-session-chrome:local .`
+  and `docker build -f docker/Dockerfile.session-chrome -t shepherd-session-chrome:local .`
   for the on-demand browser image.
 - **Local iteration in Docker:** `docker-compose.dev.yml` + `docker/Dockerfile.dev`
   (source-mounted, hot reload) — `docker compose -f docker-compose.dev.yml up`.

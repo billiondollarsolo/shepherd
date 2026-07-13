@@ -73,7 +73,7 @@ for (const [file, expectedName] of Object.entries(packageNames)) {
 
 const retainedContracts = {
   'agentd/go.mod': ['module github.com/billiondollarsolo/flock/agentd'],
-  'docker-compose.yml': ['flock-orchestrator:', 'flock-web:', 'flock-session-chrome:'],
+  'docker-compose.yml': ['shepherd-orchestrator:', 'shepherd-web:', 'shepherd-session-chrome:'],
   'apps/web/src/theme/themeContext.ts': ["THEME_STORAGE_KEY = 'flock.theme'"],
   'apps/web/public/sw.js': [
     "const SHELL_CACHE = 'flock-shell-v2'",

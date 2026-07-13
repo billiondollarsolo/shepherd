@@ -57,6 +57,8 @@ branding outside the explicit compatibility allowlist.
   link labels.
 - Operator-facing messages printed by supported scripts and CLIs when the text refers to
   the product rather than a literal command, file, user, service, or image name.
+- GHCR image names, because no public release existed when `v0.3.0` was prepared and
+  therefore no container compatibility contract needed preserving.
 - Tests and validation that assert any renamed user-visible copy.
 
 ### 3.2 Explicitly out of scope
@@ -69,7 +71,6 @@ documentation. Renaming them now would be a migration, not a surface change.
 | Go module `github.com/billiondollarsolo/flock/agentd`                                                              | Public import compatibility                                          |
 | npm packages such as `@flock/web`, `@flock/shared`, and `@flock/orchestrator`                                      | Workspace and package compatibility                                  |
 | Executables/services such as `flock-agentd` and `flock-node-admin`                                                 | Installed-node and systemd compatibility                             |
-| Container images `flock-orchestrator`, `flock-web`, and `flock-session-chrome`                                     | Existing deployments and published releases                          |
 | Environment variables beginning `FLOCK_`                                                                           | Deployment compatibility and secrets/configuration stability         |
 | Compose project, database, OS users, directories, and volumes named `flock*`                                       | Existing installation compatibility                                  |
 | Scripts and filenames such as `flock-upgrade.sh` and `flock-node-prepare.sh`                                       | Automation and documentation links                                   |
@@ -92,8 +93,8 @@ These decisions should be recorded at the top of the implementation pull request
    repository. Confirm whether “website” means the web application/PWA only, or whether
    an external landing page also needs a coordinated update.
 2. **Repository slug.** Use `github.com/billiondollarsolo/shepherd` as the canonical
-   public URL. Keep the published Go module and all other technical `flock-*`
-   identifiers stable; GitHub redirects the former repository URL.
+   public URL. Keep the published Go module and compatibility-sensitive technical
+   `flock-*` identifiers stable; use `shepherd-*` for the first public container images.
 3. **Icon.** The recommendation is to retain the current sheep glyph and blue tile. Only
    its accessible name changes. A new icon is a visual-identity project, not necessary
    for this rename.
@@ -132,8 +133,8 @@ rename is concentrated in these areas:
 | Product-specific controls | `SessionPane.tsx`, `AddSessionDialog.tsx`, `RaceDialog.tsx`, `NodePage.tsx`                                           | Rename authority, explanatory, upgrade, and safety copy                                 |
 | Browser/PWA               | `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/sw.js`, `apps/web/public/icons/*.svg` | Shepherd browser title, install name, notification fallback, and accessible icon labels |
 | Public overview           | `README.md`, `docs/README.md`                                                                                         | Shepherd name, tagline, narrative, and accurate retained technical names                |
-| Operations docs           | `docs/deployment.md`, `docs/releasing.md`, security and architecture introductions                                    | Shepherd prose with literal `flock-*` commands and artifacts preserved                  |
-| GitHub presentation       | `.github/ISSUE_TEMPLATE/*`, release workflow display title, repository settings                                       | Shepherd-facing forms and release titles; unchanged repository/image identifiers        |
+| Operations docs           | `docs/deployment.md`, `docs/releasing.md`, security and architecture introductions                                    | Shepherd prose with literal retained commands and canonical `shepherd-*` images         |
+| GitHub presentation       | `.github/ISSUE_TEMPLATE/*`, release workflow display title, repository settings                                       | Shepherd-facing forms, release titles, repository, and image identifiers                |
 | Package presentation      | Root/web/shared package descriptions                                                                                  | Shepherd descriptions; package `name` fields remain unchanged                           |
 | Operator output           | Node preparation, upgrade, vault, diagnostics, and preflight messages                                                 | Shepherd prose; technical commands, fields, and paths remain unchanged                  |
 
@@ -251,8 +252,8 @@ Tasks:
 - Change the README title, logo alt text, tagline, “What is…” heading, product narrative,
   release statement, license sentence, and other prose to Shepherd.
 - Use the canonical Shepherd clone URL while keeping directory names, commands,
-  environment variables, image names, daemon names, script names, paths, and
-  configuration examples exactly accurate.
+  environment variables, daemon names, script names, paths, and configuration examples
+  exactly accurate. Use canonical `shepherd-*` public image names.
 - Use the pattern “Shepherd runs `flock-agentd`” when prose meets a retained identifier.
 - Update `docs/README.md` so the documentation landing page clearly names Shepherd and
   explains that technical identifiers retain the `flock` prefix during the transition.
@@ -281,7 +282,7 @@ Tasks:
   while leaving package `name` values unchanged.
 - Update GitHub issue-template descriptions and labels to Shepherd.
 - Update release display titles from `Flock <version>` to `Shepherd <version>` while
-  preserving tags, image names, release assets, and version-check logic.
+  preserving tags, release assets, and version-check logic.
 - Update the About link label and target to the canonical Shepherd repository.
 - Update operator-facing log/error/help text in supported scripts and backend routes when
   it describes the product. Do not rename literal commands, services, users, or files.
@@ -290,14 +291,15 @@ Tasks:
   - website URL once confirmed;
   - social preview if a Shepherd asset exists;
   - topics only if they currently contain obsolete product-brand terms.
-- Do not rename GHCR packages or compatibility-sensitive technical identifiers in this
-  phase.
+- Publish the first public images as `shepherd-orchestrator`, `shepherd-web`, and
+  `shepherd-session-chrome`; remove unreleased private `flock-*` candidates.
 
 Definition of done:
 
 - GitHub pages, issue creation, release pages, package descriptions, About, and operator
   messages present Shepherd consistently.
-- Existing links, image pulls, upgrades, and node provisioning continue to work.
+- Compose pulls, upgrades, and node provisioning resolve the canonical `shepherd-*`
+  images.
 
 ### Phase 6 — Test, audit, and release
 
@@ -467,7 +469,7 @@ Prove the rename did not change behavior:
 - Existing nodes connect without re-provisioning or agentd upgrades.
 - Existing sessions reconnect.
 - Existing backups can be listed, verified, and restored.
-- Existing Compose image references and GHCR pulls still resolve.
+- Canonical Compose image references and GHCR pulls resolve under `shepherd-*`.
 - Existing clone URLs, Go imports, scripts, and upgrade commands still work.
 - Diagnostics and APIs retain current field names.
 
@@ -475,7 +477,8 @@ Prove the rename did not change behavior:
 
 - Search the rendered application, not just source, for Flock branding.
 - Read the README from top to bottom and execute or syntax-check every quick-start command.
-- Review documentation links and ensure retained `flock-*` names are visibly intentional.
+- Review documentation links and ensure retained non-image `flock-*` names are visibly
+  intentional.
 - Inspect GitHub issue forms and a draft release page before publishing.
 - Test a push notification whose payload omits a title to exercise the service-worker
   Shepherd fallback.
@@ -507,7 +510,8 @@ The surface rename is complete only when all of the following are true:
 - Deploy it as a normal versioned release; do not overwrite an existing release tag.
 - Include before/after desktop and mobile screenshots in the pull request.
 - In release notes, lead with the new name and explicitly state that deployment commands,
-  environment variables, image names, and node services are unchanged.
+  environment variables, and node services retain compatibility names while public
+  images use `shepherd-*`.
 - After deployment, verify browser title, PWA metadata, About version/link, notification
   fallback, and one live node/session workflow.
 
@@ -520,17 +524,17 @@ crossed the surface-rename boundary and must not ship under this plan.
 
 ## 11. Risks and mitigations
 
-| Risk                                                 | Mitigation                                                                               |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Blind replacement breaks commands/imports/images     | Classify occurrences and enforce an explicit retained-identifier policy                  |
-| Mixed Flock/Shepherd UI                              | Central runtime brand constants plus static-asset audit                                  |
-| PWA continues showing cached Flock metadata          | Test upgrade behavior and deliberately version the shell cache if required               |
-| Longer wordmark clips on mobile/sidebar              | Test all named breakpoints and collapsed states before merge                             |
-| Users think `flock-*` commands are obsolete          | Add one concise transition note and preserve literal formatting                          |
-| Repository rename accidentally breaks Go/GHCR links  | Keep slug and URLs unchanged in this phase                                               |
-| Backup/diagnostic contracts change with display copy | Change labels only; contract tests assert fields remain stable                           |
-| Historical docs become misleading                    | Preserve historical statements and update only current-facing framing                    |
-| External website remains stale                       | Confirm its owner/source before implementation and track it as a coordinated launch task |
+| Risk                                                  | Mitigation                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Blind replacement breaks commands/imports/images      | Classify occurrences and enforce an explicit retained-identifier policy                  |
+| Mixed Flock/Shepherd UI                               | Central runtime brand constants plus static-asset audit                                  |
+| PWA continues showing cached Flock metadata           | Test upgrade behavior and deliberately version the shell cache if required               |
+| Longer wordmark clips on mobile/sidebar               | Test all named breakpoints and collapsed states before merge                             |
+| Users think `flock-*` commands are obsolete           | Add one concise transition note and preserve literal formatting                          |
+| Repository/image rename breaks Go or deployment links | Preserve the Go module path and validate every canonical Compose/GHCR reference          |
+| Backup/diagnostic contracts change with display copy  | Change labels only; contract tests assert fields remain stable                           |
+| Historical docs become misleading                     | Preserve historical statements and update only current-facing framing                    |
+| External website remains stale                        | Confirm its owner/source before implementation and track it as a coordinated launch task |
 
 ## 12. Completion evidence
 
@@ -564,7 +568,6 @@ The later migration should receive its own design document. It may consider:
 
 - GitHub repository rename and redirects.
 - New Go module and npm package paths.
-- New GHCR image names with mirrored publishing and deprecation windows.
 - `SHEPHERD_*` environment variables with `FLOCK_*` compatibility aliases.
 - Executable, systemd service, OS user, directory, and script renames.
 - CSS/custom-property, storage-key, cache, hook, MCP, and session-prefix migration.

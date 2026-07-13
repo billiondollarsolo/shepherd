@@ -3,9 +3,9 @@
 Shepherd releases are GitHub Releases backed by three multi-platform images in the
 GitHub Container Registry (GHCR):
 
-- `ghcr.io/billiondollarsolo/flock-orchestrator`
-- `ghcr.io/billiondollarsolo/flock-web`
-- `ghcr.io/billiondollarsolo/flock-session-chrome`
+- `ghcr.io/billiondollarsolo/shepherd-orchestrator`
+- `ghcr.io/billiondollarsolo/shepherd-web`
+- `ghcr.io/billiondollarsolo/shepherd-session-chrome`
 
 The release workflow builds Linux amd64 and arm64 images, publishes semantic
 version tags, generates SBOM/provenance attestations, and updates `latest` only for
@@ -75,9 +75,9 @@ docker run --rm -v "$PWD:/repo:ro" \
 Build all three images locally at least once when their Dockerfiles change:
 
 ```bash
-docker build -f docker/Dockerfile.orchestrator -t flock-orchestrator:test .
-docker build -f docker/Dockerfile.web -t flock-web:test .
-docker build -f docker/Dockerfile.session-chrome -t flock-session-chrome:test .
+docker build -f docker/Dockerfile.orchestrator -t shepherd-orchestrator:test .
+docker build -f docker/Dockerfile.web -t shepherd-web:test .
+docker build -f docker/Dockerfile.session-chrome -t shepherd-session-chrome:test .
 ```
 
 Before a destructive migration or upgrade, create and verify a vault using
@@ -108,13 +108,13 @@ version. A failed workflow may be rerun before consumers rely on its tags.
 ## Verify
 
 ```bash
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/flock-orchestrator:<version>
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/flock-web:<version>
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/flock-session-chrome:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-web:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-session-chrome:<version>
 
-docker pull ghcr.io/billiondollarsolo/flock-orchestrator:<version>
-docker pull ghcr.io/billiondollarsolo/flock-web:<version>
-docker pull ghcr.io/billiondollarsolo/flock-session-chrome:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-web:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:<version>
 ```
 
 Confirm that anonymous pulls work, both amd64 and arm64 manifests exist, provenance
