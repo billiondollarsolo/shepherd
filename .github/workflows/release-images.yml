@@ -81,7 +81,7 @@ jobs:
           docker compose -f docker-compose.dev.yml build builder sshd
           docker compose -f docker-compose.dev.yml up -d --wait postgres sshd
           docker compose -f docker-compose.dev.yml run --rm builder sh -lc \
-            'until [ -s /ssh-keys/id_test ]; do sleep 1; done; pnpm install --frozen-lockfile; pnpm test:int'
+            'until [ -s /ssh-keys/id_test ]; do sleep 1; done; pnpm install --frozen-lockfile; pnpm --filter @flock/shared build; pnpm test:int'
 
       - name: Collect integration logs
         if: always()

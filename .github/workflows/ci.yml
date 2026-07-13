@@ -161,6 +161,7 @@ jobs:
           docker compose -f docker-compose.dev.yml run --rm builder sh -lc
           'until [ -s /ssh-keys/id_test ]; do sleep 1; done;
           pnpm install --frozen-lockfile;
+          pnpm --filter @flock/shared build;
           pnpm test:int'
 
       - name: Collect service logs
