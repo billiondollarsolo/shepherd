@@ -42,7 +42,7 @@ export async function runVaultCli(args = process.argv.slice(2)): Promise<void> {
   try {
     if (command === 'create') {
       const manifest = await createVault({ output: input, password });
-      console.log(`Created and verified Flock vault ${input} (${manifest.createdAt})`);
+      console.log(`Created and verified Shepherd vault ${input} (${manifest.createdAt})`);
       return;
     }
     if (command === 'verify') {

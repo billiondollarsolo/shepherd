@@ -1,6 +1,6 @@
-# Flock Premium Single-User Roadmap
+# Shepherd Premium Single-User Roadmap
 
-> **Purpose:** a durable, implementation-ready plan for making Flock feel dependable,
+> **Purpose:** a durable, implementation-ready plan for making Shepherd feel dependable,
 > polished, and premium for one operator. This document intentionally avoids team/RBAC,
 > approval chains, billing administration, and other enterprise theater.
 >
@@ -36,7 +36,7 @@ an important user outcome faster, safer, or easier to understand.
 
 ## 2. Current-state constraints
 
-Flock does **not** currently have a complete backup/restore facility. Durable state is
+Shepherd does **not** currently have a complete backup/restore facility. Durable state is
 split across several boundaries:
 
 | State                                                                                                      | Current location                                 | Backup implication                                                                                           |
@@ -103,11 +103,11 @@ Additionally:
 | Order | Initiative                                   | Depends on | Primary outcome                                  |
 | ----: | -------------------------------------------- | ---------- | ------------------------------------------------ |
 |     0 | Persistence inventory and server preferences | None       | Know and centralize what must survive.           |
-|     1 | Flock Vault backup foundation                | 0          | Create complete, encrypted, verifiable archives. |
+|     1 | Shepherd Vault backup foundation             | 0          | Create complete, encrypted, verifiable archives. |
 |     2 | Safe restore and Recovery Center             | 1          | Reliably recover an installation.                |
 |     3 | Scheduled backups and restore drills         | 2          | Make protection automatic and provable.          |
 |     4 | Session history and universal search         | 0          | Make completed work reusable.                    |
-|     5 | Global activity timeline                     | 4          | Explain what happened across Flock.              |
+|     5 | Global activity timeline                     | 4          | Explain what happened across Shepherd.           |
 |     6 | Project health center                        | 4          | Understand repository state at a glance.         |
 |     7 | Node health history and capacity             | 0          | Detect operational problems before failure.      |
 |     8 | Workspace snapshots                          | 0          | Restore a useful working arrangement.            |
@@ -174,7 +174,7 @@ temporary dialog input—should remain local and should not pollute backups.
 
 ---
 
-## Initiative 1 — Flock Vault backup foundation
+## Initiative 1 — Shepherd Vault backup foundation
 
 ### Why
 
@@ -186,7 +186,7 @@ CLI before adding a polished UI.
 
 A `.flockvault` archive is an authenticated encrypted container containing:
 
-- `manifest.json`: format version, Flock version, schema/migration version, created time,
+- `manifest.json`: format version, Shepherd version, schema/migration version, created time,
   installation ID, inclusion/exclusion list, counts, checksums, and required capabilities.
 - A consistent PostgreSQL logical dump (`pg_dump` custom format or an equivalently
   restorable logical representation).
@@ -267,7 +267,7 @@ isolation, rollback, and explicit handling of live sessions.
 - [ ] **R2.1 — Restore state machine.** Define `uploaded → verified → preflighted →
 snapshot-created → restoring → validating → complete|rolled-back|failed`. Persist job
       state so a browser refresh cannot orphan the operation.
-- [ ] **R2.2 — Preflight service.** Check archive version, Flock compatibility, schema
+- [ ] **R2.2 — Preflight service.** Check archive version, Shepherd compatibility, schema
       direction, free disk, database connectivity, master-key presence, required tools,
       installation identity, conflicts, and node/session implications.
 - [ ] **R2.3 — Restore preview.** Show archive date/version, record counts, included
@@ -289,7 +289,7 @@ snapshot-created → restoring → validating → complete|rolled-back|failed`. 
 - [ ] **R2.9 — Disaster-recovery CLI.** Support restore when the web application cannot
       boot, with the same verifier and engine used by the UI.
 - [ ] **R2.10 — Runbook.** Document new-host recovery, lost database, lost master key,
-      wrong Flock version, interrupted restore, and rollback.
+      wrong Shepherd version, interrupted restore, and rollback.
 
 ### Definition of done
 
@@ -402,7 +402,7 @@ file?”, “What solved this error?”, and “Where was this commit produced?�
 
 ### Why
 
-Flock already exposes session-level activity and an audit log. A premium global timeline
+Shepherd already exposes session-level activity and an audit log. A premium global timeline
 should unify meaningful operational events without duplicating raw telemetry or becoming
 an unreadable firehose.
 
@@ -465,7 +465,7 @@ agent contention without opening a terminal or managing Git on the agents’ beh
 
 - Project pages answer “what branch/state is this in, what changed, and who is working?”
 - Collection cannot overload a node with many projects.
-- Flock remains observational: no implicit checkout, reset, worktree creation, or merge.
+- Shepherd remains observational: no implicit checkout, reset, worktree creation, or merge.
 
 ### Tests and validation
 
@@ -554,7 +554,7 @@ without pretending it can resurrect terminated agents.
 ### Why
 
 Notifications should bring the operator back only when action or awareness is valuable.
-Flock already has web-push foundations; this initiative turns them into a coherent,
+Shepherd already has web-push foundations; this initiative turns them into a coherent,
 user-controlled attention system.
 
 ### Tasks
@@ -592,7 +592,7 @@ user-controlled attention system.
 
 ### Why
 
-Flock already supports Command/Ctrl+K. Premium keyboard UX requires a complete command
+Shepherd already supports Command/Ctrl+K. Premium keyboard UX requires a complete command
 model, recency, context-aware actions, and visible discovery—not a hidden shortcut.
 
 ### Tasks
@@ -630,7 +630,7 @@ model, recency, context-aware actions, and visible discovery—not a hidden shor
 ### Why
 
 Showing the version is helpful; a premium product also explains update availability,
-compatibility, migrations, node-daemon rollout, and recovery. Flock should not silently
+compatibility, migrations, node-daemon rollout, and recovery. Shepherd should not silently
 self-update by default.
 
 ### Tasks
@@ -647,12 +647,12 @@ self-update by default.
       migration-bearing upgrades; allow explicit CLI override.
 - [ ] **U11.6 — Assisted update (later).** Only after the informational center is mature,
       consider an opt-in deployment-specific updater with signed artifacts, health checks,
-      and rollback. Do not assume Flock can safely mutate every Compose deployment.
+      and rollback. Do not assume Shepherd can safely mutate every Compose deployment.
 
 ### Definition of done
 
 - The operator knows what is installed, what is available, and what an update will do.
-- Update checks fail quietly and never block normal Flock use.
+- Update checks fail quietly and never block normal Shepherd use.
 - No update is represented as reversible unless rollback is actually tested.
 
 ### Tests and validation
@@ -728,12 +728,12 @@ turning settings into database administration.
 - [ ] **O13.6 — Destructive deletion.** Delete session history/project metadata/all user
       data with typed confirmation, dependency preview, verified completion report, and
       recommendation to create a backup first.
-- [ ] **O13.7 — Privacy defaults.** Document what Flock records, where it resides, how
+- [ ] **O13.7 — Privacy defaults.** Document what Shepherd records, where it resides, how
       long it remains, and what is never sent externally.
 
 ### Definition of done
 
-- The operator can understand and control Flock’s storage growth.
+- The operator can understand and control Shepherd’s storage growth.
 - Cleanup previews match actual results within documented estimation limits.
 - Destructive operations are auditable, resumable where possible, and cannot delete live
   sessions accidentally.
@@ -773,7 +773,7 @@ first two consumers.
 - Archive and diagnostic downloads use short-lived, single-user authorization and expire.
 - Sensitive jobs never put secrets in payload JSON, database errors, telemetry, or audit
   detail.
-- External destinations are opt-in and communicate exactly what leaves Flock.
+- External destinations are opt-in and communicate exactly what leaves Shepherd.
 - Search/transcript storage gets explicit retention and redaction from its first release.
 - Use constant-time comparisons and established crypto libraries for vault verification.
 
@@ -806,7 +806,7 @@ For each initiative:
 
 This roadmap is complete when one operator can:
 
-- rebuild a destroyed Flock installation from a recently verified encrypted vault;
+- rebuild a destroyed Shepherd installation from a recently verified encrypted vault;
 - see that backups and restore drills are healthy before disaster;
 - search completed work by task, file, project, agent, or commit;
 - understand project Git state and node capacity without opening a terminal;

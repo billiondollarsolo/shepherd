@@ -33,6 +33,7 @@ import {
   SimpleTooltip,
   type BadgeProps,
 } from '../../components/ui';
+import { PRODUCT_NAME } from '../../brand';
 
 /** Common authed handoff targets (the source's own type is filtered out at render). */
 const HANDOFF_TARGETS: ReadonlyArray<{ type: AgentType; label: string }> = [
@@ -174,7 +175,7 @@ function Header({ session }: { session: Session }): JSX.Element {
 
       <Badge
         variant={authority === 'manage' ? 'danger' : 'outline'}
-        title={`Flock authority: ${AUTHORITY_LABEL[authority]}`}
+        title={`${PRODUCT_NAME} authority: ${AUTHORITY_LABEL[authority]}`}
       >
         {AUTHORITY_LABEL[authority]}
       </Badge>

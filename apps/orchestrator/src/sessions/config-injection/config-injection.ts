@@ -6,8 +6,8 @@
  * must NOT clobber the user's real `~/.claude` / `~/.codex` / `~/.config`.
  *
  * THE SOLUTION (spec §3 "Hook injection", decision row): on session create,
- * merge a narrowly named Flock hook file/plugin into the runtime user's native
- * configuration. The installed forwarder is inert unless a Flock session supplies
+ * merge a narrowly named Shepherd hook file/plugin into the runtime user's native
+ * configuration. The installed forwarder is inert unless a Shepherd session supplies
  * its private callback environment, so ordinary agent launches are unaffected.
  *
  * DUMB NODES (spec §6.4): this is orchestrator-side logic. The node never runs
@@ -35,14 +35,14 @@ export interface RenderedHookConfig {
 
 /**
  * POSIX forwarder script that POSTs the agent's hook event (read on stdin) to
- * Flock using the env the orchestrator already injects (FLOCK_HOOK_URL/TOKEN). A
+ * Shepherd using the env the orchestrator already injects (FLOCK_HOOK_URL/TOKEN). A
  * real script — not an env-var-stuffed command — so shell quoting is correct.
  */
 const HOOK_FORWARDER_SH = [
   '#!/bin/sh',
-  '# Flock hook forwarder (US-19): reads the agent event JSON on stdin, POSTs it.',
-  "# No-op outside a Flock session: this file is installed in the agent's NATIVE",
-  '# config dir, so a plain (non-Flock) run of the agent must not error on it.',
+  '# Shepherd hook forwarder (US-19): reads the agent event JSON on stdin, POSTs it.',
+  "# No-op outside a Shepherd session: this file is installed in the agent's NATIVE",
+  '# config dir, so a plain (non-Shepherd) run of the agent must not error on it.',
   '[ -n "$FLOCK_HOOK_URL" ] && [ -n "$FLOCK_HOOK_TOKEN" ] || exit 0',
   'exec curl -sS -m 5 -X POST "$FLOCK_HOOK_URL" \\',
   '  -H "Authorization: Bearer $FLOCK_HOOK_TOKEN" \\',
@@ -102,7 +102,7 @@ export async function renderHookConfig(agentType: AgentType): Promise<RenderedHo
     case 'opencode': {
       // Drop the plugin into the real
       // ~/.config/opencode/plugin so opencode uses native auth/config. The plugin
-      // already no-ops without FLOCK_HOOK_URL/TOKEN, so non-Flock runs are clean.
+      // already no-ops without FLOCK_HOOK_URL/TOKEN, so non-Shepherd runs are clean.
       const plugin = await readFile(openCodePluginSourcePath(), 'utf8');
       return {
         configBaseSubdir: '.config',
@@ -138,7 +138,7 @@ export async function renderHookConfig(agentType: AgentType): Promise<RenderedHo
       };
     }
     case 'gemini': {
-      // NATIVE install: merge Flock's hooks into the real ~/.gemini/settings.json
+      // NATIVE install: merge Shepherd's hooks into the real ~/.gemini/settings.json
       // (the generic JSON deep-merge in the daemon preserves the user's gemini
       // config). Gemini CLI v0.26.0+ fires Claude-Code-style lifecycle hooks with
       // the SAME settings.json shape — so this lifts gemini from the old PTY-activity

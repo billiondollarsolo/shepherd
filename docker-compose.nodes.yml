@@ -1,7 +1,7 @@
 # =============================================================================
-# Flock — simulated SSH nodes for multi-node testing (3 nodes).
+# Shepherd — simulated SSH nodes for multi-node testing (3 nodes).
 #
-#   ./scripts/sim-nodes.sh up      # gen key, build, start, register in Flock
+#   ./scripts/sim-nodes.sh up      # gen key, build, start, register in Shepherd
 #   ./scripts/sim-nodes.sh down    # stop + remove
 #
 # Each node is a container running sshd + tmux + the agent CLIs. The native
@@ -29,7 +29,7 @@ services:
     ports:
       - '127.0.0.1:2231:22'
     # Persist the agent home (incl. ~/.claude, ~/.codex creds) across container
-    # recreation so an agent login STAYS logged in between Flock sessions. The
+    # recreation so an agent login STAYS logged in between Shepherd sessions. The
     # entrypoint re-installs authorized_keys on every boot, so a persistent home
     # is safe; Docker seeds the empty volume from the image's /home/flock skeleton.
     volumes:

@@ -394,6 +394,6 @@ jobs:
             printf '```\n\nNodes report whether this policy makes their daemon compatible, recommended to upgrade, or required to upgrade.\n'
           } > release-tool-versions.md
           # shellcheck disable=SC2086
-          gh release create "$TAG" --verify-tag --generate-notes --notes-file release-tool-versions.md --title "Flock ${TAG#v}" $prerelease
+          gh release create "$TAG" --verify-tag --generate-notes --notes-file release-tool-versions.md --title "Shepherd ${TAG#v}" $prerelease
           cp agentd/COMPATIBILITY.json agentd-compatibility.json
           gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt agentd-compatibility.json

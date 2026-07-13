@@ -37,7 +37,7 @@ artifacts/
 vagrant/.vagrant/
 
 # Vendored external reference repos (their own git history, ~730MB) — not part of
-# the Flock codebase. Re-clone separately if needed; do not embed.
+# the Shepherd codebase. Re-clone separately if needed; do not embed.
 /codex/
 /orca/
 

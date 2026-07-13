@@ -1,4 +1,4 @@
-# Flock development + CI environment.
+# Shepherd development + CI environment.
 # Host needs ONLY docker. Build/test/run all happen inside these containers.
 #
 #   make up        -> start postgres, orchestrator, web

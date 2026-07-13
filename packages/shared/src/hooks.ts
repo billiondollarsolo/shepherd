@@ -128,7 +128,7 @@ export type OpenCodeHookPayload = z.infer<typeof OpenCodeHookPayload>;
 // ---------------------------------------------------------------------------
 // Grok (xAI Grok Build CLI). Grok fires Claude-Code-compatible lifecycle hooks
 // but with its OWN payload shape: camelCase fields (`hookEventName`, `toolName`,
-// `toolInput`, `toolUseId`) and snake_case event-name VALUES. It reaches Flock's
+// `toolInput`, `toolUseId`) and snake_case event-name VALUES. It reaches Shepherd's
 // hook endpoint via the same per-session forwarder the claude/opencode hooks use.
 //   session_start -> idle (ready); pre_tool_use/post_tool_use -> running;
 //   stop -> idle; session_end -> done; notification (xai_session) ignored.

@@ -316,7 +316,7 @@ export class AgentdConnections {
         let forceCandidateReplacement = false;
         if (before.running) {
           // Authenticate and evaluate the running daemon before any mutation.
-          // A protocol mismatch fails closed: Flock will not kill sessions it
+          // A protocol mismatch fails closed: Shepherd will not kill sessions it
           // cannot count. A newer compatible binary is never downgraded.
           const current = await connect();
           const compatibility = evaluateAgentdCompatibility(policy, {

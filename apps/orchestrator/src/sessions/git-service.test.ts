@@ -184,7 +184,7 @@ describe('git argv builders', () => {
     ]);
   });
 
-  it('commit injects the acting Flock user identity via -c', () => {
+  it('commit injects the acting Shepherd user identity via -c', () => {
     expect(gitCommitArgv('/r', 'msg', IDENTITY)).toEqual([
       'git',
       '-C',

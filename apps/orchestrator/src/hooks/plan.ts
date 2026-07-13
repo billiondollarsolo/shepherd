@@ -2,7 +2,7 @@
  * Plan/todo extraction from raw agent hook payloads (US-34 Plan artifact).
  *
  * The agent's plan is NOT a status transition — it rides the SAME hook callbacks
- * Flock already receives. Claude Code surfaces its plan through the `TodoWrite`
+ * Shepherd already receives. Claude Code surfaces its plan through the `TodoWrite`
  * tool: a `PostToolUse` (or `PreToolUse`) hook with `tool_name: "TodoWrite"` and
  * `tool_input.todos: [{ content, status, activeForm }]`. Because the hook
  * template already forwards `Pre/PostToolUse` and the payload is stored raw, the

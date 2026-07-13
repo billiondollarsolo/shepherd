@@ -1,7 +1,7 @@
 # =============================================================================
-# Flock — simulated SSH "node" for multi-node testing.
+# Shepherd — simulated SSH "node" for multi-node testing.
 #
-# A lightweight stand-in for a remote machine Flock connects to over SSH. It runs
+# A lightweight stand-in for a remote machine Shepherd connects to over SSH. It runs
 # sshd + tmux (what the SSH transport + remote tmux need) AND installs the three
 # first-class agent CLIs (claude / codex / opencode) so a session created on this
 # node launches a REAL agent binary in tmux. (Provider auth is out of scope here
@@ -16,7 +16,7 @@ FROM node:22-bookworm-slim
 # Without a UTF-8 locale, tmux runs in 8-bit mode and mangles every multibyte
 # glyph an agent TUI draws (box-drawing, block-element logos, the ellipsis,
 # Powerline icons) into blanks/garbage. C.UTF-8 ships with glibc (no locale-gen).
-# Flock also forces this per tmux command (TMUX_UTF8_LOCALE_ENV) since SSH exec
+# Shepherd also forces this per tmux command (TMUX_UTF8_LOCALE_ENV) since SSH exec
 # sessions don't inherit it; this ENV is belt-and-suspenders for interactive use.
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

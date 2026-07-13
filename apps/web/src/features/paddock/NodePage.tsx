@@ -39,6 +39,7 @@ import {
 } from '../../data/queries';
 import type { AgentdHealth } from '../../data/treeApi';
 import { usePaddock } from '../../store/paddock';
+import { PRODUCT_NAME } from '../../brand';
 import { formatGB } from '../../lib/utils';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
@@ -577,8 +578,8 @@ export function NodePage(): JSX.Element {
               {preflight?.daemonCompatibility.state === 'required'
                 ? `${preflight.daemonCompatibility.detail} `
                 : ''}
-              Flock refuses while known sessions are active. A failed candidate is automatically
-              rolled back, and a newer compatible daemon is never downgraded.
+              {PRODUCT_NAME} refuses while known sessions are active. A failed candidate is
+              automatically rolled back, and a newer compatible daemon is never downgraded.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

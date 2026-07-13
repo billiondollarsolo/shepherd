@@ -23,7 +23,7 @@ import (
 )
 
 // codexSessionsDir is where codex writes its rollouts. A scoped CODEX_HOME
-// (Flock hook injection, passed per-session) wins — codex then writes under
+// (Shepherd hook injection, passed per-session) wins — codex then writes under
 // <scoped>/sessions, so the tailer must follow it (the daemon's OWN env has no
 // per-session CODEX_HOME). Falls back to a daemon-wide CODEX_HOME, then ~/.codex.
 func codexSessionsDir(configDir string) string {
@@ -193,7 +193,7 @@ func codexLineToUpdate(b []byte) (Update, bool) {
 	}
 	// T62: Codex's task list rides its `update_plan` tool, recorded as a
 	// response_item function_call whose `arguments` is a JSON string
-	// {"plan":[{"step","status"}]}. Normalize to Flock's plan shape.
+	// {"plan":[{"step","status"}]}. Normalize to Shepherd's plan shape.
 	if rl.Type == "response_item" {
 		if plan := codexPlanFromResponseItem(rl.Payload); plan != "" {
 			return Update{Plan: plan}, true
@@ -236,7 +236,7 @@ func codexLineToUpdate(b []byte) (Update, bool) {
 
 // codexPlanFromResponseItem extracts Codex's `update_plan` task list from a
 // response_item payload and returns it as a JSON array of {"content","status"}
-// (Flock's PlanItem shape), or "" if this item isn't an update_plan call. Codex
+// (Shepherd's PlanItem shape), or "" if this item isn't an update_plan call. Codex
 // statuses map: in_progress/completed pass through; anything else → pending.
 func codexPlanFromResponseItem(payload []byte) string {
 	var ri struct {

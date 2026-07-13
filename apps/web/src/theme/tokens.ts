@@ -1,5 +1,5 @@
 /**
- * Flock theme tokens (US-31, spec Appendix A.3).
+ * Shepherd theme tokens (US-31, spec Appendix A.3).
  *
  * The single source of truth for the flock-theme design tokens. These values
  * are mirrored 1:1 into CSS custom properties in `../styles/theme.css`. The
@@ -146,7 +146,7 @@ export const lightTheme: ThemeTokens = {
 };
 
 /**
- * Dark theme — Flock's default surface. A true black-to-graphite neutral ramp
+ * Dark theme — Shepherd's default surface. A true black-to-graphite neutral ramp
  * with a light-grey interaction accent. Hierarchy comes from hairline borders
  * (polish.css) + small surface
  * steps, not loud fills. Inter UI + JetBrains Mono.

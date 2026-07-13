@@ -11,7 +11,7 @@ export function errorEnvelope(
 }
 
 /**
- * Send Flock's structured error envelope at the given HTTP status. The single
+ * Send Shepherd's structured error envelope at the given HTTP status. The single
  * source for route error replies (was hand-rolled per route); the global handler
  * in `buildServer` returns the same shape for uncaught errors (roadmap F2).
  */

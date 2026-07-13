@@ -32,7 +32,7 @@ function compact(value: string, fallback: string): string {
 }
 
 /**
- * Proves that the SSH target is prepared for Flock without mutating it. Commands
+ * Proves that the SSH target is prepared for Shepherd without mutating it. Commands
  * are deliberately narrow and the root-side helper validates workspace/tool args.
  */
 export async function preflightRemoteNode(
@@ -88,7 +88,7 @@ export async function preflightRemoteNode(
   checks.push(
     check(
       'preparation',
-      'Flock node preparation',
+      'Shepherd node preparation',
       prepared.code === 0 ? 'pass' : 'fail',
       prepared.code === 0
         ? compact(prepared.stdout, 'Prepared identities and constrained administrator are ready.')

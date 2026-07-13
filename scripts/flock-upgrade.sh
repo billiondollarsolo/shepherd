@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Backup-gated Docker Compose upgrade for a self-hosted Flock installation.
+# Backup-gated Docker Compose upgrade for a self-hosted Shepherd installation.
 set -euo pipefail
 
 usage() {
@@ -11,7 +11,7 @@ Options:
   --skip-backup                     Continue without the recommended verified vault.
   --skip-compatibility-check        Continue when release metadata cannot be fetched.
 
-Pulls one immutable Flock release, couples all Flock images to that version,
+Pulls one immutable Shepherd release, couples all Shepherd images to that version,
 runs the stack's normal migrations, and verifies readiness. A verified encrypted
 vault is required unless --skip-backup is explicitly supplied.
 
@@ -40,14 +40,14 @@ done
   echo "VERSION must be semantic, for example 0.3.1." >&2
   exit 2
 }
-[[ -f .env ]] || { echo "Run from the Flock deployment directory containing .env." >&2; exit 1; }
+[[ -f .env ]] || { echo "Run from the Shepherd deployment directory containing .env." >&2; exit 1; }
 docker compose version >/dev/null
 docker compose config --quiet
 
 OLD_VERSION="$(sed -n 's/^FLOCK_VERSION=//p' .env | tail -n 1)"
 [[ -n "$OLD_VERSION" ]] || { echo ".env has no FLOCK_VERSION." >&2; exit 1; }
 if [[ "$OLD_VERSION" == "$TARGET" ]]; then
-  echo "Flock is already pinned to $TARGET."
+  echo "Shepherd is already pinned to $TARGET."
   exit 0
 fi
 
@@ -134,7 +134,7 @@ else
   echo "WARNING: proceeding without the recommended verified vault." >&2
 fi
 
-echo "Pulling immutable Flock $TARGET images..."
+echo "Pulling immutable Shepherd $TARGET images..."
 FLOCK_VERSION="$TARGET" BROWSER_IMAGE='' docker compose pull
 
 tmp="$(mktemp .env.upgrade.XXXXXX)"
@@ -150,7 +150,7 @@ awk -v target="$TARGET" '
 chmod --reference=.env "$tmp"
 mv -f "$tmp" .env
 
-echo "Starting Flock $TARGET and applying idempotent migrations..."
+echo "Starting Shepherd $TARGET and applying idempotent migrations..."
 if ! docker compose up -d --no-build --wait; then
   echo "Upgrade did not become healthy." >&2
   echo "Previous environment: $ENV_ROLLBACK" >&2
@@ -162,6 +162,6 @@ fi
 docker compose exec -T orchestrator node -e \
   "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-echo "Flock upgraded successfully: $OLD_VERSION -> $TARGET"
+echo "Shepherd upgraded successfully: $OLD_VERSION -> $TARGET"
 echo "Rollback metadata retained: $ENV_ROLLBACK"
 echo "Verified database vault: $BACKUP"

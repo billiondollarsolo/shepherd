@@ -1,6 +1,6 @@
-# Releasing Flock
+# Releasing Shepherd
 
-Flock releases are GitHub Releases backed by three multi-platform images in the
+Shepherd releases are GitHub Releases backed by three multi-platform images in the
 GitHub Container Registry (GHCR):
 
 - `ghcr.io/billiondollarsolo/flock-orchestrator`
@@ -132,7 +132,7 @@ the running installation, including a first-start Claude installation or a user 
 ## Compatibility and support window
 
 The checked-in compatibility manifest is the release contract for remote node
-daemons. Flock distinguishes compatible nodes, recommended maintenance, and mandatory
+daemons. Shepherd distinguishes compatible nodes, recommended maintenance, and mandatory
 upgrades using authenticated protocol/capability facts plus semantic versions. The
 default support promise is one minor release line and 90 days after replacement,
 whichever is longer. Before 1.0, an intentional exception must be explicit in release

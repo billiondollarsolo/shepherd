@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { PRODUCT_NAME } from '../../brand';
 import { useIsPhone } from './useIsPhone';
 
 const DesktopPaddock = lazy(() =>
@@ -14,7 +15,7 @@ function SurfaceLoading(): JSX.Element {
       className="flex h-dvh w-full items-center justify-center bg-flock-bg text-sm text-flock-ink-muted"
       role="status"
     >
-      Opening Flock…
+      Opening {PRODUCT_NAME}…
     </div>
   );
 }

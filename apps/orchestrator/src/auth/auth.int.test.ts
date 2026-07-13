@@ -1,5 +1,5 @@
 /**
- * Flock — single-owner auth flow integration test (US-4/US-5).
+ * Shepherd — single-owner auth flow integration test (US-4/US-5).
  *
  * Exercises the real Fastify auth routes against the compose `postgres` service
  * (DATABASE_URL), end to end:

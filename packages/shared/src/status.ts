@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * The unified status model — the heart of Flock (spec §7, PRD §7).
+ * The unified status model — the heart of Shepherd (spec §7, PRD §7).
  *
  * The live value of a session's status is held in the orchestrator's in-memory
  * map and fanned out over the `status` WebSocket channel; Postgres only ever

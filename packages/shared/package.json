@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Shared domain types, StatusEnum, and REST/WS contracts (zod) for Flock. Imported by both orchestrator and web. Never duplicate a type.",
+  "description": "Shared domain types, StatusEnum, and REST/WS contracts (zod) for Shepherd. Imported by both orchestrator and web. Never duplicate a type.",
   "license": "MIT",
   "repository": {
     "type": "git",

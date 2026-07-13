@@ -2,7 +2,7 @@
  * US-18 — OpenCode translator contract test (spec §7.1, §9 "TDD-first").
  *
  * Pins the OpenCode plugin event → {@link Status} mapping against RECORDED
- * fixtures (`__fixtures__/opencode/*.json`), the same shape the Flock OpenCode
+ * fixtures (`__fixtures__/opencode/*.json`), the same shape the Shepherd OpenCode
  * plugin POSTs to `POST /api/hooks/:sessionId`. Mirrors the Claude (US-16) and
  * Codex (US-17) contract tests so all three first-class agents are pinned the
  * same way. Pure function: no IO, no DB.

@@ -2,7 +2,7 @@
   "name": "flock",
   "version": "0.3.0",
   "private": true,
-  "description": "Flock — shepherd your CLI coding agents across local and remote nodes from one web paddock.",
+  "description": "Shepherd — supervise CLI coding agents across local and remote nodes from one web paddock.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -42,7 +42,7 @@
     "test:coverage": "pnpm --filter @flock/shared exec vitest run --coverage && pnpm --filter @flock/orchestrator exec vitest run --coverage && pnpm --filter @flock/web exec vitest run --coverage",
     "test:int": "pnpm -r test:int",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test apps/web/e2e/accessibility.spec.ts apps/web/e2e/agent-policy.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",
+    "test:e2e:smoke": "playwright test apps/web/e2e/accessibility.spec.ts apps/web/e2e/agent-policy.spec.ts apps/web/e2e/brand.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",
     "test": "pnpm test:unit",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
@@ -58,7 +58,8 @@
     "quality:duplicates": "node scripts/check-duplicates.mjs",
     "quality:bundle": "node scripts/check-bundle-budget.mjs",
     "quality:performance": "tsx scripts/benchmark-runtime.ts --output=artifacts/performance/runtime-benchmarks.json",
-    "quality:docs": "node scripts/check-docs.mjs",
+    "quality:brand": "node scripts/check-brand-surface.mjs",
+    "quality:docs": "node scripts/check-docs.mjs && node scripts/check-brand-surface.mjs --dist",
     "quality": "pnpm quality:dead-code && pnpm quality:architecture && pnpm quality:duplicates && pnpm quality:bundle && pnpm quality:performance && pnpm quality:docs"
   },
   "devDependencies": {

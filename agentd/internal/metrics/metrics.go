@@ -1,6 +1,6 @@
 // Package metrics collects host resource metrics (CPU, memory, disk, load,
 // uptime) and detects which coding-agent CLIs are installed on the node. It is
-// Linux-only (reads /proc + statfs) — Flock nodes are Linux. CPU percentage needs
+// Linux-only (reads /proc + statfs) — Shepherd nodes are Linux. CPU percentage needs
 // two samples over an interval, so Start() runs a background sampler that keeps a
 // cached value; Snapshot() returns the latest without blocking.
 package metrics

@@ -6,7 +6,7 @@ Protocol: **v2**
 
 Supported node OS: **Linux (amd64 and arm64)**
 
-`flock-agentd` is Flock's only PTY transport. It owns agent and shell processes,
+`flock-agentd` is Shepherd's only PTY transport. It owns agent and shell processes,
 terminal input/output, resize, bounded scrollback, status extraction, and persisted
 layout state. The browser never connects to agentd directly; the orchestrator bridges
 authenticated browser WebSockets to one multiplexed agentd control connection per
@@ -145,7 +145,7 @@ The orchestrator:
 8. restarts and checks service health, restoring the previous binary on failure.
 
 Enrollment requires explicit passwordless access to only the administrative actions
-used by the bootstrap. A denied `sudo -n` fails visibly; Flock never falls back to an
+used by the bootstrap. A denied `sudo -n` fails visibly; Shepherd never falls back to an
 insecure same-user daemon.
 
 ## Persistence semantics
@@ -154,7 +154,7 @@ Agentd survives orchestrator and browser disconnects. A reconnected client lists
 existing sessions, subscribes, receives bounded scrollback, and resumes live output.
 Layout metadata persists on disk.
 
-A daemon crash or node reboot cannot preserve live PTY processes. Flock preserves its
+A daemon crash or node reboot cannot preserve live PTY processes. Shepherd preserves its
 durable session registry/layout and reconciles the missing process state; it must not
 claim a vanished agent is still running.
 

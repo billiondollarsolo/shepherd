@@ -1,13 +1,13 @@
 # Agent integration matrix
 
-How Flock derives live supervision signals for each supported coding-agent CLI —
+How Shepherd derives live supervision signals for each supported coding-agent CLI —
 what we capture, the mechanism, and the known gaps. This is the authoritative
 reference for "how well do we work with agent X." Verified against real on-disk
 transcripts/hooks (last reviewed 2026-06-05; **transport/Chat/trust + live
 validation updated 2026-06-08; integration audit + hook-dispatch fixes 2026-07-09
 — see the section immediately below**).
 
-Flock's model: **leverage what the agent already produces on the node** — its
+Shepherd's model: **leverage what the agent already produces on the node** — its
 transcript files (tailed by `flock-agentd`) and/or its lifecycle hooks (forwarded
 to `POST /api/hooks/:id`). The orchestrator normalizes everything into the shared
 `Status` enum + telemetry (rides the status WS → bottom bar + grid + sidebar) +
@@ -17,10 +17,10 @@ the `plan` event artifact (`/plan`).
 
 Three additions supersede parts of the older matrix below:
 
-**Transport is auto-selected per agent (no user toggle).** Flock picks the path
+**Transport is auto-selected per agent (no user toggle).** Shepherd picks the path
 that yields a structured **Chat** log while preserving the best interaction:
 
-- **claude / codex / opencode → native PTY.** Native TUI; Flock tails the
+- **claude / codex / opencode → native PTY.** Native TUI; Shepherd tails the
   transcript (claude/codex) or hook stream (opencode) for status/telemetry.
 - **gemini → ACP** (`gemini --experimental-acp`) over stdio for **both chat and
   status**. Hook seeding is skipped on the ACP path (`isAcp ? null`); status comes
@@ -99,8 +99,8 @@ chat**. So Chat is proven for claude/codex/gemini/opencode; grok has status only
 | current tool                  | ✅                            | ✅ (`exec`/`patch_apply`/…)                                              | ✅ ACP tool started⁵                                         | ✅ (`tool` prop)             | ✅ (`pre_tool_use` toolName)               |
 
 ¹ Codex now ships Claude-style hooks incl. a `PermissionRequest` event (→
-awaiting_input). Flock's shared schema + `codex.ts` translator are READY (tolerant
-of both `hook_event_name`/`event` shapes), but Flock does not yet SEED codex hooks
+awaiting_input). Shepherd's shared schema + `codex.ts` translator are READY (tolerant
+of both `hook_event_name`/`event` shapes), but Shepherd does not yet SEED codex hooks
 — that means merging a `[hooks]` block into the user's real `~/.codex/config.toml`,
 deferred until the exact on-disk format is validated on a live authed codex. The
 transcript path already gives status/tokens/model/plan.
@@ -131,7 +131,7 @@ delivers the subtype as the hook matcher, not always a body field).
 
 ### Claude Code — most complete (hooks + transcript)
 
-- **Hooks** (`$CLAUDE_CONFIG_DIR/settings.json`, Flock-seeded): `SessionStart`,
+- **Hooks** (`$CLAUDE_CONFIG_DIR/settings.json`, Shepherd-seeded): `SessionStart`,
   `Pre/PostToolUse`, `Notification`, `Stop` → `status/translators/claude.ts`.
   `Notification:permission_prompt` → **awaiting_input** (the money state).
 - **Transcript** (`~/.claude/projects/<slug>/<uuid>.jsonl`, `status/claude.go`):
@@ -159,7 +159,7 @@ delivers the subtype as the hook matcher, not always a body field).
 
 ### OpenCode — hooks (per-session)
 
-- **Plugin** (`$XDG_CONFIG_HOME/opencode/plugin/flock.js`, Flock-seeded): forwards
+- **Plugin** (`$XDG_CONFIG_HOME/opencode/plugin/flock.js`, Shepherd-seeded): forwards
   `session.start`, `tool.execute.before/after`, `permission.request`,
   `question.ask`, `session.idle/error/complete` → `status/translators/opencode.ts`.
   Full per-session status incl. **awaiting_input**.
@@ -168,7 +168,7 @@ delivers the subtype as the hook matcher, not always a body field).
 
 ### Grok (xAI Grok Build CLI) — hook-driven (NOT activity)
 
-- **Native hooks** (`~/.grok/hooks/flock.json`, Flock-seeded — global + always
+- **Native hooks** (`~/.grok/hooks/flock.json`, Shepherd-seeded — global + always
   trusted, no `/hooks-trust` prompt): `session_start`/`pre_tool_use`/
   `post_tool_use`/`post_tool_use_failure`/`stop` → `status/translators/grok.ts`.
   camelCase fields, snake_case event values. `Notification` is intentionally NOT

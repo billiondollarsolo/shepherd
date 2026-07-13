@@ -7,6 +7,7 @@
  */
 import { useState, type FormEvent } from 'react';
 import type { User } from '@flock/shared';
+import { PRODUCT_NAME } from '../brand';
 import { ApiError, login } from './api';
 
 export interface LoginProps {
@@ -43,7 +44,7 @@ export default function Login({ onAuthenticated }: LoginProps): JSX.Element {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-flock-bg text-flock-fg">
       <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-3" aria-label="Log in">
-        <h1 className="text-2xl font-semibold tracking-tight">Flock</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
         <p className="text-flock-muted text-sm">Sign in to the paddock.</p>
 
         <label className="flex flex-col gap-1 text-sm">

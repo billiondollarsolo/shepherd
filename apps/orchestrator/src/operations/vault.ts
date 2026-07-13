@@ -267,7 +267,9 @@ function databaseUrlFor(target: DatabaseTarget, database: string): string {
 function assertCompatible(manifest: FlockVaultManifest, env: NodeJS.ProcessEnv): void {
   const current = resolveAgentdVersion(env);
   if (manifest.flockVersion.split('.')[0] !== current.split('.')[0]) {
-    throw new Error(`Vault Flock ${manifest.flockVersion} is incompatible with Flock ${current}`);
+    throw new Error(
+      `Vault from Shepherd ${manifest.flockVersion} is incompatible with Shepherd ${current}`,
+    );
   }
   const actual = masterKeyMetadata(env);
   if (actual.fingerprint !== manifest.masterKey.fingerprint) {

@@ -1,5 +1,5 @@
 /**
- * TerminalArea — the focus view's terminal for ONE session. In Flock's model a
+ * TerminalArea — the focus view's terminal for ONE session. In Shepherd's model a
  * session IS a single terminal (agent / shell / dev); to run more terminals you
  * add more sessions to the project (shown in the sidebar, tabs, and grid). So
  * there are no in-session splits here — just the session's live terminal, plus

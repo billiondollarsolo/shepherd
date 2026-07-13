@@ -31,7 +31,7 @@ import { OpenCodeChatAssembler } from './opencode-chat.js';
 
 /**
  * Resolve which agent translator/plan extractor to use. Prefer the live session
- * binding (always known for a Flock-managed session) over body inference — Claude
+ * binding (always known for a Shepherd-managed session) over body inference — Claude
  * and Gemini both use `hook_event_name`, Codex can too, and Grok may emit either
  * camelCase or snake_case field names. Body `agentType` (OpenCode plugin) and
  * payload-shape inference remain as fallbacks.

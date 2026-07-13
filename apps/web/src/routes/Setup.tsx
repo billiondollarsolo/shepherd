@@ -7,6 +7,7 @@
  * a clear message and offer to continue to login.
  */
 import { useState, type FormEvent } from 'react';
+import { PRODUCT_NAME } from '../brand';
 import { ApiError, setupOwner } from './api';
 
 export interface SetupProps {
@@ -64,7 +65,7 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
         className="flex w-80 flex-col gap-3"
         aria-label="First-run owner setup"
       >
-        <h1 className="text-2xl font-semibold tracking-tight">Set up Flock</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Set up {PRODUCT_NAME}</h1>
         <p className="text-flock-muted text-sm">Create the installation owner account.</p>
 
         <label className="flex flex-col gap-1 text-sm">

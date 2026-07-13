@@ -8,7 +8,7 @@
  *   GET  /api/sessions/:id/git/status      file list + branch/ahead/behind
  *   POST /api/sessions/:id/git/stage       git add  (empty paths → all)
  *   POST /api/sessions/:id/git/unstage     git reset/rm --cached (empty → all)
- *   POST /api/sessions/:id/git/commit      git commit -m … (Flock user identity)
+ *   POST /api/sessions/:id/git/commit      git commit -m … (Shepherd user identity)
  *   POST /api/sessions/:id/git/push        git push (node's own remote creds)
  *
  * It reuses {@link DiffService}'s injectable session-lookup + transport-resolver
@@ -44,7 +44,7 @@ export class GitOperationError extends Error {
   }
 }
 
-/** The committer/author identity injected per-commit (the acting Flock user). */
+/** The committer/author identity injected per-commit (the acting Shepherd user). */
 export interface GitIdentity {
   readonly name: string;
   readonly email: string;
@@ -219,7 +219,7 @@ export function gitCommitArgv(
   identity: GitIdentity,
 ): string[] {
   // Pass identity via -c so a commit succeeds even on a node with no global git
-  // config (a fresh SSH node) — the acting Flock user is the author/committer.
+  // config (a fresh SSH node) — the acting Shepherd user is the author/committer.
   return [
     'git',
     '-C',
@@ -410,7 +410,7 @@ export class GitService {
     return this.status(sessionId);
   }
 
-  /** Commit the staged changes as the acting Flock user. */
+  /** Commit the staged changes as the acting Shepherd user. */
   async commit(
     sessionId: string,
     message: string,
@@ -459,7 +459,7 @@ export class GitService {
   }
 
   /**
-   * Push the current branch. Runs with the NODE's own git credentials (Flock's
+   * Push the current branch. Runs with the NODE's own git credentials (Shepherd's
    * SSH connection is to the node, not the git remote). Falls back to setting the
    * upstream when none is configured. Throws {@link GitOperationError} (→422)
    * with git's verbatim output on failure so the user can act on it.

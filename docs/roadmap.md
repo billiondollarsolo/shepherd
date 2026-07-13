@@ -1,6 +1,6 @@
-# Flock — Elite Web Platform Roadmap & Execution Plan
+# Shepherd — Elite Web Platform Roadmap & Execution Plan
 
-> **Audience:** the engineering team (human or AI agents) building Flock from its current
+> **Audience:** the engineering team (human or AI agents) building Shepherd from its current
 > state into the elite, web-native agent **operations** platform.
 > **Status:** authoritative forward plan. Supersedes ad-hoc planning.
 > **Companion docs:** [architecture.md](architecture.md) (current system),
@@ -35,11 +35,11 @@ Check the box when merged + validated.
 
 ## 1. Vision
 
-Flock is the **operations platform for coding agents** — run, supervise, and direct a
+Shepherd is the **operations platform for coding agents** — run, supervise, and direct a
 fleet of agents across any number of machines, from any browser or phone, as an
 individual or a team.
 
-Today Flock _observes_ agents (it watches their terminals and scrapes status). The
+Today Shepherd _observes_ agents (it watches their terminals and scrapes status). The
 end state _directs_ them: a full control plane on a structured spine, **plus** the
 web-native, fleet-native capabilities that a single-machine desktop tool structurally
 cannot offer.
@@ -197,7 +197,7 @@ pnpm test:e2e                       # Playwright — for web-surface changes
   - **Deps:** none. **Risk:** low–medium.
 
 - [ ] **F4 — Resume cursors at the agentd boundary.**
-  - **Why:** Flock survives orchestrator loss (PTY lives on the node) but not _agentd_
+  - **Why:** Shepherd survives orchestrator loss (PTY lives on the node) but not _agentd_
     loss → "reconnecting forever." Synara persists a resume cursor.
   - **Scope:** `agentd/internal/session/`, orchestrator agentd client, `db/schema.ts`.
   - **Approach:** persist enough per-session state (transcript/rollout path, last seq,
@@ -297,7 +297,7 @@ unchanged PTY sessions; all gates green.
 
 ## 6. PHASE 1 — Per-session power (the Synara superset)
 
-> After Phase 0. Makes Flock match _and exceed_ the best desktop tool, per session.
+> After Phase 0. Makes Shepherd match _and exceed_ the best desktop tool, per session.
 
 ### Epic L1-A: The control plane (observe → act)
 
@@ -373,7 +373,7 @@ unchanged PTY sessions; all gates green.
       (`useCreatePr`/`useCreateBranch`/`useSwitchBranch`) + a "PR" control in the Source
       Control `CommitBar`. Tests: `git-pr.test.ts` (18). Per-turn checkpoints/revert = follow-up.
 
-  - **Why:** Flock stops at push; elite is commit→push→**PR** from the cockpit.
+  - **Why:** Shepherd stops at push; elite is commit→push→**PR** from the cockpit.
   - **Scope:** orchestrator `sessions/git-service.ts` + `git-route.ts`, web Source Control
     panel. Reference: `synara/apps/server/src/git/Layers/GitHubCli.ts`.
   - **Approach:** `gh pr create` (with duplicate-PR detection), combined commit→push→PR,
@@ -538,7 +538,7 @@ PHASE 2   M1 ─ M2/M3/M4/M5/M9/M11       M6 ◀ P3,P5     M7 ◀ F4,P6     M8 �
 
 - **M-Foundation:** F1–F8 merged + green; an ACP session runs live; status rebuildable.
 - **M-Superset:** P1–P8 merged; a session is fully directable; dual surface; PR loop;
-  handoff; 8 agents. _(Flock ≥ Synara per session.)_
+  handoff; 8 agents. _(Shepherd ≥ Synara per session.)_
 - **M-Moat:** M1, M4, M6, M8 merged. _(Team + fleet + mobile — the lead desktop can't
   follow.)_
 
@@ -590,13 +590,13 @@ Synara (`synara/`, gitignored reference) is a **local-first Electron desktop app
 - **UX:** useful command palette, configurable keybindings, multi-tab in-app browser,
   thread recap, queued-message composer, archiving.
 
-**Where Flock already wins (protect these):** multi-node over SSH, sessions persistent
+**Where Shepherd already wins (protect these):** multi-node over SSH, sessions persistent
 independent of client _and_ orchestrator, any-CLI-day-one via PTY, Postgres-grade
 persistence, per-node/session metrics, the grid/hive view, the calm push model.
 
-**Where Flock's ceiling is higher (Phase 2):** Synara is single-user, single-machine. It
+**Where Shepherd's ceiling is higher (Phase 2):** Synara is single-user, single-machine. It
 _cannot_ be a multi-user, multi-node, mobile, governed, collaborative web service. That
-gap is Flock's moat — and the point of this plan is to take Synara's per-session power
+gap is Shepherd's moat — and the point of this plan is to take Synara's per-session power
 _and_ build the moat on top.
 
 > Detailed evidence (file-level) lives in the four review threads that produced this

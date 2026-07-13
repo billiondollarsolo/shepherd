@@ -1,4 +1,4 @@
-// Command flock-agentd is the per-node Flock daemon: it owns PTY sessions (the
+// Command flock-agentd is the per-node Shepherd daemon: it owns PTY sessions (the
 // raw-PTY replacement for tmux), persists them across orchestrator reconnects,
 // and speaks the framed protocol over a unix socket (local) or a loopback TCP
 // port reached via an SSH direct-tcpip channel (remote). See

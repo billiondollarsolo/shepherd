@@ -18,6 +18,7 @@ import { usePaddock } from '../../../store/paddock';
 import { useProjects } from '../../../data/queries';
 import { startRace } from '../../../data/treeApi';
 import { DialogField as Field } from './DialogField';
+import { PRODUCT_NAME } from '../../../brand';
 
 const RACE_AGENTS: AgentType[] = ['claude-code', 'codex', 'gemini', 'grok', 'opencode'];
 const AGENT_LABELS: Record<AgentType, string> = {
@@ -57,8 +58,8 @@ export function RaceDialog(): JSX.Element {
       <DialogHeader>
         <DialogTitle>Race a task</DialogTitle>
         <DialogDescription>
-          Run the same task across several agents, then compare their changes side by side. Flock
-          observes Git state but does not isolate or manage it.
+          Run the same task across several agents, then compare their changes side by side.{' '}
+          {PRODUCT_NAME} observes Git state but does not isolate or manage it.
         </DialogDescription>
       </DialogHeader>
       <Field label="Project" htmlFor="race-project">

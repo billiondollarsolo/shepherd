@@ -1,5 +1,5 @@
 # =============================================================================
-# Flock — LOCAL bring-up (quick same-origin look on a single high port).
+# Shepherd — LOCAL bring-up (quick same-origin look on a single high port).
 #
 #   docker compose --env-file .env.flock-local -f docker-compose.local.yml up -d
 #   open http://localhost:48080

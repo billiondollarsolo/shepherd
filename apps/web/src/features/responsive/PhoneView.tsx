@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui';
 import { useVisualViewportWidth } from './useVisualViewport';
+import { PRODUCT_NAME } from '../../brand';
 
 const ATTENTION_STATUSES: ReadonlySet<Status> = new Set<Status>(['awaiting_input', 'error']);
 
@@ -232,7 +233,9 @@ function PhoneStage({
           data-testid="phone-brand"
         >
           <FlockMark className="size-5" />
-          <span className="font-wordmark text-sm font-semibold text-flock-ink-primary">Flock</span>
+          <span className="font-wordmark text-sm font-semibold text-flock-ink-primary">
+            {PRODUCT_NAME}
+          </span>
         </div>
         <div className="min-w-0 flex-1 truncate text-xs font-medium">{session.label}</div>
         <span
@@ -447,7 +450,9 @@ export function PhoneView({
         </DropdownMenu>
         <FlockMark className="size-6" />
         <div className="min-w-0">
-          <h1 className="font-wordmark text-base font-semibold text-flock-ink-primary">Flock</h1>
+          <h1 className="font-wordmark text-base font-semibold text-flock-ink-primary">
+            {PRODUCT_NAME}
+          </h1>
           <p className="text-2xs text-flock-ink-muted">
             {selectedNodeId
               ? `${nodes.find((node) => node.id === selectedNodeId)?.name ?? 'Node'} · agents`

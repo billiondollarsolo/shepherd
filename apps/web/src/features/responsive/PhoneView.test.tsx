@@ -81,14 +81,14 @@ describe('PhoneView (herdr-aligned mobile stage)', () => {
 
   it('renders Agents list of sessions', () => {
     render(<PhoneView sessions={sessions} />);
-    expect(screen.getByRole('heading', { name: 'Flock' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Shepherd' })).toBeVisible();
     expect(screen.getByText(/all nodes · agents/i)).toBeVisible();
     for (const s of sessions) {
       expect(screen.getByText(s.label)).toBeVisible();
     }
     expect(screen.getByText('Mac Studio')).toBeVisible();
     expect(screen.getByText('VPS')).toBeVisible();
-    expect(screen.getAllByText('Flock').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Flock')).toBeVisible();
   });
 
   it('floats attention sessions to the top of their node groups', () => {
@@ -120,7 +120,7 @@ describe('PhoneView (herdr-aligned mobile stage)', () => {
     expect(screen.queryByTestId('phone-stage-input')).not.toBeInTheDocument();
     expect(screen.getByTestId('phone-live-terminal')).toBeInTheDocument();
     expect(screen.getByTestId('mock-ghostty-terminal')).toHaveAttribute('data-renderer', 'ghostty');
-    expect(screen.getByTestId('phone-brand')).toHaveTextContent('Flock');
+    expect(screen.getByTestId('phone-brand')).toHaveTextContent('Shepherd');
   });
 
   it('exposes the compact agent-switcher menu', () => {

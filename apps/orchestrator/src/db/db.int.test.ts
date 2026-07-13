@@ -1,5 +1,5 @@
 /**
- * Flock — US-2 data-model INTEGRATION test (spec §6, runs under `pnpm test:int`).
+ * Shepherd — US-2 data-model INTEGRATION test (spec §6, runs under `pnpm test:int`).
  *
  * Runs against the compose `postgres` service (DATABASE_URL). It:
  *   1. runs migrations idempotently (twice — proving `pnpm migrate` is idempotent);

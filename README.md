@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="apps/web/public/icons/icon.svg" alt="Flock" width="96" height="96" />
+<img src="apps/web/public/icons/icon.svg" alt="Shepherd" width="96" height="96" />
 
-# Flock
+# Shepherd
 
 ### Shepherd Your Agents
 
@@ -23,12 +23,16 @@
 
 ---
 
-## What is Flock?
+> **Name transition:** Shepherd was previously named Flock. Technical identifiers retain
+> the `flock` prefix in this release, so existing commands, environment variables, image
+> names, node services, package paths, and repository links continue to work unchanged.
+
+## What is Shepherd?
 
 You probably run coding agents in a terminal today — one at a time, on one machine,
-and the work dies the moment you close the lid. Flock turns that into a **fleet**.
+and the work dies the moment you close the lid. Shepherd turns that into a **fleet**.
 
-Point Flock at one or more machines ("**nodes**") over SSH. On each node it runs a
+Point Shepherd at one or more machines ("**nodes**") over SSH. On each node it runs a
 tiny daemon that owns your agents' terminals. From any browser you get a live
 Paddock of every agent across every machine — what each one is doing right now
 (**Idle** / **Working** / **Needs you**), what it's spending, and a real terminal you
@@ -52,7 +56,7 @@ the session is exactly where you left it.
 
 ## Supported agents
 
-Flock leverages **what each agent already produces on the node** — its lifecycle hooks
+Shepherd leverages **what each agent already produces on the node** — its lifecycle hooks
 and/or its transcript files — and normalizes everything into one status + telemetry model.
 
 | Agent           |        Status         | `awaiting_input` | Tokens / Model / Context % | Plan |
@@ -180,7 +184,7 @@ worker; the orchestrator and coding agents never receive the raw Docker socket. 
 (or `https://localhost`) and
 complete admin setup.
 
-Prepare a remote Linux node before adding it to Flock:
+Prepare a remote Linux node before adding it to Shepherd:
 
 ```bash
 sudo ./scripts/flock-node-prepare.sh \
@@ -268,7 +272,7 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | [`docs/roadmap.md`](docs/roadmap.md)                                   | **The forward plan** — phased vision + tasks (success criteria + tests baked in) to the elite web platform |
 | [`docs/architecture.md`](docs/architecture.md)                         | How the three components fit together, end to end                                                          |
-| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Flock captures from each agent, and how                                                       |
+| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Shepherd captures from each agent, and how                                                    |
 | [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md)           | The node daemon — why it exists and how it works                                                           |
 | [`docs/deployment.md`](docs/deployment.md)                             | The production Docker Compose stack, in depth                                                              |
 | [`docs/releasing.md`](docs/releasing.md)                               | Public release workflow, GHCR images, verification, and repository settings                                |
@@ -284,7 +288,7 @@ Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
   in a `0600` file and stripped from spawned agents' environments.
 - Secrets and SSH keys live outside the repo and outside image layers (runtime only).
 - Browser containers are managed by a token-authenticated worker that is the only
-  Flock service with Docker-socket access. Its API fixes image, network, command, and
+  Shepherd service with Docker-socket access. Its API fixes image, network, command, and
   resource policy; the orchestrator and coding agents never receive the socket.
 
 Please report vulnerabilities through [private vulnerability reporting](SECURITY.md),
@@ -294,14 +298,14 @@ not public issues.
 
 ## Status
 
-**Current release: v0.3.0.** Flock is actively developed pre-1.0 software. Review the
+**Current release: v0.3.0.** Shepherd is actively developed pre-1.0 software. Review the
 [changelog](CHANGELOG.md), [security policy](SECURITY.md), and
 [contribution guide](CONTRIBUTING.md) before deploying or contributing.
 
 Released container images are published to GHCR as `flock-orchestrator`, `flock-web`,
 and `flock-session-chrome`. Pin a semantic version in production rather than `latest`.
 
-Flock is available under the [MIT License](LICENSE). Bundled font attribution is
+Shepherd is available under the [MIT License](LICENSE). Bundled font attribution is
 documented in [Third-party notices](THIRD_PARTY_NOTICES.md).
 
 Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).

@@ -1,5 +1,5 @@
 /**
- * Flock — DB row <-> shared domain type mappers.
+ * Shepherd — DB row <-> shared domain type mappers.
  *
  * The shared `Session` type/contract lives in `@flock/shared` (domain.ts) and is
  * the single source of truth used by BOTH the orchestrator and the web app.

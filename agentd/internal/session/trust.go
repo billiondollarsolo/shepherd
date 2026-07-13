@@ -69,7 +69,7 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 var flockMcpScript string
 
 // trust.go — pre-accept each agent's "do you trust the files in this folder?" gate
-// for the session's working dir, so a Flock-launched agent starts READY instead of
+// for the session's working dir, so a Shepherd-launched agent starts READY instead of
 // blocked on an onboarding/trust prompt (which also swallows the first input). This
 // is the bypass for the trust prompts: we write the SAME "trusted" marker the agent
 // would write after you click "yes", before launch.

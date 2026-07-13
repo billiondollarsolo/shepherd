@@ -1,6 +1,6 @@
 # State Ownership and Durability
 
-This document is the source of truth for where Flock state lives. A new field must
+This document is the source of truth for where Shepherd state lives. A new field must
 fit one row below, or update this inventory in the same change. Browser memory and
 orchestrator maps are never substitutes for durable state.
 

@@ -39,7 +39,7 @@ vi.mock('../diagnosticsApi', () => ({
 describe('OperationsSection', () => {
   it('shows actionable dependency health and the protected bundle action', async () => {
     render(<OperationsSection />);
-    expect(await screen.findByText('Flock 0.3.0')).toBeInTheDocument();
+    expect(await screen.findByText('Shepherd 0.3.0')).toBeInTheDocument();
     expect(screen.getByText('Browser runtime')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /download bundle/i })).toHaveAttribute(
       'href',

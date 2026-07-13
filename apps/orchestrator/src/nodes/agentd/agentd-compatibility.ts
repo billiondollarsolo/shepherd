@@ -239,7 +239,7 @@ export function evaluateAgentdCompatibility(
     binaryReplacement: false,
     detail:
       preferred > 0
-        ? `Daemon ${facts.installedVersion} is newer and compatible; Flock will not downgrade it.`
+        ? `Daemon ${facts.installedVersion} is newer and compatible; Shepherd will not downgrade it.`
         : `Daemon ${facts.installedVersion} satisfies the current compatibility policy.`,
   });
 }

@@ -78,7 +78,7 @@ export interface CreateContainerOptions {
 export interface DockerLike {
   createContainer(options: CreateContainerOptions): Promise<DockerContainerLike>;
   getContainer(id: string): DockerContainerLike;
-  /** Used by reap() to find leftover Flock browser containers (no-orphan sweep). */
+  /** Used by reap() to find leftover Shepherd browser containers (no-orphan sweep). */
   listContainers(options: {
     all?: boolean;
     filters?: Record<string, string[]>;
@@ -94,7 +94,7 @@ export interface LayerAConfig {
   readonly bindHost: string;
   /** Port chrome listens on inside the container. */
   readonly containerCdpPort: number;
-  /** Label key used to tag/reap Flock-managed browser containers. */
+  /** Label key used to tag/reap Shepherd-managed browser containers. */
   readonly labelKey: string;
   /**
    * T15(c) — per-container resource caps so one heavy page can't OOM/peg the host.

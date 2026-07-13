@@ -1,6 +1,6 @@
-# Flock — Design Tokens (US-37 final polish pass)
+# Shepherd — Design Tokens (US-37 final polish pass)
 
-> Authoritative design-token reference for the Flock web cockpit (`apps/web`).
+> Authoritative design-token reference for the Shepherd web cockpit (`apps/web`).
 > It documents the **as-built** system: the US-31 `flock-theme` color tokens
 > (`apps/web/src/theme/tokens.ts` ⇄ `apps/web/src/styles/theme.css`) plus the
 > US-37 **polish layer** (`apps/web/src/styles/polish.css`, mirrored in
@@ -13,16 +13,16 @@
 > `diff.{add,remove,context}`, `font.ui`, `font.code` — light + dark
 > first-class, auto-following OS preference. Codex _structure, terminology and
 > keybindings_ (Appendix A) are preserved; the _look and feel_ is a distinctive
-> **Flock** identity (the flock-of-agents metaphor).
+> **Shepherd** identity (the flock-of-agents metaphor).
 
 ---
 
 ## 1. Design intent
 
-Flock supervises a _flock_ of CLI coding agents. The interface is a calm control
+Shepherd supervises a _flock_ of CLI coding agents. The interface is a calm control
 tower: dense information, low chrome, one confident accent — feeling like the
 Codex desktop app (same spatial model, calm density, supervision-first emphasis,
-spec §12.3 / Appendix A.4) while reading as unmistakably Flock and avoiding the
+spec §12.3 / Appendix A.4) while reading as unmistakably Shepherd and avoiding the
 generic AI gradient-and-glass look.
 
 Five rules drive every token (operationalizing Appendix A.4 "calm density"):

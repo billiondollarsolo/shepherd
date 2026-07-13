@@ -48,6 +48,7 @@ import { FLOCK_VERSION } from '../../version';
 import { NodeRow, WorkspaceList } from './SidebarTree';
 import { NODE_CONN_BG, reorderNodeIds, sessionLabel } from './sidebarModel';
 import { FLEET_PAGE_SIZE, nextFleetLimit } from '../overview/fleetModel';
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from '../../brand';
 
 const EMPTY_SESSIONS: Session[] = [];
 
@@ -438,7 +439,7 @@ export function Sidebar(): JSX.Element {
         </div>
 
         <div className="mt-auto flex flex-col items-center gap-1 border-t border-[var(--flock-border)] pt-2">
-          <SimpleTooltip label={`Flock ${FLOCK_VERSION}`} side="right">
+          <SimpleTooltip label={`${PRODUCT_NAME} ${FLOCK_VERSION}`} side="right">
             <span className="text-[9px] font-medium text-flock-ink-muted">v{FLOCK_VERSION}</span>
           </SimpleTooltip>
         </div>
@@ -453,16 +454,16 @@ export function Sidebar(): JSX.Element {
           <button
             type="button"
             onClick={() => openMission()}
-            aria-label="Flock home"
+            aria-label={`${PRODUCT_NAME} home`}
             className="flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-flock-accent"
           >
             <FlockMark className="size-7 shrink-0" />
             <span className="flex min-w-0 flex-col items-start">
               <span className="font-wordmark truncate text-xl font-semibold leading-[18px] text-flock-ink-primary">
-                Flock
+                {PRODUCT_NAME}
               </span>
               <span className="truncate text-[9px] font-medium leading-[9px] tracking-wide text-flock-ink-muted">
-                Shepherd Your Agents
+                {PRODUCT_TAGLINE}
               </span>
             </span>
           </button>
@@ -610,7 +611,9 @@ export function Sidebar(): JSX.Element {
             <RefreshCw className="size-3" /> Workspace not saved — retry
           </button>
         ) : null}
-        <p className="mb-1 text-2xs font-medium text-flock-ink-muted">Flock v{FLOCK_VERSION}</p>
+        <p className="mb-1 text-2xs font-medium text-flock-ink-muted">
+          {PRODUCT_NAME} v{FLOCK_VERSION}
+        </p>
         <BuiltBy />
       </footer>
     </div>

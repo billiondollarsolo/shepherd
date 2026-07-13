@@ -19,7 +19,7 @@ describe('App', () => {
   it('renders the sign-in surface when unauthenticated', async () => {
     render(<App />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /sign in to flock/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /sign in to shepherd/i })).toBeInTheDocument(),
     );
   });
 });

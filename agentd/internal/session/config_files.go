@@ -27,7 +27,7 @@ func seedHookConfig(spec Spec) error {
 	return writeConfigFiles(target, spec.ConfigFiles)
 }
 
-// writeConfigFiles writes Flock's hook files into targetDir, replacing the
+// writeConfigFiles writes Shepherd's hook files into targetDir, replacing the
 // __FLOCK_CONFIG_DIR__ placeholder with targetDir and DEEP-MERGING into any
 // existing JSON (so the user's own settings/hooks are preserved, and re-running is
 // idempotent).
@@ -58,11 +58,11 @@ func writeConfigFiles(targetDir string, files map[string]string) error {
 	return nil
 }
 
-// mergeHookSettings deep-merges Flock's settings JSON into the user's existing
-// settings JSON: every top-level key from Flock wins EXCEPT `hooks`, where each
+// mergeHookSettings deep-merges Shepherd's settings JSON into the user's existing
+// settings JSON: every top-level key from Shepherd wins EXCEPT `hooks`, where each
 // event's hook array is APPENDED to the user's (so the user's own hooks survive
-// alongside Flock's). Returns (merged, true) on success, (_, false) if either
-// side isn't a JSON object (caller then keeps Flock's content as-is).
+// alongside Shepherd's). Returns (merged, true) on success, (_, false) if either
+// side isn't a JSON object (caller then keeps Shepherd's content as-is).
 func mergeHookSettings(existing, flock []byte) ([]byte, bool) {
 	var user, add map[string]any
 	if json.Unmarshal(existing, &user) != nil || json.Unmarshal(flock, &add) != nil {
@@ -82,7 +82,7 @@ func mergeHookSettings(existing, flock []byte) ([]byte, bool) {
 	return out, true
 }
 
-// mergeHooksMap appends Flock's per-event hook arrays to the user's existing ones.
+// mergeHooksMap appends Shepherd's per-event hook arrays to the user's existing ones.
 func mergeHooksMap(userHooks, flockHooks any) any {
 	fm, ok := flockHooks.(map[string]any)
 	if !ok {
@@ -97,7 +97,7 @@ func mergeHooksMap(userHooks, flockHooks any) any {
 		existing, _ := um[event].([]any)
 		// Append only entries not already present. The same native config is
 		// re-seeded on every session open, so a plain append would accumulate
-		// duplicate Flock hooks on disk (→ the agent fires the forwarder N times =
+		// duplicate Shepherd hooks on disk (→ the agent fires the forwarder N times =
 		// N duplicate hook events). Idempotent merge keeps the user's own hooks AND
 		// avoids dup-stacking ours.
 		for _, fe := range fArr {

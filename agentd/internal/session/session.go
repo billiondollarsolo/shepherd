@@ -47,8 +47,8 @@ type Spec struct {
 	Identity *identity.Runtime
 
 	// --- native hook-config injection (US-19), seeded ON THE NODE ---
-	// Flock merges its hook files into the runtime user's real agent config. The
-	// hook forwarder is inert outside a Flock session because its token env is absent.
+	// Shepherd merges its hook files into the runtime user's real agent config. The
+	// hook forwarder is inert outside a Shepherd session because its token env is absent.
 	ConfigFiles      map[string]string // relpath -> content (relpath may include subdirs)
 	ConfigBaseSubdir string            // $HOME-relative install target, e.g. ".claude"
 
@@ -204,7 +204,7 @@ func (s *Session) startProcess() error {
 	if s.spec.Cwd != "" {
 		cmd.Dir = s.spec.Cwd
 	}
-	// spec.Env are ADDITIONS (e.g. the Flock hook vars) merged over the daemon's
+	// spec.Env are ADDITIONS (e.g. the Shepherd hook vars) merged over the daemon's
 	// own environment, so the agent still inherits PATH/HOME/etc. from the node.
 	// PATH augmentation: a systemd/nohup-launched daemon has a MINIMAL $PATH that
 	// usually excludes Node version-manager / npm-global bin dirs (~/.nvm/.../bin,

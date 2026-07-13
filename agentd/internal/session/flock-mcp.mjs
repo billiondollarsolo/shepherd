@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * flock-mcp — a tiny, dependency-free MCP (Model Context Protocol) stdio server
- * that exposes Flock's agent-orchestration API as tools the host agent can
+ * that exposes Shepherd's agent-orchestration API as tools the host agent can
  * AUTO-DISCOVER and call. It is launched per session by the agent's MCP config
  * and authenticates with a separate, explicitly scoped orchestration credential:
  *

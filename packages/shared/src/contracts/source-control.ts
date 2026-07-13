@@ -105,7 +105,7 @@ export type GitCommitResponse = z.infer<typeof GitCommitResponse>;
 
 /**
  * POST /api/sessions/:id/git/push response. Push runs with the NODE's own git
- * credentials (Flock's SSH connection is to the node, not to the git remote), so
+ * credentials (Shepherd's SSH connection is to the node, not to the git remote), so
  * `detail` carries git's output verbatim for the user to read.
  */
 export const GitPushResponse = z.object({

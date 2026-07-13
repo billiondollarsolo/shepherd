@@ -13,7 +13,7 @@ test.describe('phone viewport — which-agent-needs-me away view', () => {
     // The phone surface is shown and the dense desktop three-region shell is not.
     await expect(page.getByTestId('phone-view')).toBeVisible();
     await expect(page.getByTestId('app-shell')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Flock' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Shepherd' })).toBeVisible();
   });
 });
 
@@ -32,6 +32,8 @@ test.describe('installable PWA', () => {
     const res = await request.get('/manifest.webmanifest');
     expect(res.ok()).toBeTruthy();
     const manifest = await res.json();
+    expect(manifest.name).toBe('Shepherd — Agent Paddock');
+    expect(manifest.short_name).toBe('Shepherd');
     expect(manifest.display).toBe('standalone');
     expect(manifest.start_url).toBe('/');
     const sizes = (manifest.icons as Array<{ sizes: string }>).map((i) => i.sizes);
@@ -41,6 +43,11 @@ test.describe('installable PWA', () => {
 
   test('links the manifest and a theme-color from the document', async ({ page }) => {
     await page.goto('/');
+    await expect(page).toHaveTitle('Shepherd');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      'content',
+      'Supervise CLI coding agents across local and remote nodes from one web paddock.',
+    );
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#06090d');
   });

@@ -93,7 +93,7 @@ export interface TerminalProps {
 const TERMINAL_BG = '#090909';
 
 /**
- * A polished, widely-loved 16-colour palette (One Dark family) on the Flock dark
+ * A polished, widely-loved 16-colour palette (One Dark family) on the Shepherd dark
  * background. Tuned for legibility + matching the paddock's accent so the
  * terminal feels native to the app, not bolted on.
  */
@@ -311,7 +311,7 @@ export default function Terminal({
       }
 
       // FitAddon subtracts core.viewport.scrollBarWidth whenever scrollback is
-      // enabled, even though Flock hides that native track. Calculate the grid
+      // enabled, even though Shepherd hides that native track. Calculate the grid
       // directly from xterm's authoritative cell metrics instead. This is one
       // atomic resize (and therefore one PTY SIGWINCH), not a fit followed by a
       // corrective resize that can leave full-screen TUIs between two sizes.

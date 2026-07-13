@@ -32,7 +32,7 @@ export function isPushSupported(): boolean {
 export const SERVICE_WORKER_URL = '/sw.js';
 
 /**
- * Register the Flock service worker at the root scope. Returns the registration,
+ * Register the Shepherd service worker at the root scope. Returns the registration,
  * or `null` when service workers are unsupported (no throw — callers can degrade
  * to the in-tab WS sidebar without Web Push).
  */

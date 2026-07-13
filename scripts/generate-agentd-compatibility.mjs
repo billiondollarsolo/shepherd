@@ -7,12 +7,13 @@ const quote = (value) => JSON.stringify(value);
 const ints = (values) => values.join(', ');
 const strings = (values) => values.map(quote).join(', ');
 const generated = `// Code generated from agentd/COMPATIBILITY.json; DO NOT EDIT.
+// Regenerate with: go generate ./compatibility
 
 // Package compatibility exposes the release-owned flock-agentd compatibility policy.
 package compatibility
 
 // Policy describes the daemon versions, protocols, and authenticated capabilities
-// accepted by a Flock release.
+// accepted by a Shepherd release.
 type Policy struct {
 \tSchemaVersion             int
 \tMinimumDaemonVersion      string

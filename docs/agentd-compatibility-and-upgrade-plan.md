@@ -2,14 +2,14 @@
 
 ## Objective
 
-Make Flock upgrades predictable across the application stack and remote execution
-nodes. A Flock release must be able to say whether a node daemon is compatible,
+Make Shepherd upgrades predictable across the application stack and remote execution
+nodes. A Shepherd release must be able to say whether a node daemon is compatible,
 should be upgraded, or must be upgraded, without equating every binary-version
 difference with incompatibility or interrupting active agents.
 
 The policy separates four concerns that evolve at different rates:
 
-1. **Flock release version** — the orchestrator, web application, browser worker,
+1. **Shepherd release version** — the orchestrator, web application, browser worker,
    database migrations, and bundled daemon artifacts released together.
 2. **Daemon binary version** — identifies a particular `flock-agentd` build.
 3. **Control protocol version** — changes only when the wire contract is
@@ -33,7 +33,7 @@ as compatible.
 - Every release declares one preferred daemon version, a minimum daemon version,
   supported protocol versions, and required control capabilities in a checked-in
   compatibility manifest.
-- A supported daemon receives security fixes for at least one Flock minor-release
+- A supported daemon receives security fixes for at least one Shepherd minor-release
   line and at least 90 days after its replacement, whichever is longer. Before
   1.0, the project may intentionally reset this window in release notes when the
   protocol is still experimental.

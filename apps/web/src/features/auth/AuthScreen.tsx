@@ -18,6 +18,7 @@ import {
 import type { User } from '@flock/shared';
 import { BuiltBy } from '../../components/BuiltBy';
 import { FlockMark } from '../../components/SheepIcon';
+import { PRODUCT_NAME, PRODUCT_TAGLINE_SENTENCE } from '../../brand';
 import { ApiError, login, me, setupOwner } from '../../routes/api';
 import { Button, Input, Label } from '../../components/ui';
 
@@ -56,7 +57,9 @@ function BrandWordmark({ className = '' }: { className?: string }): JSX.Element 
     <div className={`flex items-center gap-2.5 ${className}`}>
       <FlockMark className="size-8 shrink-0" />
       <div className="leading-tight">
-        <div className="text-base font-semibold tracking-tight text-flock-ink-primary">Flock</div>
+        <div className="text-base font-semibold tracking-tight text-flock-ink-primary">
+          {PRODUCT_NAME}
+        </div>
         <div className="text-2xs text-flock-ink-muted">Agent supervision</div>
       </div>
     </div>
@@ -152,7 +155,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
         <div className="relative z-10 my-10 max-w-md">
           <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--flock-border)] bg-flock-surface-0/60 px-2.5 py-1 text-2xs font-medium text-flock-ink-muted backdrop-blur-sm">
             <Activity className="size-3 text-flock-accent" aria-hidden />
-            Shepherd your coding agents
+            {PRODUCT_TAGLINE_SENTENCE}
           </p>
           <h1 className="font-display text-3xl font-semibold leading-[1.15] tracking-tight text-flock-ink-primary xl:text-4xl">
             Supervise a flock of agents
@@ -208,7 +211,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           <div className="mb-8 lg:mb-10">
             <BrandWordmark className="mb-8 lg:hidden" />
             <h2 className="text-2xl font-semibold tracking-tight text-flock-ink-primary">
-              {isSetup ? 'Create the owner account' : 'Sign in to Flock'}
+              {isSetup ? 'Create the owner account' : `Sign in to ${PRODUCT_NAME}`}
             </h2>
             <p className="mt-1.5 text-sm text-flock-ink-muted">
               {isSetup

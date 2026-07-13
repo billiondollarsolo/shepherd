@@ -52,7 +52,7 @@ vi.mock('../../data/queries', () => ({
       checks: [
         {
           id: 'preparation',
-          label: 'Flock node preparation',
+          label: 'Shepherd node preparation',
           status: upgradeAvailable ? 'fail' : 'pass',
           detail: upgradeAvailable ? 'Managed service migration required.' : 'Prepared.',
         },

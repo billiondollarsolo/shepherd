@@ -1,5 +1,5 @@
 /**
- * Flock — drizzle-kit configuration (spec §6, US-2).
+ * Shepherd — drizzle-kit configuration (spec §6, US-2).
  *
  * `db:generate` reads this to emit migration SQL into `./drizzle`, which is
  * committed to the repo. `db:migrate` (src/db/migrate.ts) applies them

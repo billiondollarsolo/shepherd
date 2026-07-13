@@ -66,7 +66,7 @@ func render(p policyJSON) []byte {
 	fmt.Fprint(&b, "// Package compatibility exposes the release-owned flock-agentd compatibility policy.\n")
 	fmt.Fprint(&b, "package compatibility\n\n")
 	fmt.Fprint(&b, "// Policy describes the daemon versions, protocols, and authenticated capabilities\n")
-	fmt.Fprint(&b, "// accepted by a Flock release.\n")
+	fmt.Fprint(&b, "// accepted by a Shepherd release.\n")
 	fmt.Fprint(&b, "type Policy struct {\n")
 	fmt.Fprint(&b, "\tSchemaVersion             int\n")
 	fmt.Fprint(&b, "\tMinimumDaemonVersion      string\n")

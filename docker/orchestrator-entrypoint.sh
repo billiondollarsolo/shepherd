@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# Flock orchestrator container entrypoint (T10).
+# Shepherd orchestrator container entrypoint (T10).
 #
 # The orchestrator makes flock-agentd the ONLY transport for the LOCAL node (the
 # raw-PTY replacement for tmux). In the single-box Docker deploy the "local node"
@@ -54,7 +54,7 @@ chmod 0640 "$NODE_ID_FILE"
 # Claude Code is commercially licensed rather than open source. Ask the official
 # installer for the latest release on every container start: the runtime home is
 # persistent, so an "install only when missing" check would silently pin an old
-# release across Flock upgrades. A transient outage never blocks Flock; an
+# release across Shepherd upgrades. A transient outage never blocks Shepherd; an
 # existing binary remains usable and the next restart retries.
 CLAUDE_BIN="$RUNTIME_HOME/.local/bin/claude"
 if [ "${FLOCK_INSTALL_CLAUDE_CODE:-1}" != "0" ]; then

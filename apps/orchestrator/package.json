@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Flock orchestrator: holds the brains. SSH/tmux orchestration, in-memory status fan-out over WS, async write-behind event log, per-session browser isolation.",
+  "description": "Shepherd orchestrator: holds the brains. SSH/agentd orchestration, in-memory status fan-out over WS, async write-behind event log, per-session browser isolation.",
   "license": "MIT",
   "repository": {
     "type": "git",

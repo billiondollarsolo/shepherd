@@ -32,7 +32,7 @@ async function provision(database: string): Promise<void> {
   await handle.pool.end();
 }
 
-describe('Flock vault backup and isolated restore', () => {
+describe('Shepherd vault backup and isolated restore', () => {
   beforeAll(async () => {
     work = await mkdtemp(join(tmpdir(), 'flock-vault-int-'));
     await provision(sourceName);
@@ -112,7 +112,7 @@ describe('Flock vault backup and isolated restore', () => {
     ).rejects.toThrow(/Master key mismatch/);
   }, 60_000);
 
-  it('rejects an incompatible Flock version before creating a rollback or changing data', async () => {
+  it('rejects an incompatible Shepherd version before creating a rollback or changing data', async () => {
     const archive = join(work, 'wrong-version.flockvault');
     const rollback = join(work, 'wrong-version-rollback.flockvault');
     const password = Buffer.from('integration-vault-password');

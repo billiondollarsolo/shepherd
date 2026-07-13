@@ -1,5 +1,5 @@
 # =============================================================================
-# Flock orchestrator — production image (US-38, NFR-DEP1/DEP2)
+# Shepherd orchestrator — production image (US-38, NFR-DEP1/DEP2)
 # Multi-stage: deps -> build -> runtime. No secrets baked in (NFR-DEP2);
 # everything sensitive is supplied at runtime via env / Docker secrets.
 # Build context is the repo root.
@@ -79,7 +79,7 @@ ENV PATH="/usr/lib/postgresql/16/bin:$PNPM_HOME:$PATH"
 COPY --from=pg-client /usr/lib/postgresql/16 /usr/lib/postgresql/16
 # UTF-8 locale so the LOCAL node's tmux (running inside this container) renders
 # agent TUIs correctly. Without it, the container's POSIX locale makes tmux mangle
-# box-drawing / block / icon glyphs (Flock also forces it per command, but this is
+# box-drawing / block / icon glyphs (Shepherd also forces it per command, but this is
 # belt-and-suspenders + helps any interactive use). C.UTF-8 ships with glibc.
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -116,7 +116,7 @@ RUN groupadd --system --gid 700 flock-control \
     && usermod -aG flock-agent flock-control
 
 # Agent CLIs on PATH so a session on the LOCAL node (i.e. this container, when
-# Flock is deployed in Docker) can launch a real agent — same set the SSH node
+# Shepherd is deployed in Docker) can launch a real agent — same set the SSH node
 # image installs. Release builds intentionally install the newest available
 # versions; a failed install fails the image instead of silently publishing an
 # incomplete runtime. Real multi-node deploys still run agents on SSH nodes;
@@ -182,6 +182,6 @@ USER root
 
 # Entrypoint (T10): supervises flock-agentd, runs idempotent migrations, then
 # installs the latest Claude Code for the local node (without redistributing its
-# commercially licensed binary in Flock's image), then execs the orchestrator.
+# commercially licensed binary in Shepherd's image), then execs the orchestrator.
 # `pnpm` workspace scripts stay the source of truth for migrate/start.
 CMD ["/usr/local/bin/flock-entrypoint.sh"]

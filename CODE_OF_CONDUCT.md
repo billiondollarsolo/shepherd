@@ -1,6 +1,6 @@
 # Code of conduct
 
-Flock's community should be useful, direct, and welcoming.
+Shepherd's community should be useful, direct, and welcoming.
 
 Treat other contributors with respect. Critique ideas and code rather than
 people. Harassment, threats, discrimination, doxxing, and deliberately

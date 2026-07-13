@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildAgentEnvironment, providerCredentialKeysFor } from './agent-environment-policy.js';
 
 describe('agent environment policy', () => {
-  it('drops control-plane, loader, malformed, and spoofed Flock variables', () => {
+  it('drops control-plane, loader, malformed, and spoofed FLOCK variables', () => {
     const env = buildAgentEnvironment(
       'claude-code',
       {

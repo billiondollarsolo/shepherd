@@ -1,4 +1,4 @@
-# Flock dev/CI orchestration. Host needs ONLY docker.
+# Shepherd dev/CI orchestration. Host needs ONLY docker.
 # All real work runs inside the dev containers (docker-compose.dev.yml).
 
 COMPOSE := docker compose -f docker-compose.dev.yml

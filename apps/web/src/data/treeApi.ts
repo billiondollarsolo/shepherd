@@ -315,7 +315,7 @@ export function handoffSession(
 }
 
 // --- compare / race ---
-/** Spawn the same task across N agents in the project directory. Flock observes
+/** Spawn the same task across N agents in the project directory. Shepherd observes
  * Git state but does not create branches or worktrees. */
 export function startRace(
   projectId: string,

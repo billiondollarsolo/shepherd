@@ -1,5 +1,5 @@
 /*
- * Flock theme tokens — CSS custom properties (US-31, spec Appendix A.3).
+ * Shepherd theme tokens — CSS custom properties (US-31, spec Appendix A.3).
  *
  * These `--flock-*` variables are the runtime face of the design tokens defined
  * in `apps/web/src/theme/tokens.ts`. They MUST stay 1:1 with that file

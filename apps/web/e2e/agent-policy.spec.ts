@@ -147,7 +147,9 @@ test('session creation defaults to callback-only authority', async ({ page }) =>
   const bodies: Array<Record<string, unknown>> = [];
   await mockFlock(page, bodies);
   await openSessionDialog(page);
-  await expect(page.getByLabel('Flock authority')).toContainText(/Project default — Independent/);
+  await expect(page.getByLabel('Shepherd authority')).toContainText(
+    /Project default — Independent/,
+  );
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect.poll(() => bodies.length).toBe(1);
   expect(bodies[0]).not.toHaveProperty('orchestrationAuthority');
@@ -157,7 +159,7 @@ test('manage authority requires explicit destructive confirmation', async ({ pag
   const bodies: Array<Record<string, unknown>> = [];
   await mockFlock(page, bodies);
   await openSessionDialog(page);
-  await page.getByLabel('Flock authority').click();
+  await page.getByLabel('Shepherd authority').click();
   await page.getByRole('option', { name: /Manage/ }).click();
   const start = page.getByRole('button', { name: 'Start session' });
   await expect(start).toBeDisabled();

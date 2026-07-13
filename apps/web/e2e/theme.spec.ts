@@ -14,7 +14,7 @@ async function dataTheme(page: Page): Promise<string | null> {
   return page.evaluate(() => document.documentElement.getAttribute('data-theme'));
 }
 
-test.describe('Flock dark-first theme', () => {
+test.describe('Shepherd dark-first theme', () => {
   test('defaults to dark even when the OS prefers light', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/');

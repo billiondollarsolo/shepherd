@@ -1,6 +1,6 @@
-# Contributing to Flock
+# Contributing to Shepherd
 
-Thanks for helping improve Flock.
+Thanks for helping improve Shepherd.
 
 ## Before opening a change
 

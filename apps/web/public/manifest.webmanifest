@@ -1,7 +1,7 @@
 {
-  "name": "Flock — Agent Paddock",
-  "short_name": "Flock",
-  "description": "Supervise CLI coding agents from anywhere: see which agent needs you and approve or deny, even from your phone.",
+  "name": "Shepherd — Agent Paddock",
+  "short_name": "Shepherd",
+  "description": "Supervise CLI coding agents across local and remote nodes from one web paddock.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

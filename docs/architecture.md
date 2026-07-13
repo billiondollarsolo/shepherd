@@ -1,11 +1,11 @@
 # Architecture
 
-How Flock is put together, end to end. After this you should understand where any given
+How Shepherd is put together, end to end. After this you should understand where any given
 piece of behavior lives and how a session's data flows.
 
 ## The one-paragraph model
 
-Flock runs agents on **nodes** (machines you reach over SSH; one of them is the
+Shepherd runs agents on **nodes** (machines you reach over SSH; one of them is the
 orchestrator's own host, the "local" node). Each node runs **`flock-agentd`**, a daemon
 that owns the agents' terminals and watches what they're doing. The **orchestrator** —
 the always-on brain — talks to every node's daemon, normalizes everything into one
@@ -89,7 +89,7 @@ orchestrator and web import these, so the wire shape is never duplicated.
 
 ## Nodes
 
-A **node** is a machine Flock can run agents on:
+A **node** is a machine Shepherd can run agents on:
 
 - **local** — the orchestrator's own host. Reached via a unix socket to the bundled
   `flock-agentd`.

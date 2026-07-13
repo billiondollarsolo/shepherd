@@ -206,7 +206,7 @@ export class LayerABrowserManager {
   }
 
   /**
-   * Sweep for any orphaned Flock browser containers (e.g. left over from an
+   * Sweep for any orphaned Shepherd browser containers (e.g. left over from an
    * orchestrator crash) and force-remove them. Returns the removed container ids.
    * Used at boot and as a safety net for the no-orphans guarantee (FR-B6).
    */

@@ -1,5 +1,5 @@
 name: Bug report
-description: Report reproducible incorrect behavior in Flock
+description: Report reproducible incorrect behavior in Shepherd
 title: '[Bug]: '
 labels: [bug]
 body:
@@ -9,7 +9,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Flock version
+      label: Shepherd version
       placeholder: 0.3.0
     validations:
       required: true

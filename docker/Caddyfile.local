@@ -1,4 +1,4 @@
-# Flock — LOCAL bring-up reverse proxy (plain HTTP, single high port).
+# Shepherd — LOCAL bring-up reverse proxy (plain HTTP, single high port).
 #
 # Unlike the production Caddyfile (TLS via FLOCK_DOMAIN), this serves everything
 # same-origin over plain HTTP on :48080 so there is no cert warning for a quick

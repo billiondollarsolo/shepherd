@@ -1,4 +1,4 @@
-# Flock — Elite Readiness Plan
+# Shepherd — Elite Readiness Plan
 
 > **HISTORICAL.** This draft predates the current implementation and is retained only
 > as design archaeology. Use `docs/README.md` for authoritative behavior.
@@ -17,10 +17,10 @@
 
 ## ⚠️ Decision required before Phase 2 (gates security scope)
 
-**What is Flock's threat model?**
+**What is Shepherd's threat model?**
 
 - **(A) Single trusted team / private network** — every logged-in user is trusted;
-  Flock is not exposed to the public internet.
+  Shepherd is not exposed to the public internet.
 - **(B) Untrusted multi-user and/or internet-exposed** — users don't fully trust
   each other, or the app is reachable from hostile networks.
 
@@ -59,15 +59,15 @@ These two have the highest leverage and are not gated by the threat-model decisi
 
 > Implemented as **agentd-seeded** config (works local + SSH, unlike the orchestrator-fs
 > module): `Spec.ConfigDirEnv/ConfigFiles/ConfigBaseSubdir` → `seedScopedConfig` on the
-> node (copies the user's real config as base, writes Flock's files, substitutes the
-> `__FLOCK_CONFIG_DIR__` placeholder, **merges** Flock hooks into the user's settings.json
+> node (copies the user's real config as base, writes Shepherd's files, substitutes the
+> `__FLOCK_CONFIG_DIR__` placeholder, **merges** Shepherd hooks into the user's settings.json
 > instead of clobbering), exports the config-dir env, removes on Close. Forwarder is a
 > robust `flock-hook.sh` script (fixes the old `$FLOCK_HOOK_CMD` quoting bug).
 > Orchestrator: `renderScopedConfig(agentType)` → passed via `client.open`. Validated:
 > Go unit tests (seed/merge/noop), live end-to-end (real Claude session seeded the dir
 > with merged settings + creds + executable forwarder; cleaned up on terminate).
 > **What:** Actually install per-session agent hook config (Claude `settings.json`,
-> Codex/OpenCode equivalents) at launch so agents call back into Flock's hook
+> Codex/OpenCode equivalents) at launch so agents call back into Shepherd's hook
 > endpoint. Today only the `FLOCK_HOOK_URL/TOKEN/CMD` env vars are injected — not the
 > config that tells the agent to use them.
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Flock session-chrome entrypoint.
+# Shepherd session-chrome entrypoint.
 #
 # Modern Chrome (111+) ignores `--remote-debugging-address` and binds the CDP
 # server to the container's LOOPBACK only, so a published port can't reach it.

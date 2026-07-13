@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "removal": "Review and remove these exceptions during the migration-aware deeper rename.",
+  "pathPatterns": [
+    {
+      "pattern": "^scripts/brand-surface-allowlist\\.json$",
+      "reason": "The policy must name the former product in order to explain each exception."
+    },
+    {
+      "pattern": "^PRD\\.md$",
+      "reason": "Historical product requirements explicitly document the former working names."
+    },
+    {
+      "pattern": "^docs/archive/",
+      "reason": "Archived engineering records preserve the terminology used when written."
+    },
+    {
+      "pattern": "^docs/audit-",
+      "reason": "Dated audit evidence is an immutable historical record."
+    },
+    {
+      "pattern": "^docs/specs/",
+      "reason": "Generated historical specifications preserve their original project identity."
+    },
+    {
+      "pattern": "^docs/shepherd-surface-rename-plan\\.md$",
+      "reason": "The rename plan must name the former product to define its scope and exclusions."
+    }
+  ],
+  "linePatterns": [
+    {
+      "pattern": "previously named Flock|Older docs may say .Flock",
+      "reason": "The public transition notice names the former product once so retained technical identifiers are not confusing."
+    },
+    {
+      "pattern": "Renamed the user-visible product from Flock",
+      "reason": "The unreleased changelog records the old and new product names for upgrade clarity."
+    },
+    {
+      "pattern": "X-Flock-Prepared",
+      "reason": "Installed systemd-unit compatibility marker retained for existing nodes."
+    },
+    {
+      "pattern": "(?:name|projectName): 'Flock'|Project:Flock|Start agent in Flock|getByText\\('Flock'\\)",
+      "reason": "Tests deliberately use Flock as user-owned project data to prove the rename does not mutate user content."
+    }
+  ]
+}

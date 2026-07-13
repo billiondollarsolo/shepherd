@@ -1,10 +1,10 @@
-# Flock Elite Code and Agent Security Plan
+# Shepherd Elite Code and Agent Security Plan
 
 > **Status:** Complete — implemented and validated 2026-07-11
 >
 > **Created:** 2026-07-11
 >
-> **Target baseline:** Flock v0.3.0
+> **Target baseline:** Shepherd v0.3.0
 >
 > **Execution record:** Implemented and reviewed one task at a time. This document is
 > now the permanent rationale, acceptance criteria, and regression checklist for the
@@ -21,7 +21,7 @@ This plan combines the findings from two July 2026 reviews:
    transport, agentd, hook callbacks, WebSockets, credentials, capability tokens,
    and the blast radius of a compromised agent.
 
-The goal is not merely to make the repository look tidy. The goal is to make Flock:
+The goal is not merely to make the repository look tidy. The goal is to make Shepherd:
 
 - secure when an agent executes hostile repository code;
 - predictable across desktop, mobile, restarts, upgrades, and multiple nodes;
@@ -80,16 +80,16 @@ Every security task depends on agreeing to this boundary first.
 
 ### Recommended threat model
 
-- Flock has one trusted human operator per installation.
-- The operator's browser, orchestrator host, master key, and Flock administrative
+- Shepherd has one trusted human operator per installation.
+- The operator's browser, orchestrator host, master key, and Shepherd administrative
   account are trusted.
-- Tailnet membership is not sufficient authorization by itself. Flock login and
+- Tailnet membership is not sufficient authorization by itself. Shepherd login and
   application authorization remain required.
 - Remote nodes may be administered by the operator, but repository contents,
   package scripts, build tools, coding-agent output, MCP servers, and subprocesses
   launched by an agent are **potentially hostile**.
 - One compromised agent must not gain implicit control over other agents, other
-  projects, Flock's control plane, SSH credentials, the Docker host, or the master
+  projects, Shepherd's control plane, SSH credentials, the Docker host, or the master
   key.
 - Root on the orchestrator host or root on a remote node remains outside the
   isolation guarantee. Root compromise is installation compromise.
@@ -728,7 +728,7 @@ maximum authority tiers plus concurrent-agent, spawn-rate, message-size, and out
 bounds. Sessions persist and publicly display their effective authority without token
 material. The server rejects overrides above policy, rechecks existing capabilities
 against policy changes, enforces all resource bounds when the UI is bypassed, audits
-policy changes/denials, and the UI separates coding-tool mode from Flock authority with
+policy changes/denials, and the UI separates coding-tool mode from Shepherd authority with
 explicit destructive confirmation. Unit, PostgreSQL API-bypass integration, and
 Playwright callback-only/manage creation tests pass.
 
@@ -740,7 +740,7 @@ arguments become the accidental authorization policy.
 **Tasks**
 
 - Define server-owned project defaults and per-session overrides.
-- Separate coding-tool autonomy mode from Flock orchestration authority.
+- Separate coding-tool autonomy mode from Shepherd orchestration authority.
 - Display granted capabilities in session details and audit logs.
 - Require human confirmation before adding destructive orchestration scopes unless a
   durable project policy already allows them.
@@ -999,7 +999,7 @@ reason about and keep security-sensitive migrations alive indefinitely.
   confirmed unused.
 - Remove old terminology and backwards-compatibility token aliases no longer required.
 - Distinguish genuinely required terminal compatibility, such as ANSI legacy escape
-  sequences, from obsolete Flock data compatibility; retain the former.
+  sequences, from obsolete Shepherd data compatibility; retain the former.
 - Delete unused `tools/flock-mcp.mjs` or generate both locations from one canonical
   source. Ensure the surviving MCP server reports the current version.
 
@@ -1724,7 +1724,7 @@ require deliberate non-pointer and assistive-technology behavior.
 
 **Priority:** Critical before production trust
 
-**Implementation status:** Complete. The password-encrypted authenticated Flock vault
+**Implementation status:** Complete. The password-encrypted authenticated Shepherd vault
 CLI performs PostgreSQL 16 custom dumps, strict manifests, checksums, isolated restore,
 migration, verified rollback archives, reversible database cutover, and master-key/
 version checks. See `docs/backup-and-recovery.md`.
@@ -1742,7 +1742,7 @@ minimum engineering gate needed for safe upgrades.
 **Tasks**
 
 - Capture PostgreSQL consistently.
-- Capture the exact Flock version, migration level, deployment manifest, master-key
+- Capture the exact Shepherd version, migration level, deployment manifest, master-key
   version requirements, and declared durable volumes.
 - Never place plaintext secrets in an unencrypted archive.
 - Verify archive checksums and structural completeness.
@@ -1858,7 +1858,7 @@ version, capacity, or stale-state failures and leads to confusing recovery behav
 - Add separate diagnostics for database, agentd identity/version/auth, SSH, reverse
   tunnel, browser runtime, Docker access, disk capacity, migrations, push, and recent
   bounded errors.
-- Include exact Flock and agent CLI versions.
+- Include exact Shepherd and agent CLI versions.
 - Provide a redacted downloadable support bundle.
 - Add explicit insecure-deployment warnings.
 
@@ -1885,7 +1885,7 @@ network, commands, labels, and resource limits.
 **Why**
 
 A writable raw Docker socket commonly implies control of the Docker host, far beyond
-the browser-container lifecycle Flock actually requires.
+the browser-container lifecycle Shepherd actually requires.
 
 **Tasks**
 
@@ -2005,7 +2005,7 @@ resolved result is recorded.
   notes.
 - Run `--version` and minimal launch smoke tests.
 - Treat an unsupported/broken latest agent as an observable compatibility failure,
-  while allowing the rest of Flock to remain available where appropriate.
+  while allowing the rest of Shepherd to remain available where appropriate.
 - Document how users install or override a specific version themselves.
 
 **Definition of done**
@@ -2067,7 +2067,7 @@ The following scenarios become permanent regression tests:
 
 ## 9. Release definition of done
 
-Flock should be described as meeting this plan only when all of the following are true:
+Shepherd should be described as meeting this plan only when all of the following are true:
 
 ### Security
 
@@ -2098,7 +2098,7 @@ Flock should be described as meeting this plan only when all of the following ar
 - Background failures are structured, bounded, and diagnosable.
 - Long-lived maps, queues, caches, and buffers have enforced limits.
 - Candidate images pass clean-install and upgrade smoke before release publication.
-- Exact Flock, agentd, image, and agent-tool versions are visible.
+- Exact Shepherd, agentd, image, and agent-tool versions are visible.
 
 ### User experience
 

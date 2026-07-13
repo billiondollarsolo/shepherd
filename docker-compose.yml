@@ -1,7 +1,7 @@
 # =============================================================================
-# Flock — PRODUCTION Docker Compose deploy (US-38/US-39, NFR-DEP1/DEP2/SEC1)
+# Shepherd — PRODUCTION Docker Compose deploy (US-38/US-39, NFR-DEP1/DEP2/SEC1)
 #
-#   docker compose pull         # pull the selected Flock release from GHCR
+#   docker compose pull         # pull the selected Shepherd release from GHCR
 #   docker compose up -d        # caddy(TLS) + orchestrator + postgres + web
 #
 # US-39: Caddy terminates TLS in front (NFR-SEC1) and is the ONLY service that
@@ -145,7 +145,7 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
       # Per-session browser containers managed dynamically (PRD §6.5, US-25): the
-      # user's screencast browser pane. MUST be the matching Flock
+      # user's screencast browser pane. MUST be the matching Shepherd
       # session-chrome release image; it bridges CDP to the published port
       # (plain Chrome binds the debugger to loopback only).
       BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/flock-session-chrome:${FLOCK_VERSION:-0.3.0}}
@@ -186,7 +186,7 @@ services:
       retries: 6
       start_period: 30s
 
-  # Narrow browser lifecycle worker. This is the only Flock process with the
+  # Narrow browser lifecycle worker. This is the only Shepherd process with the
   # Docker socket; its authenticated API accepts only create/stop/reap for the
   # allowlisted browser image with fixed network and resource limits.
   browser-worker:

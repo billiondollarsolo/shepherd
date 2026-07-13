@@ -5,7 +5,7 @@
 package compatibility
 
 // Policy describes the daemon versions, protocols, and authenticated capabilities
-// accepted by a Flock release.
+// accepted by a Shepherd release.
 type Policy struct {
 	SchemaVersion             int
 	MinimumDaemonVersion      string

@@ -26,6 +26,7 @@ import { usePaddock } from '../../../store/paddock';
 import { useCreateSession, useNodeInfo, useProjects } from '../../../data/queries';
 import { fetchLauncherPresets } from '../../shell/launcherPresetsApi';
 import { DialogField as Field } from './DialogField';
+import { PRODUCT_NAME } from '../../../brand';
 
 const AGENT_LABELS: Record<AgentType, string> = {
   'claude-code': 'Claude Code',
@@ -303,7 +304,7 @@ export function AddSessionDialog(): JSX.Element {
         </Field>
       ) : null}
       <Field
-        label="Flock authority"
+        label={`${PRODUCT_NAME} authority`}
         htmlFor="sess-authority"
         hint={AUTHORITY_HINTS[effectiveAuthority]}
       >

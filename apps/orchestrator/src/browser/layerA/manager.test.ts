@@ -235,7 +235,7 @@ describe('LayerABrowserManager (US-25)', () => {
     expect(m.count()).toBe(0);
   });
 
-  it('reaps orphaned Flock browser containers it does not track (FR-B6 safety net)', async () => {
+  it('reaps orphaned Shepherd browser containers it does not track (FR-B6 safety net)', async () => {
     // Simulate a leftover container from a previous crash: live in docker, untracked.
     docker.live.set('orphan-1', true);
     docker.labels.set('orphan-1', { 'io.flock.session-browser': 'old-sess' });

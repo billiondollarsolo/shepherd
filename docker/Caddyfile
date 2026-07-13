@@ -1,5 +1,5 @@
 # =============================================================================
-# Flock — reverse proxy + TLS termination (US-39, NFR-SEC1).
+# Shepherd — reverse proxy + TLS termination (US-39, NFR-SEC1).
 #
 # Caddy terminates TLS in front of the orchestrator and web bundle so that ALL
 # UI/API/WS traffic is encrypted on the wire (NFR-SEC1). The orchestrator and

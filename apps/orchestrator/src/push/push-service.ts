@@ -103,7 +103,7 @@ function describe(
     default:
       // Unreachable: only push-worthy statuses reach here (guarded by the
       // shouldSendPush predicate before this is called).
-      return { title: 'Flock', body: `Session ${shortId}: ${status}` };
+      return { title: 'Shepherd', body: `Session ${shortId}: ${status}` };
   }
 }
 

@@ -1,6 +1,6 @@
 # Deployment (Docker Compose)
 
-Flock deploys as a Docker Compose stack on an always-on host (a VPS). **The host needs
+Shepherd deploys as a Docker Compose stack on an always-on host (a VPS). **The host needs
 only Docker** with the Compose plugin — Node, pnpm, Postgres, and the Go toolchain all
 run inside containers or are built there; nothing is installed on the host itself.
 
@@ -38,7 +38,7 @@ run inside containers or are built there; nothing is installed on the host itsel
 
 The orchestrator image includes the latest available Codex and OpenCode releases when
 the image is built. On first container start, the entrypoint installs the latest Claude
-Code directly from Anthropic for the bundled local node; Flock does not redistribute
+Code directly from Anthropic for the bundled local node; Shepherd does not redistribute
 Anthropic's commercially licensed binary. Agent tools on SSH nodes remain user-managed,
 including any deliberate version pins. Set `FLOCK_INSTALL_CLAUDE_CODE=0` when a custom
 image or mounted home directory supplies a user-managed Claude Code version.
@@ -49,7 +49,7 @@ teardown. The orchestrator calls only its narrow lifecycle API and has no Docker
 
 > **Prerequisite:** browser panes need the **`flock-session-chrome`** image (a custom
 > Chrome that bridges CDP to a published port; stock Chrome images bind the debugger to
-> loopback only). Pull the version matching the Flock stack before using browser panes:
+> loopback only). Pull the version matching the Shepherd stack before using browser panes:
 >
 > ```
 > docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
@@ -140,10 +140,10 @@ wildcard, credential-bearing, or non-HTTPS browser origins.
 ### Tailnet HTTPS
 
 Prefer a MagicDNS hostname with a valid certificate over a raw Tailscale IP. Restrict
-the Flock host to the operator's devices with Tailscale grants/ACLs, require device
+the Shepherd host to the operator's devices with Tailscale grants/ACLs, require device
 approval, review key expiry, and consider Tailnet Lock for installations that need
 stronger control-plane protection. Tailnet membership is an outer network boundary,
-not authentication: keep Flock login, exact Origin validation, and HTTPS enabled.
+not authentication: keep Shepherd login, exact Origin validation, and HTTPS enabled.
 
 ### Localhost development
 
@@ -164,14 +164,14 @@ before accepting first use; a changed host key fails closed and must be investig
 not silently re-pinned. Agentd separates the control and agent identities, drops session
 processes to `flock-agent`, and never exposes the node-control credential to an agent.
 
-Back up the Flock master key separately from encrypted
+Back up the Shepherd master key separately from encrypted
 [vault backups](backup-and-recovery.md). Losing it makes encrypted node credentials
 unrecoverable; exposing it makes those envelopes decryptable.
 
 ### Prepare a remote node
 
 Run the production preparation script once as root on each Linux amd64/arm64 host,
-using the public half of the SSH key that Flock will use:
+using the public half of the SSH key that Shepherd will use:
 
 ```bash
 sudo ./scripts/flock-node-prepare.sh \
@@ -187,7 +187,7 @@ creates the locked `flock-agent` runtime identity, installs a single validating 
 helper with a narrow sudo rule, and makes the workspace runtime-owned. The optional
 agent installation uses the official latest Claude/OpenCode installers and a
 runtime-user-local Codex npm prefix. Provider login remains manual and belongs to
-`flock-agent`; Flock never creates or captures provider accounts.
+`flock-agent`; Shepherd never creates or captures provider accounts.
 
 Register the node with SSH user `flock-control`. Its detail page runs the same
 read-only preflight and reports platform support, SSH forwarding, installation disk
@@ -226,7 +226,7 @@ by `agentd/COMPATIBILITY.json` (minimum daemon, supported protocols, and require
 authenticated capabilities). Release orchestrator images include Linux amd64 and
 arm64 daemon binaries.
 
-Flock reports one of three states:
+Shepherd reports one of three states:
 
 - **Compatible:** keep the daemon. A newer compatible daemon is never downgraded.
 - **Upgrade recommended:** the daemon is supported but older than preferred, or its
@@ -236,7 +236,7 @@ Flock reports one of three states:
 
 A node with live sessions keeps its authenticated existing daemon and reports the
 rollout as deferred. Once sessions drain, the next node operation activates the
-candidate. If Flock cannot authenticate the old protocol and count sessions, it fails
+candidate. If Shepherd cannot authenticate the old protocol and count sessions, it fails
 closed instead of assuming the node is idle. Candidates are installed by atomic
 rename, must pass the real authenticated protocol handshake, and restore the retained
 previous binary if validation fails.
@@ -271,12 +271,12 @@ override so session Chrome follows the same release, starts the stack, applies t
 normal idempotent migrations, and verifies readiness. `--skip-backup` and
 `--skip-compatibility-check` exist only as explicit operator escape hatches.
 
-Flock does not pretend forward database migrations are automatically reversible. On
+Shepherd does not pretend forward database migrations are automatically reversible. On
 failure the helper retains the prior `.env` and reports the verified vault; use the
 documented restore procedure rather than blindly starting an older image against a
 newer schema.
 
 Schema changes use expand/migrate/contract sequencing for the documented support
-window. Do not contract data needed by a still-supported rollback release. Flock's
+window. Do not contract data needed by a still-supported rollback release. Shepherd's
 orchestrator, web, and browser images remain on one immutable release version; remote
 daemon compatibility is the deliberate exception governed by the manifest above.

@@ -29,7 +29,7 @@ export function newBrowserGuid(): string {
  * The GUID is placed on the path so the value is self-describing as a capability and
  * is never just `ws://host:port`. CDP's own per-target GUID path
  * (`/devtools/browser/<id>`) is preserved by appending it when known; otherwise the
- * Flock-minted GUID stands in so the value is still opaque and not a bare port.
+ * Shepherd-minted GUID stands in so the value is still opaque and not a bare port.
  */
 export function buildCdpEndpoint(params: {
   host: string;

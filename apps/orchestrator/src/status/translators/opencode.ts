@@ -9,7 +9,7 @@
  *
  * OpenCode integrates via a plugin (`.opencode/plugin/`) that subscribes to the
  * OpenCode event bus and POSTs each event to `POST /api/hooks/:sessionId` with
- * the per-session hook token (the Flock plugin template lives at
+ * the per-session hook token (the Shepherd plugin template lives at
  * `templates/opencode-plugin/flock.js`). The plugin forwards the raw OpenCode
  * event `{ type, properties }`, which this translator maps to a transition.
  *

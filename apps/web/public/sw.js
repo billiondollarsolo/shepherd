@@ -1,9 +1,9 @@
 /* eslint-disable */
 /**
- * Flock service worker — US-22 (Web Push, FR-ST4) + PWA shell (US-36, FR-UI6).
+ * Shepherd service worker — US-22 (Web Push, FR-ST4) + PWA shell (US-36, FR-UI6).
  *
  * Served from the site root (`/sw.js`) so it controls the whole origin scope.
- * It does TWO jobs, deliberately in ONE worker (Flock ships a single SW shared
+ * It does TWO jobs, deliberately in ONE worker (Shepherd ships a single SW shared
  * by both stories — registering a second worker would fight for the scope):
  *
  *   1. Web Push (US-22): receive a push and show a notification. The orchestrator
@@ -12,7 +12,7 @@
  *      definition worth surfacing — "which agent needs me," even with the tab
  *      closed.
  *   2. PWA shell (US-36): pre-cache the app shell on install and serve it for
- *      navigations when the network is down, so an installed Flock launches from
+ *      navigations when the network is down, so an installed Shepherd launches from
  *      the home screen even on a flaky phone connection.
  *
  * Plain JS (not TS/bundled) so it can be registered directly and is easy to
@@ -20,7 +20,7 @@
  */
 
 // Bump this when the shell changes so `activate` prunes the old cache.
-const SHELL_CACHE = 'flock-shell-v1';
+const SHELL_CACHE = 'flock-shell-v2';
 
 // The minimal app shell. We cache the document + Vite entry; hashed JS/CSS
 // chunks are cached lazily on first fetch (cache-first below) since their names
@@ -133,10 +133,10 @@ self.addEventListener('push', (event) => {
     data = event.data ? event.data.json() : {};
   } catch (_err) {
     // Non-JSON payload: fall back to raw text in the body.
-    data = { title: 'Flock', body: event.data ? event.data.text() : '' };
+    data = { title: 'Shepherd', body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || 'Flock';
+  const title = data.title || 'Shepherd';
   const options = {
     body: data.body || '',
     tag: data.sessionId ? `flock-session-${data.sessionId}` : 'flock',

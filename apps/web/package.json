@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Flock web paddock: React, Ghostty Web/xterm terminals, live fleet status, and mobile supervision.",
+  "description": "Shepherd web paddock: React, Ghostty Web/xterm terminals, live fleet status, and mobile supervision.",
   "license": "MIT",
   "repository": {
     "type": "git",

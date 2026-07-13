@@ -34,7 +34,7 @@ describe('Setup screen (US-4)', () => {
 
   it('renders the first-run owner form', () => {
     render(<Setup />);
-    expect(screen.getByRole('heading', { name: /set up flock/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /set up shepherd/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Flock — native dev runner with live reload.
+# Shepherd — native dev runner with live reload.
 #
 #   ./run-dev.sh            # start Postgres (Docker) + orchestrator + web, watch
 #   ./run-dev.sh --reset-db # also wipe the dev database first (fresh admin)

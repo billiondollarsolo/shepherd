@@ -1,5 +1,5 @@
 # =============================================================================
-# Flock session-chrome — the per-session headless Chrome that Layer A launches
+# Shepherd session-chrome — the per-session headless Chrome that Layer A launches
 # (one isolated container per session, US-25). Plain Chrome images can't expose
 # CDP over a published port (Chrome 111+ binds the debugger to loopback and
 # ignores --remote-debugging-address), so this image adds a socat bridge via the

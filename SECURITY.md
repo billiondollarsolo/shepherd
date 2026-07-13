@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Flock is pre-1.0 software. Security fixes are applied to the latest published
+Shepherd is pre-1.0 software. Security fixes are applied to the latest published
 minor release only.
 
 | Version | Supported |
@@ -22,11 +22,11 @@ within seven days and coordinate disclosure after a fix is available.
 
 ## Security boundary
 
-Flock is a single-user, self-hosted operator tool that can execute commands on
+Shepherd is a single-user, self-hosted operator tool that can execute commands on
 configured nodes and mounts the Docker socket when browser containers are
-enabled. Anyone with Flock administrator access should be treated as having
+enabled. Anyone with Shepherd administrator access should be treated as having
 code-execution authority over those nodes and the Docker host.
 
-Run Flock behind HTTPS, keep it off untrusted public networks unless required,
+Run Shepherd behind HTTPS, keep it off untrusted public networks unless required,
 use dedicated nodes for autonomous agents, protect backups and runtime secrets,
-and never reuse the Flock master key or SSH credentials elsewhere.
+and never reuse the Shepherd master key or SSH credentials elsewhere.

@@ -1,5 +1,5 @@
 # =============================================================================
-# Flock — REALISTIC VM node(s) via Vagrant + libvirt (KVM).
+# Shepherd — REALISTIC VM node(s) via Vagrant + libvirt (KVM).
 #
 # Why VMs (vs the lighter Docker sim nodes in docker-compose.nodes.yml): a real
 # kernel + persistent disk lets us validate the things containers can't fully
@@ -9,7 +9,7 @@
 #   - credential persistence (~flock-agent/.claude) across reboots is the disk's default.
 # Use the Docker nodes for fast everyday dev; bring a VM up when validating modes.
 #
-# Driven by scripts/sim-nodes-vm.sh (gen key → up → register in Flock), mirroring
+# Driven by scripts/sim-nodes-vm.sh (gen key → up → register in Shepherd), mirroring
 # scripts/sim-nodes.sh. The orchestrator (native, :8080) dials each VM on a
 # stable host-loopback SSH port, exactly like the Docker nodes.
 #

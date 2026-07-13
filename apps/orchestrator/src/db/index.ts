@@ -1,5 +1,5 @@
 /**
- * Flock — db module barrel.
+ * Shepherd — db module barrel.
  */
 export * from './schema.js';
 export * from './client.js';

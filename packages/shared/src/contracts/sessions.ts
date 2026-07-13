@@ -47,7 +47,7 @@ export const CreateSessionRequest = z
      * with no ACP entrypoint. Default: PTY.
      */
     transport: z.enum(['pty', 'acp']).optional(),
-    /** Optional, explicit Flock orchestration authority. Omitted means the agent
+    /** Optional, explicit Shepherd orchestration authority. Omitted means the agent
      * receives callback-only credentials and cannot inspect/control siblings. */
     orchestrationAuthority: AgentAuthorityEnum.optional(),
   })

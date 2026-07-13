@@ -1,8 +1,19 @@
 # Changelog
 
-Notable changes to Flock are documented here. The project follows
+Notable changes to Shepherd are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while allowing breaking changes in
 minor releases before 1.0.
+
+## [Unreleased]
+
+### Changed
+
+- Renamed the user-visible product from Flock to **Shepherd**, with the tagline
+  **Shepherd Your Agents**, across the web application, PWA metadata, notifications,
+  documentation, issue forms, and release presentation.
+- Preserved existing `flock-*` commands, environment variables, package paths, container
+  images, node services, storage keys, backup fields, API contracts, and repository URLs;
+  this release requires no installation or node migration.
 
 ## [0.3.0] - 2026-07-11
 

@@ -76,7 +76,7 @@ export async function decryptVaultPayload(
     const stat = await handle.stat();
     const fixed = Buffer.alloc(MAGIC.length + 4);
     await handle.read(fixed, 0, fixed.length, 0);
-    if (!fixed.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error('Not a Flock vault');
+    if (!fixed.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error('Not a Shepherd vault');
     const headerLength = fixed.readUInt32BE(MAGIC.length);
     if (headerLength <= 0 || headerLength > MAX_HEADER_BYTES)
       throw new Error('Invalid vault header');
@@ -85,7 +85,7 @@ export async function decryptVaultPayload(
     const header = HeaderSchema.parse(JSON.parse(headerBytes.toString('utf8')));
     const payloadStart = fixed.length + headerLength;
     const payloadEnd = stat.size - TAG_BYTES - 1;
-    if (payloadEnd < payloadStart) throw new Error('Truncated Flock vault');
+    if (payloadEnd < payloadStart) throw new Error('Truncated Shepherd vault');
     const tag = Buffer.alloc(TAG_BYTES);
     await handle.read(tag, 0, TAG_BYTES, stat.size - TAG_BYTES);
     const key = derive(password, Buffer.from(header.salt, 'base64'));

@@ -4,7 +4,7 @@
  * A PURE function mapping a Gemini CLI hook event to the unified {@link Status}.
  * Gemini CLI (v0.26.0+) ships Claude-Code-style lifecycle hooks configured in
  * `~/.gemini/settings.json` under a `hooks` block, delivering a JSON payload on
- * stdin with `hook_event_name` (+ `tool_name`, etc.). Flock seeds those hooks
+ * stdin with `hook_event_name` (+ `tool_name`, etc.). Shepherd seeds those hooks
  * (config-injection `gemini` case) and forwards each to `POST /api/hooks/:id`;
  * this translator derives the status — replacing the old PTY-activity heuristic
  * (which couldn't tell idle from awaiting_input).

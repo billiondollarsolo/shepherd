@@ -5,7 +5,7 @@ Date: 2026-05-29
 
 ## Context
 
-Some agents need a real browser. Flock provides a **per-session isolated
+Some agents need a real browser. Shepherd provides a **per-session isolated
 browser** (one container per session) running on the **orchestrator VPS** (not
 the node), reverse-tunneled to the node-side agent on **loopback only**. Phase-0
 spike **US-0b (browser-harness)** was scoped to evaluate the browser-driving

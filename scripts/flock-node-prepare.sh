@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prepare a Linux host for secure Flock remote-node enrollment.
-# Run once as root, then register the host in Flock as `flock-control`.
+# Prepare a Linux host for secure Shepherd remote-node enrollment.
+# Run once as root, then register the host in Shepherd as `flock-control`.
 set -euo pipefail
 
 CONTROL_USER="${FLOCK_CONTROL_USER:-flock-control}"
@@ -106,7 +106,7 @@ CONTROL_GROUP="$(id -gn "$CONTROL_USER")"
 RUNTIME_GROUP="$(id -gn "$RUNTIME_USER")"
 [[ -n "$CONTROL_HOME" && -n "$RUNTIME_HOME" ]] || { echo "Could not resolve account homes." >&2; exit 1; }
 
-# These are dedicated Flock identities. Repair ownership left by prior manual
+# These are dedicated Shepherd identities. Repair ownership left by prior manual
 # root installs so user-local tools can update configuration and credentials.
 chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_HOME"
 install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0755 \
@@ -172,7 +172,7 @@ case "${1:-}" in
     runuser -u "$RUNTIME_USER" -- test -r "$home" -a -w "$home" -a -x "$home"
     [[ -d /run/systemd/system ]]
     if [[ -f "$SERVICE_FILE" ]]; then
-      grep -q '^X-Flock-Prepared=1$' "$SERVICE_FILE" || die "daemon service needs managed-unit migration"
+      grep -q '^X-Shepherd-Prepared=1$' "$SERVICE_FILE" || die "daemon service needs managed-unit migration"
     fi
     echo "prepared-v1 runtime=$RUNTIME_USER"
     ;;
@@ -217,9 +217,9 @@ case "${1:-}" in
     fi
     cat > "$SERVICE_FILE.candidate" <<EOF
 [Unit]
-Description=Flock privilege-separated agent daemon
+Description=Shepherd privilege-separated agent daemon
 After=network.target
-X-Flock-Prepared=1
+X-Shepherd-Prepared=1
 
 [Service]
 Type=simple
@@ -256,7 +256,7 @@ EOF
     node_id="${2:-}"; port="${3:-}"
     valid_node_id "$node_id"; valid_port "$port"
     [[ -f "$SERVICE_FILE" ]]
-    grep -q '^X-Flock-Prepared=1$' "$SERVICE_FILE"
+    grep -q '^X-Shepherd-Prepared=1$' "$SERVICE_FILE"
     grep -Fq -- "--addr 127.0.0.1:$port" "$SERVICE_FILE"
     grep -Fq -- "--node-id $node_id" "$SERVICE_FILE"
     grep -Fq -- "--runtime-user $RUNTIME_USER" "$SERVICE_FILE"

@@ -4,6 +4,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { Badge, Button } from '../../../components/ui';
 import { SectionHeader, SettingCard, SettingRow } from '../SettingsSection';
 import { fetchDiagnostics } from '../diagnosticsApi';
+import { PRODUCT_NAME } from '../../../brand';
 
 function label(status: string): 'success' | 'danger' | 'warning' {
   return status === 'ready' || status === 'available' || status === 'configured'
@@ -61,7 +62,9 @@ export function OperationsSection(): JSX.Element {
           </SettingCard>
           <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-4">
             <div>
-              <p className="text-sm font-medium">Flock {data.versions.flock}</p>
+              <p className="text-sm font-medium">
+                {PRODUCT_NAME} {data.versions.flock}
+              </p>
               <p className="text-2xs text-flock-ink-muted">
                 {data.diagnostics.events.length} recent failure events · secrets and terminal
                 content excluded

@@ -35,6 +35,7 @@ import { NodesSection } from './sections/NodesSection';
 import { AccountSection } from './sections/AccountSection';
 import { AboutSection } from './sections/AboutSection';
 import { OperationsSection } from './sections/OperationsSection';
+import { PRODUCT_NAME } from '../../brand';
 
 interface SectionDef {
   id: SettingsSection;
@@ -81,7 +82,7 @@ export function SettingsPage(): JSX.Element {
         <header className="flex shrink-0 items-center gap-2 px-3 py-3">
           <FlockMark className="size-7" />
           <span className="font-display text-xl font-bold tracking-tight text-flock-ink-primary">
-            Flock
+            {PRODUCT_NAME}
           </span>
           <SimpleTooltip label="Back to the paddock">
             <Button

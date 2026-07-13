@@ -8,7 +8,7 @@ describe('AboutSection', () => {
     render(<AboutSection />);
 
     expect(screen.getByText(`v${FLOCK_VERSION}`)).toBeVisible();
-    expect(screen.getByRole('link', { name: /view flock on github/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /view shepherd on github/i })).toHaveAttribute(
       'href',
       FLOCK_REPOSITORY_URL,
     );

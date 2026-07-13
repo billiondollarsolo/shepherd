@@ -11,7 +11,7 @@ The installation owner can open **Settings → Operations** or request:
 
 Both detailed routes require the authenticated owner cookie. The model separates
 database, migration, agentd/node, browser-worker, disk, push, and process state; it
-also reports exact Flock/agentd and detected coding-agent versions, bounded collection
+also reports exact Shepherd/agentd and detected coding-agent versions, bounded collection
 sizes, deployment warnings, retry/drop counters, and the last 200 structured failures.
 
 Diagnostic context is scalar, length-bounded, and redacted by key name, known runtime

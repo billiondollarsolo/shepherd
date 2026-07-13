@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Flock — simulated multi-node test harness.
+# Shepherd — simulated multi-node test harness.
 #
 #   ./scripts/sim-nodes.sh up     # gen key, build image, start 3 nodes, register
 #   ./scripts/sim-nodes.sh down   # stop + remove the node containers
-#   ./scripts/sim-nodes.sh status # show node containers + Flock's view
+#   ./scripts/sim-nodes.sh status # show node containers + Shepherd's view
 #
 # Brings up 3 containers (node-alpha/bravo/charlie) running sshd + tmux + the
-# agent CLIs, then registers each as an SSH node in the RUNNING Flock orchestrator
+# agent CLIs, then registers each as an SSH node in the RUNNING Shepherd orchestrator
 # (native, :8080) so you can watch them connect in the cockpit and create real
 # agent sessions on them. The orchestrator reaches them on 127.0.0.1:2231-2233.
 # =============================================================================
@@ -42,7 +42,7 @@ node_host() { echo "${FLOCK_NODE_HOST:-127.0.0.1}"; }
 api_login() {
   local user="${FLOCK_ADMIN_USER:-}" pass="${FLOCK_ADMIN_PASS:-}"
   if [ -z "$user" ] || [ -z "$pass" ]; then
-    err "Set FLOCK_ADMIN_USER and FLOCK_ADMIN_PASS to your Flock admin creds."
+    err "Set FLOCK_ADMIN_USER and FLOCK_ADMIN_PASS to your Shepherd admin creds."
     err "  e.g. FLOCK_ADMIN_USER=you FLOCK_ADMIN_PASS=secret ./scripts/sim-nodes.sh up"
     exit 1
   fi
@@ -52,7 +52,7 @@ api_login() {
     -X POST "$API/api/auth/login" -H 'content-type: application/json' \
     -d "{\"username\":\"$user\",\"password\":\"$pass\"}")
   [ "$code" = "200" ] || { err "Login failed (HTTP $code)."; exit 1; }
-  log "Authenticated to Flock as $user."
+  log "Authenticated to Shepherd as $user."
 }
 
 register_nodes() {
@@ -106,7 +106,7 @@ cmd_status() {
   $COMPOSE ps
   echo
   if [ -f "$COOKIES" ]; then
-    log "Flock's view of nodes:"
+    log "Shepherd's view of nodes:"
     curl -sS -b "$COOKIES" "$API/api/nodes" | python3 -m json.tool 2>/dev/null || true
   fi
 }

@@ -1,5 +1,5 @@
 /**
- * Flock — optional DEV seed data (spec §6, US-2).
+ * Shepherd — optional DEV seed data (spec §6, US-2).
  *
  * NOT run in production. Guarded by NODE_ENV !== 'production'. Intended for
  * local paddock development so the UI has something to render. Inserts a local

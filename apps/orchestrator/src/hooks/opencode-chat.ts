@@ -11,7 +11,7 @@
  *   - and on `session.idle` (turn end) flush the un-emitted text parts, each
  *     labelled with its message's role, in arrival order.
  *
- * State is per Flock session id; call forget() when the session ends. Reasoning /
+ * State is per Shepherd session id; call forget() when the session ends. Reasoning /
  * step-* parts are ignored (not conversation).
  */
 import { BoundedTtlMap } from '../runtime/bounded-ttl-map.js';

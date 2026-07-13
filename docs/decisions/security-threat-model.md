@@ -5,10 +5,10 @@ Date: 2026-07-11
 
 ## Context
 
-Flock is a single-operator control plane for shell-capable coding agents. A coding
+Shepherd is a single-operator control plane for shell-capable coding agents. A coding
 agent routinely reads repositories, invokes package managers, runs build scripts,
 starts subprocesses, and follows instructions from source files. Treating the agent
-process or repository as trusted would make Flock's most important isolation claims
+process or repository as trusted would make Shepherd's most important isolation claims
 illusory.
 
 The current code also contains historical administrator/member surfaces even though
@@ -20,10 +20,10 @@ without consistently enforcing it creates more risk than a smaller explicit mode
 ### Trusted components
 
 - The one human installation owner and their authenticated browser are trusted.
-- The orchestrator host, PostgreSQL service, Flock master key, release artifacts, and
-  Flock control identity are trusted.
+- The orchestrator host, PostgreSQL service, Shepherd master key, release artifacts, and
+  Shepherd control identity are trusted.
 - Root on the orchestrator or a managed node is installation compromise and is outside
-  Flock's isolation guarantee.
+  Shepherd's isolation guarantee.
 
 ### Untrusted components
 
@@ -53,7 +53,7 @@ without consistently enforcing it creates more risk than a smaller explicit mode
 
 ### Human-user model
 
-Flock supports one owner account per installation. Human multi-tenancy and isolation
+Shepherd supports one owner account per installation. Human multi-tenancy and isolation
 between mutually untrusted human users are out of scope. Historical member, invite,
 and implicit administrator-bypass behavior will be removed rather than presented as a
 supported security boundary.
@@ -88,7 +88,7 @@ validation.
 - Some convenience features become explicit capabilities rather than implicit agent
   powers.
 - The web, API, database, and tests can be simplified around one human owner.
-- Existing development data may require destructive migrations because Flock is
+- Existing development data may require destructive migrations because Shepherd is
   pre-1.0 and does not preserve obsolete compatibility surfaces.
 - Documentation must distinguish transport encryption from agent containment.
 
@@ -101,6 +101,6 @@ credentials from browser responses.
 
 ## Revisit when
 
-- Flock intentionally adds multiple mutually untrusted human operators, or
+- Shepherd intentionally adds multiple mutually untrusted human operators, or
 - a supported non-Linux node platform cannot implement the required control/runtime
   identity separation.

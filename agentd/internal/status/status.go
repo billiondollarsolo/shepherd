@@ -6,7 +6,7 @@
 // (it's on the node with filesystem access) and streams the normalized status
 // back to the orchestrator over the existing protocol.
 //
-// The normalized states match Flock's Status enum so they flow straight into the
+// The normalized states match Shepherd's Status enum so they flow straight into the
 // orchestrator's StatusMap → /ws/status → the paddock dots:
 //
 //	running        — a turn is in progress (model thinking / tool running)
@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// Normalized status states (subset of Flock's Status enum the transcript can prove).
+// Normalized status states (subset of Shepherd's Status enum the transcript can prove).
 const (
 	StateRunning   = "running"
 	StateAwaiting  = "awaiting_input"
@@ -86,7 +86,7 @@ func DetectAgent(command []string) string {
 // this session created. `claim` reserves a transcript path for THIS session so
 // two sessions in the SAME cwd each tail a distinct file (returns false if
 // another session already claimed it). Unknown agents are a no-op.
-// configDir is the session's scoped agent-config dir (Flock hook injection), or
+// configDir is the session's scoped agent-config dir (Shepherd hook injection), or
 // "" — the transcript tailers must follow it because claude/codex write their
 // transcripts under that scoped dir, not the default ~/.claude · ~/.codex.
 // chat receives whole conversation messages (role ∈ user|assistant|tool) parsed

@@ -9,7 +9,7 @@ import (
 	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
 
-// hookOwnedAgentNames are CLIs whose live status is owned by Flock hooks
+// hookOwnedAgentNames are CLIs whose live status is owned by Shepherd hooks
 // (not transcript tailing, not PTY-foreground). Their process stays in the
 // foreground for the whole session, so watchForeground would always report
 // "running" even when the agent is idle waiting for the user.
@@ -158,7 +158,7 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 
 	startedAt := time.Now()
 	claim := func(path string) bool { return m.claimFile(path, id) }
-	// Chat sink: forward whole transcript messages to Flock's hook endpoint so the
+	// Chat sink: forward whole transcript messages to Shepherd's hook endpoint so the
 	// web Chat tab fills in for NATIVE (PTY) sessions — no ACP needed. Uses the
 	// session's own hook env (same vars the agent gets); "" → no-op.
 	hookURL, hookToken := hookEndpointFromEnv(spec.Env)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Flock — provision a REALISTIC VM node (Vagrant + libvirt/KVM).
+# Shepherd — provision a REALISTIC VM node (Vagrant + libvirt/KVM).
 #
 # Mirrors docker/Dockerfile.node + node-entrypoint.sh, but in a real VM (real
 # kernel, systemd, persistent disk). The persistent disk is the whole point:

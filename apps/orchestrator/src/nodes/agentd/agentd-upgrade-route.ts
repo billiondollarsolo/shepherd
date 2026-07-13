@@ -55,7 +55,7 @@ export function registerNodeAgentdUpgradeRoute(
           code: result.status,
           message:
             result.status === 'not_remote'
-              ? 'The local daemon is upgraded with the Flock image.'
+              ? 'The local daemon is upgraded with the Shepherd image.'
               : result.status === 'not_found'
                 ? 'Node not found.'
                 : 'The remote node is unavailable.',

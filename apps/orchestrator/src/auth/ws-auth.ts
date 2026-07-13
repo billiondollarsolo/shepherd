@@ -44,7 +44,7 @@ export function originAllowed(req: IncomingMessage, allowedOrigins: ReadonlySet<
  * with a sessionId it's a session-scoped socket (PTY/screencast) → exact owner;
  * without (the global status stream) → any authed user. Origin is always checked.
  * Unknown and null-owner sessions fail closed. Human-role bypasses do not belong in
- * this boundary; Flock's supported product model has one explicit owner.
+ * this boundary; Shepherd's supported product model has one explicit owner.
  */
 export function makeWsAuthorizer(deps: WsAuthDeps) {
   return async (req: IncomingMessage, sessionId?: string | null): Promise<boolean> => {

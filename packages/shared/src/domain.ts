@@ -245,7 +245,7 @@ export const SessionRecordSchema = z.object({
    * safety-relevant state) and so the session can be restarted as-is.
    */
   permissionMode: SessionPermissionModeEnum,
-  /** Effective Flock agent-to-agent authority. Contains no credential material. */
+  /** Effective Shepherd agent-to-agent authority. Contains no credential material. */
   orchestrationAuthority: AgentAuthorityEnum,
   createdAt: IsoTimestamp,
   lastStatusAt: IsoTimestamp,

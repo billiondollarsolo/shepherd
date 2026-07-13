@@ -6,7 +6,7 @@
  * node · project context and jumps you straight into any one.
  *
  * This is the cross-agent inbox the local competitors lack: Herdr has a per-host
- * blocked sidebar, but Flock's is fleet-wide and always visible.
+ * blocked sidebar, but Shepherd's is fleet-wide and always visible.
  */
 import { Bell, AlertTriangle, MessageCircleQuestion, ListChecks } from 'lucide-react';
 import { statusLabel, type Session, type Status } from '@flock/shared';

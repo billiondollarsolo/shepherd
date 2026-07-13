@@ -1,5 +1,5 @@
 /**
- * Flock — idempotent migration runner (spec §6, US-2).
+ * Shepherd — idempotent migration runner (spec §6, US-2).
  *
  * Applies committed drizzle migrations from `apps/orchestrator/drizzle/`.
  * Drizzle's migrator records applied migrations in `__drizzle_migrations`, so

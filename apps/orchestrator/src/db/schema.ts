@@ -1,5 +1,5 @@
 /**
- * Flock — Postgres schema (Drizzle ORM), spec §6 data model.
+ * Shepherd — Postgres schema (Drizzle ORM), spec §6 data model.
  *
  * Postgres is the durable SYSTEM OF RECORD (users, nodes, projects, session
  * registry/history, events, push subs, audit, secrets). It is NEVER on the live

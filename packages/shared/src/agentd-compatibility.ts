@@ -7,7 +7,7 @@ const StrictSemver = z
     'must be a complete semantic version',
   );
 
-/** Release-owned contract describing which remote daemons this Flock accepts. */
+/** Release-owned contract describing which remote daemons this Shepherd accepts. */
 export const AgentdCompatibilityPolicySchema = z
   .object({
     schemaVersion: z.literal(1),

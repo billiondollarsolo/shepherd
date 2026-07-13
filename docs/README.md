@@ -1,16 +1,20 @@
-# Flock documentation
+# Shepherd documentation
 
 The map for understanding the platform.
 
-> **Building Flock?** Start at **[roadmap.md](roadmap.md)** — the authoritative
+> **Name transition:** Shepherd was previously named Flock. Technical identifiers retain
+> the `flock` prefix in this release; commands, service names, environment variables,
+> package paths, images, and repository URLs remain unchanged.
+
+> **Building Shepherd?** Start at **[roadmap.md](roadmap.md)** — the authoritative
 > end-to-end vision + execution plan (phased tasks with success criteria, tests, and
-> engineering standards baked in) for taking Flock to the elite web-native platform.
+> engineering standards baked in) for taking Shepherd to the elite web-native platform.
 
 New here? Read in this order:
 
 1. **[Architecture](architecture.md)** — the three components and how a session flows
    end to end. Start here.
-2. **[Agent integration matrix](agent-integration-matrix.md)** — exactly what Flock
+2. **[Agent integration matrix](agent-integration-matrix.md)** — exactly what Shepherd
    captures from each agent (Claude / Codex / OpenCode / Gemini / Grok) and the
    mechanism behind each signal. The authoritative "how well do we work with agent X."
 3. **[flock-agentd design](flock-agentd-design.md)** — the node daemon: why it exists
@@ -50,5 +54,6 @@ Historical drafts and build ledgers are catalogued in
 **[archive/README.md](archive/README.md)**. They are deliberately excluded from the
 authoritative reading path.
 
-> **A note on terminology.** The codebase is **Flock**; the web dashboard's internal
-> name is the **paddock**. Older docs may say "Conductor" or "cockpit" — same thing.
+> **A note on terminology.** The product is **Shepherd**; the web dashboard's internal
+> name is the **paddock**. Older docs may say “Flock,” “Conductor,” or “cockpit.” Literal
+> `flock-*` identifiers remain current during the surface-name transition.

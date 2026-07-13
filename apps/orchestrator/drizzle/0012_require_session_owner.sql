@@ -1,4 +1,4 @@
--- Flock is a single-owner greenfield product. Every session must have an owner;
+-- Shepherd is a single-owner greenfield product. Every session must have an owner;
 -- WebSocket authorization therefore never needs a permissive null-owner fallback.
 -- Repair historical rows to the oldest installation user, then remove truly orphaned
 -- rows from installations that never completed owner setup.

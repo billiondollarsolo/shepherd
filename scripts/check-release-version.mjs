@@ -122,7 +122,7 @@ if (!mcp.includes(`serverInfo: { name: 'flock', version: '${canonical}' }`)) {
 
 const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
 if (!compose.includes(`FLOCK_VERSION:-${canonical}`)) {
-  throw new Error(`docker-compose.yml does not default to Flock ${canonical}`);
+  throw new Error(`docker-compose.yml does not default to Shepherd ${canonical}`);
 }
 if (!compose.includes(`flock-session-chrome:\${FLOCK_VERSION:-${canonical}}`)) {
   throw new Error(
@@ -149,5 +149,5 @@ if (expected && expected !== canonical) {
 }
 
 console.log(
-  `Flock version ${canonical} is synchronized; agentd >=${compatibility.minimumDaemonVersion}, protocol ${protocols.join('/')}.`,
+  `Shepherd version ${canonical} is synchronized; agentd >=${compatibility.minimumDaemonVersion}, protocol ${protocols.join('/')}.`,
 );

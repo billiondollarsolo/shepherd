@@ -15,7 +15,7 @@ test('renders the current paddock shell regions', async ({ page }) => {
   await expect(page.getByTestId('region-tree')).toBeVisible();
   await expect(page.getByTestId('region-session')).toBeVisible();
   await expect(page.getByTestId('region-activity')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Flock home' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Shepherd home' })).toBeVisible();
 });
 
 test('command palette opens from its visible shortcut control', async ({ page }) => {

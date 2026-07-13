@@ -1,8 +1,8 @@
 # Backup and recovery
 
-Flock vaults are password-encrypted, authenticated `.flockvault` archives containing a
+Shepherd vaults are password-encrypted, authenticated `.flockvault` archives containing a
 consistent PostgreSQL custom-format dump and a strict manifest. The archive does not
-contain the Flock master key, live processes, node filesystems, worktrees, TLS private
+contain the Shepherd master key, live processes, node filesystems, worktrees, TLS private
 keys, or in-memory terminal scrollback.
 
 The manifest inventories declared durable volumes and their disposition. `pgdata` is
@@ -13,7 +13,7 @@ snapshot.
 
 Back up the matching `secrets/flock_master_key` separately. A database vault without
 that key cannot decrypt stored SSH credentials; a master key without the database does
-not reproduce Flock state.
+not reproduce Shepherd state.
 
 ## Create and verify
 
@@ -55,7 +55,7 @@ docker compose up -d
 The restore process:
 
 1. authenticates and structurally verifies the input;
-2. checks the Flock major version and every required master-key version;
+2. checks the Shepherd major version and every required master-key version;
 3. creates and verifies an encrypted pre-restore rollback vault;
 4. restores into a new isolated database;
 5. applies migrations and validates core tables;
@@ -63,7 +63,7 @@ The restore process:
 7. reverses the rename if post-cutover validation fails;
 8. retains the prior database under the reported rollback name.
 
-After restart, Flock reconciles session metadata with agentd. Session rows, Pens,
+After restart, Shepherd reconciles session metadata with agentd. Session rows, Pens,
 preferences, events, capabilities, and encrypted credential envelopes are durable;
 running processes are not snapshotted by the vault.
 
@@ -74,5 +74,5 @@ running processes are not snapshotted by the vault.
 - Test the master-key copy at the same time; never print it into logs.
 - Confirm login, node/project order, Pens, sessions, events, and encrypted SSH
   credential use after the drill.
-- Retain at least one known-good vault from the prior Flock major version until the
+- Retain at least one known-good vault from the prior Shepherd major version until the
   new version has passed its restore drill.

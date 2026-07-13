@@ -538,9 +538,9 @@ export async function main(): Promise<void> {
       const checks = [
         {
           id: 'preparation',
-          label: 'Flock node preparation',
+          label: 'Shepherd node preparation',
           status: 'pass',
-          detail: 'Local identities and permissions are managed by the Flock image.',
+          detail: 'Local identities and permissions are managed by the Shepherd image.',
         },
         {
           id: 'daemon-version',
@@ -778,7 +778,7 @@ export async function main(): Promise<void> {
   const hookBaseUrl = originPolicy.publicBaseUrl ?? `http://localhost:${process.env.PORT ?? 8080}`;
 
   // Session create launches the agent on the target node's flock-agentd daemon
-  // (local OR ssh), injecting the per-session Flock hook env (US-19) so the agent
+  // (local OR ssh), injecting the per-session Shepherd hook env (US-19) so the agent
   // emits lifecycle hooks, and tracking it in the live channels so the sidebar +
   // terminal light up immediately.
   const sessions = new SessionRestService({
@@ -801,7 +801,7 @@ export async function main(): Promise<void> {
           const client = await agentdClientForNode(session.nodeId, nodeKind);
           if (!client) return fail('flock-agentd unreachable on node');
           // Scoped hook-config (US-19, T1): agentd seeds it on the node so the agent
-          // calls back into Flock's hook endpoint (→ awaiting_input, Plan, Web Push).
+          // calls back into Shepherd's hook endpoint (→ awaiting_input, Plan, Web Push).
           // ACP sessions (Gemini) skip hook injection — status + chat come from the
           // ACP stream (`acp_bridge`), not hooks.
           const isAcp = mode === 'acp';

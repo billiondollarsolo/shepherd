@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { decryptVaultPayload, encryptVaultPayload } from './vault-format';
 
-describe('Flock vault authenticated format', () => {
+describe('Shepherd vault authenticated format', () => {
   it('round-trips a payload without storing its plaintext', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'flock-vault-format-'));
     const source = join(dir, 'source');

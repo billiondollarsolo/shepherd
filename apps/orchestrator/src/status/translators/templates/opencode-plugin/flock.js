@@ -1,8 +1,8 @@
 /**
- * Flock OpenCode plugin (US-18, spec §7.1, §8.1).
+ * Shepherd OpenCode plugin (US-18, spec §7.1, §8.1).
  *
- * Flock installs this file as `~/.config/opencode/plugin/flock.js`. It is inert
- * outside a Flock session because the callback URL/token environment is absent.
+ * Shepherd installs this file as `~/.config/opencode/plugin/flock.js`. It is inert
+ * outside a Shepherd session because the callback URL/token environment is absent.
  * OpenCode auto-loads every file under its plugin directory.
  *
  * The plugin is a DUMB COURIER (PRD §6.4): it holds no logic of its own. It
@@ -11,7 +11,7 @@
  * the OpenCode translator (`status/translators/opencode.ts`). The node never
  * interprets events.
  *
- * Auth + addressing — read from the per-session environment Flock injects when
+ * Auth + addressing — read from the per-session environment Shepherd injects when
  * it launches the agent (one `session_id` threads the tmux session name, the
  * hook token, and the browser CDP endpoint — the single authoritative session
  * record, spec §4.2 invariant):
@@ -44,7 +44,7 @@
  * (spec §4.2 out-of-scope: no node-side queue).
  */
 
-/** OpenCode event names Flock forwards to its hook endpoint. */
+/** OpenCode event names Shepherd forwards to its hook endpoint. */
 const FORWARDED_EVENTS = new Set([
   // CURRENT OpenCode bus event names (verified against the SDK Event union):
   'session.created', // session start
@@ -76,7 +76,7 @@ const FORWARDED_EVENTS = new Set([
 async function postToFlock(event) {
   const url = process.env.FLOCK_HOOK_URL;
   const token = process.env.FLOCK_HOOK_TOKEN;
-  // Without the injected session env this is not a Flock-managed session; do
+  // Without the injected session env this is not a Shepherd-managed session; do
   // nothing rather than error.
   if (!url || !token) return;
 
@@ -97,7 +97,7 @@ async function postToFlock(event) {
 /**
  * OpenCode plugin entrypoint. OpenCode calls this with a context object and
  * expects a hooks object back. We implement the single `event` hook, which fires
- * for every event on the OpenCode bus, and forward the ones the Flock translator
+ * for every event on the OpenCode bus, and forward the ones the Shepherd translator
  * understands.
  *
  * @param {{ project?: unknown, client?: unknown, directory?: string, worktree?: string }} _ctx

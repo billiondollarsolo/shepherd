@@ -5,7 +5,7 @@
  *   GET  /api/sessions/:id/git/status     file list + branch/ahead/behind
  *   POST /api/sessions/:id/git/stage      { paths } (empty → all)
  *   POST /api/sessions/:id/git/unstage    { paths } (empty → all)
- *   POST /api/sessions/:id/git/commit     { message }  (commits as the Flock user)
+ *   POST /api/sessions/:id/git/commit     { message }  (commits as the Shepherd user)
  *   POST /api/sessions/:id/git/push       (node's own remote credentials)
  *
  * All routes are cookie-authed (NFR-SEC6) via the shared `requireAuth`
@@ -51,7 +51,7 @@ function sessionId(request: FastifyRequest, reply: FastifyReply): string | null 
   return parsed.data.id;
 }
 
-/** Derive a git author/committer identity from the acting Flock user. */
+/** Derive a git author/committer identity from the acting Shepherd user. */
 function identityFor(request: FastifyRequest): GitIdentity {
   const username = request.authUser?.username ?? 'flock';
   const email = username.includes('@') ? username : `${username}@flock.local`;

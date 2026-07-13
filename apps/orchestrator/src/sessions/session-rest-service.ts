@@ -262,7 +262,7 @@ export class SessionRestService {
     // Defaults to interactive when omitted. A `dev` session runs its configured
     // command through the node shell so the daemon can supervise + auto-restart it.
     // Transport is AUTO-SELECTED per agent so the user never chooses (and always
-    // gets a structured Chat log): native PTY for agents Flock can tail a live
+    // gets a structured Chat log): native PTY for agents Shepherd can tail a live
     // transcript from — claude/codex (+ opencode via hooks) — preserving their
     // native TUI; ACP for agents with NO live transcript (gemini/grok) so their
     // conversation is still captured as structured messages. `dev` is always a

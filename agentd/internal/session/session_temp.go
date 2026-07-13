@@ -37,5 +37,5 @@ func seedSessionTemp(spec Spec) (string, error) {
 	return dir, nil
 }
 
-// seedHookConfig merges Flock's inert-without-token hook files into the runtime
+// seedHookConfig merges Shepherd's inert-without-token hook files into the runtime
 // user's native agent configuration directory.

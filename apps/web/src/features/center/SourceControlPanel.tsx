@@ -6,7 +6,7 @@
  *   - a branch header (name + ahead/behind the upstream);
  *   - the changed files split into STAGED and CHANGES groups, each row staging /
  *     unstaging on click and opening a per-file diff PREVIEW;
- *   - a commit message box + Commit (commits the staged set as the Flock user);
+ *   - a commit message box + Commit (commits the staged set as the Shepherd user);
  *   - Push (runs with the node's own git credentials).
  *
  * Server data + mutations come from TanStack Query (`../../data/queries`); the

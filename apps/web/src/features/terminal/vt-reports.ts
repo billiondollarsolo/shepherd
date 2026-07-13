@@ -3,7 +3,7 @@
  * queries it — Device Attributes (DA1 `ESC[?…c`, DA2 `ESC[>…c`) and XTVERSION
  * (`ESC P >| … ESC \`).
  *
- * Why: tmux probes the client's Device Attributes on every attach. Over Flock's
+ * Why: tmux probes the client's Device Attributes on every attach. Over Shepherd's
  * WebSocket↔PTY bridge the query reaches xterm, xterm generates the reply, and
  * the reply round-trips back — but by then tmux has often already handed the PTY
  * to the shell prompt, so the reply (e.g. `0;276;0c`, xterm's DA2/version) is

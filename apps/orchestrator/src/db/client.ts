@@ -1,5 +1,5 @@
 /**
- * Flock — database client module.
+ * Shepherd — database client module.
  *
  * Provides a singleton Drizzle client over a `pg` Pool. This is the durable
  * system-of-record connection (spec §6).

@@ -1,5 +1,5 @@
 /**
- * Flock — US-2 data-model UNIT tests (no database; runs under `pnpm test:unit`).
+ * Shepherd — US-2 data-model UNIT tests (no database; runs under `pnpm test:unit`).
  *
  *  - schema exposes all spec §6 tables;
  *  - DB enum column tuples are DERIVED from @flock/shared (never duplicated);

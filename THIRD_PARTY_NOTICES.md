@@ -1,6 +1,6 @@
 # Third-party notices
 
-Flock is distributed under the MIT License. It also bundles or loads the
+Shepherd is distributed under the MIT License. It also bundles or loads the
 following third-party assets under their own licenses.
 
 ## Agent command-line tools
@@ -29,10 +29,10 @@ time of:
   > FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   > THE SOFTWARE.
 
-On first container start, Flock runs Anthropic's official installer to download the
-latest Claude Code directly to the user's container. Flock does not redistribute the
+On first container start, Shepherd runs Anthropic's official installer to download the
+latest Claude Code directly to the user's container. Shepherd does not redistribute the
 Claude Code binary. Claude Code remains subject to Anthropic's applicable commercial
-or consumer terms and is not covered by Flock's MIT License.
+or consumer terms and is not covered by Shepherd's MIT License.
 
 ## Runtime libraries
 

@@ -49,7 +49,7 @@ export type ScreencastFrameMessage = z.infer<typeof ScreencastFrameMessage>;
  * Encode a CDP `Page.screencastFrame` event into the `screencast:<id>` wire
  * payload. The CDP `frame.sessionId` is the FRAME ordinal (a number used for
  * acking) and is intentionally NOT serialized — the channel already scopes to
- * the Flock session id, and the ordinal is only meaningful for the ack.
+ * the Shepherd session id, and the ordinal is only meaningful for the ack.
  */
 export function encodeScreencastFrame(flockSessionId: string, frame: CdpScreencastFrame): string {
   const message: ScreencastFrameMessage = {

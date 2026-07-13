@@ -17,11 +17,11 @@ authenticated, the agentd v1 protocol grants node-wide session control.
 
 ## Decision
 
-Flock will use three distinct roles:
+Shepherd will use three distinct roles:
 
 - **agentd service:** a system service with the minimum privilege needed to create a
   PTY and drop each child to the runtime identity;
-- **Flock control client:** the orchestrator-side identity holding the encrypted
+- **Shepherd control client:** the orchestrator-side identity holding the encrypted
   per-node control credential;
 - **agent runtime:** an unprivileged node identity that owns workspaces and coding-tool
   credentials but cannot read agentd state or control credentials.
@@ -37,7 +37,7 @@ in explicitly and emits a security warning; this mode provides no agent isolatio
   `direct-tcpip`; no agentd port is externally published.
 - Agentd reads a unique per-node credential from a root/service-owned file. Agent
   runtime users cannot read it.
-- The orchestrator stores its copy in Flock's AES-256-GCM secret store.
+- The orchestrator stores its copy in Shepherd's AES-256-GCM secret store.
 - Agentd launches every session with an explicit unprivileged UID, GID, supplementary
   group set, HOME, working directory, environment allowlist, resource policy, and
   optional Landlock write confinement.

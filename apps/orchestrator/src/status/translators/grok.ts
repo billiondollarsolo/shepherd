@@ -7,7 +7,7 @@
  *
  * Grok fires Claude-Code-compatible lifecycle hooks (it scans the claude/cursor
  * hook sources), but with its OWN payload shape — camelCase fields, snake_case
- * event-name values — so it needs its own mapping. Flock receives these via the
+ * event-name values — so it needs its own mapping. Shepherd receives these via the
  * same per-session hook forwarder as the other agents.
  *
  *   session_start                  -> idle             (booted + ready for you)

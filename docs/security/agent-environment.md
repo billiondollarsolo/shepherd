@@ -1,6 +1,6 @@
 # Agent environment and credential grants
 
-Flock constructs every agent environment explicitly. A session does not inherit the
+Shepherd constructs every agent environment explicitly. A session does not inherit the
 orchestrator or secure agentd service environment.
 
 ## Categories
@@ -37,6 +37,6 @@ for Landlock or OS-user privilege separation.
 ## Token handling
 
 Hook scripts read callback values from the session environment at execution time. No
-generated command string embeds a plaintext token. Flock never returns callback or
+generated command string embeds a plaintext token. Shepherd never returns callback or
 orchestration tokens to the browser, persists only hashes, and revokes orchestration
 capabilities when a session closes.

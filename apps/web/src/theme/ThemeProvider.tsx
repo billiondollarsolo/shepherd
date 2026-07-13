@@ -10,7 +10,7 @@ function hasDom(): boolean {
 }
 
 /**
- * Read the persisted mode from localStorage. Defaults to 'dark' (Flock is a
+ * Read the persisted mode from localStorage. Defaults to 'dark' (Shepherd is a
  * dark-first "Orca-like" paddock) when the user has made no explicit choice; a
  * stored choice (incl. 'system' to follow the OS) always wins.
  */

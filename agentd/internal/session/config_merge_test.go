@@ -6,7 +6,7 @@ import (
 )
 
 // mergeHookSettings is re-seeded on EVERY session open, so it must be idempotent:
-// merging the same Flock hooks twice must not stack duplicates, while preserving
+// merging the same Shepherd hooks twice must not stack duplicates, while preserving
 // the user's own hooks + other settings.
 func TestMergeHookSettingsIdempotent(t *testing.T) {
 	user := []byte(`{

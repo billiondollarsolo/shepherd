@@ -110,7 +110,7 @@ describe('Layer A integration — real Chrome container (US-25, int-only)', () =
       await manager.stop(sessionId);
       await expect(docker!.getContainer(browser.containerId).inspect()).rejects.toBeTruthy();
 
-      // No Flock-labelled container remains for this session.
+      // No Shepherd-labelled container remains for this session.
       const remaining = await docker!.listContainers({
         all: true,
         filters: { label: [`${LABEL}=${sessionId}`] },
@@ -139,7 +139,7 @@ describe('Layer A integration — real Chrome container (US-25, int-only)', () =
 
   maybe('reap removes orphaned containers left behind by a crash', async () => {
     const d = docker as unknown as DockerLike;
-    // Create an untracked Flock-labelled container directly, simulating a crash orphan.
+    // Create an untracked Shepherd-labelled container directly, simulating a crash orphan.
     const orphan = await docker!.createContainer({
       Image: CHROME_IMAGE,
       name: `flock-orphan-${Date.now()}`,

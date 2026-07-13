@@ -2,7 +2,7 @@
  * US-36 — the service worker is the second half of "installable PWA with service
  * worker" (FR-UI6). It must add an offline app-shell cache (so a launched PWA
  * opens even on a flaky phone connection) WITHOUT regressing the US-22 Web Push
- * handlers — Flock ships ONE service worker at `/sw.js` shared by both stories.
+ * handlers — Shepherd ships ONE service worker at `/sw.js` shared by both stories.
  *
  * We load `public/sw.js` into a hand-rolled ServiceWorkerGlobalScope stub and
  * drive the lifecycle/fetch events, so the cache behaviour and the coexistence
@@ -111,6 +111,19 @@ describe('service worker — PWA shell + Web Push coexistence (US-36/US-22)', ()
     await flush();
     expect(scope.registration.showNotification).toHaveBeenCalledWith(
       'Agent needs you',
+      expect.objectContaining({ body: 'awaiting_input' }),
+    );
+  });
+
+  it('uses Shepherd when a push payload omits its title', async () => {
+    const event = {
+      data: { json: () => ({ body: 'awaiting_input', sessionId: 's1' }) },
+      waitUntil: (p: Promise<unknown>) => p,
+    };
+    scope.listeners.push?.(event);
+    await flush();
+    expect(scope.registration.showNotification).toHaveBeenCalledWith(
+      'Shepherd',
       expect.objectContaining({ body: 'awaiting_input' }),
     );
   });

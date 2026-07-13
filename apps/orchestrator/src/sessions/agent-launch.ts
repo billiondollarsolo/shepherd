@@ -1,5 +1,5 @@
 /**
- * Agent launch commands — the argv Flock runs as a session's PTY program to
+ * Agent launch commands — the argv Shepherd runs as a session's PTY program to
  * actually start the coding agent (FR-S1).
  *
  * Each first-class agent ships a CLI on PATH. Plain shell access is represented
@@ -13,7 +13,7 @@
 import type { AgentType, SessionPermissionMode, Status } from '@flock/shared';
 
 /**
- * Map a Flock {@link SessionPermissionMode} to Claude Code's CLI flags.
+ * Map a Shepherd {@link SessionPermissionMode} to Claude Code's CLI flags.
  *   default     → none (Claude's normal prompting)
  *   acceptEdits → --permission-mode acceptEdits (auto-accept edits, ask the rest)
  *   plan        → --permission-mode plan (read-only planning)
@@ -34,7 +34,7 @@ function claudePermissionFlags(mode: SessionPermissionMode): string[] {
 }
 
 /**
- * Map a Flock {@link SessionPermissionMode} to Codex's CLI flags. Codex has two
+ * Map a Shepherd {@link SessionPermissionMode} to Codex's CLI flags. Codex has two
  * orthogonal axes (sandbox + approval); we pick coherent presets:
  *   default     → none (Codex's own default)
  *   acceptEdits → --sandbox workspace-write (write in workspace; `--full-auto` is
@@ -57,7 +57,7 @@ function codexPermissionFlags(mode: SessionPermissionMode): string[] {
 }
 
 /**
- * Map a Flock {@link SessionPermissionMode} to Gemini CLI's approval flags (T20):
+ * Map a Shepherd {@link SessionPermissionMode} to Gemini CLI's approval flags (T20):
  *   default      → none (interactive — Gemini asks)
  *   plan         → --approval-mode plan (read-only plan mode; current gemini CLI)
  *   acceptEdits  → --approval-mode auto_edit (auto-accept edits, ask for the rest)
@@ -151,7 +151,7 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
   },
   // xAI Grok Build CLI (binary `grok`). No documented autonomy flags (Plan Mode is
   // its built-in safety gate). Grok fires Claude-Code-compatible lifecycle hooks
-  // (session_start/pre_tool_use/post_tool_use/stop) that reach Flock's hook
+  // (session_start/pre_tool_use/post_tool_use/stop) that reach Shepherd's hook
   // endpoint, so status is HOOK-driven (the Grok translator) — NOT the PTY activity
   // heuristic, which would fight it (`activityStatus: false`). Headless-friendly
   // auth: if not already signed in (no ~/.grok/auth.json and no XAI_API_KEY), run

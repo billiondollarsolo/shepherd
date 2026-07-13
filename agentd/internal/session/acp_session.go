@@ -37,7 +37,7 @@ type acpState struct {
 	line      []byte      // the in-progress input line (local echo + edit)
 	pending   chan string // non-nil while an approval is awaiting an answer
 	options   []acp.PermissionOption
-	// Structured-chat forwarding: whole messages are POSTed to Flock's hook
+	// Structured-chat forwarding: whole messages are POSTed to Shepherd's hook
 	// endpoint (persistent, addressable event log → the web Chat tab), NOT the
 	// status hot path. hookURL already contains the session path segment.
 	hookURL   string
@@ -330,7 +330,7 @@ func (s *Session) postChat(ast *acpState, role, text string) {
 	postChatEvent(ast.hookURL, ast.hookToken, role, text)
 }
 
-// postChatEvent forwards one whole chat message to Flock's hook endpoint, where it
+// postChatEvent forwards one whole chat message to Shepherd's hook endpoint, where it
 // is persisted in the per-session event log (addressable → the web Chat tab). Off
 // the status hot path; fire-and-forget so it never blocks the agent stream. Used by
 // BOTH the ACP session and the transcript watchers (claude/codex), so a native

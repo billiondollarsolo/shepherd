@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// claudeProjectsDir is where claude writes its transcripts. When Flock seeds a
+// claudeProjectsDir is where claude writes its transcripts. When Shepherd seeds a
 // scoped CLAUDE_CONFIG_DIR (for hook injection), claude writes under
 // <scoped>/projects — NOT ~/.claude/projects — so the tailer MUST follow the
 // session's scoped dir or it never sees the transcript (→ no tokens/model/ctx%).

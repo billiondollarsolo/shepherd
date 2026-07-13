@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boot a Flock simulated SSH node: install the orchestrator's public key for the
+# Boot a Shepherd simulated SSH node: install the orchestrator's public key for the
 # `flock` user, then run sshd in the foreground. The pubkey arrives via the
 # FLOCK_PUBKEY env var (set per-container in docker-compose.nodes.yml).
 set -e

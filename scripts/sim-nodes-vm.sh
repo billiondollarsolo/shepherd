@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Flock — REALISTIC VM node harness (Vagrant + libvirt/KVM).
+# Shepherd — REALISTIC VM node harness (Vagrant + libvirt/KVM).
 #
-#   ./scripts/sim-nodes-vm.sh up      # gen key, boot VM(s), register in Flock
+#   ./scripts/sim-nodes-vm.sh up      # gen key, boot VM(s), register in Shepherd
 #   ./scripts/sim-nodes-vm.sh down    # destroy the VM(s)
-#   ./scripts/sim-nodes-vm.sh status  # VM status + IPs + Flock's view
+#   ./scripts/sim-nodes-vm.sh status  # VM status + IPs + Shepherd's view
 #
 # The heavier, higher-fidelity sibling of sim-nodes.sh (Docker). Use it to
 # validate agent permission/sandbox modes and credential persistence on a real
@@ -14,7 +14,7 @@
 # NETWORKING: the libvirt provider does NOT honor `forwarded_port` to a host
 # loopback port (that's a VirtualBox thing) — each VM gets an IP on libvirt's
 # default NAT network (192.168.121.0/24), routable from the host. So we discover
-# each VM's IP via `virsh domifaddr` and register THAT IP:22 in Flock.
+# each VM's IP via `virsh domifaddr` and register THAT IP:22 in Shepherd.
 #
 # Requires: vagrant + the vagrant-libvirt plugin + libvirt/KVM. We invoke
 # vagrant/virsh with sudo (libvirt system instance + the plugin installed as
@@ -76,7 +76,7 @@ api_login() {
     -X POST "$API/api/auth/login" -H 'content-type: application/json' \
     -d "{\"username\":\"$user\",\"password\":\"$pass\"}")
   [ "$code" = "200" ] || { err "Login failed (HTTP $code)."; return 1; }
-  log "Authenticated to Flock as $user."
+  log "Authenticated to Shepherd as $user."
 }
 
 register_nodes() {
@@ -128,7 +128,7 @@ cmd_status() {
   for i in $(seq 1 "$NODE_COUNT"); do log "node-vm-$i IP: $(node_ip "$i" || echo '(none)')"; done
   echo
   if [ -f "$COOKIES" ]; then
-    log "Flock's view of nodes:"
+    log "Shepherd's view of nodes:"
     curl -sS -b "$COOKIES" "$API/api/nodes" | python3 -m json.tool 2>/dev/null || true
   fi
 }

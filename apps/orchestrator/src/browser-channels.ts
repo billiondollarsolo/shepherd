@@ -112,7 +112,7 @@ export function createBrowserChannels(deps: BrowserChannelsDeps): BrowserChannel
         docker,
         resolveCdp: createDockerCdpResolver(docker),
         config: {
-          // The Flock session-chrome image bridges CDP to a published port (plain
+          // The Shepherd session-chrome image bridges CDP to a published port (plain
           // Chrome images bind the debugger to loopback only). See docker/Dockerfile.session-chrome.
           image: deps.image ?? process.env.BROWSER_IMAGE ?? 'flock/session-chrome:latest',
           maxConcurrent: deps.maxConcurrent ?? Number(process.env.BROWSER_MAX_CONCURRENT ?? 4),
