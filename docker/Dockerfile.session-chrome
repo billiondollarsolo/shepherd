@@ -9,7 +9,7 @@
 # T16: pinned to a digest for reproducible builds (the :latest tag floats).
 FROM zenika/alpine-chrome:latest@sha256:b7421e26b9cd26b44d4e3d1c791e34ab25a088ceb692ea620d803c759ffb618c
 
-LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/flock" \
+LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
       org.opencontainers.image.licenses="MIT"
 
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/licenses/flock/

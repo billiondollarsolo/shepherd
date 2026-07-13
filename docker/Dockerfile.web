@@ -32,7 +32,7 @@ RUN pnpm --filter "@flock/shared" run build \
 # ---- Stage 4: static serve via nginx ----------------------------------------
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 
-LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/flock" \
+LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
       org.opencontainers.image.licenses="MIT"
 
 # Keep Shepherd and bundled-font notices inside the distributed image.
