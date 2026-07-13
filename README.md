@@ -61,7 +61,7 @@ openssl rand -base64 48 > secrets/browser_worker_token
 chmod 600 secrets/*
 
 docker compose pull
-docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0
+docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.1
 docker compose up -d --wait
 ```
 
@@ -232,7 +232,7 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.3.0.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.3.1.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, browser worker, web
 app, and preferred node daemon are released together; the UI reports when a node daemon
 is compatible, recommended to upgrade, or required to upgrade.

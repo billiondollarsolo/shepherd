@@ -13,6 +13,16 @@ if [ ! -s "${BROWSER_WORKER_TOKEN_FILE:-}" ]; then
   exit 1
 fi
 
+# Preserve 0600 on the host while giving only the dedicated worker identity a
+# readable ephemeral copy inside the container.
+BROWSER_WORKER_TOKEN_FILE="$(
+  flock-stage-secret \
+    "$BROWSER_WORKER_TOKEN_FILE" \
+    /run/flock-browser-secrets/browser_worker_token \
+    "$WORKER_USER" "$WORKER_USER" 0400 browser_worker_token
+)"
+export BROWSER_WORKER_TOKEN_FILE
+
 # Only this narrowly scoped worker joins the host socket group. The control
 # process and every coding-agent process remain outside it.
 DOCKER_GID="$(stat -c '%g' "$SOCKET")"

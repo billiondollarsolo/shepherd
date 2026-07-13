@@ -6,6 +6,16 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-13
+
+### Fixed
+
+- Staged file-backed Docker Compose secrets into ephemeral, identity-specific runtime
+  paths before dropping privileges. Fresh installs can now keep host secret files at
+  `0600` without preventing the orchestrator or browser worker from starting.
+- Made the release smoke test enforce the same restrictive secret permissions documented
+  in the public quick start, preventing this class of packaging mismatch from recurring.
+
 ## [0.3.0] - 2026-07-13
 
 ### Added
@@ -34,8 +44,9 @@ minor releases before 1.0.
   issue forms, and release presentation.
 - Renamed the canonical GitHub repository to `billiondollarsolo/shepherd`; the previous
   repository URL redirects, while compatibility-sensitive `flock-*` commands, package
-  names, image names, node services, environment variables, storage, API fields, and
-  the published Go module path remain unchanged.
+  names, node services, environment variables, storage, API fields, and the published
+  Go module path remain unchanged. The first public container images use the canonical
+  `shepherd-*` names.
 - Reworked the product navigation around Paddock, nodes, projects, agents, and
   Pens; removed the obsolete fleet-scope model.
 - Refined the dark theme, typography, wordmark, status presentation, and mobile
@@ -51,4 +62,5 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
+[0.3.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.1
 [0.3.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.0

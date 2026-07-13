@@ -212,6 +212,7 @@ jobs:
           openssl rand -base64 32 > secrets/flock_master_key
           openssl rand -base64 32 > secrets/postgres_password
           openssl rand -base64 48 > secrets/browser_worker_token
+          chmod 600 secrets/*
 
       - name: Pull exact candidates
         run: |

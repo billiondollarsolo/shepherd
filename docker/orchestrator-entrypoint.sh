@@ -29,6 +29,20 @@ export FLOCK_AGENTD_SECRET_FILE="$CREDENTIAL_FILE"
 NODE_ID_FILE="${FLOCK_AGENTD_NODE_ID_FILE:-$AGENTD_STATE_DIR/node-id}"
 export FLOCK_AGENTD_NODE_ID_FILE="$NODE_ID_FILE"
 
+# File-backed Compose secrets retain their host ownership and mode; Compose
+# cannot apply the uid/gid/mode fields for bind-mounted files. Stage the worker
+# capability into an ephemeral control-only path while still root, then pass the
+# readable copy to the non-root orchestrator.
+if [ -n "${BROWSER_WORKER_TOKEN_FILE:-}" ]; then
+  BROWSER_WORKER_TOKEN_FILE="$(
+    flock-stage-secret \
+      "$BROWSER_WORKER_TOKEN_FILE" \
+      /run/flock-control-secrets/browser_worker_token \
+      root "$CONTROL_GROUP" 0440 browser_worker_token
+  )"
+  export BROWSER_WORKER_TOKEN_FILE
+fi
+
 install -d -o root -g "$CONTROL_GROUP" -m 0750 "$AGENTD_STATE_DIR" "$(dirname "$SOCKET")"
 if [ ! -s "$CREDENTIAL_FILE" ]; then
   echo "[entrypoint] generating protected local agentd credential"

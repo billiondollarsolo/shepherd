@@ -1,6 +1,6 @@
 {
   "name": "@flock/orchestrator",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Shepherd orchestrator: holds the brains. SSH/agentd orchestration, in-memory status fan-out over WS, async write-behind event log, per-session browser isolation.",

@@ -27,6 +27,7 @@ const composePath = resolve(repoRoot, 'docker-compose.yml');
 const orchDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.orchestrator');
 const orchEntrypoint = resolve(repoRoot, 'docker', 'orchestrator-entrypoint.sh');
 const browserWorkerEntrypoint = resolve(repoRoot, 'docker', 'browser-worker-entrypoint.sh');
+const secretStager = resolve(repoRoot, 'docker', 'stage-secret.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
 const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
@@ -151,8 +152,13 @@ describe('NFR-DEP1: Docker access is isolated behind the browser worker', () => 
 
   it('uses a separate OS identity and token-authenticated fixed worker API', () => {
     const entry = read(browserWorkerEntrypoint);
+    const orchestratorEntry = read(orchEntrypoint);
     expect(entry).toMatch(/WORKER_USER=flock-browser/);
     expect(entry).toMatch(/BROWSER_WORKER_TOKEN_FILE/);
+    expect(entry).toMatch(/flock-stage-secret/);
+    expect(entry).toMatch(/\/run\/flock-browser-secrets\/browser_worker_token/);
+    expect(orchestratorEntry).toMatch(/flock-stage-secret/);
+    expect(orchestratorEntry).toMatch(/\/run\/flock-control-secrets\/browser_worker_token/);
     expect(entry).toMatch(/dist\/browser\/worker\.js/);
     expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/BROWSER_WORKER_URL/);
   });
@@ -176,6 +182,13 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
     expect(compose).toMatch(
       /browser_worker_token:[\s\S]*file:\s*\.\/secrets\/browser_worker_token/,
     );
+  });
+
+  it('stages 0600 host secrets before dropping to non-root identities', () => {
+    const stager = read(secretStager);
+    expect(stager).toMatch(/install -d -o root/);
+    expect(stager).toMatch(/install -o "\$OWNER" -g "\$GROUP" -m "\$MODE"/);
+    expect(read(orchDockerfile)).toMatch(/flock-stage-secret/);
   });
 
   it('supplies the master key + db creds at runtime via env/secret', () => {

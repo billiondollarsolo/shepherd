@@ -1,6 +1,6 @@
 {
   "name": "@flock/web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Shepherd web paddock: nodes, projects, multi-agent Pens, live terminals, diffs, and mobile access.",

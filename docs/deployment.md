@@ -52,7 +52,7 @@ teardown. The orchestrator calls only its narrow lifecycle API and has no Docker
 > loopback only). Pull the version matching the Shepherd stack before using browser panes:
 >
 > ```
-> docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0
+> docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.1
 > ```
 >
 > Override the name with `BROWSER_IMAGE`. Without it, sessions still work but the
@@ -74,7 +74,7 @@ chmod 600 secrets/*
 
 # 3. Pull the pinned release images (FLOCK_VERSION in .env), then bring it up
 docker compose pull
-docker pull "${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.0}"
+docker pull "${BROWSER_IMAGE:-ghcr.io/billiondollarsolo/shepherd-session-chrome:0.3.1}"
 docker compose up -d
 
 # 4. Watch it boot

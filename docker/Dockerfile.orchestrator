@@ -173,7 +173,8 @@ COPY agentd/VERSION /app/agentd/VERSION
 COPY agentd/COMPATIBILITY.json /app/agentd/COMPATIBILITY.json
 COPY docker/orchestrator-entrypoint.sh /usr/local/bin/flock-entrypoint.sh
 COPY docker/browser-worker-entrypoint.sh /usr/local/bin/flock-browser-worker-entrypoint.sh
-RUN chmod +x /usr/local/bin/flock-agentd /usr/local/bin/flock-entrypoint.sh /usr/local/bin/flock-browser-worker-entrypoint.sh
+COPY docker/stage-secret.sh /usr/local/bin/flock-stage-secret
+RUN chmod +x /usr/local/bin/flock-agentd /usr/local/bin/flock-entrypoint.sh /usr/local/bin/flock-browser-worker-entrypoint.sh /usr/local/bin/flock-stage-secret
 
 # The unix socket the daemon listens on and the orchestrator dials (must match;
 # the orchestrator reads FLOCK_AGENTD_SOCKET). /tmp is writable by the node user.
