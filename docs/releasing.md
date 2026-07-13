@@ -28,8 +28,12 @@ Before the first public release:
 5. Keep Actions' default token permission read-only. The release workflow requests
    `packages: write` only for its image-publishing job. Require full-SHA action
    pinning after confirming every workflow is pinned.
-6. Consider enabling immutable releases. If enabled, create the release as a draft,
-   finish notes and assets, then publish it once.
+6. After the first candidate push creates each GHCR package, an organization owner
+   must set **Package settings → Change visibility → Public**. GitHub intentionally
+   keeps package visibility separate from repository permissions and does not let a
+   repository `GITHUB_TOKEN` elevate it. This is a one-time action per package name.
+7. Consider enabling immutable releases. The workflow creates the GitHub Release only
+   after all image and anonymous-access gates pass.
 
 ## Prepare a version
 
@@ -86,18 +90,17 @@ set, or required capabilities become stricter.
 ## Publish
 
 1. Merge the prepared release commit to `main` and wait for CI and CodeQL.
-2. Create a GitHub Release for `v<version>` from that exact commit. Use a draft first
-   when immutable releases are enabled.
-3. Publish the release. `.github/workflows/release-images.yml` verifies that the tag
-   matches the repository version and belongs to `main`, reruns the release gates,
-   then builds and pushes all images. After every candidate passes, the workflow also
-   creates the immutable nested Go module tag `agentd/v<version>` at the same commit.
+2. Push an annotated `v<version>` tag at that exact commit. Do not create the GitHub
+   Release by hand.
+3. `.github/workflows/release-images.yml` verifies that the tag matches the repository
+   version and belongs to `main`, reruns the release gates, then builds and pushes all
+   images. After every candidate passes, the workflow also creates the immutable nested
+   Go module tag `agentd/v<version>` at the same commit.
    Go consumers import `github.com/billiondollarsolo/flock/agentd`; never move or
    recreate that tag.
-4. The promotion job sets each GHCR package to **Public**, logs out of GHCR, and proves
-   that both architectures can be inspected anonymously before the GitHub Release is
-   created. Package visibility is separate from repository visibility, so a visibility
-   failure blocks the release.
+4. The promotion job logs out of GHCR and proves that every release image is public and
+   that both architectures can be inspected anonymously before it creates the GitHub
+   Release. A visibility failure blocks publication with the package setting to fix.
 
 Do not move an existing semantic-version image tag. Fix a bad release with a new patch
 version. A failed workflow may be rerun before consumers rely on its tags.

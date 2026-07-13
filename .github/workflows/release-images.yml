@@ -352,18 +352,6 @@ jobs:
             printf '%s\n' "$manifest" | grep -q 'linux/arm64'
           done
 
-      - name: Make verified packages public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          set -eu
-          for image in flock-orchestrator flock-web flock-session-chrome; do
-            gh api --method PATCH \
-              "/orgs/$OWNER/packages/container/$image" \
-              -f visibility=public >/dev/null
-          done
-
       - name: Verify anonymous release access
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -374,7 +362,10 @@ jobs:
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           for image in flock-orchestrator flock-web flock-session-chrome; do
-            manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"
+            if ! manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"; then
+              printf '::error::%s must be public before this release can be published. Set Package settings → Change visibility → Public, then rerun failed jobs.\n' "$REGISTRY/$image"
+              exit 1
+            fi
             printf '%s\n' "$manifest" | grep -q 'linux/amd64'
             printf '%s\n' "$manifest" | grep -q 'linux/arm64'
           done
