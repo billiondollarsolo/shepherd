@@ -122,9 +122,25 @@ RUN groupadd --system --gid 700 flock-control \
 # incomplete runtime. Real multi-node deploys still run agents on SSH nodes;
 # this makes the single-box deploy work too.
 RUN npm install -g @openai/codex@latest
-RUN curl -fsSL https://opencode.ai/install \
-      | bash -s -- --no-modify-path \
-    && cp /root/.opencode/bin/opencode /usr/local/bin/opencode
+RUN set -eu; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /root/.opencode /tmp/opencode-install.sh; \
+      if curl --fail --silent --show-error --location \
+          --retry 5 --retry-all-errors --connect-timeout 15 --max-time 120 \
+          --output /tmp/opencode-install.sh https://opencode.ai/install \
+        && bash /tmp/opencode-install.sh --no-modify-path \
+        && install -m 0755 /root/.opencode/bin/opencode /usr/local/bin/opencode \
+        && opencode --version; then \
+        rm -f /tmp/opencode-install.sh; \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then \
+        echo "OpenCode installation failed after $attempt attempts" >&2; \
+        exit 1; \
+      fi; \
+      echo "OpenCode installation attempt $attempt failed; retrying" >&2; \
+      sleep "$((attempt * 5))"; \
+    done
 RUN install -d /usr/share/flock \
     && { codex --version; opencode --version; } > /usr/share/flock/agent-versions.txt
 LABEL io.flock.agent-install-policy="latest-at-build; user overrides supported"
