@@ -31,6 +31,7 @@ import {
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 const DEFAULT_TERM = 'xterm-256color';
+const NODE_ADMIN_HELPER = '/usr/local/sbin/flock-node-admin';
 
 /**
  * Builds a single shell command line from an argv array, with optional cwd / env
@@ -54,6 +55,22 @@ function buildRemoteCommand(
   }
   if (options.cwd) prefix += `cd ${shellQuote(options.cwd)} && `;
   return `${prefix}${quotedArgv}`;
+}
+
+/**
+ * Prepared Shepherd nodes authenticate SSH as the bootstrap-only control user,
+ * while project files and provider credentials belong to the unprivileged
+ * runtime user. The helper probe lets one transport support both shapes:
+ * prepared nodes execute the payload as the runtime identity; legacy/direct
+ * SSH nodes execute it as their login user. The probe never executes the
+ * payload, so a failing command can never be retried under a second identity.
+ */
+export function runtimeAwareRemoteCommand(command: string): string {
+  const encoded = Buffer.from(command, 'utf8').toString('base64');
+  const probe = `sudo -n ${NODE_ADMIN_HELPER} runtime-exec-supported >/dev/null 2>&1`;
+  const runtime = `sudo -n ${NODE_ADMIN_HELPER} runtime-exec ${shellQuote(encoded)}`;
+  const direct = `exec /bin/sh -c ${shellQuote(command)}`;
+  return `/bin/sh -c ${shellQuote(`if ${probe}; then exec ${runtime}; else ${direct}; fi`)}`;
 }
 
 /** POSIX single-quote escaping: wrap in '...' and escape embedded quotes. */
@@ -201,7 +218,7 @@ export class SshTransport implements NodeTransport {
     if (this.disposed) throw new TransportDisposedError(this.kind);
     if (command.length === 0) throw new TransportInvalidCommandError();
 
-    const remote = `sh -c ${shellQuote(buildRemoteCommand(command, options))}`;
+    const remote = runtimeAwareRemoteCommand(buildRemoteCommand(command, options));
 
     return new Promise<ExecResult>((resolve, reject) => {
       const ok = this.client.exec(remote, (err, channel) => {
@@ -311,10 +328,12 @@ export class SshTransport implements NodeTransport {
       } else {
         // Run a specific program under a PTY so it behaves like a terminal
         // (e.g. `cat` echoes input — required by the contract suite).
-        const remote = buildRemoteCommand(command, {
-          cwd: options.cwd,
-          env: options.env,
-        });
+        const remote = runtimeAwareRemoteCommand(
+          buildRemoteCommand(command, {
+            cwd: options.cwd,
+            env: options.env,
+          }),
+        );
         this.client.exec(remote, { pty: window, env: ptyEnv(options.env) }, onChannel);
       }
     });

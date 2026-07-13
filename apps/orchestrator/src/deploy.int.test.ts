@@ -32,6 +32,7 @@ const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
 const nodePrepare = resolve(repoRoot, 'scripts', 'flock-node-prepare.sh');
 const upgradeScript = resolve(repoRoot, 'scripts', 'flock-upgrade.sh');
+const vagrantProvision = resolve(repoRoot, 'vagrant', 'provision.sh');
 
 function read(path: string): string {
   return readFileSync(path, 'utf8');
@@ -299,7 +300,20 @@ describe('production node and stack lifecycle', () => {
     expect(script).not.toMatch(/NOPASSWD:\s*ALL/);
     expect(script).toMatch(/check-workspace/);
     expect(script).toMatch(/agent-version/);
+    expect(script).toMatch(/runtime-exec-supported/);
+    expect(script).toMatch(/runtime-exec/);
+    expect(script).toMatch(/runuser -u "\$RUNTIME_USER" -- env -i/);
+    expect(script).toMatch(/UMask=0002/);
     expect(script).toMatch(/mv -f "\$SYSTEM_BIN\.candidate" "\$SYSTEM_BIN"/);
+  });
+
+  it('makes Vagrant nodes effectively key-only even when cloud-init enables passwords', () => {
+    const script = read(vagrantProvision);
+    expect(script).toMatch(/00-flock-key-only\.conf/);
+    expect(script).toMatch(/PasswordAuthentication no/);
+    expect(script).toMatch(/KbdInteractiveAuthentication no/);
+    expect(script).toMatch(/AuthenticationMethods publickey/);
+    expect(script).toMatch(/sshd -t/);
   });
 
   it('ships a backup-gated version-coupled stack upgrade command', () => {

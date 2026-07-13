@@ -165,6 +165,28 @@ activate_previous() {
 }
 
 case "${1:-}" in
+  runtime-exec-supported)
+    # Capability probe used by the SSH transport. Keeping this separate from
+    # runtime-exec means a legacy/direct-user node can fall back safely without
+    # ever running the requested command twice.
+    echo "runtime-exec-v1"
+    ;;
+  runtime-exec)
+    # Shepherd connects as the low-privilege control identity for enrollment,
+    # but project files and Git state belong to the coding-agent identity. Run
+    # data-plane commands as that runtime user so the control account never
+    # needs access to the agent home, provider credentials, or workspace files.
+    payload="${2:-}"
+    [[ -n "$payload" && ${#payload} -le 131072 && "$payload" =~ ^[A-Za-z0-9+/=]+$ ]] ||
+      die "invalid runtime command"
+    command="$(printf '%s' "$payload" | base64 -d 2>/dev/null)" || die "invalid runtime command"
+    [[ -n "$command" ]] || die "invalid runtime command"
+    home="$(runtime_home)"
+    exec runuser -u "$RUNTIME_USER" -- env -i \
+      HOME="$home" USER="$RUNTIME_USER" LOGNAME="$RUNTIME_USER" SHELL=/bin/bash \
+      PATH="$(runtime_path)" \
+      /bin/sh -c 'umask 0002; exec /bin/sh -c "$1"' flock-runtime "$command"
+    ;;
   preflight)
     id "$RUNTIME_USER" >/dev/null
     [[ "$(id -u "$RUNTIME_USER")" != 0 ]]
@@ -225,6 +247,7 @@ X-Shepherd-Prepared=1
 Type=simple
 User=root
 Group=root
+UMask=0002
 ExecStart=$SYSTEM_BIN serve --socket '' --addr 127.0.0.1:$port --state-dir $STATE_DIR/state --secret-file $CREDENTIAL_FILE --node-id $node_id --runtime-user $RUNTIME_USER
 Restart=always
 RestartSec=2

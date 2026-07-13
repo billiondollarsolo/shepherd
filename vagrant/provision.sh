@@ -59,9 +59,24 @@ su - flock-agent -c 'curl -fsSL https://x.ai/cli/install.sh | bash' || echo "WAR
 # The agent user's home lives on the VM's persistent disk, so an in-session
 # `claude login` stays logged in across reboots.
 
-# Key-only sshd (matches the Docker node).
+# Key-only sshd (matches the Docker node). OpenSSH uses the first value it sees,
+# and Ubuntu cloud images put `PasswordAuthentication yes` in an included
+# `50-cloud-init.conf` before the main file's setting. Install an earlier drop-in
+# so the effective configuration is key-only instead of merely looking that way
+# in /etc/ssh/sshd_config.
+install -d -m 0755 /etc/ssh/sshd_config.d
+install -m 0644 /dev/null /etc/ssh/sshd_config.d/00-flock-key-only.conf
+printf '%s\n' \
+  'PubkeyAuthentication yes' \
+  'PasswordAuthentication no' \
+  'KbdInteractiveAuthentication no' \
+  'ChallengeResponseAuthentication no' \
+  'AuthenticationMethods publickey' \
+  > /etc/ssh/sshd_config.d/00-flock-key-only.conf
+# Retain explicit main-file values for distributions without Include support.
 sed -ri 's/^#?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -ri 's/^#?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+/usr/sbin/sshd -t
 systemctl enable ssh >/dev/null 2>&1 || true
 systemctl restart ssh 2>/dev/null || service ssh restart || true
 

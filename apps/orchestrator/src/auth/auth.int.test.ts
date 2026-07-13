@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
@@ -49,6 +49,15 @@ beforeAll(async () => {
   await handle.db.delete(agentSessions);
   await handle.db.delete(sessionsAuth);
   await handle.db.delete(users);
+  // Mirror main()'s boot order: the orchestrator seeds its stable local node
+  // before first-run owner setup, then AuthService claims that pre-owner row.
+  // A genuinely empty test database has no prior run from which to inherit it.
+  const localNodes = await handle.db.select().from(nodes).where(eq(nodes.kind, 'local')).limit(1);
+  if (localNodes.length === 0) {
+    await handle.db
+      .insert(nodes)
+      .values({ name: 'local', kind: 'local', connectionStatus: 'connected' });
+  }
   const auth = new AuthService({
     db: handle.db,
     audit: makeDbAuthAuditRecorder(handle.db),
