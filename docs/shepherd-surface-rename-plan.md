@@ -1,6 +1,6 @@
 # Shepherd Surface Rename Plan
 
-**Status:** Implemented and validated — awaiting commit  
+**Status:** Implemented and validated — targeting v0.3.0
 **Prepared:** 2026-07-13  
 **Implemented:** 2026-07-13  
 **Scope:** User-visible product rename from **Flock** to **Shepherd**  
@@ -15,24 +15,25 @@ application copy, browser/PWA identity, public documentation, operator-facing te
 and repository presentation should consistently say **Shepherd**.
 
 The deeper migration of package names, daemon names, environment variables, image
-names, storage keys, repository paths, and protocol fields will be planned and shipped
-separately. Keeping that boundary strict makes this change low risk, reversible, and
-compatible with existing installations, nodes, backups, releases, scripts, and links.
+names, storage keys, Go module paths, and protocol fields will be planned and shipped
+separately. The GitHub repository itself has moved to `billiondollarsolo/shepherd`, with
+GitHub preserving redirects from the former URL. Keeping the remaining boundary strict
+makes this change low risk and compatible with existing installations and nodes.
 
 ## 2. Brand contract
 
 Implementation should begin by agreeing on this small contract and using it everywhere:
 
-| Item                                           | Value                                                                             |
-| ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| Product name                                   | `Shepherd`                                                                        |
-| Primary wordmark                               | `Shepherd`                                                                        |
-| Tagline                                        | `Shepherd Your Agents`                                                            |
-| Sentence-case tagline when grammar requires it | `Shepherd your agents`                                                            |
-| Short description                              | `Supervise CLI coding agents across local and remote nodes from one web paddock.` |
-| Existing brand glyph                           | Keep the current sheep mark for this phase                                        |
-| Existing visual system                         | Keep the current colors, Geist wordmark font, and paddock/pen language            |
-| Version presentation                           | `Shepherd v0.3.0` or the actual injected version                                  |
+| Item                                           | Value                                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| Product name                                   | `Shepherd`                                                             |
+| Primary wordmark                               | `Shepherd`                                                             |
+| Tagline                                        | `Shepherd Your Agents`                                                 |
+| Sentence-case tagline when grammar requires it | `Shepherd your agents`                                                 |
+| Short description                              | `Manage nodes, projects, and CLI coding agents from one web paddock.`  |
+| Existing brand glyph                           | Keep the current sheep mark for this phase                             |
+| Existing visual system                         | Keep the current colors, Geist wordmark font, and paddock/pen language |
+| Version presentation                           | `Shepherd v0.3.0` or the actual injected version                       |
 
 The product name is **Shepherd**, while “flock” may remain as an ordinary lowercase
 noun where it reads naturally. Capitalized **Flock** must no longer appear as product
@@ -63,22 +64,21 @@ branding outside the explicit compatibility allowlist.
 The following identifiers remain unchanged even when visible in advanced technical
 documentation. Renaming them now would be a migration, not a surface change.
 
-| Keep unchanged                                                                                                     | Reason                                                                         |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| GitHub repository slug `billiondollarsolo/flock`                                                                   | Existing clones, links, Go modules, releases, and GHCR provenance depend on it |
-| Go module `github.com/billiondollarsolo/flock/agentd`                                                              | Public import compatibility                                                    |
-| npm packages such as `@flock/web`, `@flock/shared`, and `@flock/orchestrator`                                      | Workspace and package compatibility                                            |
-| Executables/services such as `flock-agentd` and `flock-node-admin`                                                 | Installed-node and systemd compatibility                                       |
-| Container images `flock-orchestrator`, `flock-web`, and `flock-session-chrome`                                     | Existing deployments and published releases                                    |
-| Environment variables beginning `FLOCK_`                                                                           | Deployment compatibility and secrets/configuration stability                   |
-| Compose project, database, OS users, directories, and volumes named `flock*`                                       | Existing installation compatibility                                            |
-| Scripts and filenames such as `flock-upgrade.sh` and `flock-node-prepare.sh`                                       | Automation and documentation links                                             |
-| API/diagnostic/backup fields such as `flockVersion` or `versions.flock`                                            | Serialized contract compatibility                                              |
-| Backup magic, schemas, migrations, database values, audit actions, and protocol fields                             | Restore and wire compatibility                                                 |
-| Local-storage keys, cache names, CSS variables/classes, and persisted preferences beginning `flock.` or `--flock-` | Avoid resetting user state and creating a dual-token theme migration           |
-| MCP server IDs, hook paths, tmux/session prefixes, and agent config paths                                          | Existing session and agent integration compatibility                           |
-| Internal TypeScript/Go symbols such as `FlockNode`, `FlockDiagnostics`, or `FlockMark`                             | No user benefit; defer mechanical churn to the deeper rename                   |
-| Historical release notes and immutable artifacts                                                                   | Preserve historical accuracy                                                   |
+| Keep unchanged                                                                                                     | Reason                                                               |
+| ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Go module `github.com/billiondollarsolo/flock/agentd`                                                              | Public import compatibility                                          |
+| npm packages such as `@flock/web`, `@flock/shared`, and `@flock/orchestrator`                                      | Workspace and package compatibility                                  |
+| Executables/services such as `flock-agentd` and `flock-node-admin`                                                 | Installed-node and systemd compatibility                             |
+| Container images `flock-orchestrator`, `flock-web`, and `flock-session-chrome`                                     | Existing deployments and published releases                          |
+| Environment variables beginning `FLOCK_`                                                                           | Deployment compatibility and secrets/configuration stability         |
+| Compose project, database, OS users, directories, and volumes named `flock*`                                       | Existing installation compatibility                                  |
+| Scripts and filenames such as `flock-upgrade.sh` and `flock-node-prepare.sh`                                       | Automation and documentation links                                   |
+| API/diagnostic/backup fields such as `flockVersion` or `versions.flock`                                            | Serialized contract compatibility                                    |
+| Backup magic, schemas, migrations, database values, audit actions, and protocol fields                             | Restore and wire compatibility                                       |
+| Local-storage keys, cache names, CSS variables/classes, and persisted preferences beginning `flock.` or `--flock-` | Avoid resetting user state and creating a dual-token theme migration |
+| MCP server IDs, hook paths, tmux/session prefixes, and agent config paths                                          | Existing session and agent integration compatibility                 |
+| Internal TypeScript/Go symbols such as `FlockNode`, `FlockDiagnostics`, or `FlockMark`                             | No user benefit; defer mechanical churn to the deeper rename         |
+| Historical release notes and immutable artifacts                                                                   | Preserve historical accuracy                                         |
 
 Technical documentation must use wording such as “Shepherd currently ships the
 `flock-agentd` service” when a product sentence and a retained identifier appear
@@ -91,9 +91,9 @@ These decisions should be recorded at the top of the implementation pull request
 1. **Canonical public URL.** No separate marketing-site source was found in this
    repository. Confirm whether “website” means the web application/PWA only, or whether
    an external landing page also needs a coordinated update.
-2. **Repository slug.** The recommendation for this phase is to keep
-   `github.com/billiondollarsolo/flock`. GitHub labels should say “Shepherd,” while links
-   continue to use the working Flock URL.
+2. **Repository slug.** Use `github.com/billiondollarsolo/shepherd` as the canonical
+   public URL. Keep the published Go module and all other technical `flock-*`
+   identifiers stable; GitHub redirects the former repository URL.
 3. **Icon.** The recommendation is to retain the current sheep glyph and blue tile. Only
    its accessible name changes. A new icon is a visual-identity project, not necessary
    for this rename.
@@ -109,8 +109,8 @@ website task, which cannot be completed without its location and access.
 - The website in this repository is the web application/PWA. No separate marketing-site
   source or configured GitHub homepage exists, so there is no external site to migrate in
   this phase.
-- The repository remains `billiondollarsolo/flock`; its GitHub description now presents
-  Shepherd, and the About link retains the working repository URL.
+- The repository is now `billiondollarsolo/shepherd`; GitHub redirects the former URL.
+  The About link and public documentation use the canonical Shepherd URL.
 - The current sheep glyph, blue tile, and Geist wordmark font are retained. No new social
   preview is required for the surface rename.
 - The version remains `0.3.0` until the normal next release. `CHANGELOG.md` contains an
@@ -250,8 +250,9 @@ Tasks:
 
 - Change the README title, logo alt text, tagline, “What is…” heading, product narrative,
   release statement, license sentence, and other prose to Shepherd.
-- Keep clone URLs, directory names, commands, environment variables, image names,
-  daemon names, script names, paths, and configuration examples exactly accurate.
+- Use the canonical Shepherd clone URL while keeping directory names, commands,
+  environment variables, image names, daemon names, script names, paths, and
+  configuration examples exactly accurate.
 - Use the pattern “Shepherd runs `flock-agentd`” when prose meets a retained identifier.
 - Update `docs/README.md` so the documentation landing page clearly names Shepherd and
   explains that technical identifiers retain the `flock` prefix during the transition.
@@ -276,12 +277,12 @@ Definition of done:
 
 Tasks:
 
-- Update root and workspace package descriptions to say Shepherd while leaving package
-  `name`, repository, bugs, and homepage URLs unchanged.
+- Update root and workspace package descriptions and repository metadata to Shepherd
+  while leaving package `name` values unchanged.
 - Update GitHub issue-template descriptions and labels to Shepherd.
 - Update release display titles from `Flock <version>` to `Shepherd <version>` while
   preserving tags, image names, release assets, and version-check logic.
-- Update the About link label to “View Shepherd on GitHub,” retaining the current URL.
+- Update the About link label and target to the canonical Shepherd repository.
 - Update operator-facing log/error/help text in supported scripts and backend routes when
   it describes the product. Do not rename literal commands, services, users, or files.
 - In GitHub repository settings, manually update:
@@ -289,7 +290,8 @@ Tasks:
   - website URL once confirmed;
   - social preview if a Shepherd asset exists;
   - topics only if they currently contain obsolete product-brand terms.
-- Do not rename the repository or GHCR packages in this phase.
+- Do not rename GHCR packages or compatibility-sensitive technical identifiers in this
+  phase.
 
 Definition of done:
 

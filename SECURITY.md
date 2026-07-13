@@ -13,7 +13,7 @@ minor release only.
 ## Reporting a vulnerability
 
 Please do not open a public issue for a suspected vulnerability. Use GitHub's
-[private vulnerability reporting](https://github.com/billiondollarsolo/flock/security/advisories/new)
+[private vulnerability reporting](https://github.com/billiondollarsolo/shepherd/security/advisories/new)
 to send a report to the maintainers.
 
 Include the affected version, deployment model, reproduction steps, potential

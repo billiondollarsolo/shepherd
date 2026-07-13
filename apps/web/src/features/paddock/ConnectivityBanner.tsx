@@ -18,7 +18,7 @@ export function ConnectivityBanner(): JSX.Element | null {
       className="flex shrink-0 items-center justify-center gap-2 border-b border-status-error/40 bg-status-error/15 px-4 py-1.5 text-xs font-medium text-status-error"
     >
       <AlertTriangle className="size-3.5 shrink-0" />
-      <span>Can’t reach the orchestrator — the fleet may be stale. Retrying…</span>
+      <span>Can’t reach the orchestrator — Paddock data may be stale. Retrying…</span>
     </div>
   );
 }

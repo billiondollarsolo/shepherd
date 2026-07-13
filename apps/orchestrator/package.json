@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/billiondollarsolo/flock.git",
+    "url": "git+https://github.com/billiondollarsolo/shepherd.git",
     "directory": "apps/orchestrator"
   },
   "main": "./dist/index.js",

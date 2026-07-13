@@ -19,9 +19,8 @@ describe('product brand contract', () => {
       name: 'Shepherd',
       tagline: 'Shepherd Your Agents',
       sentenceTagline: 'Shepherd your agents',
-      description:
-        'Supervise CLI coding agents across local and remote nodes from one web paddock.',
-      repository: 'https://github.com/billiondollarsolo/flock',
+      description: 'Manage nodes, projects, and CLI coding agents from one web paddock.',
+      repository: 'https://github.com/billiondollarsolo/shepherd',
     });
   });
 });

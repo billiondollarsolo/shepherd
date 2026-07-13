@@ -46,7 +46,7 @@ test.describe('installable PWA', () => {
     await expect(page).toHaveTitle('Shepherd');
     await expect(page.locator('meta[name="description"]')).toHaveAttribute(
       'content',
-      'Supervise CLI coding agents across local and remote nodes from one web paddock.',
+      'Manage nodes, projects, and CLI coding agents from one web paddock.',
     );
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#06090d');

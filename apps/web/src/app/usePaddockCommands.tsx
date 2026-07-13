@@ -65,7 +65,7 @@ export function buildPaddockCommands(args: {
     { id: 'open-tools', title: 'Open tools panel', hint: 'View', run: () => a.openTools() },
     {
       id: 'close-tools',
-      title: 'Terminal-first stage (hide tools)',
+      title: 'Focus terminals (hide tools)',
       hint: 'View',
       run: () => a.closeTools(),
     },

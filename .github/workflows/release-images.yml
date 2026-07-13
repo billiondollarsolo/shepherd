@@ -352,6 +352,33 @@ jobs:
             printf '%s\n' "$manifest" | grep -q 'linux/arm64'
           done
 
+      - name: Make verified packages public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -eu
+          for image in flock-orchestrator flock-web flock-session-chrome; do
+            gh api --method PATCH \
+              "/orgs/$OWNER/packages/container/$image" \
+              -f visibility=public >/dev/null
+          done
+
+      - name: Verify anonymous release access
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          docker logout ghcr.io
+          # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
+          version="${VERSION#v}"
+          for image in flock-orchestrator flock-web flock-session-chrome; do
+            manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"
+            printf '%s\n' "$manifest" | grep -q 'linux/amd64'
+            printf '%s\n' "$manifest" | grep -q 'linux/arm64'
+          done
+
   release:
     name: Publish GitHub release last
     needs: promote
@@ -385,7 +412,16 @@ jobs:
           prerelease=''
           if printf '%s' "$TAG" | grep -q -- '-'; then prerelease='--prerelease'; fi
           # shellcheck disable=SC2086
+          release_version="${TAG#v}"
           {
+            printf 'The first public Shepherd release: run and supervise coding agents across local and remote nodes from one responsive Paddock.\n\n'
+            awk -v version="$release_version" '
+              index($0, "## [" version "]") == 1 { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+              END { if (!found) exit 1 }
+            ' CHANGELOG.md
+            printf '\n## Quick start\n\nFollow the [Docker Compose quick start](%s/%s#quick-start). A fresh installation has no default credentials; the first person completing setup creates the administrator account.\n\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY"
             printf '## Tested coding-agent versions\n\n```text\n'
             cat release-smoke/agent-versions.txt
             printf '```\n\nClaude Code is installed from the latest channel at first start and its exact running version is shown in Settings → Operations.\n\n'
@@ -394,6 +430,6 @@ jobs:
             printf '```\n\nNodes report whether this policy makes their daemon compatible, recommended to upgrade, or required to upgrade.\n'
           } > release-tool-versions.md
           # shellcheck disable=SC2086
-          gh release create "$TAG" --verify-tag --generate-notes --notes-file release-tool-versions.md --title "Shepherd ${TAG#v}" $prerelease
+          gh release create "$TAG" --verify-tag --notes-file release-tool-versions.md --title "Shepherd ${TAG#v}" $prerelease
           cp agentd/COMPATIBILITY.json agentd-compatibility.json
           gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt agentd-compatibility.json

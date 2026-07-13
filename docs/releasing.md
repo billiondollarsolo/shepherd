@@ -94,8 +94,10 @@ set, or required capabilities become stricter.
    creates the immutable nested Go module tag `agentd/v<version>` at the same commit.
    Go consumers import `github.com/billiondollarsolo/flock/agentd`; never move or
    recreate that tag.
-4. For the first publication of each GHCR package, open the package settings and set
-   visibility to **Public**. Package visibility is separate from repository visibility.
+4. The promotion job sets each GHCR package to **Public**, logs out of GHCR, and proves
+   that both architectures can be inspected anonymously before the GitHub Release is
+   created. Package visibility is separate from repository visibility, so a visibility
+   failure blocks the release.
 
 Do not move an existing semantic-version image tag. Fix a bad release with a new patch
 version. A failed workflow may be rerun before consumers rely on its tags.

@@ -17,8 +17,8 @@ export function AboutSection(): JSX.Element {
           <Badge variant="accent">v{FLOCK_VERSION}</Badge>
         </div>
         <p className="max-w-prose text-sm text-flock-ink-muted">
-          A web paddock for supervising a flock of CLI coding agents across local and remote nodes.
-          Sessions run on the flock-agentd daemon; the orchestrator holds the brains.
+          Manage local and remote nodes, projects, Pens, and CLI coding agents from one web paddock.
+          Sessions run on their nodes while the orchestrator coordinates status and control.
         </p>
         <a
           href={FLOCK_REPOSITORY_URL}

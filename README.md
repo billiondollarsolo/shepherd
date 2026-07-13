@@ -6,7 +6,7 @@
 
 ### Shepherd Your Agents
 
-**A self-hosted web platform for running and supervising CLI coding agents across all your machines—from one browser.**
+**Run, organize, and supervise coding agents across all your machines from one browser.**
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) ·
 [Codex](https://openai.com/codex/) ·
@@ -14,177 +14,117 @@
 [Gemini](https://geminicli.com/) ·
 [Grok](https://x.ai/cli)
 
-[![CI](https://github.com/billiondollarsolo/flock/actions/workflows/ci.yml/badge.svg)](https://github.com/billiondollarsolo/flock/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/billiondollarsolo/flock/actions/workflows/codeql.yml/badge.svg)](https://github.com/billiondollarsolo/flock/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/billiondollarsolo/flock?display_name=tag)](https://github.com/billiondollarsolo/flock/releases)
+[![CI](https://github.com/billiondollarsolo/shepherd/actions/workflows/ci.yml/badge.svg)](https://github.com/billiondollarsolo/shepherd/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/billiondollarsolo/shepherd/actions/workflows/codeql.yml/badge.svg)](https://github.com/billiondollarsolo/shepherd/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/billiondollarsolo/shepherd?display_name=tag)](https://github.com/billiondollarsolo/shepherd/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
 
 ---
 
-> **Name transition:** Shepherd was previously named Flock. Technical identifiers retain
-> the `flock` prefix in this release, so existing commands, environment variables, image
-> names, node services, package paths, and repository links continue to work unchanged.
-
 ## What is Shepherd?
 
-You probably run coding agents in a terminal today — one at a time, on one machine,
-and the work dies the moment you close the lid. Shepherd turns that into a **fleet**.
+Shepherd keeps CLI coding-agent sessions alive on local or remote machines and gives
+you one responsive Paddock for operating them. Start agents, follow live terminals,
+see what needs attention, review Git changes, and move between desktop and mobile
+without losing the session.
 
-Point Shepherd at one or more machines ("**nodes**") over SSH. On each node it runs a
-tiny daemon that owns your agents' terminals. From any browser you get a live
-Paddock of every agent across every machine — what each one is doing right now
-(**Idle** / **Working** / **Needs you**), what it's spending, and a real terminal you
-can type into. Organize a project's agents into named **Pens** of one to four,
-arrange each Pen as columns, rows, or a 2×2 grid, or focus one agent full-screen.
-Walk away, close your laptop, come back on your phone: the agents kept working and
-the session is exactly where you left it.
+## Why Shepherd?
 
-### Why it's different
-
-|                                           |                                                                                                                                                                                                                        |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔌 **Sessions never die when you leave**  | Agents run inside `flock-agentd` on always-on nodes. Your machine is just a viewer — never in the data path. Reload, switch devices, lose Wi-Fi: the work continues.                                                   |
-| 🔔 **Status you can trust at a glance**   | Affirmative labels on every agent: **Idle**, **Working**, **Needs you** (plus Starting / Done / Error / Disconnected). Hooks + transcripts feed the model; away-from-keyboard **web push** when someone is blocked.    |
-| 🐑 **Pens for focused supervision**       | Organize any number of project agents into **Pen 1, Pen 2, …**, with 1–4 agents per Pen. Drag agents between Pens, reorder them, resize panes, and choose columns, rows, or **2×2** independently for every Pen.       |
-| ⌨️ **Fast navigation**                    | Press **⌘K / Ctrl+K** to search and jump to any node, project, or running agent. The Agents sidebar uses Pens and drag-and-drop as one clear organization model, with status awareness and confirmed session deletion. |
-| 🖥️ **Every session gets its own browser** | A per-session Chrome lets the agent drive a real browser **and** lets you watch / take over — streamed into the UI.                                                                                                    |
-| 🤖 **Works with any agent**               | Five first-class integrations (status, tokens, model, context %, cost, plan) plus a graceful fallback for anything else.                                                                                               |
-
----
-
-## Supported agents
-
-Shepherd leverages **what each agent already produces on the node** — its lifecycle hooks
-and/or its transcript files — and normalizes everything into one status + telemetry model.
-
-| Agent           |        Status         | `awaiting_input` | Tokens / Model / Context % | Plan |
-| --------------- | :-------------------: | :--------------: | :------------------------: | :--: |
-| **Claude Code** | ✅ hooks + transcript |        ✅        |             ✅             |  ✅  |
-| **Codex**       |     ✅ transcript     |       ⚠️¹        |   ✅ (exact ctx window)    |  ✅  |
-| **OpenCode**    |       ✅ plugin       |        ✅        |    ✅ (exact USD cost)     |  ✅  |
-| **Gemini**      |        ✅ ACP         |        ✅        |            ⚠️²             | ⚠️²  |
-| **Grok**        |       ✅ hooks        |        —         |             —              |  —   |
-
-<sub>¹ Codex hooks (incl. the approval signal) are wired and ready; seeding is deferred until validated on a live node (transcript still drives status/tokens/plan). ² Gemini status + chat ride ACP; tokens/model/plan fill only when the ACP stream emits usage/plan. Full detail: [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md).</sub>
-
----
-
-## How it fits together
-
-```
-   Your browser (PWA — phone / laptop / desktop)
-            │  HTTPS + WebSocket
-            ▼
-   ┌─────────────────────────────────────────────┐
-   │  orchestrator  (Node · Fastify · Postgres)   │   the brain:
-   │  auth · status model · hook endpoint · web    │   management state,
-   │  push · per-session browsers · agentd client  │   never in the hot path
-   └───────┬──────────────────────────┬───────────┘
-           │ SSH (direct-tcpip)        │ unix socket
-           ▼                           ▼
-   ┌───────────────┐           ┌───────────────┐
-   │  remote node  │   …N…     │  local node   │     each node runs:
-   │  flock-agentd │           │  flock-agentd │
-   │  ── raw PTYs  │           │  ── raw PTYs  │   • your agents' terminals
-   │  ── status    │           │  ── status    │   • transcript/hook tailing
-   │  ── metrics   │           │  ── metrics   │   • CPU/mem per session
-   └───────────────┘           └───────────────┘
-```
-
-Three components, one monorepo:
-
-- **`flock-agentd`** (Go) — the node daemon. Owns raw PTYs, speaks a framed binary
-  protocol over an SSH loopback channel, tails agent transcripts/hooks for live status
-  - telemetry, and reports node + per-session resource metrics. This is what makes
-    sessions survive disconnects. See [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md).
-- **`apps/orchestrator`** (TypeScript · Fastify · Drizzle/Postgres) — the always-on
-  brain. Authentication, the unified status model, the agent hook endpoint, SSH/agentd
-  transport, per-session browser lifecycle, web push, and the REST + WebSocket API.
-  Postgres is the durable record — **never** on the live status path.
-- **`apps/web`** (React · Vite · Ghostty Web/xterm.js · TanStack · Zustand) — the dashboard.
-  Paddock and Agents lenses, project Pens with persisted
-  drag/drop membership and per-Pen layouts, live terminals, status dots +
-  **Idle / Working / Needs you**, source control, browser screencast, and activity.
-
----
+| Feature                          | What it gives you                                                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Durable agent sessions**       | Agents run on their node, not in the browser. Reload, close your laptop, or lose Wi-Fi without terminating their work.     |
+| **Nodes → Projects → Agents**    | See local and remote machines, the projects on each one, and every active agent through one clear hierarchy.               |
+| **Multi-agent Pens**             | Arrange one to four agents in each Pen, drag agents between Pens, choose a layout, or focus one agent full-screen.         |
+| **Live status and attention**    | See **Idle**, **Working**, **Needs you**, **Done**, **Error**, and connectivity state without opening every terminal.      |
+| **Real terminals everywhere**    | Drive the actual PTY from desktop or mobile, with reconnect, scrollback, keyboard controls, and responsive layouts.        |
+| **Git visibility without churn** | Inspect project status, diffs, and agent activity while leaving branch and worktree strategy to you and your agents.       |
+| **A browser per session**        | Let an agent use an isolated Chrome session, watch it work, and take over when needed.                                     |
+| **Self-hosted and observable**   | Keep control of your machines and data, with node metrics, audit history, diagnostics, backups, and explicit health state. |
 
 ## Quick start
 
-> **Prerequisites:** [Node ≥ 22](https://nodejs.org), [pnpm ≥ 9](https://pnpm.io)
-> (`npm i -g pnpm`), [Go ≥ 1.25](https://go.dev) (for the daemon), and **Docker** (the
-> dev database + per-session browsers run in containers). The agent CLIs themselves
-> (`claude`, `codex`, …) are installed on the **nodes**, not here.
-
-### Option A — Run it locally (fastest way to see it)
-
-Everything runs natively on your host with hot reload; only Postgres stays in Docker.
+You need [Docker Engine](https://docs.docker.com/engine/install/) with the Compose
+plugin, Git, and OpenSSL. Shepherd's application images are published on GHCR for
+Linux `amd64` and `arm64`.
 
 ```bash
-git clone https://github.com/billiondollarsolo/flock.git
-cd flock
-pnpm install
+git clone https://github.com/billiondollarsolo/shepherd.git
+cd shepherd
 
-# Create your dev env from the template, then generate the throwaway secrets it needs:
-cp .env.dev.example .env.dev.local
-# (the template explains each value and the one-liners to generate the keys)
-
-./run-dev.sh            # starts Postgres + flock-agentd + orchestrator + web
-#   └─ add --reset-db on the first run for a clean database + fresh admin setup
-```
-
-Open **http://localhost:5173**, complete first-run admin setup, and you're in. The web
-app proxies the API/WebSocket, so it's a single origin. (Direct API: `http://localhost:8080`.)
-
-**Then:** use the bundled **local** node (or add an SSH node) → create a **project** →
-**launch an agent**. The Agents sidebar creates Pens as needed (maximum four agents
-per Pen). Drag agents between Pens or into **Other agents**, select a Pen to show it,
-and choose columns, rows, or **2×2** beside its name. Pen membership and geometry
-survive refresh. Clicking any agent focuses it without changing its Pen.
-
-### Everyday controls
-
-- **Paddock** is the fleet-level supervision board; **Agents** is the project/node
-  switcher and Pen organizer.
-- Select a node or project in the hierarchy to drill into its agents, metrics,
-  source control, and operational details.
-- Drag the grip beside an agent to move it between Pens. Drop it on **New Pen** to
-  create another; a Pen may intentionally contain one, two, three, or four agents.
-- Use an agent's `…` menu to keep it at the top or delete the session with confirmation.
-- Press **⌘K** on macOS or **Ctrl+K** elsewhere to find nodes, projects, sessions,
-  settings, and common actions. **⌘J / Ctrl+J** toggles the shell drawer.
-
-### Option B — Deploy it (Docker Compose)
-
-The host needs **only Docker** (with the Compose plugin) — nothing else is installed on
-it. See [`docs/deployment.md`](docs/deployment.md) for the full guide; the short version:
-
-```bash
-cp .env.example .env && $EDITOR .env          # set public URL, allowed origins + domain
-
-# Required: Compose mounts these as Docker secrets (up fails if they are missing)
+cp .env.example .env
 mkdir -p secrets backups
 openssl rand -base64 32 > secrets/flock_master_key
+openssl rand -base64 32 > secrets/postgres_password
 openssl rand -base64 48 > secrets/browser_worker_token
-printf '%s' 'a-strong-db-password' > secrets/postgres_password
 chmod 600 secrets/*
 
-# Pull the pinned release images, including the on-demand browser image.
 docker compose pull
 docker pull ghcr.io/billiondollarsolo/flock-session-chrome:0.3.0
-
-docker compose up -d                          # caddy + web + orchestrator + postgres
-docker compose logs -f orchestrator
+docker compose up -d --wait
 ```
 
-Caddy terminates TLS on `443` (`80` redirects), migrations run automatically on boot,
-and per-session browser containers are launched on demand by a least-privilege browser
-worker; the orchestrator and coding agents never receive the raw Docker socket. Open `https://<host>`
-(or `https://localhost`) and
-complete admin setup.
+Open **https://localhost**. Caddy uses a local certificate for localhost, so your
+browser may ask you to trust it. A completely fresh installation shows **Set up
+Shepherd**: there is no default username or password. The first person completing
+setup creates the sole administrator account.
 
-Prepare a remote Linux node before adding it to Shepherd:
+For a real domain, set these values in `.env` before starting the stack:
+
+```dotenv
+PUBLIC_BASE_URL=https://shepherd.example.com
+FLOCK_ALLOWED_ORIGINS=https://shepherd.example.com
+FLOCK_DOMAIN=shepherd.example.com
+ACME_EMAIL=you@example.com
+```
+
+Useful operations:
+
+```bash
+docker compose ps
+docker compose logs -f orchestrator
+docker compose down                 # stop services but keep persistent volumes
+docker compose down --volumes       # destructive: remove installation data
+```
+
+See the complete [deployment guide](docs/deployment.md) for TLS, backups, upgrades,
+remote nodes, and production hardening.
+
+## Your first Paddock
+
+1. Complete the first-run administrator setup.
+2. Open the bundled **local** node or add a remote Linux node over SSH.
+3. Create a project with its working directory.
+4. Launch an agent. The first four project agents enter **Pen 1** automatically.
+5. Drag agents between Pens, choose each Pen's layout, or focus one full-screen.
+6. Press **⌘K** or **Ctrl+K** to jump to any node, project, agent, setting, or action.
+
+The Paddock is the cross-node overview. Node pages show health and projects, project
+pages expose agents and Git information, and Pens control which terminals share the
+workspace. On mobile, the same hierarchy, creation flows, settings, and live terminal
+controls remain available.
+
+## Supported coding agents
+
+Shepherd uses the lifecycle data each tool already produces and normalizes it into a
+single status and telemetry model. Unknown CLI tools still work as terminal sessions;
+first-class integrations add richer status and metadata.
+
+| Agent           | Status source      | Attention | Tokens / model / context | Plan |
+| --------------- | ------------------ | :-------: | :----------------------: | :--: |
+| **Claude Code** | Hooks + transcript |    ✅     |            ✅            |  ✅  |
+| **Codex**       | Transcript         |    ⚠️     |            ✅            |  ✅  |
+| **OpenCode**    | Plugin             |    ✅     |            ✅            |  ✅  |
+| **Gemini**      | ACP                |    ✅     |            ⚠️            |  ⚠️  |
+| **Grok**        | Hooks              |     —     |            —             |  —   |
+
+Integration details and limitations are documented in the
+[agent integration matrix](docs/agent-integration-matrix.md).
+
+## Connect a remote node
+
+Prepare a Linux node with the public half of the SSH key Shepherd will use:
 
 ```bash
 sudo ./scripts/flock-node-prepare.sh \
@@ -193,119 +133,116 @@ sudo ./scripts/flock-node-prepare.sh \
   --install-agents
 ```
 
-The node page then validates identities, workspace permissions, daemon version, and
-launchable agent CLIs. For versioned Compose upgrades, use the verified-backup gate:
+Then add the node in Shepherd. The node page validates SSH access, runtime identities,
+workspace permissions, daemon compatibility, metrics, and available agent CLIs before
+you launch work. The daemon upgrade policy distinguishes **compatible**, **upgrade
+recommended**, and **upgrade required** without silently killing active sessions.
+
+## How it works
+
+```text
+Browser / installed PWA
+        │ HTTPS + WebSocket
+        ▼
+┌──────────────────────────────┐
+│ Shepherd orchestrator       │
+│ auth · projects · status    │
+│ Git · browser control       │
+└──────────┬───────────────────┘
+           │ authenticated agentd protocol
+     ┌─────┴──────────────┐
+     ▼                    ▼
+local node            remote nodes
+flock-agentd          flock-agentd
+PTYs · status         PTYs · status
+metrics · transcripts metrics · transcripts
+```
+
+- **`flock-agentd`** is the small Go daemon on each node. It owns PTYs, keeps sessions
+  alive, reports metrics, and observes supported agent lifecycle data.
+- **The orchestrator** is the Fastify/Postgres control plane. It owns authentication,
+  durable configuration, node connections, status, Git views, and browser lifecycle.
+- **The web app** is the React PWA. It provides the Paddock, node/project hierarchy,
+  Pens, terminals, diffs, activity, settings, and mobile experience.
+
+The orchestrator is not in the PTY ownership path: disconnecting a browser does not
+stop an agent.
+
+## Published images
+
+Each release publishes provenance-attested, SBOM-enabled multi-platform images:
+
+- `ghcr.io/billiondollarsolo/flock-orchestrator`
+- `ghcr.io/billiondollarsolo/flock-web`
+- `ghcr.io/billiondollarsolo/flock-session-chrome`
+
+Production Compose pins `FLOCK_VERSION`; avoid mutable `latest` tags. Image names keep
+the `flock-*` prefix for deployment compatibility during the Shepherd name transition.
+
+## Local development
+
+Prerequisites: Node 22+, pnpm 9+, Go 1.25+, and Docker.
 
 ```bash
-FLOCK_VAULT_PASSWORD_FILE=/secure/flock-vault-password \
-  ./scripts/flock-upgrade.sh 0.3.1
+git clone https://github.com/billiondollarsolo/shepherd.git
+cd shepherd
+pnpm install
+cp .env.dev.example .env.dev.local
+./run-dev.sh --reset-db
 ```
 
-> **Must set in `.env`:** `PUBLIC_BASE_URL` to the URL users open in the browser
-> (for example, `https://flock.example.com`) and `FLOCK_ALLOWED_ORIGINS` to the
-> exact browser origin(s) allowed to open authenticated WebSockets. Match
-> `FLOCK_DOMAIN` to that hostname so Caddy’s TLS certificate is correct.
-> Production startup fails closed when either setting is missing or malformed, or
-> when the allowlist omits `PUBLIC_BASE_URL`.
+Open **http://localhost:5173** and complete fresh administrator setup. Subsequent runs
+can use `./run-dev.sh` without `--reset-db`.
 
----
-
-## Repository layout
-
-```
-flock/
-├── agentd/              # flock-agentd — the Go node daemon (raw PTYs, status, metrics)
-├── apps/
-│   ├── orchestrator/    # the brain — Fastify API/WS, status model, SSH/agentd, auth, push
-│   └── web/             # the dashboard — React + Vite + Ghostty/xterm PWA
-├── packages/
-│   └── shared/          # shared TypeScript contracts (Zod schemas, the Status enum, …)
-├── docker/              # Dockerfiles + Caddyfile for the production stack
-├── docs/                # architecture, agent integrations, deployment, decisions  ← start at docs/README.md
-├── vagrant/             # libvirt VMs that simulate real remote SSH nodes (for testing)
-├── run-dev.sh           # native dev runner (Postgres in Docker; everything else hot-reloaded)
-└── docker-compose*.yml  # prod / dev / multi-node-sim stacks
-```
-
----
-
-## Development
+Common checks:
 
 ```bash
-pnpm dev              # orchestrator + web (or use ./run-dev.sh for the full stack incl. agentd)
-pnpm build            # build every workspace
-pnpm typecheck        # tsc across the monorepo
-pnpm lint             # eslint
-pnpm format           # prettier --write
-
-# Tests
-pnpm test:unit        # vitest unit suites (shared + orchestrator + web)
-pnpm test:int         # integration suites (spins up Postgres + sshd in Docker)
-pnpm test:e2e         # Playwright end-to-end
-cd agentd && go test -race ./...   # the daemon
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm test:unit
+pnpm test:int
+pnpm test:e2e
+(cd agentd && go test -race ./...)
 ```
-
-The orchestrator runs idempotent Drizzle migrations on boot, so a fresh database
-provisions itself. To exercise **real remote nodes**, the `vagrant/` profile brings up
-libvirt VMs you can add as SSH nodes.
-
----
-
-## Configuration
-
-Nothing sensitive is baked into any image — config and secrets are supplied at runtime.
-
-- **Local dev:** [`.env.dev.example`](.env.dev.example) → copy to `.env.dev.local`.
-- **Production:** [`.env.example`](.env.example) → copy to `.env`; prefer the
-  `./secrets/*` Docker secret files for the master key + DB password.
-
-Both templates document every variable inline. `.env*` (except the examples) and
-`secrets/` are gitignored — **never commit real secrets or SSH keys.**
-
----
 
 ## Documentation
 
-Start at **[`docs/README.md`](docs/README.md)** — the index. Highlights:
+Start with the [documentation index](docs/README.md):
 
-| Doc                                                                    | What it covers                                                                                             |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [`docs/roadmap.md`](docs/roadmap.md)                                   | **The forward plan** — phased vision + tasks (success criteria + tests baked in) to the elite web platform |
-| [`docs/architecture.md`](docs/architecture.md)                         | How the three components fit together, end to end                                                          |
-| [`docs/agent-integration-matrix.md`](docs/agent-integration-matrix.md) | Exactly what Shepherd captures from each agent, and how                                                    |
-| [`docs/flock-agentd-design.md`](docs/flock-agentd-design.md)           | The node daemon — why it exists and how it works                                                           |
-| [`docs/deployment.md`](docs/deployment.md)                             | The production Docker Compose stack, in depth                                                              |
-| [`docs/releasing.md`](docs/releasing.md)                               | Public release workflow, GHCR images, verification, and repository settings                                |
-| [`PRD.md`](PRD.md)                                                     | Product intent and the original requirements                                                               |
+- [Deployment and production configuration](docs/deployment.md)
+- [Architecture](docs/architecture.md)
+- [Node daemon design](docs/flock-agentd-design.md)
+- [Agent integrations](docs/agent-integration-matrix.md)
+- [Backup and recovery](docs/backup-and-recovery.md)
+- [Release and GHCR verification](docs/releasing.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
 
----
+## Security
 
-## Security model (at a glance)
+Shepherd uses authenticated UI/API/WebSocket surfaces, SSH node transport, an
+additional per-node daemon credential, encrypted secret storage, origin validation,
+login throttling, and a constrained browser worker that isolates Docker-socket access
+from the orchestrator and coding agents.
 
-- All UI / API / WebSocket traffic requires authentication. The only unauthenticated
-  endpoint is the per-session hook callback — gated by a per-session bearer token.
-- Node transport is SSH; the agentd control channel adds a shared secret on top, stored
-  in a `0600` file and stripped from spawned agents' environments.
-- Secrets and SSH keys live outside the repo and outside image layers (runtime only).
-- Browser containers are managed by a token-authenticated worker that is the only
-  Shepherd service with Docker-socket access. Its API fixes image, network, command, and
-  resource policy; the orchestrator and coding agents never receive the socket.
+Review the [security model](docs/decisions/security-threat-model.md) before exposing an
+installation publicly. Report vulnerabilities through
+[private vulnerability reporting](SECURITY.md), not public issues.
 
-Please report vulnerabilities through [private vulnerability reporting](SECURITY.md),
-not public issues.
+## Version and compatibility
 
----
+**Current release: v0.3.0.** Shepherd is actively developed pre-1.0 software. Review
+the [changelog](CHANGELOG.md) before upgrading. The application, browser worker, web
+app, and preferred node daemon are released together; the UI reports when a node daemon
+is compatible, recommended to upgrade, or required to upgrade.
 
-## Status
+Shepherd was previously named Flock. The repository is now `shepherd`, while existing
+technical identifiers—including `flock-*` images, services, commands, environment
+variables, storage, and the published Go module path—remain stable for compatibility.
 
-**Current release: v0.3.0.** Shepherd is actively developed pre-1.0 software. Review the
-[changelog](CHANGELOG.md), [security policy](SECURITY.md), and
-[contribution guide](CONTRIBUTING.md) before deploying or contributing.
+Shepherd is available under the [MIT License](LICENSE). Bundled font attribution is in
+[Third-party notices](THIRD_PARTY_NOTICES.md).
 
-Released container images are published to GHCR as `flock-orchestrator`, `flock-web`,
-and `flock-session-chrome`. Pin a semantic version in production rather than `latest`.
-
-Shepherd is available under the [MIT License](LICENSE). Bundled font attribution is
-documented in [Third-party notices](THIRD_PARTY_NOTICES.md).
-
-Built by [@mjtechguy](https://x.com/mjtechguy) · [@blndollarsolo](https://x.com/blndollarsolo).
+Built by [@mjtechguy](https://x.com/mjtechguy) ·
+[@blndollarsolo](https://x.com/blndollarsolo).

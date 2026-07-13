@@ -18,7 +18,12 @@ import {
 import type { User } from '@flock/shared';
 import { BuiltBy } from '../../components/BuiltBy';
 import { FlockMark } from '../../components/SheepIcon';
-import { PRODUCT_NAME, PRODUCT_TAGLINE_SENTENCE } from '../../brand';
+import {
+  PRODUCT_DESCRIPTION,
+  PRODUCT_NAME,
+  PRODUCT_TAGLINE,
+  PRODUCT_TAGLINE_SENTENCE,
+} from '../../brand';
 import { ApiError, login, me, setupOwner } from '../../routes/api';
 import { Button, Input, Label } from '../../components/ui';
 
@@ -32,23 +37,23 @@ export interface AuthScreenProps {
 const FEATURES: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <LayoutGrid className="size-4" aria-hidden />,
-    title: 'Multi-agent paddock',
-    body: 'Supervise a flock of coding agents side-by-side, or focus one on the full stage.',
+    title: 'Multi-agent Pens',
+    body: 'Arrange up to four coding agents side-by-side in a Pen, or focus one full-screen.',
   },
   {
     icon: <Terminal className="size-4" aria-hidden />,
-    title: 'Live terminal & hooks',
-    body: 'Honest working / idle status from agent hooks and live PTY, not stale guesses.',
+    title: 'Live terminals & status',
+    body: 'Follow live sessions and see working, idle, and attention states as they change.',
   },
   {
     icon: <GitBranch className="size-4" aria-hidden />,
     title: 'Diffs & activity',
-    body: 'See what each agent changed and what needs your attention without hopping hosts.',
+    body: 'Review what each agent changed and what needs your attention without managing Git.',
   },
   {
     icon: <MonitorSmartphone className="size-4" aria-hidden />,
-    title: 'Nodes & fleet',
-    body: 'Connect remote nodes and keep the fleet view accurate when VMs come and go.',
+    title: 'Nodes, projects & agents',
+    body: 'Connect local or remote nodes and follow the projects and agents running on each one.',
   },
 ];
 
@@ -60,7 +65,7 @@ function BrandWordmark({ className = '' }: { className?: string }): JSX.Element 
         <div className="text-base font-semibold tracking-tight text-flock-ink-primary">
           {PRODUCT_NAME}
         </div>
-        <div className="text-2xs text-flock-ink-muted">Agent supervision</div>
+        <div className="text-2xs text-flock-ink-muted">{PRODUCT_TAGLINE}</div>
       </div>
     </div>
   );
@@ -158,12 +163,12 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
             {PRODUCT_TAGLINE_SENTENCE}
           </p>
           <h1 className="font-display text-3xl font-semibold leading-[1.15] tracking-tight text-flock-ink-primary xl:text-4xl">
-            Supervise a flock of agents
+            Manage every coding agent
             <span className="block text-flock-accent">from one paddock.</span>
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-flock-ink-muted xl:text-[15px]">
-            Launch, layout, and watch coding agents across nodes — live terminals, honest status,
-            diffs, and attention when something needs you.
+            Manage nodes and projects, launch agents into Pens, follow live terminals, review diffs,
+            and see when something needs your attention.
           </p>
 
           <ul className="mt-8 grid gap-3">
@@ -189,9 +194,7 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
         </div>
 
         <div className="relative z-10 space-y-1.5">
-          <p className="text-2xs text-flock-ink-muted">
-            A web paddock for supervising a flock of coding agents.
-          </p>
+          <p className="text-2xs text-flock-ink-muted">{PRODUCT_DESCRIPTION}</p>
           <BuiltBy />
         </div>
       </aside>
@@ -211,18 +214,18 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
           <div className="mb-8 lg:mb-10">
             <BrandWordmark className="mb-8 lg:hidden" />
             <h2 className="text-2xl font-semibold tracking-tight text-flock-ink-primary">
-              {isSetup ? 'Create the owner account' : `Sign in to ${PRODUCT_NAME}`}
+              {isSetup ? `Set up ${PRODUCT_NAME}` : `Sign in to ${PRODUCT_NAME}`}
             </h2>
             <p className="mt-1.5 text-sm text-flock-ink-muted">
               {isSetup
-                ? 'First run — set up the installation owner for this paddock.'
-                : 'Enter your credentials to open the paddock.'}
+                ? `Create the administrator account for this ${PRODUCT_NAME} installation.`
+                : 'Manage your nodes, projects, and agents from one place.'}
             </p>
           </div>
 
           <form
             onSubmit={onSubmit}
-            aria-label={isSetup ? 'First-run owner setup' : 'Log in'}
+            aria-label={isSetup ? `First-run ${PRODUCT_NAME} setup` : 'Log in'}
             className="grid min-w-0 max-w-full gap-4"
           >
             <div className="grid gap-1.5">
@@ -282,25 +285,33 @@ export function AuthScreen({ initialMode, onAuthenticated }: AuthScreenProps): J
 
             <Button type="submit" size="lg" disabled={busy} className="mt-1 w-full">
               {busy && <Loader2 className="size-4 animate-spin" />}
-              {isSetup ? (busy ? 'Creating…' : 'Create owner') : busy ? 'Signing in…' : 'Sign in'}
+              {isSetup
+                ? busy
+                  ? 'Setting up…'
+                  : 'Complete setup'
+                : busy
+                  ? 'Signing in…'
+                  : 'Sign in'}
             </Button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                setConfirm('');
-                setMode(isSetup ? 'signin' : 'setup');
-              }}
-              className="text-center text-2xs text-flock-ink-muted underline-offset-2 hover:text-flock-ink-primary hover:underline"
-            >
-              {isSetup ? 'Already set up? Sign in' : 'First run? Create the owner account'}
-            </button>
+            {isSetup && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setConfirm('');
+                  setMode('signin');
+                }}
+                className="text-center text-2xs text-flock-ink-muted underline-offset-2 hover:text-flock-ink-primary hover:underline"
+              >
+                Already set up? Sign in
+              </button>
+            )}
           </form>
 
           <div className="mt-10 flex flex-col items-center gap-1.5 text-center">
             <p className="text-2xs leading-relaxed text-flock-ink-muted lg:hidden">
-              A web paddock for supervising a flock of coding agents.
+              {PRODUCT_DESCRIPTION}
             </p>
             <BuiltBy className="text-center" />
           </div>

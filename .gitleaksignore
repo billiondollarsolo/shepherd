@@ -2,3 +2,12 @@
 # literal string "secret-bytes", not usable key material. Keep the fingerprint
 # narrow so any new finding in the same test file still fails the scan.
 edd9da97b301d968bfa4f48d49e184e3674acaa7:apps/orchestrator/src/nodes/node-service.test.ts:private-key:151
+
+# Deterministic, synthetic agentd mutual-authentication test vectors. These values
+# are deliberately shared across the Go and TypeScript fixtures to prove protocol
+# compatibility; they have never been runtime credentials. Fingerprints stay tied
+# to the introducing commits so new findings in these files still fail the scan.
+940bce780427263e7a3324862d07254d82ff8b3e:apps/orchestrator/src/nodes/agentd/agentd-connections.test.ts:generic-api-key:18
+b26e065ed5f3529e92f17fc0d8218203b43e922b:agentd/internal/server/server_test.go:generic-api-key:17
+b26e065ed5f3529e92f17fc0d8218203b43e922b:apps/orchestrator/src/nodes/agentd/control-auth.test.ts:generic-api-key:9
+b26e065ed5f3529e92f17fc0d8218203b43e922b:apps/orchestrator/src/nodes/agentd/agentd-client.test.ts:generic-api-key:17

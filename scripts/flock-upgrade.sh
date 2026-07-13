@@ -59,7 +59,7 @@ if ((SKIP_COMPATIBILITY == 0)); then
     echo "curl is required for the release compatibility preflight." >&2
     exit 1
   }
-  COMPATIBILITY_URL="${FLOCK_COMPATIBILITY_URL:-https://github.com/billiondollarsolo/flock/releases/download/v$TARGET/agentd-compatibility.json}"
+  COMPATIBILITY_URL="${FLOCK_COMPATIBILITY_URL:-https://github.com/billiondollarsolo/shepherd/releases/download/v$TARGET/agentd-compatibility.json}"
   echo "Fetching target node compatibility policy..."
   curl --fail --silent --show-error --location "$COMPATIBILITY_URL" > "$TARGET_COMPATIBILITY"
   set +e

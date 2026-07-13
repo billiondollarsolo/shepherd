@@ -32,7 +32,7 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
       onComplete?.();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError('An owner already exists. Continue to login.');
+        setError(`${PRODUCT_NAME} is already set up. Continue to sign in.`);
       } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
@@ -46,13 +46,13 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
   if (done) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-flock-bg text-flock-fg">
-        <h1 className="text-2xl font-semibold">Owner created</h1>
+        <h1 className="text-2xl font-semibold">{PRODUCT_NAME} is ready</h1>
         <button
           type="button"
           className="rounded bg-flock-accent px-4 py-2 text-sm font-medium"
           onClick={() => onComplete?.()}
         >
-          Continue to login
+          Continue to sign in
         </button>
       </main>
     );
@@ -63,10 +63,12 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
       <form
         onSubmit={handleSubmit}
         className="flex w-80 flex-col gap-3"
-        aria-label="First-run owner setup"
+        aria-label={`First-run ${PRODUCT_NAME} setup`}
       >
         <h1 className="text-2xl font-semibold tracking-tight">Set up {PRODUCT_NAME}</h1>
-        <p className="text-flock-muted text-sm">Create the installation owner account.</p>
+        <p className="text-flock-muted text-sm">
+          Create the administrator account for this {PRODUCT_NAME} installation.
+        </p>
 
         <label className="flex flex-col gap-1 text-sm">
           <span>Username</span>
@@ -105,7 +107,7 @@ export default function Setup({ onComplete }: SetupProps): JSX.Element {
           disabled={submitting}
           className="rounded bg-flock-accent px-4 py-2 text-sm font-medium disabled:opacity-50"
         >
-          {submitting ? 'Creating...' : 'Create owner'}
+          {submitting ? 'Setting up…' : 'Complete setup'}
         </button>
       </form>
     </main>

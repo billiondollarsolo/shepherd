@@ -35,11 +35,12 @@ describe('Setup screen (US-4)', () => {
   it('renders the first-run owner form', () => {
     render(<Setup />);
     expect(screen.getByRole('heading', { name: /set up shepherd/i })).toBeInTheDocument();
+    expect(screen.getByText(/create the administrator account/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 
-  it('creates the owner and offers to continue to login', async () => {
+  it('completes setup and offers to continue to sign in', async () => {
     const fetchMock = mockFetch(() => jsonResponse({ user }, 201));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -47,10 +48,10 @@ describe('Setup screen (US-4)', () => {
     render(<Setup onComplete={onComplete} />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-pass-1' } });
-    fireEvent.click(screen.getByRole('button', { name: /create owner/i }));
+    fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
 
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
-    expect(await screen.findByText(/owner created/i)).toBeInTheDocument();
+    expect(await screen.findByText(/shepherd is ready/i)).toBeInTheDocument();
   });
 
   it('surfaces a clear message when an owner already exists (409)', async () => {
@@ -61,8 +62,8 @@ describe('Setup screen (US-4)', () => {
     render(<Setup />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-pass-1' } });
-    fireEvent.click(screen.getByRole('button', { name: /create owner/i }));
+    fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/owner already exists/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/already set up/i);
   });
 });

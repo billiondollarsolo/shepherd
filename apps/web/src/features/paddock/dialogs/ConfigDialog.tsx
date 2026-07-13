@@ -33,8 +33,8 @@ export function ConfigDialog(): JSX.Element {
       <DialogHeader>
         <DialogTitle>Config as code (flock.yml)</DialogTitle>
         <DialogDescription>
-          Define your fleet — projects, working dirs, and agents — then apply it. Re-applying is
-          idempotent: existing projects and running agents are reused.
+          Define nodes, projects, working directories, and agents, then apply the configuration.
+          Re-applying is idempotent: existing projects and running agents are reused.
         </DialogDescription>
       </DialogHeader>
       <Textarea

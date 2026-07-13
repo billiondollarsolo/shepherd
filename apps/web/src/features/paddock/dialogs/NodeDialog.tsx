@@ -288,7 +288,7 @@ export function NodeDialog(): JSX.Element {
       <Field
         label="Pool (optional)"
         htmlFor="node-pool"
-        hint="A group label to organize the fleet (e.g. gpu, us-east)."
+        hint="A group label to organize nodes (e.g. gpu, us-east)."
       >
         <Input
           id="node-pool"

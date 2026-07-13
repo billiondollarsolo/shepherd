@@ -53,15 +53,15 @@ export function ActivityFeed(): JSX.Element {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Fleet activity"
-          title="Fleet activity"
+          aria-label="Paddock activity"
+          title="Paddock activity"
           className="flex size-8 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2"
         >
           <History className="size-[18px]" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-96">
-        <DropdownMenuLabel>Fleet activity</DropdownMenuLabel>
+        <DropdownMenuLabel>Paddock activity</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {events.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-flock-ink-muted">No activity yet.</div>

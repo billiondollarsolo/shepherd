@@ -1,7 +1,7 @@
 {
   "name": "Shepherd — Agent Paddock",
   "short_name": "Shepherd",
-  "description": "Supervise CLI coding agents across local and remote nodes from one web paddock.",
+  "description": "Manage nodes, projects, and CLI coding agents from one web paddock.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -2,16 +2,16 @@
   "name": "flock",
   "version": "0.3.0",
   "private": true,
-  "description": "Shepherd — supervise CLI coding agents across local and remote nodes from one web paddock.",
+  "description": "Shepherd — manage nodes, projects, and CLI coding agents from one web paddock.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/billiondollarsolo/flock.git"
+    "url": "git+https://github.com/billiondollarsolo/shepherd.git"
   },
   "bugs": {
-    "url": "https://github.com/billiondollarsolo/flock/issues"
+    "url": "https://github.com/billiondollarsolo/shepherd/issues"
   },
-  "homepage": "https://github.com/billiondollarsolo/flock#readme",
+  "homepage": "https://github.com/billiondollarsolo/shepherd#readme",
   "keywords": [
     "coding-agents",
     "claude-code",

@@ -33,13 +33,13 @@ const expected = {
   'apps/web/src/brand.ts': [
     "PRODUCT_NAME = 'Shepherd'",
     "PRODUCT_TAGLINE = 'Shepherd Your Agents'",
-    'Supervise CLI coding agents across local and remote nodes from one web paddock.',
-    "PRODUCT_REPOSITORY_URL = 'https://github.com/billiondollarsolo/flock'",
+    'Manage nodes, projects, and CLI coding agents from one web paddock.',
+    "PRODUCT_REPOSITORY_URL = 'https://github.com/billiondollarsolo/shepherd'",
   ],
   'apps/web/index.html': [
     '<title>Shepherd</title>',
     'name="description"',
-    'content="Supervise CLI coding agents across local and remote nodes from one web paddock."',
+    'content="Manage nodes, projects, and CLI coding agents from one web paddock."',
     'name="apple-mobile-web-app-title" content="Shepherd"',
   ],
   'apps/web/public/manifest.webmanifest': [
@@ -115,7 +115,7 @@ for (const file of files) {
     const forbiddenTechnicalRenames = [
       /\bSHEPHERD_[A-Z0-9_]+\b/,
       /@shepherd\//,
-      /github\.com\/billiondollarsolo\/shepherd/,
+      /github\.com\/billiondollarsolo\/shepherd\/agentd/,
       /(?:^|[/'"`])shepherd-agentd\b/,
       /--shepherd-/,
       /['"`]shepherd\.(?:theme|sidebar|grid|assistive|rightPanel)/,
@@ -133,7 +133,7 @@ if (process.argv.includes('--dist')) {
   } else {
     requireText(`${dist}/index.html`, [
       '<title>Shepherd</title>',
-      'Supervise CLI coding agents across local and remote nodes from one web paddock.',
+      'Manage nodes, projects, and CLI coding agents from one web paddock.',
     ]);
     requireText(`${dist}/manifest.webmanifest`, [
       '"name": "Shepherd — Agent Paddock"',

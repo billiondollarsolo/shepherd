@@ -6,16 +6,7 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
-### Changed
-
-- Renamed the user-visible product from Flock to **Shepherd**, with the tagline
-  **Shepherd Your Agents**, across the web application, PWA metadata, notifications,
-  documentation, issue forms, and release presentation.
-- Preserved existing `flock-*` commands, environment variables, package paths, container
-  images, node services, storage keys, backup fields, API contracts, and repository URLs;
-  this release requires no installation or node migration.
-
-## [0.3.0] - 2026-07-11
+## [0.3.0] - 2026-07-13
 
 ### Added
 
@@ -38,6 +29,13 @@ minor releases before 1.0.
 
 ### Changed
 
+- Renamed the user-visible product from Flock to **Shepherd**, with the tagline
+  **Shepherd Your Agents**, across the application, PWA, documentation, repository,
+  issue forms, and release presentation.
+- Renamed the canonical GitHub repository to `billiondollarsolo/shepherd`; the previous
+  repository URL redirects, while compatibility-sensitive `flock-*` commands, package
+  names, image names, node services, environment variables, storage, API fields, and
+  the published Go module path remain unchanged.
 - Reworked the product navigation around Paddock, nodes, projects, agents, and
   Pens; removed the obsolete fleet-scope model.
 - Refined the dark theme, typography, wordmark, status presentation, and mobile
@@ -53,4 +51,4 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[0.3.0]: https://github.com/billiondollarsolo/flock/releases/tag/v0.3.0
+[0.3.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.0
