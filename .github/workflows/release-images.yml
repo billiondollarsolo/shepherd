@@ -267,8 +267,9 @@ jobs:
 
       - name: Verify migrations, readiness, setup, login, and API
         run: |
-          set -eu
-          curl --fail --silent --show-error --insecure https://localhost:18443/health | tee release-smoke.log
+          set -euo pipefail
+          origin='https://localhost:18443'
+          curl --fail --silent --show-error --insecure "$origin/health" | tee release-smoke.log
           docker compose exec -T orchestrator node -e \
             "fetch('http://127.0.0.1:8080/ready').then(async r => { console.log(await r.text()); process.exit(r.ok ? 0 : 1) })" \
             | tee -a release-smoke.log
@@ -276,15 +277,17 @@ jobs:
           jq -n --arg token "$setup_token" \
             '{username:"release-owner",password:"Release-Smoke-Only-2026!",setupToken:$token}' \
             | curl --fail --silent --show-error --insecure \
+                -H "origin: $origin" \
                 -H 'content-type: application/json' --data-binary @- \
-                https://localhost:18443/api/auth/setup | tee -a release-smoke.log
+                "$origin/api/auth/setup" | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure -c release-cookies.txt \
+            -H "origin: $origin" \
             -H 'content-type: application/json' \
             -d '{"username":"release-owner","password":"Release-Smoke-Only-2026!"}' \
-            https://localhost:18443/api/auth/login | tee -a release-smoke.log
+            "$origin/api/auth/login" | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure -b release-cookies.txt \
-            https://localhost:18443/api/auth/me | tee -a release-smoke.log
-          curl --fail --silent --show-error --insecure https://localhost:18443/ \
+            "$origin/api/auth/me" | tee -a release-smoke.log
+          curl --fail --silent --show-error --insecure "$origin/" \
             | grep -q '<div id="root">'
           docker compose exec -T orchestrator flock-agentd version | tee -a release-smoke.log
           {
@@ -293,11 +296,11 @@ jobs:
             docker compose exec -T orchestrator sh -lc 'claude --version 2>/dev/null || echo "claude: runtime installer disabled in candidate smoke"'
           } | tee agent-versions.txt | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure -b release-cookies.txt \
-            https://localhost:18443/api/diagnostics | tee release-diagnostics.json
+            "$origin/api/diagnostics" | tee release-diagnostics.json
 
       - name: Verify isolated Remote Preview end to end
         run: |
-          set -eu
+          set -euo pipefail
           origin='https://localhost:18443'
           auth=(-b release-cookies.txt -H "origin: $origin")
 
@@ -357,6 +360,7 @@ jobs:
             | curl --fail --silent --show-error --insecure \
                 --resolve "$preview_host:18443:127.0.0.1" \
                 -c release-preview-cookies.txt \
+                -H "origin: $preview_origin" \
                 -H 'content-type: application/json' --data-binary @- \
                 "$preview_origin/_shepherd/authorize"
           curl --fail --silent --show-error --insecure \
