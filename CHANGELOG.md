@@ -20,9 +20,9 @@ minor releases before 1.0.
 
 ### Security
 
-- Reviewed two newly reported Perl findings inherited through Debian's Git dependency.
-  Debian has not published fixed packages, so the findings remain in the visible,
-  expiring image-risk register and must be reassessed at every release.
+- Reviewed newly reported findings inherited through required Debian runtime
+  dependencies. Debian has not published fixed stable packages, so the findings remain
+  in the visible, expiring image-risk register and must be reassessed at every release.
 
 ## [0.4.0] - 2026-07-14
 

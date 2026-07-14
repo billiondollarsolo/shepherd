@@ -70,6 +70,9 @@ vulnerabilities:
   - id: CVE-2026-60002
     expired_at: 2026-10-14
     statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-6653
+    expired_at: 2026-10-14
+    statement: PostgreSQL requires libxml2 and Debian has no patched stable package as of 2026-07-14; review at every release.
   - id: CVE-2026-8286
     expired_at: 2026-10-14
     statement: No patched Debian package is available as of 2026-07-14; review at every release.
