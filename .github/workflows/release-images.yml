@@ -412,7 +412,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: digest-*
-          path: digests
+          path: release-candidates
           merge-multiple: true
 
       - name: Download tested agent versions
@@ -436,12 +436,12 @@ jobs:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           VERSION: ${{ github.ref_name }}
         run: |
-          set -eu
+          set -euo pipefail
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
           for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
-            digest="$(cat "digests/$image.digest")"
+            digest="$(cat "release-candidates/digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
             annotations=''
@@ -465,7 +465,7 @@ jobs:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           VERSION: ${{ github.ref_name }}
         run: |
-          set -eu
+          set -euo pipefail
           docker logout ghcr.io
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
