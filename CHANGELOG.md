@@ -18,6 +18,12 @@ minor releases before 1.0.
 - Added regression coverage for generic Duplex Preview tunnels and every production
   Content Security Policy mode.
 
+### Security
+
+- Reviewed two newly reported Perl findings inherited through Debian's Git dependency.
+  Debian has not published fixed packages, so the findings remain in the visible,
+  expiring image-risk register and must be reassessed at every release.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added
