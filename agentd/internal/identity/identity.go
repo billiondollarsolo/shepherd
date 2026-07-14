@@ -64,7 +64,8 @@ func Resolve(username string) (*Runtime, error) {
 }
 
 // ResolveGroupID resolves a local control group without accepting numeric input.
-func ResolveGroupID(name string) (uint32, error) {
+// Atoi rejects values outside the platform int range required by os.Chown.
+func ResolveGroupID(name string) (int, error) {
 	if strings.TrimSpace(name) == "" {
 		return 0, fmt.Errorf("control group is required")
 	}
@@ -72,11 +73,14 @@ func ResolveGroupID(name string) (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("lookup control group %q: %w", name, err)
 	}
-	value, err := strconv.ParseUint(group.Gid, 10, 32)
+	value, err := strconv.Atoi(group.Gid)
 	if err != nil {
 		return 0, fmt.Errorf("parse gid for control group %q: %w", name, err)
 	}
-	return uint32(value), nil
+	if value < 0 {
+		return 0, fmt.Errorf("gid for control group %q must not be negative", name)
+	}
+	return value, nil
 }
 
 func shellFromPasswd(username string) string {

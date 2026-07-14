@@ -253,6 +253,11 @@ Security properties:
   headers, and Referer are never forwarded across the tunnel. Development applications
   may use their own host-only cookies; reserved Shepherd cookie names are filtered in
   both directions.
+- HTTPS targets must present a certificate trusted by the orchestrator for `localhost`;
+  Shepherd never disables upstream certificate verification. For a self-signed local
+  development server, trust its CA in the deployment or forward its loopback HTTP port—the
+  node hop remains inside the authenticated SSH/agentd transport and the public Preview
+  origin still follows the selected deployment TLS policy.
 - Service workers are denied; request/response bytes, connection count, headers, and
   connect/upstream time are bounded. Active HTTP/WebSocket tunnels close on revoke,
   expiry, session termination, shutdown, or orchestrator restart.

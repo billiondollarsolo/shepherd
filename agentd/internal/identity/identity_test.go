@@ -48,8 +48,8 @@ func TestResolveGroupID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := strconv.ParseUint(current.Gid, 10, 32)
-	if got != uint32(want) {
+	want, _ := strconv.Atoi(current.Gid)
+	if got != want {
 		t.Fatalf("got gid %d, want %d", got, want)
 	}
 }

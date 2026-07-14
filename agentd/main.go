@@ -198,7 +198,7 @@ func serve(args []string) {
 
 	// Unix socket (local node path).
 	if *socket != "" {
-		var controlGID *uint32
+		var controlGID *int
 		if runtimeIdentity != nil {
 			gid, groupErr := identity.ResolveGroupID(*controlGroup)
 			if groupErr != nil {
@@ -215,13 +215,7 @@ func serve(args []string) {
 			fatal("listen unix", err)
 		}
 		if controlGID != nil {
-			// os.Chown takes int even though Linux gid_t is unsigned. Refuse a
-			// value that the current architecture cannot represent instead of
-			// wrapping a valid group id into a negative integer on 32-bit hosts.
-			if uint64(*controlGID) > uint64(^uint(0)>>1) {
-				fatal("chown unix socket", fmt.Errorf("control group id %d exceeds platform int range", *controlGID))
-			}
-			if err := os.Chown(*socket, 0, int(*controlGID)); err != nil {
+			if err := os.Chown(*socket, 0, *controlGID); err != nil {
 				fatal("chown unix socket", err)
 			}
 			if err := os.Chmod(*socket, 0o660); err != nil {

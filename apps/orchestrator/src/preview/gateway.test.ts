@@ -65,13 +65,17 @@ describe('Remote Preview gateway', () => {
   });
 
   it('exchanges the fragment capability, strips credentials, proxies HTTP/WS, and blocks service workers', async () => {
+    let receivedUrl: string | undefined;
+    let receivedHeaders: IncomingHttpHeaders | undefined;
     upstream = createServer((req, res) => {
+      receivedUrl = req.url;
+      receivedHeaders = req.headers;
       res.setHeader('set-cookie', [
         'upstream_session=allowed; Path=/; HttpOnly',
         '__Host-shepherd_preview=must-not-escape; Path=/; Secure',
       ]);
       res.setHeader('clear-site-data', '"cookies"');
-      res.end(JSON.stringify({ url: req.url, headers: req.headers }));
+      res.end('ok');
     });
     const websocketServer = new WebSocketServer({ noServer: true });
     upstream.on('upgrade', (req, socket, head) => {
@@ -200,11 +204,11 @@ describe('Remote Preview gateway', () => {
     expect(proxied.headers['set-cookie']).toEqual(['upstream_session=allowed; Path=/; HttpOnly']);
     expect(proxied.headers['clear-site-data']).toBeUndefined();
     expect(proxied.headers['cross-origin-opener-policy']).toBe('same-origin');
-    const received = JSON.parse(proxied.body) as { headers: IncomingHttpHeaders };
-    expect(received.headers.cookie).toBe('upstream_session=allowed');
-    expect(received.headers.authorization).toBeUndefined();
-    expect(received.headers['x-forwarded-for']).toBeUndefined();
-    expect(received.headers.host).toBe(`127.0.0.1:${upstreamPort}`);
+    expect(receivedUrl).toBe('/hello?x=1');
+    expect(receivedHeaders?.cookie).toBe('upstream_session=allowed');
+    expect(receivedHeaders?.authorization).toBeUndefined();
+    expect(receivedHeaders?.['x-forwarded-for']).toBeUndefined();
+    expect(receivedHeaders?.host).toBe(`127.0.0.1:${upstreamPort}`);
 
     const oversized = await request(gatewayPort, '/upload', {
       host,

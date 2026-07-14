@@ -268,13 +268,13 @@ async function proxyHttp(
     record.protocol === 'https'
       ? new HttpsAgent({
           keepAlive: false,
-          rejectUnauthorized: false,
+          rejectUnauthorized: true,
         })
       : new Agent({ keepAlive: false });
   Object.assign(agent, {
     createConnection: () =>
       record.protocol === 'https'
-        ? tlsConnect({ socket: stream, servername: 'localhost', rejectUnauthorized: false })
+        ? tlsConnect({ socket: stream, servername: 'localhost', rejectUnauthorized: true })
         : stream,
   });
   const requestUpstream = record.protocol === 'https' ? httpsRequest : httpRequest;
@@ -375,7 +375,7 @@ function secureUpstream(stream: Duplex): Promise<Duplex> {
     const secure = tlsConnect({
       socket: stream,
       servername: 'localhost',
-      rejectUnauthorized: false,
+      rejectUnauthorized: true,
     });
     const onError = (error: Error): void => {
       secure.destroy();
