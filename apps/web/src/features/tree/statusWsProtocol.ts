@@ -40,7 +40,7 @@ export function statusWebSocketUrl(
 /**
  * The client→server subscribe envelope for the status channel. The status
  * channel is not session-scoped, so no `sessionId` is sent (spec §8.2
- * ClientSubscribeMessage; `sessionId` is only required for pty/screencast).
+ * ClientSubscribeMessage; `sessionId` is required only for PTY channels).
  */
 export function encodeStatusSubscribe(): string {
   return JSON.stringify({ op: 'subscribe', channel: STATUS_CHANNEL });

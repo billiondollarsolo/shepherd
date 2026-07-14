@@ -5,8 +5,7 @@
  *  - DB enum column tuples are DERIVED from @flock/shared (never duplicated);
  *  - the row <-> shared `Session` mapper round-trips;
  *  - the mapper preserves the single authoritative session record identity
- *    (one session_id threads tmux name + hook token hash + browser CDP endpoint,
- *    spec §4.2).
+ *    (one session_id threads tmux name + hook token hash, spec §4.2).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -28,10 +27,13 @@ import {
 import {
   agentSessions,
   agentCapabilities,
+  authLoginThrottle,
   auditLog,
   events,
   nodes,
   projects,
+  projectServices,
+  previewRuntimeSettings,
   pushSubscriptions,
   schema,
   secrets,
@@ -46,8 +48,11 @@ describe('schema (§6) — all required tables exist', () => {
     for (const t of [
       users,
       sessionsAuth,
+      authLoginThrottle,
       nodes,
       projects,
+      projectServices,
+      previewRuntimeSettings,
       agentSessions,
       agentCapabilities,
       events,
@@ -64,9 +69,12 @@ describe('schema (§6) — all required tables exist', () => {
       expect.arrayContaining([
         'users',
         'sessionsAuth',
+        'authLoginThrottle',
         'secrets',
         'nodes',
         'projects',
+        'projectServices',
+        'previewRuntimeSettings',
         'agentSessions',
         'agentCapabilities',
         'events',
@@ -130,12 +138,10 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     agentType: AgentTypeEnum.options[0], // 'claude-code'
     tmuxSessionName: 'flock-sess-abc',
     workingDir: '/home/dev/project',
-    browserCdpEndpoint: 'ws://127.0.0.1:9222/devtools/browser/xyz',
     hookTokenHash: 'argon2id$hash$abc',
     status: 'running',
     statusDetail: null,
     note: null,
-    parentSessionId: null,
     permissionMode: 'default',
     orchestrationAuthority: 'callback_only',
     createdAt: now,
@@ -159,26 +165,15 @@ describe('Session mapper (US-2) — round-trips & identity invariant', () => {
     expect(back.id).toBe(baseRow.id);
     expect(back.tmuxSessionName).toBe(baseRow.tmuxSessionName);
     expect(back.hookTokenHash).toBe(baseRow.hookTokenHash);
-    expect(back.browserCdpEndpoint).toBe(baseRow.browserCdpEndpoint);
   });
 
-  it('threads tmux + hook token hash + CDP endpoint through ONE session_id', () => {
+  it('threads tmux + hook token hash through ONE session_id', () => {
     const session: Session = rowToSession(baseRow);
     // The single authoritative session record invariant (§4.2): one id binds all.
     expect(session.id).toBe(baseRow.id);
     expect(session.tmuxSessionName).toBeTruthy();
     expect(session.hookTokenHash).toBeTruthy();
-    expect(session.browserCdpEndpoint).toBeTruthy();
-  });
-
-  it('preserves nullable browser endpoint (session before browser attaches)', () => {
-    const noBrowser = rowToSession({
-      ...baseRow,
-      browserCdpEndpoint: null,
-      closedAt: now,
-    });
-    expect(noBrowser.browserCdpEndpoint).toBeNull();
-    expect(noBrowser.closedAt).toBe(now.toISOString());
+    expect(session.closedAt).toBeNull();
   });
 
   it('keeps the agent type within the shared AgentTypeEnum', () => {

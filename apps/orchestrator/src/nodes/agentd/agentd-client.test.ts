@@ -17,7 +17,7 @@ const identity = {
   nodeId: 'node-client-test',
   credential: '0123456789abcdef0123456789abcdef',
 };
-const capabilities = ['pty', 'resize', 'scrollback'];
+const capabilities = ['pty', 'resize', 'scrollback', 'listening_ports_v1'];
 const daemonVersion = '0.3.0';
 const sockets: Socket[] = [];
 const servers: net.Server[] = [];
@@ -109,6 +109,25 @@ describe('NodeAgentdClient v2 handshake', () => {
             credentialId: controlCredentialId(control.newCredential!),
           }),
         );
+      } else if (control.op === 'listeningPorts') {
+        socket.write(
+          encodeControl({
+            op: 'listeningPorts',
+            observedAt: '2026-07-14T00:00:00.000Z',
+            listeningPorts: [
+              {
+                observationKey: 'tcp:127.0.0.1:3000:123',
+                address: '127.0.0.1',
+                targetHost: '127.0.0.1',
+                port: 3000,
+                pid: 42,
+                process: 'vite',
+                cwd: '/work/project',
+                sessionId: 'session-a',
+              },
+            ],
+          }),
+        );
       }
     });
     await expect(client.hello(identity)).resolves.toMatchObject({
@@ -119,6 +138,22 @@ describe('NodeAgentdClient v2 handshake', () => {
     await expect(
       client.rotateCredential('new-credential-value-0123456789abcdef'),
     ).resolves.toBeUndefined();
+    await expect(client.listeningPorts()).resolves.toEqual({
+      ports: [
+        {
+          observationKey: 'tcp:127.0.0.1:3000:123',
+          address: '127.0.0.1',
+          targetHost: '127.0.0.1',
+          port: 3000,
+          pid: 42,
+          process: 'vite',
+          cwd: '/work/project',
+          sessionId: 'session-a',
+        },
+      ],
+      observedAt: '2026-07-14T00:00:00.000Z',
+      degradedReason: null,
+    });
     client.dispose();
   });
 

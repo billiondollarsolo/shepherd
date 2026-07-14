@@ -6,7 +6,7 @@
  *   2. inserts a user -> node -> project -> agent_session chain and reads it back;
  *   3. ASSERTS the single authoritative session record invariant (spec §4.2): the
  *      session_id (agent_sessions.id) threads the tmux session name, the hook
- *      token hash, and the browser CDP endpoint in ONE row;
+ *      token hash, and its owner in ONE row;
  *   4. asserts hook_token_hash uniqueness (per-session token cannot collide);
  *   5. asserts the events log accepts append-only writes ordered by (session_id, seq).
  *
@@ -21,7 +21,15 @@ import { createDb } from './client.js';
 import type { DbHandle } from './client.js';
 import { runMigrations } from './migrate.js';
 import { rowToSession } from './mappers.js';
-import { agentSessions, events, nodes, projects, users } from './schema.js';
+import {
+  agentSessions,
+  events,
+  nodes,
+  previewRuntimeSettings,
+  projectServices,
+  projects,
+  users,
+} from './schema.js';
 import { ensureIntegrationOwner } from '../../test/integration-owner.js';
 
 let handle: DbHandle;
@@ -76,13 +84,55 @@ async function seedChain(): Promise<{
 }
 
 describe('US-2 integration — node -> project -> agent_session chain', () => {
+  it('persists project services/preferences, rejects duplicates, and cascades project cleanup', async () => {
+    const { db } = handle;
+    const { ownerId, projectId } = await seedChain();
+    const [service] = await db
+      .insert(projectServices)
+      .values({
+        projectId,
+        targetHost: '127.0.0.1',
+        targetPort: 5173,
+        protocol: 'http',
+        label: 'Web',
+        autoForward: true,
+      })
+      .returning();
+    await expect(
+      db.insert(projectServices).values({
+        projectId,
+        targetHost: '127.0.0.1',
+        targetPort: 5173,
+        protocol: 'http',
+        label: 'Duplicate',
+      }),
+    ).rejects.toThrow();
+    await db.insert(previewRuntimeSettings).values({
+      userId: ownerId,
+      enabled: true,
+      defaultTtlMs: 3_600_000,
+      autoForwardPolicy: 'remembered_on_access',
+    });
+    expect(service).toMatchObject({ targetPort: 5173, autoForward: true });
+
+    await db.delete(projects).where(eq(projects.id, projectId));
+    expect(
+      await db.select().from(projectServices).where(eq(projectServices.projectId, projectId)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(previewRuntimeSettings)
+        .where(eq(previewRuntimeSettings.userId, ownerId)),
+    ).toHaveLength(1);
+  });
+
   it('inserts the chain and reads back the single authoritative session record', async () => {
     const { db } = handle;
     const { ownerId, nodeId, projectId } = await seedChain();
 
     const tmuxSessionName = `flock-${randomUUID().slice(0, 8)}`;
     const hookTokenHash = `argon2id$${randomUUID()}`;
-    const browserCdpEndpoint = `ws://127.0.0.1:9222/devtools/browser/${randomUUID()}`;
 
     const [inserted] = await db
       .insert(agentSessions)
@@ -92,7 +142,6 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
         agentType: 'claude-code',
         tmuxSessionName,
         workingDir: '/home/flock/work/demo',
-        browserCdpEndpoint,
         hookTokenHash,
         status: 'running',
         createdBy: ownerId,
@@ -108,16 +157,14 @@ describe('US-2 integration — node -> project -> agent_session chain', () => {
     expect(readBack).toBeDefined();
 
     // ---- THE INVARIANT (single authoritative session record, §4.2) ----
-    // One session_id (the row id) threads tmux name + hook token hash + CDP endpoint.
+    // One session_id (the row id) threads tmux name + hook token hash.
     const session = rowToSession(readBack!);
     expect(session.id).toBe(inserted!.id);
     expect(session.tmuxSessionName).toBe(tmuxSessionName);
     expect(session.hookTokenHash).toBe(hookTokenHash);
-    expect(session.browserCdpEndpoint).toBe(browserCdpEndpoint);
-    // All three identities live in ONE row keyed by the single session_id.
+    // Both identities live in ONE row keyed by the single session_id.
     expect(readBack!.tmuxSessionName).toBe(tmuxSessionName);
     expect(readBack!.hookTokenHash).toBe(hookTokenHash);
-    expect(readBack!.browserCdpEndpoint).toBe(browserCdpEndpoint);
   });
 
   it('enforces hook_token_hash uniqueness (per-session token cannot collide)', async () => {

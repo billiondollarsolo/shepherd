@@ -8,6 +8,7 @@ import {
   GitBranch,
   LayoutGrid,
   MoreVertical,
+  RadioTower,
   MoveRight,
   Pencil,
   Rows2,
@@ -49,6 +50,7 @@ export function AgentsSwitcher(): JSX.Element {
   const requestPenAction = usePaddock((s) => s.requestPenAction);
   const projectView = usePaddock((s) => s.projectView);
   const openProjectGit = usePaddock((s) => s.openProjectGit);
+  const openProjectPorts = usePaddock((s) => s.openProjectPorts);
   const statuses = useLiveStatuses();
   const updateSession = useUpdateSession();
   const contextProjectId =
@@ -130,18 +132,32 @@ export function AgentsSwitcher(): JSX.Element {
             </span>
           </div>
           {contextProject ? (
-            <button
-              type="button"
-              onClick={() => openProjectGit(contextProject.id)}
-              data-active={projectView === 'git' ? '1' : '0'}
-              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium ${
-                projectView === 'git'
-                  ? 'bg-flock-accent/15 text-flock-ink-primary'
-                  : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
-              }`}
-            >
-              <GitBranch className="size-3.5" /> Source Control
-            </button>
+            <div className="grid gap-0.5">
+              <button
+                type="button"
+                onClick={() => openProjectGit(contextProject.id)}
+                data-active={projectView === 'git' ? '1' : '0'}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium ${
+                  projectView === 'git'
+                    ? 'bg-flock-accent/15 text-flock-ink-primary'
+                    : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
+                }`}
+              >
+                <GitBranch className="size-3.5" /> Source Control
+              </button>
+              <button
+                type="button"
+                onClick={() => openProjectPorts(contextProject.id)}
+                data-active={projectView === 'ports' ? '1' : '0'}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium ${
+                  projectView === 'ports'
+                    ? 'bg-flock-accent/15 text-flock-ink-primary'
+                    : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
+                }`}
+              >
+                <RadioTower className="size-3.5" /> Ports
+              </button>
+            </div>
           ) : null}
         </div>
       ) : null}

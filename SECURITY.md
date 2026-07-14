@@ -7,8 +7,8 @@ minor release only.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.3.x   | Yes       |
-| < 0.3   | No        |
+| 0.4.x   | Yes       |
+| < 0.4   | No        |
 
 ## Reporting a vulnerability
 
@@ -23,10 +23,12 @@ within seven days and coordinate disclosure after a fix is available.
 ## Security boundary
 
 Shepherd is a single-user, self-hosted operator tool that can execute commands on
-configured nodes and mounts the Docker socket when browser containers are
-enabled. Anyone with Shepherd administrator access should be treated as having
-code-execution authority over those nodes and the Docker host.
+configured nodes and can forward explicitly selected node-local development
+services to the operator's browser. It does not require the Docker socket. Anyone
+with Shepherd administrator access should be treated as having code-execution
+authority over configured nodes and access to services forwarded through Shepherd.
 
 Run Shepherd behind HTTPS, keep it off untrusted public networks unless required,
-use dedicated nodes for autonomous agents, protect backups and runtime secrets,
-and never reuse the Shepherd master key or SSH credentials elsewhere.
+use dedicated nodes for autonomous agents, expose Preview only on trusted networks
+or isolated origins, protect backups and runtime secrets, and never reuse the
+Shepherd master key or SSH credentials elsewhere.

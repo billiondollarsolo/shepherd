@@ -17,8 +17,8 @@ back. Your browser is never in the data path — disconnect it and the agents ke
  Browser ──HTTPS/WS──▶ orchestrator ──SSH/socket──▶ flock-agentd (per node) ──PTY──▶ agent
    (viewer)              (brain + API)                (terminals + status)         (claude/…)
                             ├──▶ Postgres  (durable record — NOT on the live path)
-                            └──▶ browser worker ──▶ Docker socket
-                                  (fixed lifecycle API; only socket holder)
+                            └──▶ project Ports gateway ── SSH/socket ──▶ node loopback port
+                                  (isolated hostname or private pool + expiring capability)
 ```
 
 ## The three components
@@ -41,6 +41,10 @@ PTY live **inside the daemon**, not inside any client connection.
   plan) — and streams changes to the orchestrator.
 - **Metrics.** Node CPU / memory / disk / load, detected agent CLIs, and **per-session
   RSS + CPU%** (so you can see which agent is eating a box).
+- **Port discovery.** The optional `listening_ports_v1` capability reports a bounded,
+  read-only snapshot of loopback/wildcard HTTP candidates with short process, cwd, and
+  known-session association. Older compatible daemons remain usable through manual
+  project Port entry.
 
 Why a purpose-built daemon instead of tmux: see [flock-agentd-design.md](flock-agentd-design.md).
 
@@ -58,8 +62,11 @@ Always-on. Stateless on the hot path; durable state in Postgres.
   _translators_ map each agent's payload to the unified status (`status/translators/`).
 - **Transport.** An agentd client (with SSH bootstrap for remote nodes, a reverse tunnel
   so node-side agents can reach the hook endpoint, and reconnect-with-backoff).
-- **Per-session browsers** through an authenticated, least-privilege browser worker;
-  the orchestrator cannot issue arbitrary Docker operations.
+- **Project Ports & Preview** merge daemon listener observations, durable project labels,
+  and ephemeral forwards. Each forward dials only one explicit loopback port on the
+  project's node. HTTP, HTTPS upstreams, WebSocket, and HMR are preserved through either
+  an isolated hostname or a bounded private no-DNS port pool—without a Docker socket or
+  server-side browser.
 - **Auth, web push, secret store** (encryption at rest), verified vault recovery, and
   owner-only redacted diagnostics.
 - **Postgres** (via Drizzle) is the **system of record** — users, nodes, projects,
@@ -76,8 +83,7 @@ A PWA that renders the orchestrator's model. Internally the shell is the **paddo
   view switches and network reconnects.
 - Status dots + a telemetry bottom bar (model · tool · context % · tokens · cost).
 - A **source-control** panel (live git diff + stage/commit/push), a **plan** artifact,
-  an **activity** timeline, a node **file browser**, and the per-session **browser
-  screencast**.
+  an **activity** timeline, a node **file browser**, and secure **Remote Preview**.
 - State: **Zustand** store as the render driver; **TanStack Router/Query** for routing +
   server cache; live updates arrive over the status WebSocket.
 
@@ -142,9 +148,11 @@ Postgres is not involved in steps 2–4 — it only records the durable history.
   refuses to open a TCP control port without a secret.
 - Secrets (master key, DB password, SSH keys) are runtime-only — never in images, never
   in the repo.
-- The raw Docker socket exists only in the browser-worker container. Its API fixes the
-  image, network, command, labels, and resource limits and exposes no host-mount,
-  privileged, host-network, or unrelated-container operation.
+- No Shepherd service has Docker-socket access. Preview content is isolated onto a
+  dedicated wildcard origin or an explicitly acknowledged private port pool. The
+  gateway strips control-plane credentials and dials only the selected node's numeric
+  loopback port through its existing transport. Exact Origin enforcement protects every
+  unsafe browser mutation, including same-host/different-port Preview deployments.
 
 See [deployment.md](deployment.md) for how this maps onto the production stack, and the
 [agent integration matrix](agent-integration-matrix.md) for the per-agent specifics.

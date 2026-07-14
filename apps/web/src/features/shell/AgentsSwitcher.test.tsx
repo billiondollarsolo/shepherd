@@ -86,7 +86,6 @@ function makeSession(
     agentType: 'codex',
     tmuxSessionName: `flock-${id}`,
     workingDir: '/workspace/flock',
-    browserCdpEndpoint: null,
     hookTokenHash: 'hash',
     status,
     statusDetail: null,

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * Login throttle (T6) — in-memory per-key failure counter + lockout to blunt
  * online brute-force / credential-stuffing against `/api/auth/login` (and setup).
@@ -12,6 +14,19 @@ export interface ThrottleDecision {
   allowed: boolean;
   /** ms until the caller may retry, when not allowed. */
   retryAfterMs: number;
+}
+
+export interface LoginThrottleLike {
+  check(key: string): ThrottleDecision | Promise<ThrottleDecision>;
+  recordFailure(key: string): void | Promise<void>;
+  recordSuccess(key: string): void | Promise<void>;
+}
+
+/** Privacy-preserving key shared by the memory and durable implementations. */
+export function loginThrottleKey(ip: string | null | undefined, username: string): string {
+  return createHash('sha256')
+    .update(`${ip ?? 'unknown'}\0${username.trim().toLowerCase()}`)
+    .digest('hex');
 }
 
 export interface LoginThrottleOptions {
@@ -31,7 +46,7 @@ interface Entry {
   lastSeenAt: number;
 }
 
-export class LoginThrottle {
+export class LoginThrottle implements LoginThrottleLike {
   private readonly entries = new Map<string, Entry>();
   private readonly maxFailures: number;
   private readonly windowMs: number;
@@ -78,7 +93,7 @@ export class LoginThrottle {
 
   /** Build the throttle key from the request ip + attempted username. */
   static key(ip: string | null | undefined, username: string): string {
-    return `${ip ?? 'unknown'}|${username.toLowerCase()}`;
+    return loginThrottleKey(ip, username);
   }
 
   /** Whether this key may attempt a login now. */

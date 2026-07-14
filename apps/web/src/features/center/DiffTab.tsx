@@ -9,7 +9,7 @@
  * scrollable `<pre>`-style surface.
  *
  * The fetch impl is injectable so the component is unit-testable without a real
- * network, mirroring the Terminal/BrowserPane injectable-factory convention.
+ * network, mirroring the Terminal injectable-factory convention.
  */
 import { useEffect, useState } from 'react';
 

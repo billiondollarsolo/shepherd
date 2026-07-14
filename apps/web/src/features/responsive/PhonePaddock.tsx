@@ -6,6 +6,7 @@ import { PhoneView, type PhoneSession } from './PhoneView';
 import { PaddockDialogs } from '../paddock/PaddockDialogs';
 import { NodePage } from '../paddock/NodePage';
 import { ProjectGitPage } from '../paddock/ProjectGitPage';
+import { ProjectPortsPage } from '../preview/ProjectPortsPage';
 import { SettingsPage } from '../settings/SettingsPage';
 import { usePaddock } from '../../store/paddock';
 import { MobileViewportFrame } from './MobileViewportFrame';
@@ -42,6 +43,14 @@ export function PhonePaddock(): JSX.Element {
     return (
       <MobileViewportFrame testId="phone-project-git">
         <ProjectGitPage />
+        <PaddockDialogs />
+      </MobileViewportFrame>
+    );
+  }
+  if (projectView === 'ports') {
+    return (
+      <MobileViewportFrame testId="phone-project-ports">
+        <ProjectPortsPage />
         <PaddockDialogs />
       </MobileViewportFrame>
     );

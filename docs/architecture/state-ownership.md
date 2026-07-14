@@ -14,6 +14,8 @@ orchestrator maps are never substitutes for durable state.
 | Events and audit log                                         | PostgreSQL `events`, `audit_log`          | Shared event/audit enums                       | Append-oriented operational history. Retention is an operator policy until an automated policy is introduced.                 | Yes                                    |
 | Push subscriptions                                           | PostgreSQL `push_subscriptions`           | W3C subscription contract                      | Removed on unsubscribe, invalid endpoint cleanup, or owner deletion.                                                          | Yes                                    |
 | Per-project Pens and terminal placement                      | PostgreSQL `project_pens`                 | `ProjectPensV1`, optimistic integer `revision` | One document per owner/project; project or owner deletion cascades. A stale writer receives `409 pens_conflict`.              | Yes                                    |
+| Saved project web services                                   | PostgreSQL `project_services`             | Strict shared Project Port contracts           | Project deletion cascades; labels/protocol/auto-forward survive restart, but no active capability does.                       | Yes                                    |
+| Preview runtime preferences                                  | PostgreSQL `preview_runtime_settings`     | Strict runtime settings contract               | Owner deletion cascades; deployment hard caps always override runtime TTL/policy.                                             | Yes                                    |
 
 ## Durable cross-device owner preferences
 
@@ -66,7 +68,8 @@ The following are rebuilt or reconciled and are deliberately excluded from backu
 
 - TanStack Query response caches and derived node/project/session maps;
 - live status, hook translation state, PTY subscribers, scrollback subscriptions,
-  WebSocket clients, browser/CDP streams, and viewport/control ownership;
+  WebSocket clients, listener-discovery snapshots, active Project Preview allocations,
+  launch capability digests/cookies, and viewport/control ownership;
 - SSH connections, tunnels, agentd clients, connection attempts, health probes,
   rate-limit buckets, and login-throttle entries;
 - encryption-key material cached in process memory;

@@ -124,18 +124,26 @@ const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
 if (!compose.includes(`FLOCK_VERSION:-${canonical}`)) {
   throw new Error(`docker-compose.yml does not default to Shepherd ${canonical}`);
 }
-if (!compose.includes(`shepherd-session-chrome:\${FLOCK_VERSION:-${canonical}}`)) {
-  throw new Error(
-    `docker-compose.yml does not couple session Chrome to FLOCK_VERSION ${canonical}`,
-  );
+for (const image of ['orchestrator', 'web', 'caddy', 'postgres']) {
+  if (!compose.includes(`shepherd-${image}:\${FLOCK_VERSION:-${canonical}}`)) {
+    throw new Error(`docker-compose.yml does not couple shepherd-${image} to ${canonical}`);
+  }
 }
 
 const envExample = readFileSync(resolve(root, '.env.example'), 'utf8');
 if (!envExample.includes(`FLOCK_VERSION=${canonical}`)) {
   throw new Error(`.env.example does not pin FLOCK_VERSION=${canonical}`);
 }
-if (!envExample.includes('BROWSER_IMAGE=')) {
-  throw new Error('.env.example does not expose the optional BROWSER_IMAGE override');
+
+const releaseWorkflow = readFileSync(resolve(root, '.github/workflows/release-images.yml'), 'utf8');
+if (releaseWorkflow.includes('shepherd-session-chrome')) {
+  throw new Error('release workflow still publishes the retired session-Chrome image');
+}
+if (releaseWorkflow.includes('/api/sessions/$session_id/preview')) {
+  throw new Error('release workflow still calls the retired session-owned Preview API');
+}
+if (!releaseWorkflow.includes('/api/projects/$project_id/ports/$service_id/forward')) {
+  throw new Error('release workflow does not smoke the project-owned Ports API');
 }
 
 const changelog = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8');

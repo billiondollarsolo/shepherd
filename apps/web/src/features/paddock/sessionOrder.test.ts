@@ -10,7 +10,6 @@ function mk(id: string, createdAt: string): Session {
     agentType: 'claude-code',
     tmuxSessionName: id,
     workingDir: '/w',
-    browserCdpEndpoint: null,
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,

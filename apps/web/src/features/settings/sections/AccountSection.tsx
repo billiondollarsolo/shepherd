@@ -78,8 +78,8 @@ function ChangePasswordForm(): JSX.Element {
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
-    if (next.length < 8) {
-      toast.error('New password must be at least 8 characters.');
+    if (next.length < 12) {
+      toast.error('New password must be at least 12 characters.');
       return;
     }
     if (next !== confirm) {

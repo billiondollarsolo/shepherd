@@ -19,6 +19,7 @@ describe('collectDiagnostics', () => {
         sink,
         agentdHealth: async () => ({ enabled: true, nodes: {}, sessions: {} }),
         listNodes: async () => [{ id: 'node' }],
+        previewHealth: () => ({ enabled: true, active: 1, reason: null }),
         collectionSizes: () => ({ liveSessions: 1 }),
         env: { NODE_ENV: 'production', FLOCK_AGENTD_VERSION: '0.3.0' },
       }),
@@ -26,6 +27,7 @@ describe('collectDiagnostics', () => {
     expect(result.health.database.status).toBe('ready');
     expect(result.health.migrations.count).toBe(21);
     expect(result.health.nodes.count).toBe(1);
+    expect(result.health.preview).toEqual({ status: 'available', active: 1, reason: null });
     expect(JSON.stringify(result)).not.toContain('canary-secret');
   });
 });

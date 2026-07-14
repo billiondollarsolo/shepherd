@@ -8,6 +8,8 @@
  * it holds no status model, no daemon, no agent logic.
  */
 import { spawn as spawnChild } from 'node:child_process';
+import { connect } from 'node:net';
+import type { Duplex } from 'node:stream';
 
 import { spawn as spawnPty, type IPty } from 'node-pty';
 
@@ -92,6 +94,22 @@ export class LocalTransport implements NodeTransport {
   private readonly live = new Set<LocalPtyHandle>();
   /** Underlying node-pty instances, so dispose can force-kill them. */
   private readonly livePtys = new Set<IPty>();
+
+  async dialTcp(port: number, host: '127.0.0.1' | '::1' = '127.0.0.1'): Promise<Duplex> {
+    if (this.disposed) throw new TransportDisposedError(this.kind);
+    return await new Promise<Duplex>((resolve, reject) => {
+      const socket = connect({ host, port });
+      const onError = (error: Error): void => {
+        socket.destroy();
+        reject(error);
+      };
+      socket.once('error', onError);
+      socket.once('connect', () => {
+        socket.off('error', onError);
+        resolve(socket);
+      });
+    });
+  }
 
   async exec(command: string[], options: ExecOptions = {}): Promise<ExecResult> {
     if (this.disposed) throw new TransportDisposedError(this.kind);

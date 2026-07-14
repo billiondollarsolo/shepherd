@@ -31,6 +31,17 @@ beforeEach(() => {
 });
 
 describe('AuthScreen first-run confirmation', () => {
+  it('makes an explicitly unencrypted deployment visible before sign-in', () => {
+    render(
+      <AuthScreen
+        initialMode="signin"
+        transportWarning="Private HTTP mode — traffic is not encrypted."
+        onAuthenticated={() => {}}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/traffic is not encrypted/i);
+  });
+
   it('uses the current Shepherd hierarchy and capability terminology', () => {
     render(<AuthScreen initialMode="signin" onAuthenticated={() => {}} />);
 
@@ -48,6 +59,53 @@ describe('AuthScreen first-run confirmation', () => {
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument();
   });
 
+  it('requires and submits the server bootstrap token when configured', async () => {
+    setupOwner.mockResolvedValue({ user: {} });
+    login.mockResolvedValue({ user: {} });
+    me.mockResolvedValue({
+      user: {
+        id: '11111111-1111-4111-8111-111111111111',
+        username: 'admin',
+        displayName: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        lastLoginAt: null,
+        isActive: true,
+      },
+    });
+    render(<AuthScreen initialMode="setup" setupTokenRequired onAuthenticated={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText('Setup token'), {
+      target: { value: 'bootstrap-secret' },
+    });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password12345' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'password12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
+
+    await waitFor(() =>
+      expect(setupOwner).toHaveBeenCalledWith({
+        username: 'admin',
+        password: 'password12345',
+        setupToken: 'bootstrap-secret',
+      }),
+    );
+  });
+
+  it('blocks production setup when the bootstrap token is empty', async () => {
+    render(<AuthScreen initialMode="setup" setupTokenRequired onAuthenticated={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password12345' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'password12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/setup token/i));
+    expect(setupOwner).not.toHaveBeenCalled();
+  });
+
   it('does NOT show Confirm password in sign-in mode', () => {
     render(<AuthScreen initialMode="signin" onAuthenticated={() => {}} />);
     expect(screen.queryByLabelText('Confirm password')).toBeNull();
@@ -56,7 +114,7 @@ describe('AuthScreen first-run confirmation', () => {
   it('blocks setup and never calls the API when passwords do not match', async () => {
     render(<AuthScreen initialMode="setup" onAuthenticated={() => {}} />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password12345' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: 'password999' },
     });
@@ -67,14 +125,14 @@ describe('AuthScreen first-run confirmation', () => {
     expect(login).not.toHaveBeenCalled();
   });
 
-  it('blocks setup when the password is shorter than 8 chars', async () => {
+  it('blocks setup when the password is shorter than 12 chars', async () => {
     render(<AuthScreen initialMode="setup" onAuthenticated={() => {}} />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
     fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/at least 8/i));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/at least 12/i));
     expect(setupOwner).not.toHaveBeenCalled();
   });
 

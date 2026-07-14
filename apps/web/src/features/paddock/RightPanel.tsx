@@ -4,7 +4,6 @@
  * flat tabs:
  *   • Talk — the conversation (Chat) + Activity timeline/plan
  *   • Code — Source Control (diff), Files, Find-in-Files
- *   • Web  — the session browser
  * Each context keeps its sub-views; the store's `rightTab` is still the active
  * leaf, so adaptive surfacing (SessionPane) just calls openRight(<leaf>).
  */
@@ -14,7 +13,6 @@ import {
   Code2,
   FolderTree,
   GitBranch,
-  Globe,
   MessageSquare,
   Search,
   type LucideIcon,
@@ -26,7 +24,6 @@ import { ActivitySidebar } from '../activity';
 import { usePaddock, type RightTab } from '../../store/paddock';
 import { useSessionEvents, useSessionPlan, useUpdateSession } from '../../data/queries';
 
-const BrowserPane = lazy(() => import('../browser/BrowserPane'));
 const SourceControlPanel = lazy(() => import('../center/SourceControlPanel'));
 const FilesPanel = lazy(() => import('../files/FilesPanel'));
 const SearchPanel = lazy(() => import('../search/SearchPanel'));
@@ -75,12 +72,6 @@ const CONTEXTS: ReadonlyArray<Context> = [
       { id: 'files', label: 'Files', icon: FolderTree },
       { id: 'search', label: 'Find', icon: Search },
     ],
-  },
-  {
-    id: 'web',
-    label: 'Web',
-    icon: Globe,
-    tabs: [{ id: 'browser', label: 'Browser', icon: Globe }],
   },
 ];
 
@@ -186,7 +177,6 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
           ) : null}
           {tab === 'files' ? <FilesPanel key={session.id} session={session} /> : null}
           {tab === 'search' ? <SearchPanel key={session.id} session={session} /> : null}
-          {tab === 'browser' ? <BrowserPane key={session.id} sessionId={session.id} /> : null}
           {tab === 'diff' ? <SourceControlPanel key={session.id} sessionId={session.id} /> : null}
         </Suspense>
       </div>

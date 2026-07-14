@@ -9,7 +9,7 @@
  * terminates any that miss the next pong (a half-open / dead socket), keeping
  * live connections healthy through proxies.
  *
- * Applied to every orchestrator WS server (pty / status / screencast).
+ * Applied to every orchestrator WS server (pty / status).
  */
 import type { WebSocket, WebSocketServer } from 'ws';
 

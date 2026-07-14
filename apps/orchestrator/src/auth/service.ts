@@ -15,8 +15,8 @@
  * `secret_access` row when it reads the stored credential material to verify a
  * login, so credential reads are auditable too.
  */
-import { randomUUID } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { and, eq, gt, isNull, ne } from 'drizzle-orm';
 
 /**
  * Session ids are UUIDs (the cookie carries one verbatim). A malformed cookie
@@ -76,6 +76,14 @@ export class InvalidCredentialsError extends Error {
   }
 }
 
+/** Raised when fresh-install setup does not present the configured bootstrap token. */
+export class InvalidSetupTokenError extends Error {
+  constructor() {
+    super('The installation setup token is invalid.');
+    this.name = 'InvalidSetupTokenError';
+  }
+}
+
 /** Context carried with audited actions (network origin). */
 export interface RequestContext {
   ip?: string | null;
@@ -97,15 +105,33 @@ export function rowToUser(row: UserRow): User {
 export interface AuthServiceDeps {
   db: Database;
   audit: AuthAuditRecorder;
+  /** File-loaded bootstrap token; required by production startup policy. */
+  setupToken?: string;
 }
 
 export class AuthService {
   private readonly db: Database;
   private readonly audit: AuthAuditRecorder;
+  private readonly setupToken?: string;
 
   constructor(deps: AuthServiceDeps) {
     this.db = deps.db;
     this.audit = deps.audit;
+    this.setupToken = deps.setupToken;
+  }
+
+  /** Whether first-run setup must present the out-of-band bootstrap token. */
+  requiresSetupToken(): boolean {
+    return this.setupToken !== undefined;
+  }
+
+  private setupTokenMatches(candidate: string | undefined): boolean {
+    if (this.setupToken === undefined) return true;
+    const actual = createHash('sha256')
+      .update(candidate ?? '')
+      .digest();
+    const expected = createHash('sha256').update(this.setupToken).digest();
+    return timingSafeEqual(actual, expected);
   }
 
   /** True once the installation owner exists (gates first-run setup). */
@@ -119,11 +145,14 @@ export class AuthService {
    * (→ 409) if setup is already complete. Stores an argon2id hash only.
    */
   async setupInitialOwner(
-    input: { username: string; password: string },
+    input: { username: string; password: string; setupToken?: string },
     ctx: RequestContext = {},
   ): Promise<User> {
     if (await this.ownerExists()) {
       throw new OwnerAlreadyExistsError();
+    }
+    if (!this.setupTokenMatches(input.setupToken)) {
+      throw new InvalidSetupTokenError();
     }
     const passwordHash = await hashPassword(input.password);
     let row: UserRow;
@@ -285,6 +314,7 @@ export class AuthService {
   async changePassword(
     userId: string,
     input: { currentPassword: string; newPassword: string },
+    currentSessionId: string | null,
     ctx: RequestContext = {},
   ): Promise<void> {
     const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -296,7 +326,20 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
     const passwordHash = await hashPassword(input.newPassword);
-    await this.db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    const revokedAt = new Date();
+    await this.db.transaction(async (tx) => {
+      await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
+      await tx
+        .update(sessionsAuth)
+        .set({ revokedAt })
+        .where(
+          and(
+            eq(sessionsAuth.userId, userId),
+            isNull(sessionsAuth.revokedAt),
+            ...(currentSessionId ? [ne(sessionsAuth.id, currentSessionId)] : []),
+          ),
+        );
+    });
     // No dedicated audit action exists; record the credential write as secret_access.
     await this.audit.record({
       action: 'secret_access',
@@ -304,7 +347,7 @@ export class AuthService {
       targetType: 'user_credential',
       targetId: userId,
       ip: ctx.ip ?? null,
-      detail: { purpose: 'password_change' },
+      detail: { purpose: 'password_change', otherSessionsRevoked: true },
     });
   }
 

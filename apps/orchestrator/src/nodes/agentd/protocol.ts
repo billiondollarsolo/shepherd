@@ -39,6 +39,9 @@ export interface AgentdControl {
   code?: number;
   message?: string;
   sessions?: Array<{ id: string; kind: string; cwd: string }>;
+  listeningPorts?: AgentdListeningPort[];
+  observedAt?: string;
+  discoveryError?: string;
   workspace?: string;
   layout?: unknown;
   // status (daemon→client): derived agent status for session `id`.
@@ -60,6 +63,17 @@ export interface AgentdControl {
   // Native hook-config injection (US-19) on `open` (client→daemon).
   configFiles?: Record<string, string>;
   configBaseSubdir?: string;
+}
+
+export interface AgentdListeningPort {
+  observationKey: string;
+  address: string;
+  targetHost: '127.0.0.1' | '::1';
+  port: number;
+  pid?: number;
+  process?: string;
+  cwd?: string;
+  sessionId?: string;
 }
 
 /**

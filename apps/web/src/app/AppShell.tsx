@@ -3,7 +3,7 @@
  *
  *   ┌──────────────┬───────────────────────────┬──────────────┐
  *   │  tree        │  session pane             │  activity    │
- *   │ (node→proj→  │  (terminal | browser |    │  sidebar     │
+ *   │ (node→proj→  │  (terminal | preview |    │  sidebar     │
  *   │  session)    │   diff land here later)   │              │
  *   ├──────────────┴───────────────────────────┴──────────────┤
  *   │  shell drawer (Cmd+J, toggleable)                        │
@@ -14,7 +14,7 @@
  * is a labelled ARIA landmark and carries a stable `data-slot` + `data-testid`
  * so later UI stories mount their content here without touching this file:
  *   - tree     → US-32 supervision tree
- *   - session  → US-33 center tab group (Terminal | Browser | Diff)
+ *   - session  → center tab group (Terminal | Preview | Diff)
  *   - activity → US-34 right activity sidebar
  *   - drawer   → US-35 second shell in the working dir
  *

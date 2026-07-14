@@ -28,6 +28,11 @@ import type {
   SessionPlan,
   UpdateNodeRequest,
   UpdateProjectAgentPolicyRequest,
+  SaveProjectPortRequest,
+  UpdateProjectPortRequest,
+  UpdatePreviewRuntimeSettingsRequest,
+  ListProjectPortsResponse,
+  DeploymentPreviewSettingsResponse,
 } from '@flock/shared';
 import {
   commitGit,
@@ -53,6 +58,18 @@ import {
   unstageGitFiles,
   updateSession,
   upgradeNodeAgentd,
+  listProjectPorts,
+  refreshProjectPorts,
+  activateProjectPorts,
+  saveProjectPort,
+  updateProjectPort,
+  forgetProjectPort,
+  startProjectForward,
+  relaunchProjectForward,
+  stopProjectForward,
+  getDeploymentPreviewSettings,
+  updateDeploymentPreviewSettings,
+  testDeploymentPreviewRouting,
 } from './treeApi';
 import type { UpdateSessionRequest } from '@flock/shared';
 import type { ListNodeDirResponse, NodeFileReadResponse, NodeFsTreeResponse } from '@flock/shared';
@@ -77,6 +94,8 @@ export const qk = {
   agentdStatus: ['agentd-status'] as const,
   stack: (nodeId: string, path: string) => ['stack', nodeId, path] as const,
   fleetActivity: ['fleet-activity'] as const,
+  projectPorts: (projectId: string) => ['project-ports', projectId] as const,
+  deploymentPreview: ['deployment-preview'] as const,
 };
 
 /** Core fleet queries retry continuously only while connectivity is degraded.
@@ -116,6 +135,124 @@ export function useSessions(): UseQueryResult<Session[]> {
     // reconcile). Same-client create/terminate invalidates this immediately.
     refetchInterval: (query) =>
       query.state.status === 'error' ? CORE_RECOVERY_INTERVAL_MS : 30_000,
+  });
+}
+
+export function useProjectPorts(
+  projectId: string | null,
+): UseQueryResult<ListProjectPortsResponse> {
+  return useQuery({
+    queryKey: qk.projectPorts(projectId ?? ''),
+    enabled: projectId !== null,
+    queryFn: () => listProjectPorts(projectId as string),
+    refetchInterval: 4_000,
+    retry: false,
+  });
+}
+
+export function useRefreshProjectPorts(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => refreshProjectPorts(projectId as string),
+    onSuccess: (data) => queryClient.setQueryData(qk.projectPorts(projectId as string), data),
+    onError: (error) => toast.error(errMessage(error, 'Could not refresh project ports.')),
+  });
+}
+
+export function useActivateProjectPorts(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => activateProjectPorts(projectId as string),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+  });
+}
+
+export function useSaveProjectPort(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveProjectPortRequest) => saveProjectPort(projectId as string, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not save project port.')),
+  });
+}
+
+export function useUpdateProjectPort(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serviceId, input }: { serviceId: string; input: UpdateProjectPortRequest }) =>
+      updateProjectPort(projectId as string, serviceId, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not update project port.')),
+  });
+}
+
+export function useForgetProjectPort(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (serviceId: string) => forgetProjectPort(projectId as string, serviceId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not forget project port.')),
+  });
+}
+
+export function useStartProjectForward(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serviceId, ttlMs }: { serviceId: string; ttlMs?: number }) =>
+      startProjectForward(projectId as string, serviceId, ttlMs),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not start Preview.')),
+  });
+}
+
+export function useRelaunchProjectForward(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (serviceId: string) => relaunchProjectForward(projectId as string, serviceId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not reopen Preview.')),
+  });
+}
+
+export function useStopProjectForward(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (serviceId: string) => stopProjectForward(projectId as string, serviceId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: qk.projectPorts(projectId as string) }),
+    onError: (error) => toast.error(errMessage(error, 'Could not stop Preview.')),
+  });
+}
+
+export function useDeploymentPreviewSettings(): UseQueryResult<DeploymentPreviewSettingsResponse> {
+  return useQuery({
+    queryKey: qk.deploymentPreview,
+    queryFn: getDeploymentPreviewSettings,
+    refetchInterval: 10_000,
+    retry: false,
+  });
+}
+
+export function useUpdateDeploymentPreviewSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdatePreviewRuntimeSettingsRequest) =>
+      updateDeploymentPreviewSettings(input),
+    onSuccess: (data) => queryClient.setQueryData(qk.deploymentPreview, data),
+    onError: (error) => toast.error(errMessage(error, 'Could not update Preview settings.')),
+  });
+}
+
+export function useTestDeploymentPreviewRouting() {
+  return useMutation({
+    mutationFn: testDeploymentPreviewRouting,
+    onError: (error) => toast.error(errMessage(error, 'Could not test Preview routing.')),
   });
 }
 

@@ -8,6 +8,8 @@
  * POSIX shell + node-pty, both present in the dev/CI image (Dockerfile.dev).
  */
 import { describe, expect, it } from 'vitest';
+import { createServer } from 'node:net';
+import type { AddressInfo } from 'node:net';
 
 import { LocalTransport } from './local-transport.js';
 import { runTransportContract } from './transport-contract.js';
@@ -47,5 +49,25 @@ describe('LocalTransport — local-specific behaviour', () => {
     const t = new LocalTransport();
     await expect(t.exec(['this-binary-should-not-exist-flock'])).rejects.toBeDefined();
     await t.dispose();
+  });
+
+  it('dials only the selected numeric loopback endpoint', async () => {
+    const server = createServer((socket) => socket.end('ready'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const transport = new LocalTransport();
+    try {
+      const socket = await transport.dialTcp(port, '127.0.0.1');
+      const body = await new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        socket.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        socket.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        socket.on('error', reject);
+      });
+      expect(body).toBe('ready');
+    } finally {
+      await transport.dispose();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

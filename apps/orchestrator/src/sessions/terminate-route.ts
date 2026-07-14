@@ -1,7 +1,7 @@
 /**
  * Session terminate route (US-13, spec §8.1, FR-S5).
  *
- *   DELETE /api/sessions/:id   kill tmux + browser harness, mark the record
+ *   DELETE /api/sessions/:id   kill the daemon session, revoke capabilities, mark the record
  *                              closed, write a `session_terminate` audit row.
  *
  * Authed via the session cookie (NFR-SEC6): the `requireAuth` preHandler rejects

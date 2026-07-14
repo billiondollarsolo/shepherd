@@ -215,6 +215,12 @@ func serve(args []string) {
 			fatal("listen unix", err)
 		}
 		if controlGID != nil {
+			// os.Chown takes int even though Linux gid_t is unsigned. Refuse a
+			// value that the current architecture cannot represent instead of
+			// wrapping a valid group id into a negative integer on 32-bit hosts.
+			if uint64(*controlGID) > uint64(^uint(0)>>1) {
+				fatal("chown unix socket", fmt.Errorf("control group id %d exceeds platform int range", *controlGID))
+			}
 			if err := os.Chown(*socket, 0, int(*controlGID)); err != nil {
 				fatal("chown unix socket", err)
 			}

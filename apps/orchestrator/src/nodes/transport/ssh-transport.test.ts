@@ -1,8 +1,10 @@
 import { Buffer } from 'node:buffer';
+import { PassThrough } from 'node:stream';
+import type { Client } from 'ssh2';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { runtimeAwareRemoteCommand } from './ssh-transport.js';
+import { runtimeAwareRemoteCommand, SshTransport } from './ssh-transport.js';
 
 describe('runtimeAwareRemoteCommand', () => {
   it('probes the prepared-node helper before selecting the runtime identity', () => {
@@ -19,5 +21,27 @@ describe('runtimeAwareRemoteCommand', () => {
 
     expect(remote).toContain('else exec /bin/sh -c');
     expect(remote).toContain(`'\\''%s'\\''`);
+  });
+});
+
+describe('SshTransport.dialTcp', () => {
+  it('uses SSH direct-tcpip for the exact selected loopback address and port', async () => {
+    const channel = new PassThrough();
+    const forwardOut = vi.fn(
+      (
+        _sourceHost: string,
+        _sourcePort: number,
+        _destinationHost: string,
+        _destinationPort: number,
+        callback: (error: Error | undefined, stream: PassThrough) => void,
+      ) => {
+        callback(undefined, channel);
+        return true;
+      },
+    );
+    const transport = new SshTransport({ forwardOut } as unknown as Client);
+    await expect(transport.dialTcp(5173, '::1')).resolves.toBe(channel);
+    expect(forwardOut).toHaveBeenCalledWith('127.0.0.1', 0, '::1', 5173, expect.any(Function));
+    await transport.dispose();
   });
 });

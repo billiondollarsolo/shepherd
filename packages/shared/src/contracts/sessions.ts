@@ -93,7 +93,7 @@ export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 
 /**
  * DELETE /api/sessions/:id — terminate (US-13, FR-S5). The orchestrator kills
- * the tmux session + any per-session browser harness, marks the authoritative
+ * the daemon session, revokes its capabilities, marks the authoritative
  * record closed (sets `closed_at`), and writes a `session_terminate` audit row.
  * The response echoes the closed session id and the close timestamp.
  */

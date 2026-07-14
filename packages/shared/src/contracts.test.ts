@@ -22,7 +22,6 @@ function sampleSession(): SessionRecord {
     agentType: 'codex',
     tmuxSessionName: `flock-${SESSION_ID}`,
     workingDir: '/home/dev/project',
-    browserCdpEndpoint: null,
     hookTokenHash: 'hash',
     status: 'starting',
     statusDetail: null,
@@ -62,7 +61,6 @@ describe('REST contract round-trips (spec §8.1)', () => {
     expect(parsed).not.toHaveProperty('hookToken');
     expect(parsed.session).not.toHaveProperty('hookTokenHash');
     expect(parsed.session).not.toHaveProperty('tmuxSessionName');
-    expect(parsed.session).not.toHaveProperty('browserCdpEndpoint');
     expect(parsed.session).not.toHaveProperty('createdBy');
     expect(parsed.session.id).toBe(SESSION_ID);
     // Round-trip is idempotent.

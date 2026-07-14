@@ -5,8 +5,7 @@
  * the US-38 acceptance criteria and the mapped NFRs:
  *
  *   - `docker compose up` brings up orchestrator + Postgres                (US-38)
- *   - per-session browsers are managed by a constrained worker that alone
- *     receives the Docker socket                                             (NFR-DEP1)
+ *   - no service receives the Docker socket; Preview is origin-isolated      (NFR-DEP1)
  *   - secrets via env / secret files, not baked into images                 (NFR-DEP2)
  *
  * These are structural assertions over the deploy artifacts (no live Docker
@@ -24,13 +23,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..', '..');
 
 const composePath = resolve(repoRoot, 'docker-compose.yml');
+const readmePath = resolve(repoRoot, 'README.md');
+const privateHttpComposePath = resolve(repoRoot, 'docker-compose.private-http.yml');
+const externalProxyComposePath = resolve(repoRoot, 'docker-compose.external-proxy.yml');
 const orchDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.orchestrator');
 const orchEntrypoint = resolve(repoRoot, 'docker', 'orchestrator-entrypoint.sh');
-const browserWorkerEntrypoint = resolve(repoRoot, 'docker', 'browser-worker-entrypoint.sh');
 const secretStager = resolve(repoRoot, 'docker', 'stage-secret.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
+const caddyDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.caddy');
+const postgresDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.postgres');
 const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
+const privateHttpCaddyfile = resolve(repoRoot, 'docker', 'Caddyfile.private-http');
 const nodePrepare = resolve(repoRoot, 'scripts', 'flock-node-prepare.sh');
 const upgradeScript = resolve(repoRoot, 'scripts', 'flock-upgrade.sh');
 const vagrantProvision = resolve(repoRoot, 'vagrant', 'provision.sh');
@@ -80,6 +84,10 @@ describe('US-38: production deploy artifacts exist', () => {
   it('ships a web Dockerfile that serves static assets', () => {
     expect(existsSync(webDockerfile)).toBe(true);
   });
+  it('ships security-patched edge and database Dockerfiles', () => {
+    expect(existsSync(caddyDockerfile)).toBe(true);
+    expect(existsSync(postgresDockerfile)).toBe(true);
+  });
   it('ships a .env.example template', () => {
     expect(existsSync(envExample)).toBe(true);
   });
@@ -100,8 +108,8 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
     expect(compose).toMatch(/^\s{2}web:/m);
   });
 
-  it('declares the constrained browser worker', () => {
-    expect(compose).toMatch(/^\s{2}browser-worker:/m);
+  it('declares the TLS edge service', () => {
+    expect(compose).toMatch(/^\s{2}caddy:/m);
   });
 
   it('orchestrator depends on postgres being healthy', () => {
@@ -118,54 +126,39 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
   });
 });
 
-describe('NFR-DEP1: Docker access is isolated behind the browser worker', () => {
+describe('NFR-DEP1: Docker access is absent and Preview is isolated', () => {
   const compose = read(composePath);
 
-  it('does NOT declare any static per-session browser/chrome service', () => {
-    // browser-worker is infrastructure, not a per-session Chrome service.
-    // Scope the scan to the `services:` block so top-level volumes/networks/
-    // secrets keys are not mistaken for services.
+  it('declares only the four production services', () => {
     const servicesBlock = extractTopLevelBlock(compose, 'services');
     const serviceNames = Array.from(
       servicesBlock.matchAll(/^\s{2}([a-z0-9_-]+):\s*$/gm),
       (m) => m[1],
     );
-    expect(serviceNames).toEqual(expect.arrayContaining(['orchestrator', 'postgres', 'web']));
-    // No per-session browser/chrome service is statically declared.
-    expect(servicesBlock).not.toMatch(/^\s{2}(chrome|chromium)[a-z0-9_-]*:/m);
-    expect(serviceNames.sort()).toEqual([
-      'browser-worker',
-      'caddy',
-      'orchestrator',
-      'postgres',
-      'web',
-    ]);
+    expect(serviceNames.sort()).toEqual(['caddy', 'orchestrator', 'postgres', 'web']);
   });
 
-  it('mounts the Docker socket only into browser-worker', () => {
-    expect(extractServiceBlock(compose, 'orchestrator')).not.toMatch(/\/var\/run\/docker\.sock/);
-    expect(extractServiceBlock(compose, 'browser-worker')).toMatch(
-      /:\s*\/var\/run\/docker\.sock\b/,
-    );
-    expect(compose.match(/^\s*-\s+.*:\/var\/run\/docker\.sock\b/gm)).toHaveLength(1);
+  it('mounts no Docker socket into any service', () => {
+    expect(compose).not.toMatch(/\/var\/run\/docker\.sock|DOCKER_HOST|DOCKER_SOCKET/);
   });
 
-  it('uses a separate OS identity and token-authenticated fixed worker API', () => {
-    const entry = read(browserWorkerEntrypoint);
-    const orchestratorEntry = read(orchEntrypoint);
-    expect(entry).toMatch(/WORKER_USER=flock-browser/);
-    expect(entry).toMatch(/BROWSER_WORKER_TOKEN_FILE/);
-    expect(entry).toMatch(/flock-stage-secret/);
-    expect(entry).toMatch(/\/run\/flock-browser-secrets\/browser_worker_token/);
-    expect(orchestratorEntry).toMatch(/flock-stage-secret/);
-    expect(orchestratorEntry).toMatch(/\/run\/flock-control-secrets\/browser_worker_token/);
-    expect(entry).toMatch(/dist\/browser\/worker\.js/);
-    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/BROWSER_WORKER_URL/);
+  it('uses a dedicated preview suffix and private gateway port', () => {
+    const edgeConfig = read(caddyfile);
+    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/FLOCK_PREVIEW_DOMAIN/);
+    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/FLOCK_PREVIEW_PORT:\s*8081/);
+    expect(extractServiceBlock(compose, 'orchestrator')).not.toMatch(/^\s+ports:/m);
+    expect(edgeConfig).toMatch(/on_demand_tls[\s\S]*_shepherd\/caddy-ask/);
+    expect(edgeConfig).toMatch(/\*\.\{\$FLOCK_PREVIEW_DOMAIN:preview\.localhost\}/);
+    expect(edgeConfig).not.toMatch(/^\*\.preview\.localhost\s*\{/m);
   });
 
-  it('configures a browser image + concurrency cap for runtime launches', () => {
-    expect(compose).toMatch(/BROWSER_IMAGE:/);
-    expect(compose).toMatch(/BROWSER_MAX_CONCURRENT:/);
+  it('hardens every long-running container', () => {
+    for (const service of ['caddy', 'postgres', 'orchestrator', 'web']) {
+      const block = extractServiceBlock(compose, service);
+      expect(block).toMatch(/read_only:\s*true/);
+      expect(block).toMatch(/no-new-privileges:true/);
+      expect(block).toMatch(/pids_limit:/);
+    }
   });
 });
 
@@ -179,9 +172,7 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
     expect(compose).toMatch(/^secrets:/m);
     expect(compose).toMatch(/flock_master_key:[\s\S]*file:\s*\.\/secrets\/flock_master_key/);
     expect(compose).toMatch(/postgres_password:[\s\S]*file:\s*\.\/secrets\/postgres_password/);
-    expect(compose).toMatch(
-      /browser_worker_token:[\s\S]*file:\s*\.\/secrets\/browser_worker_token/,
-    );
+    expect(compose).toMatch(/setup_token:[\s\S]*file:\s*\.\/secrets\/setup_token/);
   });
 
   it('stages 0600 host secrets before dropping to non-root identities', () => {
@@ -230,7 +221,6 @@ describe('NFR-SEC1: production browser security headers', () => {
   it('documents every necessary CSP exception next to the policy', () => {
     expect(caddy).toMatch(/Ghostty needs WebAssembly/);
     expect(caddy).toMatch(/React components use[\s\S]*runtime style attributes/);
-    expect(caddy).toMatch(/Screencast frames[\s\S]*data:image\/jpeg/);
   });
 
   it('sets permissions and cross-origin policies', () => {
@@ -239,6 +229,79 @@ describe('NFR-SEC1: production browser security headers', () => {
     expect(caddy).toMatch(/microphone=\(\)/);
     expect(caddy).toMatch(/Cross-Origin-Opener-Policy "same-origin"/);
     expect(caddy).toMatch(/Cross-Origin-Resource-Policy "same-origin"/);
+  });
+});
+
+describe('explicit deployment modes', () => {
+  const compose = read(composePath);
+  const privateCompose = read(privateHttpComposePath);
+  const externalCompose = read(externalProxyComposePath);
+  const privateCaddy = read(privateHttpCaddyfile);
+
+  it('keeps bundled TLS as the base-stack default', () => {
+    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(
+      /FLOCK_DEPLOYMENT_MODE:\s*builtin-tls/,
+    );
+    expect(extractServiceBlock(compose, 'caddy')).toMatch(/'\$\{HTTPS_HOST_PORT:-443\}:443'/);
+  });
+
+  it('requires an explicit acknowledgement for private HTTP', () => {
+    expect(privateCompose).toMatch(/FLOCK_DEPLOYMENT_MODE:\s*private-http/);
+    expect(privateCompose).toMatch(/FLOCK_ALLOW_INSECURE_HTTP:\s*\$\{[^}]+:\?/);
+    expect(privateCompose).toMatch(/Caddyfile\.private-http/);
+    expect(privateCaddy).not.toMatch(/^\s*Strict-Transport-Security\s/m);
+    expect(privateCaddy).not.toMatch(/Content-Security-Policy[^\n]*upgrade-insecure-requests/);
+    expect(privateCaddy).toMatch(/Content-Security-Policy/);
+    expect(privateCaddy).toMatch(/preview\.invalid/);
+  });
+
+  it('publishes a bounded Preview-only port pool for no-DNS private deployments', () => {
+    const orchestrator = extractServiceBlock(privateCompose, 'orchestrator');
+    expect(orchestrator).toMatch(/FLOCK_PREVIEW_BACKEND:\s*\$\{FLOCK_PREVIEW_BACKEND:-port-pool\}/);
+    expect(orchestrator).toMatch(
+      /FLOCK_PREVIEW_PORT_RANGE:\s*\$\{FLOCK_PREVIEW_PORT_RANGE:-12000-12031\}/,
+    );
+    expect(orchestrator).toMatch(/FLOCK_PREVIEW_POOL_HOST:\s*0\.0\.0\.0/);
+    expect(orchestrator).toMatch(
+      /\$\{FLOCK_PREVIEW_BIND_ADDRESS:-0\.0\.0\.0\}:\$\{FLOCK_PREVIEW_PORT_RANGE:-12000-12031\}:\$\{FLOCK_PREVIEW_PORT_RANGE:-12000-12031\}/,
+    );
+    expect(extractServiceBlock(privateCompose, 'caddy')).not.toMatch(/12000-12031/);
+  });
+
+  it('fails embedded private Preview closed unless finite frame origins are configured', () => {
+    expect(privateCaddy).toMatch(/frame-src \{\$FLOCK_PREVIEW_FRAME_SOURCES:'none'\}/);
+    expect(privateCaddy).not.toMatch(/frame-src\s+(?:\*|https?:)(?:[;"\s]|$)/);
+    expect(extractServiceBlock(privateCompose, 'orchestrator')).toMatch(
+      /FLOCK_PREVIEW_FRAME_SOURCES/,
+    );
+  });
+
+  it('binds external-proxy upstreams to loopback by default and retains TLS policy', () => {
+    expect(externalCompose).toMatch(/FLOCK_DEPLOYMENT_MODE:\s*external-tls/);
+    expect(externalCompose).toMatch(/FLOCK_PROXY_BIND_ADDRESS:-127\.0\.0\.1/);
+    expect(externalCompose).toMatch(/18080}:8080/);
+    expect(externalCompose).toMatch(/18081}:80/);
+    expect(externalCompose).toMatch(/18082}:8081/);
+  });
+});
+
+describe('public deployment guidance', () => {
+  const readme = read(readmePath);
+
+  it('offers copy-paste paths for each supported edge mode', () => {
+    expect(readme).toMatch(/public domain with automatic TLS/i);
+    expect(readme).toMatch(/docker-compose\.external-proxy\.yml up -d --wait/);
+    expect(readme).toMatch(/docker-compose\.private-http\.yml up -d --wait/);
+    expect(readme).toMatch(/FLOCK_ALLOW_INSECURE_HTTP=1/);
+    expect(readme).toMatch(/Private DNS with HTTP and Remote Preview/);
+  });
+
+  it('documents custom topology freedom without hiding the risk', () => {
+    expect(readme).toMatch(/You own the deployment/);
+    expect(readme).toMatch(/credentials and sessions can be intercepted/);
+    expect(readme).toMatch(/orchestrator:8080/);
+    expect(readme).toMatch(/web:80/);
+    expect(readme).toMatch(/orchestrator:8081/);
   });
 });
 
@@ -254,8 +317,8 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/FROM\s+node:22/);
   });
 
-  it('installs runtime tools the orchestrator needs (tmux, ssh, git)', () => {
-    expect(orch).toMatch(/\btmux\b/);
+  it('installs runtime tools the orchestrator needs without legacy tmux', () => {
+    expect(orch).not.toMatch(/^\s*tmux\s*\\/m);
     expect(orch).toMatch(/openssh-client/);
     expect(orch).toMatch(/\bgit\b/);
   });
@@ -334,7 +397,7 @@ describe('production node and stack lifecycle', () => {
     expect(script).toMatch(/vault create/);
     expect(script).toMatch(/vault verify/);
     expect(script).toMatch(/FLOCK_VERSION/);
-    expect(script).toMatch(/BROWSER_IMAGE=/);
+    expect(script).not.toMatch(/BROWSER_IMAGE=/);
     expect(script).toMatch(/\/ready/);
     expect(script).toMatch(/agentd-compatibility\.json/);
     expect(script).toMatch(/--acknowledge-node-policy-change/);
@@ -379,6 +442,48 @@ describe('US-38: docker compose config is valid (smoke, when Docker is present)'
         stdio: 'pipe',
         env: { ...process.env },
       }),
+    ).not.toThrow();
+  });
+
+  it('parses the private HTTP and external proxy overrides', () => {
+    let hasDocker = true;
+    try {
+      execFileSync('docker', ['--version'], { stdio: 'ignore' });
+    } catch {
+      hasDocker = false;
+    }
+    if (!hasDocker) return;
+
+    const common = {
+      cwd: repoRoot,
+      stdio: 'pipe' as const,
+      env: {
+        ...process.env,
+        PUBLIC_BASE_URL: 'http://100.64.0.1:11010',
+        FLOCK_ALLOWED_ORIGINS: 'http://100.64.0.1:11010',
+        FLOCK_ALLOW_INSECURE_HTTP: '1',
+      },
+    };
+    expect(() =>
+      execFileSync(
+        'docker',
+        ['compose', '-f', composePath, '-f', privateHttpComposePath, 'config'],
+        common,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      execFileSync(
+        'docker',
+        ['compose', '-f', composePath, '-f', externalProxyComposePath, 'config'],
+        {
+          ...common,
+          env: {
+            ...common.env,
+            PUBLIC_BASE_URL: 'https://shepherd.example.com',
+            FLOCK_ALLOWED_ORIGINS: 'https://shepherd.example.com',
+          },
+        },
+      ),
     ).not.toThrow();
   });
 });

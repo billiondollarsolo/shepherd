@@ -1,0 +1,90 @@
+# Release-image risk register. Every entry is currently reported against a
+# Debian package for which the configured stable repository has no fixed
+# version. The release workflow still prints suppressed findings, rejects every
+# new High/Critical finding, and forces this list to be reviewed by the expiry.
+# Remove an entry as soon as the rebuilt image no longer reports it.
+vulnerabilities:
+  - id: CVE-2023-2953
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2023-45853
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2025-59375
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2025-69720
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2025-7458
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-12064
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-25210
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-41992
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-42496
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-42497
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-45186
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-48962
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-53615
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-54369
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-56131
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-56407
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-56408
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-59999
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-60000
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-60002
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-8286
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-8376
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-8927
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-8932
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-9079
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-9080
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-9538
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.
+  - id: CVE-2026-9545
+    expired_at: 2026-10-14
+    statement: No patched Debian package is available as of 2026-07-14; review at every release.

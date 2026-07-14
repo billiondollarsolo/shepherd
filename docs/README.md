@@ -4,7 +4,8 @@ The map for understanding the platform.
 
 > **Name transition:** Shepherd was previously named Flock. Technical identifiers retain
 > the `flock` prefix in this release; commands, service names, environment variables,
-> package paths, images, and repository URLs remain unchanged.
+> package paths and environment variables remain compatibility-sensitive, while public
+> images and repository-facing product copy use `shepherd`.
 
 > **Building Shepherd?** Start at **[roadmap.md](roadmap.md)** — the authoritative
 > end-to-end vision + execution plan (phased tasks with success criteria, tests, and
@@ -19,8 +20,8 @@ New here? Read in this order:
    mechanism behind each signal. The authoritative "how well do we work with agent X."
 3. **[flock-agentd design](flock-agentd-design.md)** — the node daemon: why it exists
    (the tmux replacement) and how the raw-PTY + status + metrics model works.
-4. **[Deployment](deployment.md)** — the production Docker Compose stack in depth
-   (services, TLS, secrets, per-session browsers, verifying a deploy).
+4. **[Deployment](deployment.md)** — bundled TLS, external proxies, private HTTP,
+   custom routing, secrets, Remote Preview, and deployment verification.
 5. **[Releasing](releasing.md)** — public-repository setup, versioning, GHCR
    publication, verification, and operational follow-through.
 6. **[Backup and recovery](backup-and-recovery.md)** and
@@ -29,24 +30,26 @@ New here? Read in this order:
 
 ## Reference
 
-| Doc                                                              | Purpose                                                                                                                                  |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [architecture.md](architecture.md)                               | System overview — orchestrator ⇄ agentd ⇄ web, the status pipeline, data path                                                            |
-| [agent-integration-matrix.md](agent-integration-matrix.md)       | Per-agent capability matrix + the hook/transcript mechanism for each                                                                     |
-| [flock-agentd-design.md](flock-agentd-design.md)                 | Node daemon design + protocol rationale                                                                                                  |
-| [deployment.md](deployment.md)                                   | Docker Compose production deploy, TLS, secrets, ops                                                                                      |
-| [releasing.md](releasing.md)                                     | Release gates, GitHub/GHCR publication, verification, and public-repository checklist                                                    |
-| [backup-and-recovery.md](backup-and-recovery.md)                 | Encrypted vault creation, verification, isolated restore, rollback, and drills                                                           |
-| [operations-and-diagnostics.md](operations-and-diagnostics.md)   | Health/readiness, owner diagnostics, redaction, and support bundle                                                                       |
-| [operations-memory-bounds.md](operations-memory-bounds.md)       | Required bounds and cleanup policy for every process-lifetime collection                                                                 |
-| [design-tokens.md](design-tokens.md)                             | The web UI design system — color, type, spacing tokens                                                                                   |
-| [premium-single-user-roadmap.md](premium-single-user-roadmap.md) | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
-| [decisions/](decisions/)                                         | Architecture Decision Records (e.g. terminal renderer, browser-driving)                                                                  |
+| Doc                                                                    | Purpose                                                                                                                                  |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [architecture.md](architecture.md)                                     | System overview — orchestrator ⇄ agentd ⇄ web, the status pipeline, data path                                                            |
+| [agent-integration-matrix.md](agent-integration-matrix.md)             | Per-agent capability matrix + the hook/transcript mechanism for each                                                                     |
+| [flock-agentd-design.md](flock-agentd-design.md)                       | Node daemon design + protocol rationale                                                                                                  |
+| [deployment.md](deployment.md)                                         | Docker Compose deployment modes, TLS/private HTTP, custom proxies, secrets, Preview, and operations                                      |
+| [releasing.md](releasing.md)                                           | Release gates, GitHub/GHCR publication, verification, and public-repository checklist                                                    |
+| [backup-and-recovery.md](backup-and-recovery.md)                       | Encrypted vault creation, verification, isolated restore, rollback, and drills                                                           |
+| [operations-and-diagnostics.md](operations-and-diagnostics.md)         | Health/readiness, owner diagnostics, redaction, and support bundle                                                                       |
+| [operations-memory-bounds.md](operations-memory-bounds.md)             | Required bounds and cleanup policy for every process-lifetime collection                                                                 |
+| [design-tokens.md](design-tokens.md)                                   | The web UI design system — color, type, spacing tokens                                                                                   |
+| [project-ports-and-preview-plan.md](project-ports-and-preview-plan.md) | Implementation plan for project-owned port discovery, no-DNS forwarding, embedded Preview, security, and deployment controls             |
+| [premium-single-user-roadmap.md](premium-single-user-roadmap.md)       | Incremental premium roadmap: backup/recovery, history/search, health, snapshots, notifications, updates, diagnostics, and data ownership |
+| [decisions/](decisions/)                                               | Architecture Decision Records (e.g. terminal renderer and Remote Preview)                                                                |
 
 Security boundary decisions:
 
 - [Threat model and product boundary](decisions/security-threat-model.md)
 - [Privilege-separated agentd control plane](decisions/agentd-privilege-separation.md)
+- [Project-owned Ports and fixed private Preview pool](decisions/project-preview-port-pool.md)
 
 ## Background / historical
 

@@ -145,7 +145,15 @@ export type ShellNavPathPatch = Partial<
   >
 >;
 
-const SETTINGS_SECTIONS = new Set(['appearance', 'notifications', 'nodes', 'account', 'about']);
+const SETTINGS_SECTIONS = new Set([
+  'appearance',
+  'notifications',
+  'nodes',
+  'account',
+  'operations',
+  'deployment-preview',
+  'about',
+]);
 
 /**
  * URL → nav patch.

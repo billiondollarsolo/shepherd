@@ -3,8 +3,9 @@ import process from 'node:process';
 export interface ShutdownDependencies {
   stopBackground(): void;
   closeHttp(): Promise<void>;
+  closePreviewGateway(): Promise<void>;
   disposeLiveChannels(): Promise<void>;
-  disposeBrowserChannels(): Promise<void>;
+  disposePreview(): void;
   disposeConnections(): Promise<void>;
   closeDatabase(): Promise<void>;
   timeoutMs?: number;
@@ -31,8 +32,9 @@ export function createGracefulShutdown(
     try {
       dependencies.stopBackground();
       await dependencies.closeHttp();
+      await dependencies.closePreviewGateway().catch(() => undefined);
       await dependencies.disposeLiveChannels().catch(() => undefined);
-      await dependencies.disposeBrowserChannels().catch(() => undefined);
+      dependencies.disposePreview();
       await dependencies.disposeConnections().catch(() => undefined);
       await dependencies.closeDatabase().catch(() => undefined);
       clearTimeout(hardExit);

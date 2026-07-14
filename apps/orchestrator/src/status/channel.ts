@@ -9,7 +9,7 @@ import type { StatusMap, Unsubscribe } from './map.js';
  * the channel. It owns NO source of truth and holds NO DB handle: the WS path
  * literally cannot touch Postgres (NFR-PERF1, spec §6.6).
  *
- * The full multiplexed socket (pty/screencast/nodes) is wired by later agents;
+ * The full multiplexed socket (pty/nodes) is wired by later agents;
  * this class is responsible only for the `status` channel membership + fan-out.
  */
 

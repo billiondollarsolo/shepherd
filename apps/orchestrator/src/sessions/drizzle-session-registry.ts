@@ -4,8 +4,8 @@
  *
  * It uses the shared row<->domain mappers so the `Session` domain type is never
  * duplicated, upholding the single authoritative record invariant (spec §4.2):
- * the row `id` (the session_id) threads the tmux name, hook token hash, and
- * browser endpoint into ONE row.
+ * the row `id` (the session_id) threads the tmux name, hook token hash, node,
+ * project, and owner into ONE row.
  *
  * Postgres is the durable REGISTRY/identity store, NOT the live status path
  * (spec §6.6, NFR-PERF1): these writes/reads happen at create time and at boot

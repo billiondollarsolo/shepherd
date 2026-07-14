@@ -1,0 +1,30 @@
+# Shepherd edge proxy. Building Caddy ourselves keeps its Go standard library
+# on the same security-patched toolchain as agentd instead of waiting for an
+# upstream image rebuild after a Go CVE disclosure.
+FROM --platform=$BUILDPLATFORM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS build
+ARG TARGETOS
+ARG TARGETARCH
+RUN GOBIN=/out CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
+    go install github.com/caddyserver/caddy/v2/cmd/caddy@v2.11.4
+
+FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
+LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
+      org.opencontainers.image.licenses="MIT"
+ARG RELEASE_REFRESH=manual
+RUN echo "$RELEASE_REFRESH" >/dev/null \
+    && apk update \
+    && apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates mailcap tzdata \
+    && addgroup -S caddy \
+    && adduser -S -D -H -s /sbin/nologin -G caddy caddy \
+    && mkdir -p /config/caddy /data/caddy /etc/caddy \
+    && chown -R caddy:caddy /config /data
+COPY --from=build /out/caddy /usr/bin/caddy
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/licenses/shepherd/
+ENV XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data
+EXPOSE 80 443 443/udp
+USER caddy
+ENTRYPOINT ["caddy"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

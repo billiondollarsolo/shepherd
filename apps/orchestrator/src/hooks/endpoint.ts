@@ -187,14 +187,15 @@ export function extractBearerToken(header: string | undefined): string | null {
   const trimmed = header.trim();
   if (!trimmed) return null;
 
-  const match = /^bearer\s+(.+)$/i.exec(trimmed);
-  if (match) {
-    const token = match[1]!.trim();
+  const separator = trimmed.search(/\s/);
+  const scheme = separator < 0 ? trimmed : trimmed.slice(0, separator);
+  if (scheme.toLowerCase() === 'bearer' && separator >= 0) {
+    const token = trimmed.slice(separator).trim();
     return token.length > 0 ? token : null;
   }
 
   // A bare scheme word ("Bearer" with nothing after) is not a token.
-  if (/^bearer$/i.test(trimmed)) return null;
+  if (scheme.toLowerCase() === 'bearer') return null;
 
   // No recognized scheme: treat the whole value as the token.
   return trimmed;

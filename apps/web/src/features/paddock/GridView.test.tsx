@@ -31,7 +31,6 @@ function mk(id: string, projectId = 'P'): Session {
     agentType: 'claude-code',
     tmuxSessionName: `flock-${id}`,
     workingDir: '/w',
-    browserCdpEndpoint: null,
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,

@@ -19,17 +19,26 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type DbHandle } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { agentSessions, auditLog, nodes, sessionsAuth, users } from '../db/schema.js';
+import {
+  agentSessions,
+  auditLog,
+  authLoginThrottle,
+  nodes,
+  sessionsAuth,
+  users,
+} from '../db/schema.js';
 import { buildServer } from '../server.js';
 import { AuthService } from './service.js';
 import { makeDbAuthAuditRecorder } from './audit-sink.js';
 import { SESSION_COOKIE } from './cookie.js';
+import { PersistentLoginThrottle } from './persistent-login-throttle.js';
 
 let handle: DbHandle;
 let app: ReturnType<typeof buildServer>;
 
 const suffix = randomUUID().slice(0, 8);
 const OWNER = { username: `owner-${suffix}`, password: 'owner-password-1' };
+const SETUP_TOKEN = 'release-style-bootstrap-token-0123456789abcdef';
 const createdUserIds: string[] = [];
 
 /** Pull the session id out of a Set-Cookie response header. */
@@ -48,6 +57,7 @@ beforeAll(async () => {
   // intentionally uses ON DELETE RESTRICT.
   await handle.db.delete(agentSessions);
   await handle.db.delete(sessionsAuth);
+  await handle.db.delete(authLoginThrottle);
   await handle.db.delete(users);
   // Mirror main()'s boot order: the orchestrator seeds its stable local node
   // before first-run owner setup, then AuthService claims that pre-owner row.
@@ -61,8 +71,9 @@ beforeAll(async () => {
   const auth = new AuthService({
     db: handle.db,
     audit: makeDbAuthAuditRecorder(handle.db),
+    setupToken: SETUP_TOKEN,
   });
-  app = buildServer({ auth });
+  app = buildServer({ auth, loginThrottle: new PersistentLoginThrottle(handle.db) });
   await app.ready();
 });
 
@@ -73,6 +84,7 @@ afterAll(async () => {
     await handle.db.delete(auditLog).where(inArray(auditLog.userId, createdUserIds));
     await handle.db.delete(users).where(inArray(users.id, createdUserIds));
   }
+  await handle.db.delete(authLoginThrottle);
   await handle.pool.end();
 });
 
@@ -83,21 +95,38 @@ describe('first-run status probe', () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
     expect(res.statusCode).toBe(200);
     expect(res.json().setupRequired).toBe(true);
+    expect(res.json().setupTokenRequired).toBe(true);
+    expect(res.json().deployment).toEqual({
+      mode: 'development',
+      transport: 'https',
+      warning: null,
+    });
   });
 });
 
 describe('US-4 first-run owner setup', () => {
-  it('creates the installation owner (201) and stores an argon2id hash, not plaintext', async () => {
+  it('rejects setup without the out-of-band bootstrap token', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/setup',
       payload: OWNER,
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe('invalid_setup_token');
+  });
+
+  it('creates the installation owner (201) and stores an argon2id hash, not plaintext', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { ...OWNER, setupToken: SETUP_TOKEN },
     });
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.user.username).toBe(OWNER.username);
     expect(body.user).not.toHaveProperty('role');
     expect(JSON.stringify(body)).not.toContain('password');
+    expect(JSON.stringify(body)).not.toContain(SETUP_TOKEN);
     createdUserIds.push(body.user.id);
 
     const rows = await handle.db.select().from(users);
@@ -115,7 +144,7 @@ describe('US-4 first-run owner setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/setup',
-      payload: { username: `other-${suffix}`, password: 'whatever-12' },
+      payload: { username: `other-${suffix}`, password: 'whatever-123' },
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe('owner_exists');
@@ -125,6 +154,7 @@ describe('US-4 first-run owner setup', () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
     expect(res.statusCode).toBe(200);
     expect(res.json().setupRequired).toBe(false);
+    expect(res.json().setupTokenRequired).toBe(false);
   });
 });
 
@@ -176,7 +206,7 @@ describe('US-5 login / session cookies', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/auth/me',
-      headers: { cookie: 'flock_session=not-a-valid-uuid' },
+      headers: { cookie: `${SESSION_COOKIE}=not-a-valid-uuid` },
     });
     expect(res.statusCode).toBe(401);
     expect(res.json().error.code).toBe('unauthorized');
@@ -228,5 +258,61 @@ describe('FR-A3 audit rows', () => {
     expect(actions.has('login')).toBe(true);
     expect(actions.has('owner_setup')).toBe(true);
     expect(actions.has('logout')).toBe(true);
+  });
+});
+
+describe('durable public-login hardening', () => {
+  it('retains a lockout across throttle instances (process restarts)', async () => {
+    const key = PersistentLoginThrottle.key('203.0.113.10', `probe-${suffix}`);
+    const first = new PersistentLoginThrottle(handle.db, { maxFailures: 1, lockoutMs: 60_000 });
+    await first.recordFailure(key);
+
+    const afterRestart = new PersistentLoginThrottle(handle.db, {
+      maxFailures: 1,
+      lockoutMs: 60_000,
+    });
+    expect(await afterRestart.check(key)).toMatchObject({ allowed: false });
+    await handle.db.delete(authLoginThrottle).where(eq(authLoginThrottle.keyHash, key));
+  });
+
+  it('keeps the current login but revokes every other session after a password change', async () => {
+    const firstLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: OWNER });
+    const secondLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: OWNER,
+    });
+    const firstCookie = cookieFromResponse(firstLogin.headers['set-cookie']);
+    const secondCookie = cookieFromResponse(secondLogin.headers['set-cookie']);
+    const nextPassword = 'replacement-owner-password-2';
+
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie: firstCookie },
+      payload: { currentPassword: OWNER.password, newPassword: nextPassword },
+    });
+    expect(changed.statusCode).toBe(204);
+
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: firstCookie } }))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: secondCookie } }))
+        .statusCode,
+    ).toBe(401);
+    expect(
+      (await app.inject({ method: 'POST', url: '/api/auth/login', payload: OWNER })).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          payload: { username: OWNER.username, password: nextPassword },
+        })
+      ).statusCode,
+    ).toBe(200);
   });
 });

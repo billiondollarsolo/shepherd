@@ -37,7 +37,7 @@ while (($# > 0)); do
   shift
 done
 [[ "$TARGET" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]] || {
-  echo "VERSION must be semantic, for example 0.3.1." >&2
+  echo "VERSION must be semantic, for example 0.4.0." >&2
   exit 2
 }
 [[ -f .env ]] || { echo "Run from the Shepherd deployment directory containing .env." >&2; exit 1; }
@@ -135,16 +135,14 @@ else
 fi
 
 echo "Pulling immutable Shepherd $TARGET images..."
-FLOCK_VERSION="$TARGET" BROWSER_IMAGE='' docker compose pull
+FLOCK_VERSION="$TARGET" docker compose pull
 
 tmp="$(mktemp .env.upgrade.XXXXXX)"
 awk -v target="$TARGET" '
   /^FLOCK_VERSION=/ { print "FLOCK_VERSION=" target; version=1; next }
-  /^BROWSER_IMAGE=/ { print "BROWSER_IMAGE="; browser=1; next }
   { print }
   END {
     if (!version) print "FLOCK_VERSION=" target
-    if (!browser) print "BROWSER_IMAGE="
   }
 ' .env > "$tmp"
 chmod --reference=.env "$tmp"

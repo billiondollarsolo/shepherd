@@ -17,7 +17,7 @@ for (const viewport of VIEWPORTS) {
       ? page.getByRole('heading', { name: 'Shepherd' })
       : page.getByRole('button', { name: 'Shepherd home' });
     await expect(wordmark).toBeVisible();
-    if (!viewport.mobile) await expect(page.getByText('Shepherd Your Agents')).toBeVisible();
+    if (!viewport.mobile) await expect(page.getByText('Guide Your Flock Of Agents')).toBeVisible();
 
     const bounds = await wordmark.boundingBox();
     expect(bounds).not.toBeNull();

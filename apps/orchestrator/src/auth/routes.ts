@@ -12,13 +12,19 @@
  * synchronous DB use through {@link AuthService} is correct.
  */
 import type { FastifyInstance } from 'fastify';
-import { LoginRequest, SetupRequest, UpdateProfileRequest } from '@flock/shared';
+import {
+  LoginRequest,
+  SetupRequest,
+  UpdateProfileRequest,
+  type DeploymentStatus,
+} from '@flock/shared';
 import { buildClearSessionCookie, buildSessionCookie, readSessionCookie } from './cookie.js';
 import { makeRequireAuth } from './middleware.js';
-import { LoginThrottle } from './login-throttle.js';
+import { LoginThrottle, loginThrottleKey, type LoginThrottleLike } from './login-throttle.js';
 import {
   OwnerAlreadyExistsError,
   InvalidCredentialsError,
+  InvalidSetupTokenError,
   SESSION_TTL_MS,
   UsernameTakenError,
   type AuthService,
@@ -46,10 +52,17 @@ function ctxOf(request: { ip?: string; headers: Record<string, unknown> }): Requ
  * plain function (not an auto-loaded plugin) so `buildServer` wires it with the
  * concrete service and so tests can register it on an isolated Fastify app.
  */
-export function registerAuthRoutes(app: FastifyInstance, service: AuthService): void {
+export function registerAuthRoutes(
+  app: FastifyInstance,
+  service: AuthService,
+  throttle: LoginThrottleLike = new LoginThrottle(),
+  deployment: DeploymentStatus = {
+    mode: 'development',
+    transport: 'https',
+    warning: null,
+  },
+): void {
   const requireAuth = makeRequireAuth(service);
-  // In-memory brute-force throttle for the public credential endpoints (T6).
-  const throttle = new LoginThrottle();
   const setupBudget = new RequestBudget({
     maxRequests: 10,
     windowMs: 60 * 60_000,
@@ -70,7 +83,7 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
     withinRequestBudget(reply, setupBudget, request.ip, async () => {
       const parsed = SetupRequest.safeParse(request.body);
       if (!parsed.success) {
-        return badRequest(reply, 'username and a password (min 8 chars) are required.');
+        return badRequest(reply, 'username and a password (min 12 chars) are required.');
       }
       try {
         const user = await service.setupInitialOwner(parsed.data, ctxOf(request));
@@ -78,6 +91,11 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       } catch (err) {
         if (err instanceof OwnerAlreadyExistsError) {
           return reply.code(409).send({ error: { code: 'owner_exists', message: err.message } });
+        }
+        if (err instanceof InvalidSetupTokenError) {
+          return reply.code(401).send({
+            error: { code: 'invalid_setup_token', message: err.message },
+          });
         }
         if (err instanceof UsernameTakenError) {
           return reply.code(409).send({ error: { code: 'username_taken', message: err.message } });
@@ -92,7 +110,11 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
   // without a destructive probe. Public: callable before any session exists.
   app.get('/api/auth/status', async (_request, reply) => {
     const setupRequired = !(await service.ownerExists());
-    return reply.code(200).send({ setupRequired });
+    return reply.code(200).send({
+      setupRequired,
+      setupTokenRequired: setupRequired && service.requiresSetupToken(),
+      deployment,
+    });
   });
 
   // --- US-5: login -------------------------------------------------------
@@ -104,8 +126,8 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       }
       // Brute-force throttle (T6): cap guesses per ip+username; locks after repeated
       // failures, clears on success. Checked BEFORE the (expensive) argon2 verify.
-      const tkey = LoginThrottle.key(request.ip, parsed.data.username);
-      const gate = throttle.check(tkey);
+      const tkey = loginThrottleKey(request.ip, parsed.data.username);
+      const gate = await throttle.check(tkey);
       if (!gate.allowed) {
         void reply.header('retry-after', String(Math.ceil(gate.retryAfterMs / 1000)));
         return reply.code(429).send({
@@ -117,12 +139,12 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
       }
       try {
         const { sessionId, user } = await service.login(parsed.data, ctxOf(request));
-        throttle.recordSuccess(tkey);
+        await throttle.recordSuccess(tkey);
         void reply.header('set-cookie', buildSessionCookie(sessionId, SESSION_TTL_MS));
         return reply.code(200).send({ user });
       } catch (err) {
         if (err instanceof InvalidCredentialsError) {
-          throttle.recordFailure(tkey);
+          await throttle.recordFailure(tkey);
           return reply
             .code(401)
             .send({ error: { code: 'invalid_credentials', message: err.message } });
@@ -168,13 +190,14 @@ export function registerAuthRoutes(app: FastifyInstance, service: AuthService): 
     const body = (request.body ?? {}) as { currentPassword?: unknown; newPassword?: unknown };
     const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
     const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-    if (!currentPassword || newPassword.length < 8) {
-      return badRequest(reply, 'currentPassword and a newPassword (min 8 chars) are required.');
+    if (!currentPassword || newPassword.length < 12) {
+      return badRequest(reply, 'currentPassword and a newPassword (min 12 chars) are required.');
     }
     try {
       await service.changePassword(
         request.authUser!.id,
         { currentPassword, newPassword },
+        readSessionCookie(request.headers.cookie),
         ctxOf(request),
       );
       return reply.code(204).send();

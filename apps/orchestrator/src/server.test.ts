@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { buildServer } from './server.js';
 import { RequestBudget } from './http/request-budget.js';
+import { SESSION_COOKIE } from './auth/cookie.js';
 
 describe('orchestrator health route', () => {
   const app = buildServer();
@@ -113,7 +114,7 @@ describe('authenticated diagnostics bundle', () => {
       expect((await app.inject('/api/diagnostics')).statusCode).toBe(401);
       const response = await app.inject({
         url: '/api/diagnostics/bundle',
-        headers: { cookie: 'flock_session=valid' },
+        headers: { cookie: `${SESSION_COOKIE}=valid` },
       });
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-disposition']).toContain('flock-diagnostics-');

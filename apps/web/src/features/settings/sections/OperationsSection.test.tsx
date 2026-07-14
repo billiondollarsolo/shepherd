@@ -15,6 +15,12 @@ vi.mock('../diagnosticsApi', () => ({
         opencode: { status: 'available', version: 'opencode 1' },
       },
     },
+    deployment: {
+      mode: 'builtin-tls',
+      transport: 'https',
+      publicBaseUrl: 'https://shepherd.example.com',
+      trustedProxy: true,
+    },
     health: {
       process: { status: 'ready', uptimeSeconds: 1 },
       database: { status: 'ready' },
@@ -22,7 +28,7 @@ vi.mock('../diagnosticsApi', () => ({
       agentd: {},
       nodes: { status: 'ready', count: 1 },
       disk: { status: 'ready', freeBytes: 1, totalBytes: 2 },
-      browserRuntime: { status: 'available', image: 'browser', network: 'internal' },
+      preview: { status: 'available', active: 0, reason: null },
       push: { status: 'not_configured' },
     },
     warnings: [],
@@ -40,7 +46,8 @@ describe('OperationsSection', () => {
   it('shows actionable dependency health and the protected bundle action', async () => {
     render(<OperationsSection />);
     expect(await screen.findByText('Shepherd 0.3.0')).toBeInTheDocument();
-    expect(screen.getByText('Browser runtime')).toBeInTheDocument();
+    expect(screen.getByText('Database')).toBeInTheDocument();
+    expect(screen.getByText('builtin tls')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /download bundle/i })).toHaveAttribute(
       'href',
       '/api/diagnostics/bundle',

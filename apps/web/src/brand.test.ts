@@ -17,8 +17,8 @@ describe('product brand contract', () => {
       repository: PRODUCT_REPOSITORY_URL,
     }).toEqual({
       name: 'Shepherd',
-      tagline: 'Shepherd Your Agents',
-      sentenceTagline: 'Shepherd your agents',
+      tagline: 'Guide Your Flock Of Agents',
+      sentenceTagline: 'Guide your flock of agents',
       description: 'Manage nodes, projects, and CLI coding agents from one web paddock.',
       repository: 'https://github.com/billiondollarsolo/shepherd',
     });

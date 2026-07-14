@@ -1,11 +1,12 @@
 # Releasing Shepherd
 
-Shepherd releases are GitHub Releases backed by three multi-platform images in the
+Shepherd releases are GitHub Releases backed by four multi-platform images in the
 GitHub Container Registry (GHCR):
 
 - `ghcr.io/billiondollarsolo/shepherd-orchestrator`
 - `ghcr.io/billiondollarsolo/shepherd-web`
-- `ghcr.io/billiondollarsolo/shepherd-session-chrome`
+- `ghcr.io/billiondollarsolo/shepherd-caddy`
+- `ghcr.io/billiondollarsolo/shepherd-postgres`
 
 The release workflow builds Linux amd64 and arm64 images, publishes semantic
 version tags, generates SBOM/provenance attestations, and updates `latest` only for
@@ -72,13 +73,30 @@ docker run --rm -v "$PWD:/repo:ro" \
   git /repo --no-banner --redact
 ```
 
-Build all three images locally at least once when their Dockerfiles change:
+Build all four images locally at least once when their Dockerfiles change:
 
 ```bash
 docker build -f docker/Dockerfile.orchestrator -t shepherd-orchestrator:test .
 docker build -f docker/Dockerfile.web -t shepherd-web:test .
-docker build -f docker/Dockerfile.session-chrome -t shepherd-session-chrome:test .
+docker build -f docker/Dockerfile.caddy -t shepherd-caddy:test .
+docker build -f docker/Dockerfile.postgres -t shepherd-postgres:test .
+
+for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
+  docker run --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "$PWD:/workspace:ro" \
+    aquasec/trivy:0.66.0 image --exit-code 1 \
+    --ignorefile /workspace/.trivyignore.yaml \
+    --severity HIGH,CRITICAL "$image:test"
+done
 ```
+
+The release gate rejects every unregistered High/Critical finding, including
+findings without an upstream fix. `.trivyignore.yaml` is a visible, expiring risk
+register for Debian findings that cannot yet be patched: suppressed findings stay in
+the repository, the workflow uploads an unfiltered report for every image/platform,
+and an overdue review automatically fails the build. Never add an entry for a finding
+with an available fixed version.
 
 Before a destructive migration or upgrade, create and verify a vault using
 [backup-and-recovery.md](backup-and-recovery.md). A release candidate is not ready if
@@ -110,17 +128,19 @@ version. A failed workflow may be rerun before consumers rely on its tags.
 ```bash
 docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
 docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-web:<version>
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-session-chrome:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-caddy:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-postgres:<version>
 
 docker pull ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
 docker pull ghcr.io/billiondollarsolo/shepherd-web:<version>
-docker pull ghcr.io/billiondollarsolo/shepherd-session-chrome:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-caddy:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-postgres:<version>
 ```
 
 Confirm that anonymous pulls work, both amd64 and arm64 manifests exist, provenance
 is visible, release notes match `CHANGELOG.md`, and a clean-host Compose deployment
-can complete first-run setup, launch an agent, reconnect its terminal, and start a
-browser pane. The workflow attaches `agent-versions.txt` and a redacted candidate
+can complete first-run setup, launch an agent, reconnect its terminal, and open/revoke
+a Remote Preview. The workflow attaches `agent-versions.txt` and a redacted candidate
 diagnostics snapshot to the GitHub Release. The orchestrator image also contains
 `/usr/share/flock/agent-versions.txt`; Settings → Operations reports the exact tools in
 the running installation, including a first-start Claude installation or a user override.
@@ -145,6 +165,6 @@ notes.
 
 Database migrations follow expand/migrate/contract sequencing across the supported
 rollback window. Do not ship destructive contraction while the oldest supported
-application version may still be restored. Application, web, browser-worker, and
-daemon artifacts remain immutable and version-coupled; external coding-agent CLIs are
+application version may still be restored. Application, web, proxy, database base,
+and daemon artifacts remain immutable and version-coupled; external coding-agent CLIs are
 reported integrations and require their own matrix tests.

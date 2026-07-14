@@ -10,9 +10,6 @@
 # auth, enforced by the orchestrator's default-deny surface guard (NFR-SEC6);
 # the per-session-token hook endpoint is the one exception (spec §8.1).
 #
-# Per-session browser containers (Layer A, PRD §6.5) are launched dynamically by
-# the constrained browser-worker. Only that worker receives the Docker socket.
-#
 # Secrets are supplied at runtime via env / Docker secret files — never baked
 # into images (NFR-DEP2). Copy `.env.example` -> `.env` and fill it in, and (in
 # production) populate the secret files under `./secrets/`.
@@ -35,15 +32,28 @@ services:
   # Certs/ACME keys persist in caddy_data — never baked into the image (NFR-DEP2).
   # ---------------------------------------------------------------------------
   caddy:
-    # T16: pinned to a digest for reproducible builds (the 2-alpine tag floats).
-    image: caddy:2-alpine@sha256:86deaf5e3d3408a6ccec08fbb79989783dd26e206ae10bcf78a801dc8c9ab794
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.caddy
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.4.0}
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
     depends_on:
       - orchestrator
       - web
     environment:
       FLOCK_DOMAIN: ${FLOCK_DOMAIN:-localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-}
+      # Preview hostnames use on-demand certificates guarded by the orchestrator's
+      # active-capability allow endpoint. Local quick start uses preview.localhost.
+      FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-preview.localhost}
+      FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-}
     ports:
       - '${HTTP_HOST_PORT:-80}:80'
       - '${HTTPS_HOST_PORT:-443}:443'
@@ -51,16 +61,30 @@ services:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     networks:
-      - internal
+      - edge
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', '-T', '2', 'http://127.0.0.1:2019/config/']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
 
   # ---------------------------------------------------------------------------
   # Postgres — durable system of record. NOT on the live status path (PRD §6.6).
   # ---------------------------------------------------------------------------
   postgres:
-    # T16: pinned to a digest for reproducible builds (the 16-bookworm tag floats).
-    image: postgres:16-bookworm@sha256:da514b7d293c5e9126503f85ecd835f4fb0942a77e012fe74f016c114c3e25b8
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.postgres
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.4.0}
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-flock}
       POSTGRES_DB: ${POSTGRES_DB:-flock}
@@ -71,11 +95,11 @@ services:
       - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Bind to host loopback only (debugging); remove entirely in hardened prod.
-    ports:
-      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=16m,uid=999,gid=999,mode=3775
     networks:
-      - internal
+      - data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-flock} -d ${POSTGRES_DB:-flock}']
       interval: 5s
@@ -84,22 +108,24 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Orchestrator — the brain. Status model, hooks, SSH, browser control, auth.
-  # Browser container lifecycle is delegated to browser-worker, so this service
-  # has no Docker socket. TLS is terminated by an upstream proxy
+  # Orchestrator — the brain. Status model, hooks, SSH, preview gateway, auth.
+  # This service has no Docker socket. TLS is terminated by an upstream proxy
   # (US-39 / NFR-SEC1) — this service speaks plain HTTP/WS internally.
   # ---------------------------------------------------------------------------
   orchestrator:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.3.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.4.0}
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 2048
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
-      browser-worker:
-        condition: service_started
     environment:
       NODE_ENV: production
       PORT: ${PORT:-8080}
@@ -107,6 +133,10 @@ services:
       # orchestrator:8080 (the app default is loopback-only). The published port is
       # still gated by the compose `ports:`/reverse proxy, not this bind.
       HOST: ${HOST:-0.0.0.0}
+      # The base stack is the secure default: bundled Caddy terminates TLS.
+      # Alternate topologies use the checked-in Compose overrides rather than
+      # weakening this file in place.
+      FLOCK_DEPLOYMENT_MODE: builtin-tls
       # Optional explicit override. When empty, the entrypoint safely constructs
       # DATABASE_URL from these fields + the mounted password secret.
       DATABASE_URL: ${DATABASE_URL:-}
@@ -122,14 +152,33 @@ services:
       # separate from cookie transport settings; comma-separate additional exact
       # origins only when users intentionally browse through more than one URL.
       FLOCK_ALLOWED_ORIGINS: ${FLOCK_ALLOWED_ORIGINS:-https://localhost}
+      # Isolated origin suffix for untrusted development-server content. For a
+      # real domain, point wildcard DNS (*.preview.example.com) at this host.
+      # Empty derives preview.localhost only when PUBLIC_BASE_URL is localhost;
+      # public deployments must opt into their dedicated wildcard DNS suffix.
+      FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-}
+      FLOCK_PREVIEW_BACKEND: ${FLOCK_PREVIEW_BACKEND:-hostname}
+      FLOCK_PREVIEW_PORT_RANGE: ${FLOCK_PREVIEW_PORT_RANGE:-}
+      FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-}
+      FLOCK_PREVIEW_HOST: 0.0.0.0
+      FLOCK_PREVIEW_PORT: 8081
+      FLOCK_PREVIEW_PUBLIC_PORT: ${HTTPS_HOST_PORT:-}
+      FLOCK_PREVIEW_TTL_MS: ${FLOCK_PREVIEW_TTL_MS:-28800000}
+      FLOCK_PREVIEW_MAX_CONCURRENT: ${FLOCK_PREVIEW_MAX_CONCURRENT:-16}
+      FLOCK_PREVIEW_MAX_CONNECTIONS: ${FLOCK_PREVIEW_MAX_CONNECTIONS:-32}
+      FLOCK_PREVIEW_CONNECT_TIMEOUT_MS: ${FLOCK_PREVIEW_CONNECT_TIMEOUT_MS:-3000}
+      FLOCK_PREVIEW_UPSTREAM_TIMEOUT_MS: ${FLOCK_PREVIEW_UPSTREAM_TIMEOUT_MS:-120000}
+      FLOCK_PREVIEW_MAX_REQUEST_BYTES: ${FLOCK_PREVIEW_MAX_REQUEST_BYTES:-67108864}
+      FLOCK_PREVIEW_MAX_RESPONSE_BYTES: ${FLOCK_PREVIEW_MAX_RESPONSE_BYTES:-67108864}
       # Secret-store master key (encryption at rest, NFR-SEC2). Prefer the file.
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY:-}
       FLOCK_MASTER_KEY_FILE: /run/secrets/flock_master_key
       FLOCK_MASTER_KEY_VERSION: ${FLOCK_MASTER_KEY_VERSION:-0}
-      # T16: removed dead SESSION_SECRET / COOKIE_SECURE knobs (never read by the
-      # app). Cookie transport is controlled by FLOCK_INSECURE_COOKIES (unset in
-      # prod = Secure cookies); it never relaxes FLOCK_ALLOWED_ORIGINS. T14: the
-      # agentd version is SINGLE-SOURCED from the
+      # Fresh-install ownership capability. The setup screen requires this
+      # out-of-band token before it will create the sole administrator.
+      FLOCK_SETUP_TOKEN_FILE: /run/secrets/setup_token
+      # Session-cookie transport derives from the validated deployment mode; it
+      # never relaxes FLOCK_ALLOWED_ORIGINS. The agentd version is SINGLE-SOURCED from the
       # COPYed agentd/VERSION (resolveAgentdVersion reads it when this is empty).
       # Do NOT bake a literal default here: a stale value shadows the shipped
       # binary's version → ensureRunning re-ships+relaunches the daemon on every
@@ -144,22 +193,11 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
-      # Per-session browser containers managed dynamically (PRD §6.5, US-25): the
-      # user's screencast browser pane. MUST be the matching Shepherd
-      # session-chrome release image; it bridges CDP to the published port
-      # (plain Chrome binds the debugger to loopback only).
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-session-chrome:${FLOCK_VERSION:-0.3.1}}
-      BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
-      BROWSER_WORKER_URL: http://browser-worker:8090
-      BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
-      # Attach per-session browser containers to this compose network so the
-      # orchestrator can reach their loopback-bound CDP endpoint.
-      BROWSER_NETWORK: flock_internal
     secrets:
       - flock_master_key
       - postgres_password
-      - source: browser_worker_token
-        target: browser_worker_token
+      - source: setup_token
+        target: setup_token
     volumes:
       # Runtime home/workspaces/tool credentials belong only to flock-agent.
       - 'flock_agent_home:/home/flock-agent'
@@ -167,13 +205,19 @@ services:
       - 'flock_agentd_state:/var/lib/flock-agentd'
       # Operator-managed encrypted vault destination; keep it on separate storage.
       - '${FLOCK_BACKUP_DIR:-./backups}:/backups'
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+      - /run:size=32m,mode=0755
+      - /home/flock-control/.cache:size=32m,uid=700,gid=700,mode=0700
     # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
     # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
     # network. `expose` documents the internal port without publishing it.
     expose:
       - '8080'
+      - '8081'
     networks:
-      - internal
+      - edge
+      - data
     healthcheck:
       test:
         - 'CMD-SHELL'
@@ -182,35 +226,6 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
-
-  # Narrow browser lifecycle worker. This is the only Shepherd process with the
-  # Docker socket; its authenticated API accepts only create/stop/reap for the
-  # allowlisted browser image with fixed network and resource limits.
-  browser-worker:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.3.1}
-    restart: unless-stopped
-    entrypoint: ['/usr/local/bin/flock-browser-worker-entrypoint.sh']
-    environment:
-      NODE_ENV: production
-      BROWSER_WORKER_PORT: 8090
-      BROWSER_WORKER_TOKEN_FILE: /run/secrets/browser_worker_token
-      BROWSER_IMAGE: ${BROWSER_IMAGE:-${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-session-chrome:${FLOCK_VERSION:-0.3.1}}
-      BROWSER_NETWORK: flock_internal
-      BROWSER_MAX_CONCURRENT: ${BROWSER_MAX_CONCURRENT:-4}
-      BROWSER_MEMORY_BYTES: ${BROWSER_MEMORY_BYTES:-1073741824}
-      BROWSER_NANO_CPUS: ${BROWSER_NANO_CPUS:-1000000000}
-      BROWSER_PIDS_LIMIT: ${BROWSER_PIDS_LIMIT:-512}
-      DOCKER_SOCKET: /var/run/docker.sock
-    secrets:
-      - source: browser_worker_token
-        target: browser_worker_token
-    volumes:
-      - '${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock'
-    networks:
-      - internal
 
   # ---------------------------------------------------------------------------
   # Web — static React/Vite PWA bundle served by nginx. Fronted by the Caddy TLS
@@ -221,14 +236,28 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.3.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.4.0}
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
     depends_on:
       - orchestrator
     expose:
       - '80'
+    tmpfs:
+      - /var/lib/nginx/tmp:size=32m,uid=101,gid=101,mode=0750
+      - /var/run:size=4m,uid=101,gid=101,mode=0750
+      - /var/log/nginx:size=8m,uid=101,gid=101,mode=0750
     networks:
-      - internal
+      - edge
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', '-T', '2', 'http://127.0.0.1/']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
 
 # -----------------------------------------------------------------------------
 # Named volumes
@@ -247,8 +276,11 @@ volumes:
 # Networks
 # -----------------------------------------------------------------------------
 networks:
-  internal:
-    name: flock_internal
+  edge:
+    name: shepherd_edge
+  data:
+    name: shepherd_data
+    internal: true
 
 # -----------------------------------------------------------------------------
 # Secret files (NFR-DEP2) — populate these on the host before `compose up`.
@@ -256,7 +288,7 @@ networks:
 # NEVER copied into an image. Create with e.g.:
 #   mkdir -p secrets
 #   openssl rand -base64 32 > secrets/flock_master_key
-#   openssl rand -base64 48 > secrets/browser_worker_token
+#   openssl rand -base64 48 > secrets/setup_token
 #   printf '%s' 'strong-db-password' > secrets/postgres_password
 # -----------------------------------------------------------------------------
 secrets:
@@ -264,5 +296,5 @@ secrets:
     file: ./secrets/flock_master_key
   postgres_password:
     file: ./secrets/postgres_password
-  browser_worker_token:
-    file: ./secrets/browser_worker_token
+  setup_token:
+    file: ./secrets/setup_token

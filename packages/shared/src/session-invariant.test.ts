@@ -5,10 +5,8 @@ import { SessionRecordSchema, type SessionRecord } from './domain.js';
  * Single authoritative session record invariant (spec §4.2, §6, §15).
  *
  * One `session_id` (the record's `id`) names the tmux session, scopes the hook
- * token, and binds the browser endpoint. The shared schema is the contract that
- * keeps these threaded through ONE record; this test fails if any of those
- * binding fields are dropped from the schema (which would let the three
- * identities diverge across separate records).
+ * token. Remote Preview is deliberately an ephemeral, revocable capability and
+ * therefore does not belong in this durable record.
  */
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
@@ -21,7 +19,6 @@ function sampleSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     agentType: 'claude-code',
     tmuxSessionName: `flock-${SESSION_ID}`,
     workingDir: '/home/dev/project',
-    browserCdpEndpoint: `ws://127.0.0.1:9222/devtools/browser/${SESSION_ID}`,
     hookTokenHash: 'argon2id$hash$for$session$token',
     status: 'running',
     statusDetail: null,
@@ -37,13 +34,12 @@ function sampleSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe('Session single-record invariant (§4.2)', () => {
-  it('one record carries the tmux name, hook token hash, and browser endpoint together', () => {
+  it('one record carries the tmux name and hook-token binding together', () => {
     const session = SessionRecordSchema.parse(sampleSession());
 
-    // All three identities live on the SAME record keyed by the one session_id.
+    // Both durable identities live on the SAME record keyed by one session id.
     expect(session.id).toBe(SESSION_ID);
     expect(session.tmuxSessionName).toContain(SESSION_ID);
-    expect(session.browserCdpEndpoint).toContain(SESSION_ID);
     expect(session.hookTokenHash.length).toBeGreaterThan(0);
   });
 
@@ -53,17 +49,5 @@ describe('Session single-record invariant (§4.2)', () => {
       delete broken[field];
       expect(SessionRecordSchema.safeParse(broken).success).toBe(false);
     }
-  });
-
-  it('allows browserCdpEndpoint to be null before a browser is started', () => {
-    const session = SessionRecordSchema.parse(sampleSession({ browserCdpEndpoint: null }));
-    expect(session.browserCdpEndpoint).toBeNull();
-  });
-
-  it('rejects a divergent browser endpoint that is not a valid url', () => {
-    const result = SessionRecordSchema.safeParse(
-      sampleSession({ browserCdpEndpoint: 'not-a-url' }),
-    );
-    expect(result.success).toBe(false);
   });
 });

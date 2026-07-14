@@ -12,6 +12,7 @@ import { useNodes, useProjects, useSessions } from '../data/queries';
 export interface PaddockCommandActions {
   openAgent: (id: string, projectId?: string | null) => void;
   selectProject: (id: string | null) => void;
+  openProjectPorts: (id: string) => void;
   openNodeInfo: (nodeId: string) => void;
   toggleGridLayout: () => void;
   toggleSidebar: () => void;
@@ -29,7 +30,6 @@ const RIGHT_TABS: ReadonlyArray<{ tab: RightTab; label: string }> = [
   { tab: 'activity', label: 'Activity' },
   { tab: 'diff', label: 'Source Control' },
   { tab: 'files', label: 'Files' },
-  { tab: 'browser', label: 'Browser' },
   { tab: 'search', label: 'Search' },
   { tab: 'notes', label: 'Notes' },
 ];
@@ -105,6 +105,12 @@ export function buildPaddockCommands(args: {
       hint: 'Project',
       run: () => a.selectProject(p.id),
     });
+    commands.push({
+      id: `goto-project-ports-${p.id}`,
+      title: `Open ports: ${p.name}`,
+      hint: 'Project',
+      run: () => a.openProjectPorts(p.id),
+    });
   }
   for (const n of nodes) {
     commands.push({
@@ -125,6 +131,7 @@ export function PaddockCommands(): null {
 
   const openAgent = usePaddock((s) => s.openAgent);
   const selectProject = usePaddock((s) => s.selectProject);
+  const openProjectPorts = usePaddock((s) => s.openProjectPorts);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
   const toggleGridLayout = usePaddock((s) => s.toggleGridLayout);
   const toggleSidebar = usePaddock((s) => s.toggleSidebar);
@@ -140,6 +147,7 @@ export function PaddockCommands(): null {
     () => ({
       openAgent,
       selectProject,
+      openProjectPorts,
       openNodeInfo,
       toggleGridLayout,
       toggleSidebar,
@@ -155,6 +163,7 @@ export function PaddockCommands(): null {
     [
       openAgent,
       selectProject,
+      openProjectPorts,
       openNodeInfo,
       toggleGridLayout,
       toggleSidebar,

@@ -59,8 +59,9 @@ in explicitly and emits a security warning; this mode provides no agent isolatio
   runtime UID.
 - Workspaces and coding-tool credentials are owned by the runtime UID and persist in
   dedicated volumes.
-- The agent runtime receives no Docker socket access. Browser-container management is
-  moved behind a separately constrained service or socket proxy.
+- The agent runtime receives no Docker socket access. Project Preview forwards only
+  explicitly saved loopback services through the orchestrator's bounded gateway; no
+  Shepherd service needs container-management access.
 
 ### Control protocol
 

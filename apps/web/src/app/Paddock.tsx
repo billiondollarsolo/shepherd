@@ -29,6 +29,11 @@ const ProjectGitPage = lazy(() =>
     default: Page,
   })),
 );
+const ProjectPortsPage = lazy(() =>
+  import('../features/preview/ProjectPortsPage').then(({ ProjectPortsPage: Page }) => ({
+    default: Page,
+  })),
+);
 const SettingsPage = lazy(() =>
   import('../features/settings/SettingsPage').then(({ SettingsPage: Page }) => ({ default: Page })),
 );
@@ -76,6 +81,12 @@ function CenterPane(): JSX.Element {
     return (
       <Suspense fallback={<PanelLoading />}>
         <ProjectGitPage />
+      </Suspense>
+    );
+  if (projectView === 'ports')
+    return (
+      <Suspense fallback={<PanelLoading />}>
+        <ProjectPortsPage />
       </Suspense>
     );
   return <SessionPane />;

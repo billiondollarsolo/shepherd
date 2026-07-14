@@ -1,0 +1,30 @@
+# Shepherd private HTTP override.
+#
+# Use only on a trusted LAN or encrypted overlay network such as Tailscale:
+#   docker compose -f docker-compose.yml -f docker-compose.private-http.yml up -d --wait
+#
+# The explicit file selection plus FLOCK_ALLOW_INSECURE_HTTP=1 are both required.
+services:
+  caddy:
+    environment:
+      FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-preview.invalid}
+      FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-'none'}
+    ports: !override
+      - '${HTTP_HOST_PORT:-11010}:80'
+    volumes: !override
+      - ./docker/Caddyfile.private-http:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  orchestrator:
+    environment:
+      FLOCK_DEPLOYMENT_MODE: private-http
+      FLOCK_ALLOW_INSECURE_HTTP: ${FLOCK_ALLOW_INSECURE_HTTP:?Set FLOCK_ALLOW_INSECURE_HTTP=1 to acknowledge unencrypted browser traffic}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set the exact http:// IP or hostname users will open}
+      FLOCK_ALLOWED_ORIGINS: ${FLOCK_ALLOWED_ORIGINS:?Set the exact http:// browser origin}
+      FLOCK_PREVIEW_BACKEND: ${FLOCK_PREVIEW_BACKEND:-port-pool}
+      FLOCK_PREVIEW_PORT_RANGE: ${FLOCK_PREVIEW_PORT_RANGE:-12000-12031}
+      FLOCK_PREVIEW_POOL_HOST: 0.0.0.0
+      FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-}
+    ports:
+      - '${FLOCK_PREVIEW_BIND_ADDRESS:-0.0.0.0}:${FLOCK_PREVIEW_PORT_RANGE:-12000-12031}:${FLOCK_PREVIEW_PORT_RANGE:-12000-12031}'

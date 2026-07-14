@@ -120,8 +120,10 @@ jobs:
             dockerfile: docker/Dockerfile.orchestrator
           - image: shepherd-web
             dockerfile: docker/Dockerfile.web
-          - image: shepherd-session-chrome
-            dockerfile: docker/Dockerfile.session-chrome
+          - image: shepherd-caddy
+            dockerfile: docker/Dockerfile.caddy
+          - image: shepherd-postgres
+            dockerfile: docker/Dockerfile.postgres
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       CANDIDATE_TAG: candidate-${{ github.sha }}
@@ -155,6 +157,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.licenses=MIT
+          build-args: |
+            RELEASE_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max
@@ -165,11 +169,46 @@ jobs:
           mkdir -p digests
           printf '%s\n' '${{ steps.push.outputs.digest }}' > 'digests/${{ matrix.image }}.digest'
 
+      - name: Reject new or overdue high and critical image vulnerabilities
+        run: |
+          mkdir -p .trivy-cache trivy-reports
+          for platform in linux/amd64 linux/arm64; do
+            platform_slug="${platform//\//-}"
+            docker pull --platform "$platform" "$IMAGE:$CANDIDATE_TAG"
+
+            # Keep the complete unfiltered inventory as a release artifact.
+            docker run --rm --user 0 \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
+              -v "$GITHUB_WORKSPACE/trivy-reports:/reports" \
+              aquasec/trivy:0.66.0 image \
+              --platform "$platform" --scanners vuln --format json \
+              --output "/reports/${{ matrix.image }}-${platform_slug}-full.json" \
+              --severity HIGH,CRITICAL \
+              "$IMAGE:$CANDIDATE_TAG"
+
+            # The expiring register suppresses only reviewed, upstream-unfixed
+            # findings. Any new finding—or expired review—fails the release.
+            docker run --rm --user 0 \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
+              -v "$GITHUB_WORKSPACE:/workspace:ro" \
+              aquasec/trivy:0.66.0 image \
+              --platform "$platform" \
+              --exit-code 1 --quiet --scanners vuln \
+              --ignorefile /workspace/.trivyignore.yaml \
+              --severity HIGH,CRITICAL \
+              "$IMAGE:$CANDIDATE_TAG"
+          done
+
       - name: Upload digest
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digest-${{ matrix.image }}
-          path: digests/
+          path: |
+            digests/
+            trivy-reports/
           retention-days: 30
 
       - name: Attest build provenance
@@ -193,6 +232,7 @@ jobs:
       HTTP_HOST_PORT: '18080'
       HTTPS_HOST_PORT: '18443'
       FLOCK_DOMAIN: localhost
+      FLOCK_PREVIEW_DOMAIN: preview.localhost
       PUBLIC_BASE_URL: https://localhost:18443
       FLOCK_ALLOWED_ORIGINS: https://localhost:18443
       FLOCK_INSTALL_CLAUDE_CODE: '0'
@@ -211,20 +251,19 @@ jobs:
           mkdir -p secrets
           openssl rand -base64 32 > secrets/flock_master_key
           openssl rand -base64 32 > secrets/postgres_password
-          openssl rand -base64 48 > secrets/browser_worker_token
+          openssl rand -base64 48 > secrets/setup_token
           chmod 600 secrets/*
 
       - name: Pull exact candidates
         run: |
-          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
             docker pull "$FLOCK_IMAGE_REGISTRY/$image:$CANDIDATE_TAG"
           done
 
       - name: Start clean candidate stack
         env:
           FLOCK_VERSION: ${{ env.CANDIDATE_TAG }}
-          BROWSER_IMAGE: ${{ env.FLOCK_IMAGE_REGISTRY }}/shepherd-session-chrome:${{ env.CANDIDATE_TAG }}
-        run: docker compose up -d --no-build --wait postgres browser-worker orchestrator web caddy
+        run: docker compose up -d --no-build --wait postgres orchestrator web caddy
 
       - name: Verify migrations, readiness, setup, login, and API
         run: |
@@ -233,10 +272,12 @@ jobs:
           docker compose exec -T orchestrator node -e \
             "fetch('http://127.0.0.1:8080/ready').then(async r => { console.log(await r.text()); process.exit(r.ok ? 0 : 1) })" \
             | tee -a release-smoke.log
-          curl --fail --silent --show-error --insecure \
-            -H 'content-type: application/json' \
-            -d '{"username":"release-owner","password":"Release-Smoke-Only-2026!"}' \
-            https://localhost:18443/api/auth/setup | tee -a release-smoke.log
+          setup_token="$(cat secrets/setup_token)"
+          jq -n --arg token "$setup_token" \
+            '{username:"release-owner",password:"Release-Smoke-Only-2026!",setupToken:$token}' \
+            | curl --fail --silent --show-error --insecure \
+                -H 'content-type: application/json' --data-binary @- \
+                https://localhost:18443/api/auth/setup | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure -c release-cookies.txt \
             -H 'content-type: application/json' \
             -d '{"username":"release-owner","password":"Release-Smoke-Only-2026!"}' \
@@ -254,22 +295,84 @@ jobs:
           curl --fail --silent --show-error --insecure -b release-cookies.txt \
             https://localhost:18443/api/diagnostics | tee release-diagnostics.json
 
-      - name: Verify constrained browser worker policy and lifecycle
+      - name: Verify isolated Remote Preview end to end
         run: |
           set -eu
-          test "$(docker compose exec -T browser-worker sh -lc \
-            "curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/containers/create")" = 401
-          docker compose exec -T browser-worker sh -lc '
-            token="$(cat /run/secrets/browser_worker_token)"
-            id=11111111-1111-4111-8111-111111111111
-            test "$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $token" \
-              -H "Content-Type: application/json" -d "{\"sessionId\":\"$id\",\"privileged\":true}" \
-              http://127.0.0.1:8090/v1/browsers)" = 400
-            curl --fail --silent -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
-              -d "{\"sessionId\":\"$id\"}" http://127.0.0.1:8090/v1/browsers
-            curl --fail --silent -X DELETE -H "Authorization: Bearer $token" \
-              "http://127.0.0.1:8090/v1/browsers/$id"
-          ' | tee -a release-smoke.log
+          origin='https://localhost:18443'
+          auth=(-b release-cookies.txt -H "origin: $origin")
+
+          node_id="$(curl --fail --silent --show-error --insecure -b release-cookies.txt \
+            "$origin/api/nodes" | jq -r '.nodes[] | select(.kind == "local") | .id' | head -n 1)"
+          test -n "$node_id"
+
+          project_id="$(jq -n --arg nodeId "$node_id" \
+            '{nodeId:$nodeId,name:"release-preview",workingDir:"/home/flock-agent"}' \
+            | curl --fail --silent --show-error --insecure "${auth[@]}" \
+                -H 'content-type: application/json' --data-binary @- \
+                "$origin/api/projects" | jq -r '.project.id')"
+          test -n "$project_id"
+
+          dev_command="node -e \"require('node:http').createServer((_req,res)=>res.end('shepherd-preview-ok')).listen(39001,'127.0.0.1')\""
+          session_id="$(jq -n --arg projectId "$project_id" --arg devCommand "$dev_command" \
+            '{projectId:$projectId,agentType:"dev",devCommand:$devCommand}' \
+            | curl --fail --silent --show-error --insecure "${auth[@]}" \
+                -H 'content-type: application/json' --data-binary @- \
+                "$origin/api/sessions" | jq -r '.session.id')"
+          test -n "$session_id"
+
+          service_id="$(jq -n \
+            '{targetHost:"127.0.0.1",targetPort:39001,protocol:"http",label:"Release Preview",autoForward:false}' \
+            | curl --fail --silent --show-error --insecure "${auth[@]}" \
+                -H 'content-type: application/json' --data-binary @- \
+                "$origin/api/projects/$project_id/ports" | jq -r '.port.serviceId')"
+          test -n "$service_id"
+
+          status=''
+          for _attempt in $(seq 1 30); do
+            status="$(jq -n '{}' \
+              | curl --silent --show-error --insecure "${auth[@]}" --data-binary @- \
+                  -H 'content-type: application/json' \
+                  -o release-preview.json -w '%{http_code}' \
+                  "$origin/api/projects/$project_id/ports/$service_id/forward" || true)"
+            [ "$status" = 201 ] && break
+            sleep 1
+          done
+          test "$status" = 201
+
+          launch_url="$(jq -r '.launchUrl' release-preview.json)"
+          preview_origin="${launch_url%%/_shepherd/*}"
+          preview_host="$(printf '%s' "$preview_origin" | sed -E 's#^https?://([^:/]+).*#\1#')"
+          preview_token="${launch_url##*#token=}"
+          test -n "$preview_host"
+          test -n "$preview_token"
+
+          for internal_path in '/_shepherd/caddy-ask' '/_shepherd/health'; do
+            internal_status="$(curl --silent --show-error --insecure \
+              --resolve "$preview_host:18443:127.0.0.1" \
+              -o /dev/null -w '%{http_code}' "$preview_origin$internal_path")"
+            test "$internal_status" = 404
+          done
+
+          jq -n --arg token "$preview_token" '{token:$token}' \
+            | curl --fail --silent --show-error --insecure \
+                --resolve "$preview_host:18443:127.0.0.1" \
+                -c release-preview-cookies.txt \
+                -H 'content-type: application/json' --data-binary @- \
+                "$preview_origin/_shepherd/authorize"
+          curl --fail --silent --show-error --insecure \
+            --resolve "$preview_host:18443:127.0.0.1" \
+            -b release-preview-cookies.txt "$preview_origin/" \
+            | grep -q '^shepherd-preview-ok$'
+
+          curl --fail --silent --show-error --insecure "${auth[@]}" -X DELETE \
+            "$origin/api/projects/$project_id/ports/$service_id/forward" >/dev/null
+          revoked_status="$(curl --silent --show-error --insecure \
+            --resolve "$preview_host:18443:127.0.0.1" \
+            -b release-preview-cookies.txt -o /dev/null -w '%{http_code}' \
+            "$preview_origin/")"
+          test "$revoked_status" = 404
+          curl --fail --silent --show-error --insecure "${auth[@]}" -X DELETE \
+            "$origin/api/sessions/$session_id" >/dev/null
 
       - name: Collect candidate diagnostics
         if: always()
@@ -333,7 +436,7 @@ jobs:
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
-          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
             digest="$(cat "digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
@@ -362,7 +465,7 @@ jobs:
           docker logout ghcr.io
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
-          for image in shepherd-orchestrator shepherd-web shepherd-session-chrome; do
+          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
             if ! manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"; then
               printf '::error::%s must be public before this release can be published. Set Package settings → Change visibility → Public, then rerun failed jobs.\n' "$REGISTRY/$image"
               exit 1
@@ -406,7 +509,7 @@ jobs:
           # shellcheck disable=SC2086
           release_version="${TAG#v}"
           {
-            printf 'The first public Shepherd release: run and supervise coding agents across local and remote nodes from one responsive Paddock.\n\n'
+            printf 'Shepherd %s: guide coding agents across local and remote nodes from one responsive Paddock.\n\n' "$release_version"
             awk -v version="$release_version" '
               index($0, "## [" version "]") == 1 { found = 1; next }
               found && /^## \[/ { exit }

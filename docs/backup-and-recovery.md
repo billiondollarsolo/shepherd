@@ -64,15 +64,17 @@ The restore process:
 8. retains the prior database under the reported rollback name.
 
 After restart, Shepherd reconciles session metadata with agentd. Session rows, Pens,
-preferences, events, capabilities, and encrypted credential envelopes are durable;
-running processes are not snapshotted by the vault.
+preferences, events, saved `project_services`, Preview runtime preferences, capabilities,
+and encrypted credential envelopes are durable. Active Preview origins, launch tokens,
+cookie material, sockets, listener snapshots, and running processes are not snapshotted;
+restored project services correctly return as stopped and require a fresh capability.
 
 ## Validation schedule
 
 - Create and verify a vault before every destructive migration or upgrade.
 - Restore the latest vault into an isolated installation at least quarterly.
 - Test the master-key copy at the same time; never print it into logs.
-- Confirm login, node/project order, Pens, sessions, events, and encrypted SSH
-  credential use after the drill.
+- Confirm login, node/project order, Pens, sessions, events, saved project Ports in a
+  stopped state, and encrypted SSH credential use after the drill.
 - Retain at least one known-good vault from the prior Shepherd major version until the
   new version has passed its restore drill.

@@ -6,7 +6,9 @@ import { UserSchema } from '../domain.js';
 /** POST /api/auth/setup — first-run owner creation (409 once an owner exists). */
 export const SetupRequest = z.object({
   username: z.string().min(1),
-  password: z.string().min(8),
+  password: z.string().min(12),
+  /** Out-of-band fresh-install capability; required when production config says so. */
+  setupToken: z.string().min(1).optional(),
 });
 export type SetupRequest = z.infer<typeof SetupRequest>;
 export const SetupResponse = z.object({ user: UserSchema });
@@ -34,10 +36,31 @@ export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequest>;
 export const UpdateProfileResponse = z.object({ user: UserSchema });
 export type UpdateProfileResponse = z.infer<typeof UpdateProfileResponse>;
 
+/** Browser-facing deployment posture. Safe to expose before authentication. */
+export const DeploymentModeSchema = z.enum([
+  'builtin-tls',
+  'external-tls',
+  'private-http',
+  'development',
+]);
+export type DeploymentMode = z.infer<typeof DeploymentModeSchema>;
+
+export const DeploymentStatusSchema = z.object({
+  mode: DeploymentModeSchema,
+  transport: z.enum(['https', 'http']),
+  /** Present only when the operator deliberately selected an unencrypted mode. */
+  warning: z.string().nullable(),
+});
+export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>;
+
 /**
  * GET /api/auth/status — public first-run probe. `setupRequired` is true until
  * the installation owner exists, so the sign-in UI can show first-run setup
  * vs. "sign in" without a destructive POST.
  */
-export const AuthStatusResponse = z.object({ setupRequired: z.boolean() });
+export const AuthStatusResponse = z.object({
+  setupRequired: z.boolean(),
+  setupTokenRequired: z.boolean(),
+  deployment: DeploymentStatusSchema,
+});
 export type AuthStatusResponse = z.infer<typeof AuthStatusResponse>;

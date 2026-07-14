@@ -9,3 +9,7 @@ export * from './surface-guard.js';
 export * from './routes.js';
 export * from './audit-sink.js';
 export * from './origin-policy.js';
+export * from './request-origin.js';
+export * from './setup-token.js';
+export * from './login-throttle.js';
+export * from './persistent-login-throttle.js';

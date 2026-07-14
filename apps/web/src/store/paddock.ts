@@ -46,10 +46,11 @@ export type SettingsSection =
   | 'nodes'
   | 'account'
   | 'operations'
+  | 'deployment-preview'
   | 'about';
 
 /** Which view the right-hand session panel shows (Codex-style side panel). */
-export type RightTab = 'chat' | 'activity' | 'browser' | 'diff' | 'files' | 'search' | 'notes';
+export type RightTab = 'chat' | 'activity' | 'diff' | 'files' | 'search' | 'notes';
 
 export type PenAction = {
   type: 'add' | 'remove' | 'move' | 'select' | 'create' | 'arrange' | 'rename' | 'delete';
@@ -173,7 +174,7 @@ export interface PaddockUiState {
 
   rightTab: RightTab;
   rightOpen: boolean;
-  projectView: 'agents' | 'git';
+  projectView: 'agents' | 'git' | 'ports';
 
   diffSelectedPath: string | null;
   diffSelectedStaged: boolean | null;
@@ -222,6 +223,7 @@ export interface PaddockUiState {
   toggleGridLayout: () => void;
   openRight: (tab: RightTab) => void;
   openProjectGit: (projectId: string) => void;
+  openProjectPorts: (projectId: string) => void;
   toggleRight: () => void;
   selectDiffFile: (path: string | null, staged?: boolean | null) => void;
   openFileInViewer: (path: string) => void;
@@ -439,6 +441,18 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       lens: 'agents',
       view: 'paddock',
       projectView: 'git',
+      rightOpen: false,
+      chrome: 'stage',
+      zoomLeafId: null,
+    }),
+  openProjectPorts: (projectId) =>
+    set({
+      selectedSessionId: null,
+      selectedProjectId: projectId,
+      nodeInfoNodeId: null,
+      lens: 'agents',
+      view: 'paddock',
+      projectView: 'ports',
       rightOpen: false,
       chrome: 'stage',
       zoomLeafId: null,

@@ -32,7 +32,7 @@ function requireText(file, expected) {
 const expected = {
   'apps/web/src/brand.ts': [
     "PRODUCT_NAME = 'Shepherd'",
-    "PRODUCT_TAGLINE = 'Shepherd Your Agents'",
+    "PRODUCT_TAGLINE = 'Guide Your Flock Of Agents'",
     'Manage nodes, projects, and CLI coding agents from one web paddock.',
     "PRODUCT_REPOSITORY_URL = 'https://github.com/billiondollarsolo/shepherd'",
   ],
@@ -49,7 +49,7 @@ const expected = {
   'apps/web/public/sw.js': ["title: 'Shepherd'", "data.title || 'Shepherd'"],
   'apps/web/public/icons/icon.svg': ['aria-label="Shepherd"'],
   'apps/web/public/icons/icon-maskable.svg': ['aria-label="Shepherd"'],
-  'README.md': ['# Shepherd', '### Shepherd Your Agents', '## What is Shepherd?'],
+  'README.md': ['# Shepherd', '### Guide Your Flock Of Agents', '## What is Shepherd?'],
   'docs/README.md': ['# Shepherd documentation'],
   '.github/ISSUE_TEMPLATE/bug_report.yml': ['Shepherd version'],
   '.github/ISSUE_TEMPLATE/feature_request.yml': [
@@ -73,7 +73,12 @@ for (const [file, expectedName] of Object.entries(packageNames)) {
 
 const retainedContracts = {
   'agentd/go.mod': ['module github.com/billiondollarsolo/flock/agentd'],
-  'docker-compose.yml': ['shepherd-orchestrator:', 'shepherd-web:', 'shepherd-session-chrome:'],
+  'docker-compose.yml': [
+    'shepherd-orchestrator:',
+    'shepherd-web:',
+    'shepherd-caddy:',
+    'shepherd-postgres:',
+  ],
   'apps/web/src/theme/themeContext.ts': ["THEME_STORAGE_KEY = 'flock.theme'"],
   'apps/web/public/sw.js': [
     "const SHELL_CACHE = 'flock-shell-v2'",

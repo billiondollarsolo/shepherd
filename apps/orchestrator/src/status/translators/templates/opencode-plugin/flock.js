@@ -12,9 +12,8 @@
  * interprets events.
  *
  * Auth + addressing — read from the per-session environment Shepherd injects when
- * it launches the agent (one `session_id` threads the tmux session name, the
- * hook token, and the browser CDP endpoint — the single authoritative session
- * record, spec §4.2 invariant):
+ * it launches the agent (one `session_id` threads the tmux session name, hook
+ * token, node, project, and owner — the single authoritative session record):
  *
  *   FLOCK_HOOK_URL    full URL of `POST /api/hooks/:sessionId` reached over the
  *                     loopback-bound reverse tunnel (SSH nodes) or directly

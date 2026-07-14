@@ -1,6 +1,6 @@
 /**
  * SessionPane — the center region for a selected session: a slim Codex-style
- * header (breadcrumb · status · actions) above the Terminal | Browser | Diff tab
+ * header (breadcrumb · status · actions) above the focused agent terminal
  * group. Shows a calm empty state when nothing is selected.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -379,8 +379,6 @@ export function SessionPane(): JSX.Element {
     const st = usePaddock.getState();
     if (/edit|write|patch|apply|create|str_replace|multiedit/.test(lastTool.text)) {
       if (st.rightTab !== 'diff') st.openRight('diff');
-    } else if (/web|browser|fetch|url|navigate|screenshot/.test(lastTool.text)) {
-      if (st.rightTab !== 'browser') st.openRight('browser');
     }
   }, [lastTool, assistivePanels]);
 

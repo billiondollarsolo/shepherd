@@ -1,4 +1,14 @@
 # =============================================================================
+{
+	# A container cannot install its local CA into the host trust store. Avoid a
+	# misleading startup error for localhost; operators may trust the persisted
+	# root certificate explicitly when they use the local TLS profile.
+	skip_install_trust
+
+	on_demand_tls {
+		ask http://orchestrator:8081/_shepherd/caddy-ask
+	}
+}
 # Shepherd — reverse proxy + TLS termination (US-39, NFR-SEC1).
 #
 # Caddy terminates TLS in front of the orchestrator and web bundle so that ALL
@@ -17,17 +27,9 @@
 #                  Let's Encrypt certificate. Defaults to `localhost`, for which
 #                  Caddy mints a locally-trusted internal cert (good for dev/CI
 #                  and IP-only deploys).
-#   ACME_EMAIL     contact email for the ACME account (optional but recommended).
 # Certificates + ACME account keys persist in the `caddy_data` named volume so
 # they survive restarts and are never baked into the image.
 # =============================================================================
-
-# NOTE: the ACME account email is intentionally NOT set as a global option here.
-# A global `email {$ACME_EMAIL}` fails to parse when ACME_EMAIL is empty (the
-# placeholder expands to zero arguments). Caddy provisions certs fine without an
-# explicit email (internal cert for localhost; Let's Encrypt for a real domain).
-# To register an ACME contact email, set it per-site via a `tls {$ACME_EMAIL}`
-# directive only when you know it is non-empty.
 
 {$FLOCK_DOMAIN:localhost} {
 	# --- Security headers --------------------------------------------------
@@ -41,8 +43,7 @@
 		# Vite emits external module scripts. Ghostty needs WebAssembly compilation
 		# (`wasm-unsafe-eval`, not general `unsafe-eval`); React components use
 		# runtime style attributes, hence the narrowly documented style exception.
-		# Screencast frames are rendered as in-memory data:image/jpeg URLs.
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://{$FLOCK_DOMAIN:localhost}; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src 'none'; upgrade-insecure-requests"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://{$FLOCK_DOMAIN:localhost}; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src https://*.{$FLOCK_PREVIEW_DOMAIN:preview.localhost}; upgrade-insecure-requests"
 		Permissions-Policy "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
@@ -58,7 +59,7 @@
 		reverse_proxy orchestrator:8080
 	}
 
-	# --- WebSocket channels (status | pty | screencast | nodes, spec §8.2) -
+	# --- WebSocket channels (status | pty | nodes, spec §8.2) ------------
 	# Caddy proxies the Upgrade/Connection handshake transparently; the
 	# orchestrator authenticates the upgrade from the session cookie
 	# (authenticateUpgrade, NFR-SEC6) and rejects anonymous sockets.
@@ -75,5 +76,25 @@
 	# The React/Vite SPA + service worker. Served by the web (nginx) container.
 	handle {
 		reverse_proxy web:80
+	}
+}
+
+# Local quick start uses `preview.localhost`, for which Caddy selects its local
+# issuer. Public deployments override the suffix and point wildcard DNS at
+# Caddy. In both modes, certificates are issued on demand only after the ask
+# endpoint confirms that Shepherd currently owns that capability.
+*.{$FLOCK_PREVIEW_DOMAIN:preview.localhost} {
+	tls {
+		on_demand
+	}
+	@internalPreviewEndpoint path /_shepherd/caddy-ask /_shepherd/health
+	respond @internalPreviewEndpoint 404
+	reverse_proxy orchestrator:8081
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
 	}
 }

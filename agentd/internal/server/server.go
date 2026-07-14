@@ -18,6 +18,7 @@ import (
 
 	"github.com/billiondollarsolo/flock/agentd/controlauth"
 	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/listeners"
 	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
 	"github.com/billiondollarsolo/flock/agentd/internal/session"
 	"github.com/billiondollarsolo/flock/agentd/proto"
@@ -79,7 +80,7 @@ func New(mgr *session.Manager, version, nodeID, secret, credentialFile string, l
 	return &Server{mgr: mgr, version: version, nodeID: nodeID, secret: secret, credentialFile: credentialFile, layout: layout, runtime: runtime}
 }
 
-var controlCapabilities = []string{"pty", "resize", "scrollback", "status", "node-info", "layout", "acp"}
+var controlCapabilities = []string{"pty", "resize", "scrollback", "status", "node-info", "layout", "acp", "listening_ports_v1"}
 
 // conn is the per-connection state.
 type conn struct {
@@ -268,6 +269,12 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		if blob, err := json.Marshal(combined); err == nil {
 			c.sendControl(proto.Control{Op: "nodeInfo", NodeInfo: blob})
 		}
+	case "listeningPorts":
+		ports, discoveryError := listeners.Snapshot(c.s.mgr.ProcessRoots())
+		c.sendControl(proto.Control{
+			Op: "listeningPorts", ListeningPorts: ports,
+			ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), DiscoveryError: discoveryError,
+		})
 	case "getLayout":
 		if c.s.layout != nil {
 			c.sendControl(proto.Control{Op: "layout", Workspace: ctrl.Workspace, Layout: c.s.layout.Get(ctrl.Workspace)})

@@ -14,7 +14,7 @@
  *  2. `authenticateUpgrade` — the WebSocket upgrade authenticator. The spec
  *     (§8.2) requires "one AUTHED socket": an upgrade with no/invalid session
  *     cookie must be rejected so an anonymous client can never open the status /
- *     pty / screencast / nodes channels (NFR-SEC6).
+ *     PTY / nodes channels (NFR-SEC6).
  *
  * The guard is the safety net that makes default-deny the posture: even a route
  * an author forgets to attach `requireAuth` to is still rejected. The hook
@@ -28,6 +28,7 @@ import {
   isPublicPath,
   isHookPath,
 } from './surface-guard.js';
+import { SESSION_COOKIE } from './cookie.js';
 
 const OWNER: User = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -114,7 +115,7 @@ describe('makeSurfaceAuthGuard (HTTP default-deny)', () => {
   it('rejects a request with an invalid/expired session cookie with 401', async () => {
     const getUserBySession = vi.fn(async () => null);
     const guard = makeSurfaceAuthGuard({ getUserBySession });
-    const req = makeRequest({ url: '/api/sessions', cookie: 'flock_session=deadbeef' });
+    const req = makeRequest({ url: '/api/sessions', cookie: `${SESSION_COOKIE}=deadbeef` });
     const reply = makeReply();
 
     await guard(req as never, reply as never);
@@ -126,7 +127,7 @@ describe('makeSurfaceAuthGuard (HTTP default-deny)', () => {
   it('allows an authenticated request through (no reply sent) and attaches the user', async () => {
     const getUserBySession = vi.fn(async () => OWNER);
     const guard = makeSurfaceAuthGuard({ getUserBySession });
-    const req = makeRequest({ url: '/api/sessions', cookie: 'flock_session=good' });
+    const req = makeRequest({ url: '/api/sessions', cookie: `${SESSION_COOKIE}=good` });
     const reply = makeReply();
 
     await guard(req as never, reply as never);
@@ -181,7 +182,7 @@ describe('authenticateUpgrade (WebSocket)', () => {
     const getUserBySession = vi.fn(async () => null);
     const result = await authenticateUpgrade(
       { getUserBySession },
-      { headers: { cookie: 'flock_session=deadbeef' } },
+      { headers: { cookie: `${SESSION_COOKIE}=deadbeef` } },
     );
     expect(result.ok).toBe(false);
     expect(getUserBySession).toHaveBeenCalledWith('deadbeef');
@@ -191,7 +192,7 @@ describe('authenticateUpgrade (WebSocket)', () => {
     const getUserBySession = vi.fn(async () => OWNER);
     const result = await authenticateUpgrade(
       { getUserBySession },
-      { headers: { cookie: 'flock_session=good' } },
+      { headers: { cookie: `${SESSION_COOKIE}=good` } },
     );
     expect(result.ok).toBe(true);
     if (result.ok) {

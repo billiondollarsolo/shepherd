@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from './flock-test';
  * Full flow, in order (spec §9 / §13 Phase 6):
  *   first-run setup → login → add local node → create project →
  *   create Claude session → terminal renders → trigger `awaiting_input` →
- *   sidebar rings + push fires → open Browser tab → screencast renders → terminate.
+ *   sidebar rings + push fires → inspect Remote Preview controls → terminate.
  *
  * Unlike the other specs in this directory (shell/theme/terminal/responsive),
  * which use the `flock.e2e.authed` localStorage bypass for pure-DOM smokes,
@@ -321,26 +321,12 @@ test.describe('US-41 — e2e happy path', () => {
         });
       });
 
-    // ===== 9. open the Browser tab → screencast renders =====
-    await clickFirst(page, ['tab-browser', /^browser$/i]);
-    // Layer C screencast streams JPEG frames over screencast:<id> into a canvas
-    // /img on demand (US-27). The element appears and starts painting.
-    const screencast = await firstAttached([
-      page.getByTestId('screencast'),
-      page.locator('[data-screencast]'),
-      page.locator('canvas.screencast, img.screencast'),
-    ]);
-    await expect(screencast).toBeVisible({ timeout: 45_000 });
-    // A frame has been received (non-zero rendered size).
-    const box = await screencast.boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThan(0);
-    expect(box?.height ?? 0).toBeGreaterThan(0);
-
-    // The browser endpoint belongs to THIS session id (spec §4.2 thread-through).
-    const browserPane = page.getByTestId('browser-pane');
-    if ((await browserPane.count()) > 0) {
-      await expect(browserPane).toHaveAttribute('data-session-id', sid);
-    }
+    // ===== 9. Ports and Preview are project-owned =====
+    await clickFirst(page, ['project-ports', /^ports$/i]);
+    await expect(page.getByTestId('project-ports-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ports' })).toBeVisible();
+    await expect(page.getByText(/forwards belong to the project/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /forward a port/i })).toBeVisible();
 
     // ===== 10. terminate the session =====
     await clickFirst(page, ['terminate-session', /terminate|stop session|kill/i]);

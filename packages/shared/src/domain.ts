@@ -153,8 +153,15 @@ export const AuditActionEnum = z.enum([
   'agent_policy_event',
   'session_create',
   'session_terminate',
-  'browser_takeover',
-  'browser_release',
+  'preview_create',
+  'preview_revoke',
+  'preview_forward_start',
+  'preview_forward_stop',
+  'preview_forward_expire',
+  'preview_service_save',
+  'preview_service_forget',
+  'preview_settings_update',
+  'preview_test',
   'secret_access',
   'owner_setup',
 ]);
@@ -221,7 +228,7 @@ export type Project = z.infer<typeof ProjectSchema>;
  *
  * Invariant (asserted in tests): one `id` (the session_id) names the tmux
  * session (`tmuxSessionName`), scopes the hook token (`hookTokenHash`), and
- * binds the browser endpoint (`browserCdpEndpoint`). `status` here is the
+ * scopes the hook token (`hookTokenHash`). `status` here is the
  * write-behind MIRROR of the in-memory authoritative status (spec §6.6).
  */
 export const SessionRecordSchema = z.object({
@@ -231,8 +238,6 @@ export const SessionRecordSchema = z.object({
   agentType: AgentTypeEnum,
   tmuxSessionName: z.string().min(1),
   workingDir: z.string().min(1),
-  /** Opaque CDP ws URL including a GUID; null until a browser is started. */
-  browserCdpEndpoint: z.string().url().nullable(),
   /** Hash of the per-session hook token (NFR-SEC3); never the plaintext. */
   hookTokenHash: z.string().min(1),
   status: StatusEnum,
@@ -256,14 +261,13 @@ export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 
 /**
  * Browser-safe session view. Control-plane identity and capability material are
- * deliberately absent: the web never needs the daemon handle, raw CDP endpoint,
- * hook-token hash, or creating-user id. Keep this allowlist-shaped projection at
+ * deliberately absent: the web never needs the daemon handle, hook-token hash,
+ * or creating-user id. Keep this allowlist-shaped projection at
  * the shared contract boundary so adding an internal field cannot leak it
  * accidentally through a REST response.
  */
 export const SessionSchema = SessionRecordSchema.omit({
   tmuxSessionName: true,
-  browserCdpEndpoint: true,
   hookTokenHash: true,
   createdBy: true,
 });

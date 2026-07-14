@@ -8,6 +8,8 @@ import {
   makeDbAuthAuditRecorder,
   makeDbAuditSink,
   readOriginPolicy,
+  readSetupToken,
+  PersistentLoginThrottle,
 } from './auth/index.js';
 import { AuditQueryService, DrizzleAuditReadStore } from './audit/index.js';
 import { AuditLogger } from './audit/index.js';
@@ -69,7 +71,6 @@ import { ProjectPensService } from './me/project-pens-service.js';
 import { agentSessions } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createLiveChannels } from './live-channels.js';
-import { createBrowserChannels } from './browser-channels.js';
 import { EventReadService } from './events/index.js';
 import {
   PushService,
@@ -86,6 +87,12 @@ import { createGracefulShutdown, installShutdownSignals } from './runtime/gracef
 import { DiagnosticSink } from './runtime/diagnostics.js';
 import { collectDiagnostics } from './operations/diagnostics.js';
 import { BoundedTtlMap } from './runtime/bounded-ttl-map.js';
+import {
+  createPreviewGateway,
+  PreviewService,
+  ProjectPortsService,
+  readPreviewConfig,
+} from './preview/index.js';
 
 /**
  * Entry point. Starts the HTTP server ONLY when this module is run directly
@@ -106,7 +113,7 @@ export async function main(): Promise<void> {
   for (const file of [
     process.env.FLOCK_MASTER_KEY_FILE,
     process.env.POSTGRES_PASSWORD_FILE,
-    process.env.BROWSER_WORKER_TOKEN_FILE,
+    process.env.FLOCK_SETUP_TOKEN_FILE,
   ]) {
     if (!file) continue;
     try {
@@ -126,10 +133,13 @@ export async function main(): Promise<void> {
     diagnostics.record({ category, operation, message: error, context });
   };
   const originPolicy = readOriginPolicy(process.env);
+  const setupToken = readSetupToken(process.env);
+  const previewConfig = readPreviewConfig(process.env, originPolicy.publicBaseUrl);
   // eslint-disable-next-line no-console
   console.log(describeOriginPolicy(originPolicy));
   const { db, pool } = getDb();
-  const auth = new AuthService({ db, audit: makeDbAuthAuditRecorder(db) });
+  const auth = new AuthService({ db, audit: makeDbAuthAuditRecorder(db), setupToken });
+  const loginThrottle = new PersistentLoginThrottle(db);
 
   // US-40: owner audit read surface (GET /api/audit). Reads the append-only
   // audit_log off the live status path; guarded by authentication.
@@ -181,6 +191,7 @@ export async function main(): Promise<void> {
 
   // Node / project / session CRUD (FR-N1/N2/N3, FR-S2/S3). Creating an SSH node
   // fires a managed connect; removing one tears it down.
+  let revokeNodePreviews = (_nodeId: string): void => {};
   const nodes = new NodeService({
     db,
     secrets,
@@ -191,6 +202,7 @@ export async function main(): Promise<void> {
         .catch((error) => recordFailure('ssh', 'connect-created-node', error, { nodeId: id }));
     },
     onNodeRemoved: (id) => {
+      revokeNodePreviews(id);
       void connections
         .disconnectNode(id)
         .catch((error) => recordFailure('ssh', 'disconnect-removed-node', error, { nodeId: id }));
@@ -211,6 +223,27 @@ export async function main(): Promise<void> {
   // resolve the node's transport, or null when unreachable (routes map null → 422).
   const transportForNode = async (nodeId: string) =>
     connections.transportFor(nodeId).catch(() => null);
+  const previews = new PreviewService({
+    db,
+    audit: auditLogger,
+    config: previewConfig,
+    transportForNode,
+  });
+  const previewGateway = createPreviewGateway(previews, {
+    host: previewConfig.listenHost,
+    port: previewConfig.listenPort,
+    pool:
+      previewConfig.backend === 'port_pool' && previewConfig.portRange
+        ? {
+            host: previewConfig.poolListenHost,
+            ports: Array.from(
+              { length: previewConfig.portRange.capacity },
+              (_, index) => previewConfig.portRange!.start + index,
+            ),
+          }
+        : null,
+  });
+  revokeNodePreviews = (nodeId) => previews.revokeForNode(nodeId);
 
   // Node filesystem browse (path picker): lists directories on any node.
   const nodeFs = new NodeFsService({ transports: { transportForNode } });
@@ -347,6 +380,62 @@ export async function main(): Promise<void> {
   // used by the teardown paths to close PTYs without forcing a reconnect.
   const peekClientForNode = (nodeId: string): NodeAgentdClient | null =>
     nodeId === localNodeId ? agentdConns.peekLocal() : agentdConns.peekRemote(nodeId);
+
+  const projectPorts = new ProjectPortsService({
+    db,
+    audit: auditLogger,
+    previews,
+    discover: async (nodeId) => {
+      const node = await nodes.getNode(nodeId);
+      if (!node) {
+        return {
+          supported: false,
+          healthy: false,
+          reason: 'Project node no longer exists.',
+          observedAt: null,
+          ports: [],
+        };
+      }
+      const client = await agentdClientForNode(node.id, node.kind);
+      if (!client) {
+        return {
+          supported: false,
+          healthy: false,
+          reason: 'Node daemon is unreachable; enter a port manually or reconnect the node.',
+          observedAt: null,
+          ports: [],
+        };
+      }
+      if (!client.supports('listening_ports_v1')) {
+        return {
+          supported: false,
+          healthy: false,
+          reason:
+            'Upgrade this node daemon for automatic port discovery; manual forwarding remains available.',
+          observedAt: null,
+          ports: [],
+        };
+      }
+      try {
+        const snapshot = await client.listeningPorts();
+        return {
+          supported: true,
+          healthy: snapshot.degradedReason === null,
+          reason: snapshot.degradedReason,
+          observedAt: snapshot.observedAt,
+          ports: snapshot.ports,
+        };
+      } catch (error) {
+        return {
+          supported: true,
+          healthy: false,
+          reason: error instanceof Error ? error.message : 'Listener discovery failed.',
+          observedAt: null,
+          ports: [],
+        };
+      }
+    },
+  });
 
   // flock-agentd connection health (the paddock's green dot). Per ssh node: is the
   // multiplexed daemon link live (cached client). Per open session: is its PTY
@@ -608,7 +697,7 @@ export async function main(): Promise<void> {
   // never wired in before — without them a session sits at "starting" with no
   // events and the terminal shows "reconnecting".
   // T4/T5: WS upgrade authorizer — Origin check + cookie→user + per-session
-  // ownership. Shared by the PTY, status, and screencast sockets.
+  // ownership. Shared by the PTY and status sockets.
   const wsAuthorize = makeWsAuthorizer({
     allowedOrigins: originPolicy.allowedOrigins,
     resolveUser: async (cookieHeader) => {
@@ -760,18 +849,6 @@ export async function main(): Promise<void> {
     );
   }
 
-  // Per-session browser feature (US-25/27): a headless Chrome container + its
-  // CDP screencast streamed over /ws/screencast/:id. Built across browser/layer*
-  // but never wired before — without it the Browser pane sat at "connecting…".
-  const browserChannels = createBrowserChannels({
-    audit: auditLogger,
-    resolveUserId,
-    authorizeUpgrade: wsAuthorize, // T4/T5: origin + owner check on screencast upgrades
-    logger: {
-      warn: (message, error) => recordFailure('browser', message, error),
-    },
-  });
-
   // Where agent hook callbacks POST. Over an SSH node the agent curls localhost
   // (the reverse tunnel forwards it back); locally it hits the orchestrator
   // directly. PUBLIC_BASE_URL is the orchestrator's own origin.
@@ -884,8 +961,8 @@ export async function main(): Promise<void> {
 
   // Terminate (US-13, FR-S5): close the agent's flock-agentd session on its node
   // (kill the agent), mark the record closed, drop it from live channels, audit.
-  // Detaching the browser does NOT terminate (the daemon persists the agent) —
-  // this is the only place a session is killed. Best-effort via the cached link.
+  // Closing a browser tab does NOT terminate the daemon-backed agent. This is the
+  // only place a session is killed. Best-effort via the cached node link.
   const sessionRegistry = new DrizzleSessionRegistry(db);
   const terminateSession = new TerminateSessionService({
     registry: sessionRegistry,
@@ -915,11 +992,6 @@ export async function main(): Promise<void> {
       liveChannels.untrackSession(sessionId);
       agentdSessionMeta.delete(sessionId); // free the per-session telemetry cache (was never evicted)
       forgetPlan(sessionId);
-      // Tear down the session's browser (stream + CDP client + Chrome container)
-      // so no container orphans (FR-B6). Best-effort, off the terminate result.
-      void browserChannels
-        .stopFor(sessionId)
-        .catch((error) => recordFailure('browser', 'stop-session', error, { sessionId }));
       return result;
     },
   };
@@ -1090,9 +1162,6 @@ export async function main(): Promise<void> {
   // Don't keep the process alive solely for the poller.
   reconcileTimer.unref?.();
 
-  // Sweep any browser containers orphaned by a prior crash (FR-B6).
-  void browserChannels.reap().catch((error) => recordFailure('browser', 'reap', error));
-
   // Read-only `git diff` for the center pane's Diff tab (US-33). Runs `git diff`
   // on the session's node via its transport. Built+tested but never wired before
   // — without it `GET /api/sessions/:id/diff` 404s and the Diff tab shows the
@@ -1112,6 +1181,9 @@ export async function main(): Promise<void> {
   // seam directly. TLS is terminated by the upstream Caddy proxy (NFR-SEC1).
   const app = buildServer({
     auth,
+    loginThrottle,
+    authDeployment: originPolicy.deployment,
+    browserOrigins: originPolicy.allowedOrigins,
     surfaceAuth: auth,
     audit,
     nodes,
@@ -1124,6 +1196,8 @@ export async function main(): Promise<void> {
       pens: new ProjectPensService(db),
     },
     sessions,
+    previews,
+    projectPorts,
     diff,
     git,
     diagnostics: () =>
@@ -1132,17 +1206,21 @@ export async function main(): Promise<void> {
         sink: diagnostics,
         agentdHealth: agentdHealthSnapshot,
         listNodes: () => nodes.listNodes(),
+        previewHealth: () => ({
+          enabled: previewConfig.enabled,
+          active: previews.size(),
+          reason: previewConfig.reason,
+        }),
         collectionSizes: () => ({
           agentTelemetry: agentdSessionMeta.size,
           daemonProbes: probeCache.size,
           sandboxCapabilities: sandboxAvailableByNode.size,
+          previews: previews.size(),
           ...liveChannels.diagnosticSizes(),
-          ...browserChannels.diagnosticSizes(),
         }),
       }),
     events: new EventReadService(db),
     push: pushRouteDeps,
-    browserControl: browserChannels,
     terminateSession: terminateAndCleanup,
     hookEndpoint: liveChannels.hookService,
     agentdHealth: useAgentd ? agentdHealthSnapshot : undefined,
@@ -1251,7 +1329,7 @@ export async function main(): Promise<void> {
       client.write(targetId, Buffer.from(text.endsWith('\r') ? text : `${text}\r`));
       return true;
     },
-    // kill: terminate a sibling (full cleanup: worktree, browser, untrack).
+    // kill: terminate a sibling (full cleanup: worktree, preview, untrack).
     async (targetId) => {
       try {
         await terminateAndCleanup.terminate(targetId, { userId: '', ip: null });
@@ -1314,20 +1392,27 @@ export async function main(): Promise<void> {
   // LAN-reachable. Multi-container deploys set HOST=0.0.0.0 explicitly (compose).
   const host = process.env.HOST ?? '127.0.0.1';
   await app.listen({ port, host });
+  await previewGateway.listen();
 
-  // Attach the WS bridges to the now-listening HTTP server (status + pty +
-  // browser screencast).
+  // Attach the live status and PTY WebSocket bridges to the HTTP server.
   liveChannels.attach(app.server);
-  browserChannels.attach(app.server);
   // eslint-disable-next-line no-console
   console.log(`[flock-orchestrator] listening on http://${host}:${port}`);
+  console.log(
+    previewConfig.enabled
+      ? previewConfig.backend === 'port_pool' && previewConfig.portRange
+        ? `[shepherd-preview] private pool listening on ${previewConfig.poolListenHost}:${previewConfig.portRange.start}-${previewConfig.portRange.end}`
+        : `[shepherd-preview] hostname gateway listening on ${previewConfig.listenHost}:${previewConfig.listenPort} for *.${previewConfig.domain}`
+      : `[shepherd-preview] disabled: ${previewConfig.reason}`,
+  );
 
   installShutdownSignals(
     createGracefulShutdown({
       stopBackground: () => clearInterval(reconcileTimer),
       closeHttp: () => app.close(),
+      closePreviewGateway: () => previewGateway.close(),
       disposeLiveChannels: () => liveChannels.dispose(),
-      disposeBrowserChannels: () => browserChannels.dispose(),
+      disposePreview: () => previews.dispose(),
       disposeConnections: () => connections.disposeAll(),
       closeDatabase: closeDb,
       log: (message, error) => {

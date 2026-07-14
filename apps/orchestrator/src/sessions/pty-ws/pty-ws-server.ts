@@ -105,7 +105,7 @@ export class PtyWsServer {
 
   /**
    * Bind to an http.Server's `upgrade` event for the pty path. Other paths are
-   * left untouched (so the status/screencast WS servers can claim them).
+   * left untouched (so the status WS server can claim them).
    */
   attach(server: HttpServer): void {
     if (this.upgradeBound) return;
@@ -265,7 +265,7 @@ export class PtyWsServer {
           }
           break;
         default:
-          break; // screencast:quality etc. are not handled by this endpoint
+          break; // unknown control messages are not handled by this endpoint
       }
     });
 

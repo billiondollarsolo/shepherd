@@ -26,6 +26,11 @@ import {
   NodeMakeDirResponse as NodeMakeDirResponseSchema,
   NodeResponse as NodeResponseSchema,
   ProjectResponse as ProjectResponseSchema,
+  ListProjectPortsResponse as ListProjectPortsResponseSchema,
+  ProjectPortResponse as ProjectPortResponseSchema,
+  StartProjectForwardResponse as StartProjectForwardResponseSchema,
+  DeploymentPreviewSettingsResponse as DeploymentPreviewSettingsResponseSchema,
+  PreviewRoutingTestResponse as PreviewRoutingTestResponseSchema,
   SessionPlanResponse as SessionPlanResponseSchema,
   SessionResponse as SessionResponseSchema,
   type CreateNodeRequest,
@@ -51,6 +56,14 @@ import {
   type NodeFsTreeResponse,
   type Project,
   type ProjectResponse,
+  type ListProjectPortsResponse,
+  type ProjectPortResponse,
+  type StartProjectForwardResponse,
+  type DeploymentPreviewSettingsResponse,
+  type PreviewRoutingTestResponse,
+  type SaveProjectPortRequest,
+  type UpdateProjectPortRequest,
+  type UpdatePreviewRuntimeSettingsRequest,
   type NodeResponse,
   type NodeEnvResponse,
   type SessionResponse,
@@ -330,6 +343,111 @@ export function startRace(
 }
 export function getSessionPlan(id: string): Promise<SessionPlanResponse> {
   return apiRequest(`/api/sessions/${id}/plan`, { schema: SessionPlanResponseSchema });
+}
+
+// --- project-owned development ports and Preview --------------------------
+export function listProjectPorts(projectId: string): Promise<ListProjectPortsResponse> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}/ports`, {
+    schema: ListProjectPortsResponseSchema,
+  });
+}
+
+export function refreshProjectPorts(projectId: string): Promise<ListProjectPortsResponse> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}/ports/refresh`, {
+    method: 'POST',
+    schema: ListProjectPortsResponseSchema,
+  });
+}
+
+export function activateProjectPorts(projectId: string): Promise<void> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}/ports/activate`, {
+    method: 'POST',
+    response: 'void',
+  });
+}
+
+export function saveProjectPort(
+  projectId: string,
+  input: SaveProjectPortRequest,
+): Promise<ProjectPortResponse> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}/ports`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: ProjectPortResponseSchema,
+  });
+}
+
+export function updateProjectPort(
+  projectId: string,
+  serviceId: string,
+  input: UpdateProjectPortRequest,
+): Promise<ProjectPortResponse> {
+  return apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/ports/${encodeURIComponent(serviceId)}`,
+    { method: 'PATCH', body: JSON.stringify(input), schema: ProjectPortResponseSchema },
+  );
+}
+
+export function forgetProjectPort(projectId: string, serviceId: string): Promise<void> {
+  return apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/ports/${encodeURIComponent(serviceId)}`,
+    { method: 'DELETE', response: 'void' },
+  );
+}
+
+export function startProjectForward(
+  projectId: string,
+  serviceId: string,
+  ttlMs?: number,
+): Promise<StartProjectForwardResponse> {
+  return apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/ports/${encodeURIComponent(serviceId)}/forward`,
+    {
+      method: 'POST',
+      body: JSON.stringify(ttlMs === undefined ? {} : { ttlMs }),
+      schema: StartProjectForwardResponseSchema,
+    },
+  );
+}
+
+export function relaunchProjectForward(
+  projectId: string,
+  serviceId: string,
+): Promise<StartProjectForwardResponse> {
+  return apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/ports/${encodeURIComponent(serviceId)}/forward/relaunch`,
+    { method: 'POST', schema: StartProjectForwardResponseSchema },
+  );
+}
+
+export function stopProjectForward(projectId: string, serviceId: string): Promise<void> {
+  return apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/ports/${encodeURIComponent(serviceId)}/forward`,
+    { method: 'DELETE', response: 'void' },
+  );
+}
+
+export function getDeploymentPreviewSettings(): Promise<DeploymentPreviewSettingsResponse> {
+  return apiRequest('/api/settings/deployment-preview', {
+    schema: DeploymentPreviewSettingsResponseSchema,
+  });
+}
+
+export function updateDeploymentPreviewSettings(
+  input: UpdatePreviewRuntimeSettingsRequest,
+): Promise<DeploymentPreviewSettingsResponse> {
+  return apiRequest('/api/settings/deployment-preview', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: DeploymentPreviewSettingsResponseSchema,
+  });
+}
+
+export function testDeploymentPreviewRouting(): Promise<PreviewRoutingTestResponse> {
+  return apiRequest('/api/settings/deployment-preview/test', {
+    method: 'POST',
+    schema: PreviewRoutingTestResponseSchema,
+  });
 }
 
 // --- git source control (US-33.1) ---

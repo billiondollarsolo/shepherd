@@ -18,6 +18,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   'nodes',
   'account',
   'operations',
+  'deployment-preview',
   'about',
 ];
 
@@ -65,7 +66,11 @@ export function pathToNav(pathname: string): NavPatch {
   if (shell.selectedSessionId !== undefined) patch.selectedSessionId = shell.selectedSessionId;
   if (shell.activeProjectId !== undefined) patch.selectedProjectId = shell.activeProjectId;
   if (shell.nodeInfoNodeId !== undefined) patch.nodeInfoNodeId = shell.nodeInfoNodeId;
-  patch.projectView = /^\/p\/[^/]+\/git\/?$/.test(pathname) ? 'git' : 'agents';
+  patch.projectView = /^\/p\/[^/]+\/git\/?$/.test(pathname)
+    ? 'git'
+    : /^\/p\/[^/]+\/ports\/?$/.test(pathname)
+      ? 'ports'
+      : 'agents';
 
   return patch;
 }
@@ -95,6 +100,7 @@ export function navToPath(n: NavToPathInput): string {
     });
   }
   if (n.projectView === 'git' && n.gridProjectId) return `/p/${n.gridProjectId}/git`;
+  if (n.projectView === 'ports' && n.gridProjectId) return `/p/${n.gridProjectId}/ports`;
   return shellNavToPath({
     settings: false,
     settingsSection: n.settingsSection,
@@ -177,6 +183,16 @@ const routeTree = rootRoute.addChildren([
     component: nullComponent,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: '/p/$projectId', component: nullComponent }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/p/$projectId/ports',
+    component: nullComponent,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/p/$projectId/git',
+    component: nullComponent,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: '/n/$nodeId', component: nullComponent }),
   createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: nullComponent }),
   createRoute({

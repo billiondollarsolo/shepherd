@@ -1,0 +1,23 @@
+# Shepherd external TLS proxy override.
+#
+# The caller's reverse proxy owns HTTPS and routes the three loopback listeners
+# documented in docs/deployment.md. Change FLOCK_PROXY_BIND_ADDRESS only when a
+# separately isolated proxy host/container genuinely needs network access.
+services:
+  caddy:
+    profiles: [bundled-edge-disabled]
+
+  orchestrator:
+    environment:
+      FLOCK_DEPLOYMENT_MODE: external-tls
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set the exact public https:// URL}
+      FLOCK_ALLOWED_ORIGINS: ${FLOCK_ALLOWED_ORIGINS:?Set the exact public https:// origin}
+      FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}
+      FLOCK_PREVIEW_PUBLIC_PORT: ${FLOCK_PREVIEW_PUBLIC_PORT:-}
+    ports: !override
+      - '${FLOCK_PROXY_BIND_ADDRESS:-127.0.0.1}:${FLOCK_ORCHESTRATOR_PROXY_PORT:-18080}:8080'
+      - '${FLOCK_PROXY_BIND_ADDRESS:-127.0.0.1}:${FLOCK_PREVIEW_PROXY_PORT:-18082}:8081'
+
+  web:
+    ports: !override
+      - '${FLOCK_PROXY_BIND_ADDRESS:-127.0.0.1}:${FLOCK_WEB_PROXY_PORT:-18081}:80'

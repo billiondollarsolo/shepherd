@@ -10,7 +10,8 @@
  * Single authoritative session record (spec §4.2 invariant): one
  * `agent_sessions` row — its `id` IS the session_id — threads together the tmux
  * session name (`tmux_session_name`), the per-session hook token
- * (`hook_token_hash`), and the browser CDP endpoint (`browser_cdp_endpoint`).
+ * (`hook_token_hash`). Ephemeral Remote Preview capabilities are intentionally
+ * kept outside this durable record.
  *
  * Column names mirror the shared `@flock/shared` domain contract (Session,
  * Node, etc.) and the spec §6 table list; the StatusEnum and every value enum
@@ -28,6 +29,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -80,6 +82,8 @@ const EVENT_SOURCE_VALUES: EnumTuple = ['hook', 'osc', 'pty', 'orchestrator'];
 // Mirrors shared SshAuthMethodEnum (named so the enum-drift guard can assert it).
 const SSH_AUTH_METHOD_VALUES: EnumTuple = ['key', 'password'];
 const SECRET_KIND_VALUES: EnumTuple = ['ssh_key', 'hook_token', 'node_env', 'agentd_control'];
+const PROJECT_PORT_PROTOCOL_VALUES: EnumTuple = ['http', 'https'];
+const AUTO_FORWARD_POLICY_VALUES: EnumTuple = ['off', 'remembered_on_access'];
 const AUDIT_ACTION_VALUES: EnumTuple = [
   'login',
   'logout',
@@ -91,8 +95,15 @@ const AUDIT_ACTION_VALUES: EnumTuple = [
   'agent_policy_event',
   'session_create',
   'session_terminate',
-  'browser_takeover',
-  'browser_release',
+  'preview_create',
+  'preview_revoke',
+  'preview_forward_start',
+  'preview_forward_stop',
+  'preview_forward_expire',
+  'preview_service_save',
+  'preview_service_forget',
+  'preview_settings_update',
+  'preview_test',
   'secret_access',
   'owner_setup',
 ];
@@ -160,6 +171,20 @@ export const sessionsAuth = pgTable(
   (t) => ({
     byUser: index('sessions_auth_user_id_idx').on(t.userId),
   }),
+);
+
+// Durable credential-abuse state. Keys are SHA-256 digests of IP + username;
+// raw network identifiers and attempted account names are never retained.
+export const authLoginThrottle = pgTable(
+  'auth_login_throttle',
+  {
+    keyHash: text('key_hash').primaryKey(),
+    failures: integer('failures').notNull().default(0),
+    firstFailureAt: timestamp('first_failure_at', { withTimezone: true }).notNull(),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({ byLastSeen: index('auth_login_throttle_last_seen_idx').on(t.lastSeenAt) }),
 );
 
 // ---------------------------------------------------------------------------
@@ -266,12 +291,57 @@ export const projects = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// project_services — durable labels/preferences for node-local web services.
+// Active Preview capabilities and sockets remain process-memory only.
+// ---------------------------------------------------------------------------
+export const projectServices = pgTable(
+  'project_services',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    targetHost: text('target_host').notNull().default('127.0.0.1'),
+    targetPort: integer('target_port').notNull(),
+    protocol: text('protocol', { enum: PROJECT_PORT_PROTOCOL_VALUES }).notNull().default('http'),
+    label: text('label').notNull(),
+    autoForward: boolean('auto_forward').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    byProject: index('project_services_project_id_idx').on(table.projectId),
+    oneServicePerPort: uniqueIndex('project_services_project_port_protocol_uq').on(
+      table.projectId,
+      table.targetHost,
+      table.targetPort,
+      table.protocol,
+    ),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// preview_runtime_settings — single-owner, runtime-safe Preview preferences.
+// Infrastructure config (DNS, range, bind, TLS) remains deployment-owned.
+// ---------------------------------------------------------------------------
+export const previewRuntimeSettings = pgTable('preview_runtime_settings', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(true),
+  defaultTtlMs: integer('default_ttl_ms').notNull().default(7_200_000),
+  autoForwardPolicy: text('auto_forward_policy', { enum: AUTO_FORWARD_POLICY_VALUES })
+    .notNull()
+    .default('off'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // agent_sessions — THE single authoritative session record (spec §4.2/§6).
 //
 // One `id` (== session_id) threads together:
 //   - tmux session name      (tmux_session_name)
 //   - per-session hook token  (hook_token_hash, unique)
-//   - browser CDP endpoint    (browser_cdp_endpoint, opaque ws URL w/ GUID)
 //
 // `status` is the write-behind MIRROR of the in-memory authoritative status.
 // ---------------------------------------------------------------------------
@@ -290,8 +360,6 @@ export const agentSessions = pgTable(
     agentType: text('agent_type', { enum: AGENT_TYPE_VALUES }).notNull(),
     tmuxSessionName: text('tmux_session_name').notNull(),
     workingDir: text('working_dir').notNull(),
-    /** Opaque CDP ws URL incl. GUID; null until a browser is started. */
-    browserCdpEndpoint: text('browser_cdp_endpoint'),
     /** Hash of the per-session hook token (NFR-SEC3); never plaintext. Unique. */
     hookTokenHash: text('hook_token_hash').notNull().unique(),
     /** Write-behind mirror of the in-memory authoritative status (§6.6). */
@@ -452,6 +520,10 @@ export type NewNodeRow = typeof nodes.$inferInsert;
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
 
+export type ProjectServiceRow = typeof projectServices.$inferSelect;
+export type NewProjectServiceRow = typeof projectServices.$inferInsert;
+export type PreviewRuntimeSettingsRow = typeof previewRuntimeSettings.$inferSelect;
+
 export type AgentSessionRow = typeof agentSessions.$inferSelect;
 export type NewAgentSessionRow = typeof agentSessions.$inferInsert;
 
@@ -476,9 +548,12 @@ export const schema = {
   users,
   userPreferences,
   sessionsAuth,
+  authLoginThrottle,
   secrets,
   nodes,
   projects,
+  projectServices,
+  previewRuntimeSettings,
   agentSessions,
   agentCapabilities,
   events,

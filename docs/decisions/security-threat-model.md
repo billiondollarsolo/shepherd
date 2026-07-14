@@ -50,6 +50,20 @@ without consistently enforcing it creates more risk than a smaller explicit mode
   values are never available to an agent process.
 - Missing identity, ownership, Origin policy, sandbox support, or protocol negotiation
   fails closed.
+- Development-server content exposed by Preview is untrusted. Hostname mode gives each
+  forward a random separate hostname. Private port-pool mode gives it a separate browser
+  origin but shares the control-plane cookie host; that weaker mode is restricted to an
+  explicitly acknowledged trusted Tailnet/LAN deployment.
+- Preview never receives Shepherd login/setup/capability cookies, Authorization,
+  forwarding, client-identity, or Referer headers. An upstream cannot set reserved
+  Shepherd cookies, clear the control-plane cookie site, or install a service worker.
+- A Preview may dial only the exact numeric loopback port saved for an owner-controlled
+  project on its current node. It is connection/byte/time bounded, expiring, immediately
+  revocable, auditable, and independent of any one agent session.
+- Every unsafe control-plane browser method requires an exact configured Origin. Missing
+  Origin fails closed. Bearer-authenticated hooks and orchestration callbacks use narrow,
+  separately tested policies. This is mandatory because SameSite cookies do not stop a
+  same-host, cross-port Preview from causing a request.
 
 ### Human-user model
 
@@ -61,17 +75,22 @@ supported security boundary.
 ### Supported network modes
 
 1. Production HTTPS/WSS through the bundled Caddy deployment.
-2. Tailnet HTTPS using a verified hostname/certificate and restrictive Tailscale
-   grants or ACLs.
-3. Localhost development with explicitly enumerated Origins.
+2. Production HTTPS/WSS through an explicitly trusted external reverse proxy.
+3. Deliberate private HTTP/WS on a restricted LAN or encrypted overlay, selected by a
+   named deployment mode plus an explicit insecure-transport acknowledgement.
+4. Localhost development with explicitly enumerated Origins.
 
-Raw public or LAN HTTP is unsupported. Tailnet-IP HTTP may be used only for temporary
-development, must remain tailnet-restricted, and does not disable WebSocket Origin
-validation.
+Raw public HTTP is unsupported. Private HTTP does not disable exact WebSocket Origin
+validation or application authentication, but it cannot provide transport
+confidentiality, `Secure` cookies, or the `__Host-` cookie prefix. The UI and diagnostics
+must keep that distinction visible. IP-only private HTTP may use a bounded, pre-published
+Preview-only port pool. Apps across those ports can share application cookies because
+cookies are host-scoped; hostname mode is required for mutually untrusted apps.
 
 ## Security invariants
 
-1. Network traffic is encrypted outside a same-host protected socket boundary.
+1. Public-Internet traffic is encrypted. Any unencrypted private-network mode is
+   explicit, visible, origin-restricted, and documented as accepting interception risk.
 2. Agent and control identities are distinct.
 3. Capabilities are least-privilege, scoped, expiring, revocable, and auditable.
 4. Public DTOs are allowlisted and contain no control-plane secret material.
@@ -80,6 +99,10 @@ validation.
    adversarial agent.
 7. A release is not considered hardened without verified backup/restore and candidate
    image smoke tests.
+8. Hostname Preview never shares the control-plane hostname. Port-pool Preview may share
+   the host only with global exact-Origin enforcement, duplicate-cookie rejection,
+   reserved-cookie filtering, finite frame CSP, and listeners that expose no control
+   routes. All capability state fails closed on orchestrator restart.
 
 ## Consequences
 

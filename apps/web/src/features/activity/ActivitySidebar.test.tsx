@@ -22,7 +22,6 @@ const SESSION: Session = {
   agentType: 'claude-code',
   tmuxSessionName: 'flock-sess-1',
   workingDir: '/home/dev/project',
-  browserCdpEndpoint: null,
   hookTokenHash: 'super-secret-hash',
   status: 'awaiting_input',
   statusDetail: 'Approve edit to src/app.ts?',

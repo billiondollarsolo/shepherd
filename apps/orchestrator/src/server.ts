@@ -1,11 +1,13 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { STATUS_VALUES } from '@flock/shared';
+import { STATUS_VALUES, type DeploymentStatus } from '@flock/shared';
 import {
   registerAuthRoutes,
   makeSurfaceAuthGuard,
+  makeRequestOriginGuard,
   makeRequireAuth,
   type AuthService,
   type AuthGuardDeps,
+  type LoginThrottleLike,
 } from './auth/index.js';
 import {
   registerDiffRoute,
@@ -17,10 +19,6 @@ import {
   type TerminateService,
   type SessionRestService,
 } from './sessions/index.js';
-import {
-  registerBrowserControlRoutes,
-  type BrowserControlService,
-} from './browser/browser-control-route.js';
 import { errorEnvelope } from './http/reply.js';
 import { registerEventRoute, type EventReadService } from './events/index.js';
 import { registerPushRoutes, type PushRouteDeps } from './push/index.js';
@@ -37,6 +35,11 @@ import type { NodeWorkspaceService } from './nodes/node-workspace-service.js';
 import { registerProjectRoutes, type ProjectService } from './projects/index.js';
 import { registerMeRoutes } from './me/me-routes.js';
 import {
+  registerProjectPortsRoutes,
+  type PreviewService,
+  type ProjectPortsService,
+} from './preview/index.js';
+import {
   RequestBudget,
   makeRejectionReporter,
   replyRequestBudgetRejected,
@@ -52,10 +55,16 @@ export interface BuildServerDeps {
    * health-only smoke test.
    */
   auth?: AuthService;
+  /** Durable login-abuse state in production; tests use the memory default. */
+  loginThrottle?: LoginThrottleLike;
+  /** Safe browser-facing transport posture returned by the public auth status probe. */
+  authDeployment?: DeploymentStatus;
+  /** Exact browser origins accepted for every unsafe control-plane request. */
+  browserOrigins?: ReadonlySet<string>;
   /**
    * Session terminate (US-13). When provided ALONGSIDE `auth` (the route is
    * cookie-authed), `DELETE /api/sessions/:id` is registered: it kills the tmux
-   * session + any browser harness, marks the record closed, and writes a
+   * session, revokes its capabilities, marks the record closed, and writes a
    * `session_terminate` audit row (FR-S5).
    */
   terminateSession?: TerminateService;
@@ -73,12 +82,6 @@ export interface BuildServerDeps {
    * the acting user's identity (from `request.authUser`), so it needs `auth`.
    */
   git?: GitService;
-  /**
-   * Browser input takeover (US-28, FR-B4). When provided ALONGSIDE `auth`,
-   * `POST /api/sessions/:id/browser/{takeover,release}` are registered (the
-   * paddock's Take/Release control over the screencast pane).
-   */
-  browserControl?: BrowserControlService;
   /**
    * Session event log read (US-21/US-34). When provided ALONGSIDE `auth`,
    * `GET /api/sessions/:id/events` is registered (the Activity timeline source).
@@ -170,6 +173,10 @@ export interface BuildServerDeps {
    * `DELETE /api/sessions/:id` terminate route is wired separately.
    */
   sessions?: SessionRestService;
+  /** Ephemeral project Preview lifecycle and capability issuance. */
+  previews?: PreviewService;
+  /** Project-owned discovered/saved Ports surface. */
+  projectPorts?: ProjectPortsService;
   /**
    * US-39: global default-DENY surface guard (NFR-SEC6). When provided, an
    * `onRequest` hook rejects every request with 401 unless it is authenticated
@@ -293,6 +300,9 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // and skips the hook endpoint (its per-session token authorizes it, spec
   // §8.1); everything else needs a valid session cookie. The per-route
   // Per-route `requireAuth` guards still attach the installation owner.
+  if (deps.browserOrigins) {
+    app.addHook('onRequest', makeRequestOriginGuard(deps.browserOrigins));
+  }
   if (deps.surfaceAuth) {
     app.addHook('onRequest', makeSurfaceAuthGuard(deps.surfaceAuth));
   }
@@ -318,7 +328,7 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   }
 
   if (deps.auth) {
-    registerAuthRoutes(app, deps.auth);
+    registerAuthRoutes(app, deps.auth, deps.loginThrottle, deps.authDeployment);
 
     // US-13: terminate route is cookie-authed, so it needs the auth service as
     // its guard. Wired only when both the terminate service and auth are present.
@@ -337,11 +347,6 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     // US-33.1: git source-control actions (stage/commit/push), cookie-authed.
     if (deps.git) {
       registerGitRoutes(app, { service: deps.git, auth: deps.auth });
-    }
-
-    // US-28: browser input takeover/release (cookie-authed, NFR-SEC6).
-    if (deps.browserControl) {
-      registerBrowserControlRoutes(app, { service: deps.browserControl, auth: deps.auth });
     }
 
     // US-21/US-34: the read-only session event log (cookie-authed).
@@ -388,6 +393,14 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     // Session list/create (FR-S2/S3): cookie-authed.
     if (deps.sessions) {
       registerSessionRestRoutes(app, { service: deps.sessions, auth: deps.auth });
+    }
+
+    if (deps.previews && deps.projectPorts) {
+      registerProjectPortsRoutes(app, {
+        ports: deps.projectPorts,
+        previews: deps.previews,
+        auth: deps.auth,
+      });
     }
   }
 

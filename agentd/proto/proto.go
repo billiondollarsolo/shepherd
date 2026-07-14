@@ -70,6 +70,11 @@ type Control struct {
 	// list
 	Sessions []SessionInfo `json:"sessions,omitempty"`
 
+	// listeningPorts: bounded loopback/wildcard TCP listener discovery.
+	ListeningPorts []ListeningPort `json:"listeningPorts,omitempty"`
+	ObservedAt     string          `json:"observedAt,omitempty"`
+	DiscoveryError string          `json:"discoveryError,omitempty"`
+
 	// layout
 	Workspace string          `json:"workspace,omitempty"`
 	Layout    json.RawMessage `json:"layout,omitempty"`
@@ -93,6 +98,19 @@ type SessionInfo struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
 	Cwd  string `json:"cwd"`
+}
+
+// ListeningPort is safe process metadata for one node-local TCP listener.
+// It deliberately excludes argv, environment, socket payloads, and connections.
+type ListeningPort struct {
+	ObservationKey string `json:"observationKey"`
+	Address        string `json:"address"`
+	TargetHost     string `json:"targetHost"`
+	Port           int    `json:"port"`
+	PID            int    `json:"pid,omitempty"`
+	Process        string `json:"process,omitempty"`
+	Cwd            string `json:"cwd,omitempty"`
+	SessionID      string `json:"sessionId,omitempty"`
 }
 
 // WriteFrame writes one framed message.

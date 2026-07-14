@@ -6,6 +6,7 @@ import { Command, LogOut, Search, Settings, User } from 'lucide-react';
 import { ThemeToggle } from '../../theme';
 import { usePaddock } from '../../store/paddock';
 import { useAuthOptional } from '../auth/AuthGate';
+import { TransportWarning } from '../auth/TransportWarning';
 import { AttentionInbox } from './AttentionInbox';
 import { ActivityFeed } from './ActivityFeed';
 import { useShell } from '../../app/KeyboardProvider';
@@ -70,6 +71,7 @@ function AccountMenu(): JSX.Element | null {
 }
 
 export function TopBar(): JSX.Element {
+  const auth = useAuthOptional();
   const { openPalette } = useShell();
   const openSettings = usePaddock((s) => s.openSettings);
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
@@ -93,10 +95,10 @@ export function TopBar(): JSX.Element {
           <span className="truncate font-medium text-flock-ink-primary">
             {contextProject?.name ?? contextNode?.name ?? 'Paddock'}
           </span>
-          {contextProject && projectView === 'git' ? (
+          {contextProject && (projectView === 'git' || projectView === 'ports') ? (
             <>
               <span aria-hidden>/</span>
-              <span className="truncate">Source Control</span>
+              <span className="truncate">{projectView === 'git' ? 'Source Control' : 'Ports'}</span>
             </>
           ) : contextProject && activePen ? (
             <>
@@ -122,6 +124,7 @@ export function TopBar(): JSX.Element {
       </button>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <TransportWarning warning={auth?.deployment?.warning} compact />
         <ActivityFeed />
         <AttentionInbox />
         <div className="mx-1 h-5 w-px bg-[var(--flock-border)]" />

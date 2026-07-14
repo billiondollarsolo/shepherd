@@ -27,6 +27,7 @@ import {
   encodeControl,
   encodePtyInput,
   type AgentdControl,
+  type AgentdListeningPort,
   type AgentdStatusMeta,
 } from './protocol.js';
 
@@ -58,6 +59,19 @@ export interface AuthenticatedAgentdIdentity {
   daemonVersion: string;
   protocolVersion: number;
   capabilities: string[];
+}
+
+export interface AgentdListeningPortsSnapshot {
+  ports: AgentdListeningPort[];
+  observedAt: string;
+  degradedReason: string | null;
+}
+
+export class AgentdCapabilityUnavailableError extends Error {
+  constructor(public readonly capability: string) {
+    super(`agentd capability unavailable: ${capability}`);
+    this.name = 'AgentdCapabilityUnavailableError';
+  }
 }
 
 interface ControlWaiter {
@@ -263,6 +277,10 @@ export class NodeAgentdClient {
     return this.authenticatedIdentity ? { ...this.authenticatedIdentity } : null;
   }
 
+  supports(capability: string): boolean {
+    return this.authenticatedIdentity?.capabilities.includes(capability) === true;
+  }
+
   /** Keep existing sessions attachable while preventing work on a mandatory-old daemon. */
   blockNewSessions(reason: string | null): void {
     this.openBlockedReason = reason;
@@ -332,6 +350,39 @@ export class NodeAgentdClient {
     this.send({ op: 'nodeInfo' });
     const r = await this.await((c) => c.op === 'nodeInfo');
     return r.nodeInfo;
+  }
+
+  /** Bounded node-local TCP listener discovery (no argv/env/payload data). */
+  async listeningPorts(): Promise<AgentdListeningPortsSnapshot> {
+    if (!this.supports('listening_ports_v1')) {
+      throw new AgentdCapabilityUnavailableError('listening_ports_v1');
+    }
+    this.send({ op: 'listeningPorts' });
+    const response = await this.await((control) => control.op === 'listeningPorts');
+    const ports = (response.listeningPorts ?? [])
+      .slice(0, 256)
+      .filter(
+        (port): port is AgentdListeningPort =>
+          Number.isInteger(port.port) &&
+          port.port >= 1024 &&
+          port.port <= 65_535 &&
+          (port.targetHost === '127.0.0.1' || port.targetHost === '::1'),
+      )
+      .map((port) => ({
+        ...port,
+        observationKey: port.observationKey?.slice(0, 256) ?? `tcp:${port.targetHost}:${port.port}`,
+        process: port.process?.slice(0, 128),
+        cwd: port.cwd?.slice(0, 1024),
+        sessionId: port.sessionId?.slice(0, 128),
+      }));
+    return {
+      ports,
+      observedAt:
+        response.observedAt && Number.isFinite(Date.parse(response.observedAt))
+          ? new Date(response.observedAt).toISOString()
+          : new Date().toISOString(),
+      degradedReason: response.discoveryError?.slice(0, 512) || null,
+    };
   }
 
   /**

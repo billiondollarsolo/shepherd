@@ -123,13 +123,12 @@ pnpm test:e2e                       # Playwright — for web-surface changes
   versioned with auto-redeploy. Hand-written proto mirrored in TS.
 - **`orchestrator`** (Fastify + Drizzle/Postgres): REST + WS, in-memory `StatusMap`
   (live truth), append-only `events` table (write-behind, off the hot path), per-agent
-  hook endpoint + translators, SSH/agentd transport, web push, per-session browser,
-  secret store, worktree-service.
+  hook endpoint + translators, SSH/agentd transport, web push, isolated Remote Preview
+  gateway, secret store, worktree-service.
 - **`web`** (React/Vite/xterm.js/Zustand/TanStack): the "paddock" — node→project→session
   tree, focus + grid/hive terminals, status dots, telemetry bottom bar, source-control
   (diff + stage/commit/push), live plan artifact, activity timeline, node file browser,
-  per-session browser screencast, ripgrep search, command-palette **shell** (mostly
-  empty), per-session worktree toggle.
+  expiring Remote Preview links, ripgrep search, command palette, and mobile terminals.
 - **Agents (5):** claude-code, codex, opencode, gemini, grok — transcript + hooks →
   unified `Status` enum + telemetry. Tolerant parsers as of the 2026-06 audit.
 - **Already shipped (do not re-plan):** per-session git worktrees, find-in-files search,
@@ -435,9 +434,10 @@ unchanged PTY sessions; all gates green.
       `Paddock.tsx`. Tests: `usePaddockCommands.test.ts` (3).
 - [ ] **P10 — Rich, configurable keybindings.** Expand beyond Cmd+K/J; optional
       JSON config + `when` contexts. _Tests:_ web. _Risk:_ low.
-- [ ] **P11 — Browser pane → real preview.** Address bar, tabs, back/forward, and CDP
-      input takeover (currently screencast/view-only). _Scope:_ `features/browser/`. _Tests:_
-      e2e. _Risk:_ medium.
+- [x] **P11 — Project Ports & secure Preview.** The retired server-side Chrome/screencast
+      path was replaced by project-owned discovered/saved services and ephemeral forwards.
+      Isolated-hostname and explicit private no-DNS pool backends preserve HTTP,
+      HTTPS/WebSocket/HMR, capability rotation, service-worker denial, and resource bounds.
 - [ ] **P12 — Session archiving + auth-tier + one-click agent self-update.** Archive in
       the sidebar; surface subscription tier/auth method in node-info; `npm/brew/native`
       upgrade per agent. _Risk:_ low.
@@ -587,7 +587,7 @@ Synara (`synara/`, gitignored reference) is a **local-first Electron desktop app
 - **Rigor:** one Effect-Schema contract end-to-end (RPC + streams + typed errors);
   event-sourced SQLite with projections; resume cursors; readiness gate + ordered
   shutdown; a real auth control plane (pairing/roles/revocation).
-- **UX:** useful command palette, configurable keybindings, multi-tab in-app browser,
+- **UX:** useful command palette, configurable keybindings, isolated Remote Preview,
   thread recap, queued-message composer, archiving.
 
 **Where Shepherd already wins (protect these):** multi-node over SSH, sessions persistent

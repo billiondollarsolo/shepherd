@@ -134,7 +134,7 @@ describe('POST /api/hooks/:sessionId (US-15 route)', () => {
       const res = await app.inject({
         method: 'POST',
         url: `/api/hooks/${SESSION_ID}`,
-        headers: { cookie: 'flock_session=some-valid-looking-cookie' },
+        headers: { cookie: '__Host-shepherd_session=some-valid-looking-cookie' },
         payload: { hook_event_name: 'Stop' },
       });
       expect(res.statusCode).toBe(401);

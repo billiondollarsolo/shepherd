@@ -30,6 +30,8 @@ import {
 } from '../../components/ui';
 import { useVisualViewportWidth } from './useVisualViewport';
 import { PRODUCT_NAME } from '../../brand';
+import { useAuthOptional } from '../auth/AuthGate';
+import { TransportWarning } from '../auth/TransportWarning';
 
 const ATTENTION_STATUSES: ReadonlySet<Status> = new Set<Status>(['awaiting_input', 'error']);
 
@@ -158,6 +160,7 @@ function PhoneStage({
   onSelectSession: (sessionId: string) => void;
   onSendInput?: (sessionId: string, text: string, submit: boolean) => void | Promise<void>;
 }): JSX.Element {
+  const auth = useAuthOptional();
   const viewportWidth = useVisualViewportWidth();
   const terminalInputRef = useRef<((text: string) => void) | null>(null);
   const terminalFocusRef = useRef<(() => void) | null>(null);
@@ -238,6 +241,7 @@ function PhoneStage({
           </span>
         </div>
         <div className="min-w-0 flex-1 truncate text-xs font-medium">{session.label}</div>
+        <TransportWarning warning={auth?.deployment?.warning} compact />
         <span
           role="img"
           className="size-2 shrink-0 rounded-full"
@@ -295,6 +299,7 @@ export function PhoneView({
   onSelectSession,
   onSendInput,
 }: PhoneViewProps): JSX.Element {
+  const auth = useAuthOptional();
   const viewportWidth = useVisualViewportWidth();
   const openAgent = usePaddock((s) => s.openAgent);
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
@@ -448,6 +453,7 @@ export function PhoneView({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <TransportWarning warning={auth?.deployment?.warning} compact />
         <FlockMark className="size-6" />
         <div className="min-w-0">
           <h1 className="font-wordmark text-base font-semibold text-flock-ink-primary">

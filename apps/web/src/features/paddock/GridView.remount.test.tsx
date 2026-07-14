@@ -71,7 +71,6 @@ function mk(id: string, createdAt: string): Session {
     agentType: 'claude-code',
     tmuxSessionName: `flock-${id}`,
     workingDir: '/w',
-    browserCdpEndpoint: null,
     hookTokenHash: 'h',
     status: 'running',
     statusDetail: null,

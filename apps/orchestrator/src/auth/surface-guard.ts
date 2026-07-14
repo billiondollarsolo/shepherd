@@ -20,7 +20,7 @@
  *   - {@link authenticateUpgrade} — the WebSocket upgrade authenticator. The
  *     spec mandates "one AUTHED socket" (§8.2): an upgrade without a valid
  *     session cookie is rejected, so an anonymous client can never open the
- *     status / pty / screencast / nodes channels.
+ *     status / pty / nodes channels.
  *
  *   - {@link makePtyWsAuthenticator} — a thin adapter that bridges
  *     {@link authenticateUpgrade} to the existing PTY-bridge `authenticate`
@@ -143,7 +143,7 @@ export type UpgradeAuthResult = { ok: true; user: User } | { ok: false };
  * upgrade request's headers. Returns the resolved user on success; `{ ok:false }`
  * when no/invalid/expired cookie is present (the caller must then destroy the
  * socket without completing the handshake). This enforces "one AUTHED socket"
- * (spec §8.2, NFR-SEC6) for the status / pty / screencast / nodes channels.
+ * (spec §8.2, NFR-SEC6) for the status / PTY / nodes channels.
  */
 export async function authenticateUpgrade(
   deps: AuthGuardDeps,

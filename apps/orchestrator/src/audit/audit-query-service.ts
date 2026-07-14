@@ -1,8 +1,8 @@
 /**
  * AuditQueryService — the owner read side of the audit surface (US-40, FR-A3).
  *
- * US-40 acceptance: "login, node add/remove, session create/terminate, browser
- * takeover, secret access all produce audit rows (FR-A3); the owner can read them."
+ * US-40 acceptance: login, node add/remove, session create/terminate, preview
+ * lifecycle, and secret access produce audit rows (FR-A3); the owner can read them.
  * The WRITE side is the shared {@link AuditLogger}/`AuditSink` (audit.ts); this
  * module is the read side that backs the owner-only `GET /api/audit` route.
  *

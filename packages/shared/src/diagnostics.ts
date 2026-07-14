@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DeploymentModeSchema } from './contracts/auth.js';
 
 const Availability = z.enum(['ready', 'available', 'unavailable', 'configured', 'not_configured']);
 const ToolVersion = z.object({
@@ -25,6 +26,12 @@ export const FlockDiagnosticsSchema = z
       agentdExpected: z.string(),
       agents: z.object({ codex: ToolVersion, claude: ToolVersion, opencode: ToolVersion }),
     }),
+    deployment: z.object({
+      mode: DeploymentModeSchema,
+      transport: z.enum(['https', 'http']),
+      publicBaseUrl: z.string().url().nullable(),
+      trustedProxy: z.boolean(),
+    }),
     health: z.object({
       process: z.object({ status: Availability, uptimeSeconds: z.number().nonnegative() }),
       database: z.object({ status: Availability }),
@@ -36,7 +43,11 @@ export const FlockDiagnosticsSchema = z
         freeBytes: z.number().nonnegative().optional(),
         totalBytes: z.number().nonnegative().optional(),
       }),
-      browserRuntime: z.object({ status: Availability, image: z.string(), network: z.string() }),
+      preview: z.object({
+        status: Availability,
+        active: z.number().int().nonnegative(),
+        reason: z.string().nullable(),
+      }),
       push: z.object({ status: Availability }),
     }),
     warnings: z.array(z.string()),

@@ -10,8 +10,9 @@ function fixture(overrides: Partial<ShutdownDependencies> = {}) {
   const shutdown = createGracefulShutdown({
     stopBackground: () => calls.push('background'),
     closeHttp: step('http'),
+    closePreviewGateway: step('preview-http'),
     disposeLiveChannels: step('live'),
-    disposeBrowserChannels: step('browser'),
+    disposePreview: () => calls.push('preview'),
     disposeConnections: step('connections'),
     closeDatabase: step('database'),
     log: () => undefined,
@@ -25,7 +26,15 @@ describe('graceful shutdown', () => {
   it('runs once in dependency order and exits successfully', async () => {
     const { shutdown, calls, exit } = fixture();
     await Promise.all([shutdown('SIGTERM'), shutdown('SIGINT')]);
-    expect(calls).toEqual(['background', 'http', 'live', 'browser', 'connections', 'database']);
+    expect(calls).toEqual([
+      'background',
+      'http',
+      'preview-http',
+      'live',
+      'preview',
+      'connections',
+      'database',
+    ]);
     expect(exit).toHaveBeenCalledOnce();
     expect(exit).toHaveBeenCalledWith(0);
   });

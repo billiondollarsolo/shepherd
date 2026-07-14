@@ -4,7 +4,7 @@
  *
  *   GET  /api/sessions[?projectId=...]   list sessions (mapped, no plaintext)
  *   POST /api/sessions                   create a session (one id threads the
- *                                        record name + hook token + browser endpoint)
+ *                                        record name + hook token)
  *
  * Create resolves the project → its node + working_dir, mints a per-session hook
  * token (returned ONCE; only its hash is stored, NFR-SEC3), and inserts the ONE
@@ -200,7 +200,7 @@ export class SessionRestService {
     const hookTokenHash = await this.hashToken(hookToken);
 
     const now = new Date().toISOString();
-    // ONE id threads the session name + hook token hash + (null) browser endpoint (§4.2).
+    // ONE id threads the session name, hook token hash, node, project, and owner (§4.2).
     const record: SessionRecord = {
       id,
       nodeId: node.id,
@@ -208,7 +208,6 @@ export class SessionRestService {
       agentType: input.agentType,
       tmuxSessionName,
       workingDir,
-      browserCdpEndpoint: null,
       hookTokenHash,
       // Agents wait for their hook stream (`starting`); a hook-less terminal is
       // `running` the moment its shell spawns (see initialSessionStatus).

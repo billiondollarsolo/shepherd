@@ -46,22 +46,6 @@ export type PushSubscribeResponse = z.infer<typeof PushSubscribeResponse>;
 export const PushUnsubscribeRequest = z.object({ endpoint: z.string().url() });
 export type PushUnsubscribeRequest = z.infer<typeof PushUnsubscribeRequest>;
 
-// --- browser control -------------------------------------------------------
-
-/** POST /api/sessions/:id/browser/(start|stop|takeover|release) */
-export const BrowserActionEnum = z.enum(['start', 'stop', 'takeover', 'release']);
-export type BrowserAction = z.infer<typeof BrowserActionEnum>;
-
-export const BrowserControlResponse = z.object({
-  sessionId: Uuid,
-  action: BrowserActionEnum,
-  /** Opaque CDP ws endpoint when a browser is running, else null. */
-  browserCdpEndpoint: z.string().url().nullable(),
-  /** Whether THIS client now holds the single input-control lock. */
-  inControl: z.boolean(),
-});
-export type BrowserControlResponse = z.infer<typeof BrowserControlResponse>;
-
 // --- audit (US-40, FR-A3) --------------------------------------------------
 
 /** Hard ceiling on how many audit rows one `GET /api/audit` page may return. */

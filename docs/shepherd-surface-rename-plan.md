@@ -4,7 +4,7 @@
 **Prepared:** 2026-07-13  
 **Implemented:** 2026-07-13  
 **Scope:** User-visible product rename from **Flock** to **Shepherd**  
-**Tagline:** **Shepherd Your Agents**  
+**Tagline:** **Guide Your Flock Of Agents**
 **Compatibility posture:** Preserve all technical identifiers during this phase
 
 ## 1. Objective
@@ -28,8 +28,8 @@ Implementation should begin by agreeing on this small contract and using it ever
 | ---------------------------------------------- | ---------------------------------------------------------------------- |
 | Product name                                   | `Shepherd`                                                             |
 | Primary wordmark                               | `Shepherd`                                                             |
-| Tagline                                        | `Shepherd Your Agents`                                                 |
-| Sentence-case tagline when grammar requires it | `Shepherd your agents`                                                 |
+| Tagline                                        | `Guide Your Flock Of Agents`                                           |
+| Sentence-case tagline when grammar requires it | `Guide your flock of agents`                                           |
 | Short description                              | `Manage nodes, projects, and CLI coding agents from one web paddock.`  |
 | Existing brand glyph                           | Keep the current sheep mark for this phase                             |
 | Existing visual system                         | Keep the current colors, Geist wordmark font, and paddock/pen language |
@@ -196,7 +196,7 @@ Definition of done:
 Tasks:
 
 - Update desktop sidebar wordmark from Flock to Shepherd.
-- Keep “Shepherd Your Agents” directly beneath the wordmark and ensure the two-line lockup
+- Keep “Guide Your Flock Of Agents” directly beneath the wordmark and ensure the two-line lockup
   remains no taller than the sheep logo.
 - Update collapsed-sidebar accessible labels and tooltip from “Flock home/version” to
   “Shepherd home/version.”
@@ -489,7 +489,7 @@ The surface rename is complete only when all of the following are true:
 
 1. Users see **Shepherd** in the web app, installed PWA, notifications, About, README,
    current documentation, issue forms, and release presentation.
-2. The primary wordmark reads **Shepherd** and the tagline reads **Shepherd Your Agents**
+2. The primary wordmark reads **Shepherd** and the tagline reads **Guide Your Flock Of Agents**
    on supported desktop and mobile layouts.
 3. No visible state accidentally presents Flock as the current product name.
 4. Remaining `Flock`/`flock` occurrences are intentional technical identifiers, generic

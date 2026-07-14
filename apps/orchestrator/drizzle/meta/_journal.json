@@ -162,6 +162,27 @@
       "when": 1783832400000,
       "tag": "0022_claim_preowner_nodes",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784001600000,
+      "tag": "0023_remove_session_chrome",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784005200000,
+      "tag": "0024_durable_login_throttle",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784008800000,
+      "tag": "0025_project_ports",
+      "breakpoints": true
     }
   ]
 }

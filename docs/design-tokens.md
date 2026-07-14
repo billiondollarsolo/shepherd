@@ -280,7 +280,7 @@ its words:
 - **Keybinding hints** (`Cmd+K`, `Cmd+J`, `Ctrl+L`) — `.flock-kbd` chip:
   `font.code` at `text-2xs`, `rounded-xs`, `surface.2` bg, 1px border. Do not
   rename Codex keybindings (Appendix A.2).
-- **Center tabs** Terminal | Browser | Diff — `h-tab`, `rounded-md`, accent on
+- **Center tabs** Terminal | Preview | Diff — `h-tab`, `rounded-md`, accent on
   the active tab; terminal + diff use `font.code` at `text-sm`, tabular nums;
   diff uses `--flock-diff-*`.
 - **Right activity sidebar** — `w-activity`, `surface.1`, status-timeline dots

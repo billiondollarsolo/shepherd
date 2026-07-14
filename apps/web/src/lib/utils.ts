@@ -33,7 +33,7 @@ export function formatGB(bytes: number, withUnit = false): string {
  * Capped exponential backoff WITH ±20% jitter, for WebSocket reconnects. Jitter
  * is essential on the status WS especially: without it, every client reconnects
  * in lockstep after an orchestrator restart (a thundering-herd stampede). Shared
- * by the pty / status / screencast reconnect loops so they can't drift.
+ * by the PTY and status reconnect loops so they cannot drift.
  */
 export function reconnectDelay(
   attempts: number,

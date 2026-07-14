@@ -16,6 +16,7 @@
  *   - dispose kills outstanding PTYs and rejects further use.
  */
 import type { Client, ClientChannel, PseudoTtyOptions } from 'ssh2';
+import type { Duplex } from 'node:stream';
 
 import {
   TransportDisposedError,
@@ -213,6 +214,17 @@ export class SshTransport implements NodeTransport {
    *   the connection lifecycle; dispose only tears down THIS transport's PTYs.
    */
   constructor(private readonly client: Client) {}
+
+  async dialTcp(port: number, host: '127.0.0.1' | '::1' = '127.0.0.1'): Promise<Duplex> {
+    if (this.disposed) throw new TransportDisposedError(this.kind);
+    return await new Promise<Duplex>((resolve, reject) => {
+      const accepted = this.client.forwardOut('127.0.0.1', 0, host, port, (error, channel) => {
+        if (error) reject(error);
+        else resolve(channel);
+      });
+      if (!accepted) reject(new Error('SSH preview tunnel was rejected by backpressure.'));
+    });
+  }
 
   async exec(command: string[], options: ExecOptions = {}): Promise<ExecResult> {
     if (this.disposed) throw new TransportDisposedError(this.kind);

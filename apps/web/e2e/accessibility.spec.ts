@@ -35,7 +35,6 @@ const session = {
   agentType: 'codex',
   tmuxSessionName: 'flock-e2e',
   workingDir: project.workingDir,
-  browserCdpEndpoint: null,
   status: 'running',
   statusDetail: null,
   note: 'Accessibility agent',
@@ -124,7 +123,11 @@ async function installFleet(page: Page): Promise<void> {
             },
           }
         : path === '/api/auth/status'
-          ? { setupRequired: false }
+          ? {
+              setupRequired: false,
+              setupTokenRequired: false,
+              deployment: { mode: 'builtin-tls', transport: 'https', warning: null },
+            }
           : apiBody(path);
     return route.fulfill({
       status: 200,

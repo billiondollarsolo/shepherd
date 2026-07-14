@@ -17,7 +17,12 @@ const EMPTY_USER = {
 
 function emptyApiBody(path: string): unknown {
   if (path === '/api/auth/me') return { user: EMPTY_USER };
-  if (path === '/api/auth/status') return { setupRequired: false };
+  if (path === '/api/auth/status')
+    return {
+      setupRequired: false,
+      setupTokenRequired: false,
+      deployment: { mode: 'builtin-tls', transport: 'https', warning: null },
+    };
   if (path === '/api/nodes') return { nodes: [] };
   if (path === '/api/projects') return { projects: [] };
   if (path === '/api/sessions') return { sessions: [] };

@@ -148,6 +148,25 @@ func (m *Manager) List() []Spec {
 	return out
 }
 
+// ProcessRoots returns a bounded point-in-time mapping of Shepherd session IDs
+// to their current root PIDs. Listener discovery uses this to associate child
+// development servers without exposing command lines or environment data.
+func (m *Manager) ProcessRoots() map[string]int {
+	m.mu.Lock()
+	sessions := make(map[string]*Session, len(m.sessions))
+	for id, s := range m.sessions {
+		sessions[id] = s
+	}
+	m.mu.Unlock()
+	out := make(map[string]int, len(sessions))
+	for id, s := range sessions {
+		if pid := s.PID(); pid > 0 {
+			out[id] = pid
+		}
+	}
+	return out
+}
+
 // CloseAll terminates every session (daemon shutdown).
 func (m *Manager) CloseAll() {
 	m.mu.Lock()

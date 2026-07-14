@@ -1,18 +1,16 @@
 /**
  * US-13 — TerminateSessionService unit tests (run under `pnpm test:unit`).
  *
- * `DELETE /api/sessions/:id` kills the daemon session + any per-session browser
- * harness, marks the authoritative record closed, and writes a
+ * `DELETE /api/sessions/:id` kills the daemon session, revokes its capabilities,
+ * marks the authoritative record closed, and writes a
  * `session_terminate` audit row (FR-S5). These unit tests use FAKE collaborators
- * (a fake session terminator, an in-memory registry, an optional fake browser
- * harness, and a fake audit sink) so they are pure: no real daemon, no real DB.
+ * (a fake session terminator, an in-memory registry, and a fake audit sink) so
+ * they are pure: no real daemon, no real DB.
  * The real-services path is covered by terminate-session.int.test.ts.
  *
  * Acceptance-critical assertions (spec §9 US-13, §10 edge cases, §4.2 invariant):
  *   - terminate kills the session by the record's tmux_session_name;
- *   - terminate tears down the browser harness IFF the record has a CDP endpoint,
- *     and the SAME session_id threads the session name + hook token + CDP endpoint
- *     that teardown acts on (single authoritative record, §4.2/§15);
+ *   - terminate revokes session-scoped capabilities;
  *   - the record is marked closed (closed_at set; excluded from open sessions);
  *   - exactly ONE `session_terminate` audit row is written, attributed to the
  *     acting user with the request ip and target = the session id;
@@ -20,7 +18,7 @@
  *     mutates nothing / writes no audit row (§10);
  *   - terminating an already-closed session is idempotent: no second kill,
  *     no second audit row;
- *   - teardown is best-effort: a kill/browser failure still closes the record
+ *   - teardown is best-effort: a kill/capability failure still closes the record
  *     and still writes the audit row (work must not be left half-terminated).
  */
 import { describe, expect, it } from 'vitest';
@@ -32,7 +30,6 @@ import { AuditLogger } from '../audit/audit.js';
 import {
   SessionNotFoundError,
   TerminateSessionService,
-  type BrowserHarnessTeardown,
   type TerminableSessionRegistry,
   type SessionTerminator,
 } from './terminate-session-service.js';
@@ -51,7 +48,6 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     agentType: 'claude-code',
     tmuxSessionName: `flock-${id}`,
     workingDir: '/w',
-    browserCdpEndpoint: null,
     hookTokenHash: `argon2id$${id}`,
     status: 'running',
     statusDetail: null,
@@ -97,16 +93,6 @@ class FakeRegistry implements TerminableSessionRegistry {
   }
 }
 
-/** Records harness teardown calls; no real Chrome/docker. */
-class FakeBrowserHarness implements BrowserHarnessTeardown {
-  readonly tornDown: Session[] = [];
-  shouldThrow = false;
-  async teardown(session: Session): Promise<void> {
-    this.tornDown.push(session);
-    if (this.shouldThrow) throw new Error('browser harness teardown failed');
-  }
-}
-
 class FakeSink implements AuditSink {
   readonly rows: AuditEntry[] = [];
   async write(entry: AuditEntry): Promise<void> {
@@ -117,7 +103,7 @@ class FakeSink implements AuditSink {
 function build(
   opts: {
     sessions?: Session[];
-    browser?: FakeBrowserHarness;
+    revokeCapabilities?: (sessionId: string) => Promise<void>;
   } = {},
 ) {
   const terminator = new FakeTerminator();
@@ -128,9 +114,9 @@ function build(
     terminator,
     registry,
     audit,
-    browser: opts.browser,
+    revokeCapabilities: opts.revokeCapabilities,
   });
-  return { terminator, registry, sink, service, browser: opts.browser };
+  return { terminator, registry, sink, service };
 }
 
 describe('TerminateSessionService.terminate (US-13, FR-S5)', () => {
@@ -168,47 +154,31 @@ describe('TerminateSessionService.terminate (US-13, FR-S5)', () => {
     });
   });
 
-  it('tears down the browser harness when the record has a CDP endpoint (§4.2 thread-through)', async () => {
-    const session = makeSession({
-      browserCdpEndpoint: 'ws://127.0.0.1:9222/devtools/browser/abc-guid',
+  it('revokes the session capability set after closing the record', async () => {
+    const session = makeSession();
+    const revoked: string[] = [];
+    const { service } = build({
+      sessions: [session],
+      revokeCapabilities: async (id) => void revoked.push(id),
     });
-    const browser = new FakeBrowserHarness();
-    const { terminator, service } = build({ sessions: [session], browser });
 
     await service.terminate(session.id, { userId: USER_ID, ip: null });
-
-    // The SAME session_id threads the session name, the hook token, and the CDP
-    // endpoint that teardown acts on — one authoritative record (§4.2/§15).
-    expect(browser.tornDown).toHaveLength(1);
-    const torn = browser.tornDown[0]!;
-    expect(torn.id).toBe(session.id);
-    expect(torn.tmuxSessionName).toBe(session.tmuxSessionName);
-    expect(torn.hookTokenHash).toBe(session.hookTokenHash);
-    expect(torn.browserCdpEndpoint).toBe(session.browserCdpEndpoint);
-    expect(terminator.killed).toEqual([session.tmuxSessionName]);
+    expect(revoked).toEqual([session.id]);
   });
 
-  it('does NOT call browser teardown when the record has no CDP endpoint', async () => {
-    const session = makeSession({ browserCdpEndpoint: null });
-    const browser = new FakeBrowserHarness();
-    const { service } = build({ sessions: [session], browser });
-
-    await service.terminate(session.id, { userId: USER_ID, ip: null });
-
-    expect(browser.tornDown).toHaveLength(0);
-  });
-
-  it('works with no browser-harness collaborator injected (Phase 4 not built yet)', async () => {
-    const session = makeSession({
-      browserCdpEndpoint: 'ws://127.0.0.1:9222/devtools/browser/abc-guid',
+  it('still closes and audits when explicit capability revocation fails', async () => {
+    const session = makeSession();
+    const { registry, sink, service } = build({
+      sessions: [session],
+      revokeCapabilities: async () => {
+        throw new Error('database unavailable');
+      },
     });
-    const { terminator, registry, service } = build({ sessions: [session] }); // no browser dep
-
-    await expect(
-      service.terminate(session.id, { userId: USER_ID, ip: null }),
-    ).resolves.toMatchObject({ terminated: true });
-    expect(terminator.killed).toEqual([session.tmuxSessionName]);
+    await expect(service.terminate(session.id, { userId: USER_ID })).resolves.toMatchObject({
+      terminated: true,
+    });
     expect(registry.markClosedCalls).toHaveLength(1);
+    expect(sink.rows).toHaveLength(1);
   });
 
   it('throws SessionNotFoundError for an unknown session and mutates nothing (§10)', async () => {
@@ -253,20 +223,5 @@ describe('TerminateSessionService.terminate (US-13, FR-S5)', () => {
     expect(registry.markClosedCalls).toHaveLength(1); // still closed
     expect(sink.rows).toHaveLength(1); // still audited
     expect(sink.rows[0]).toMatchObject({ action: 'session_terminate' });
-  });
-
-  it('still closes the record + audits when browser teardown fails (best-effort)', async () => {
-    const session = makeSession({
-      browserCdpEndpoint: 'ws://127.0.0.1:9222/devtools/browser/abc-guid',
-    });
-    const browser = new FakeBrowserHarness();
-    browser.shouldThrow = true;
-    const { registry, sink, service } = build({ sessions: [session], browser });
-
-    const result = await service.terminate(session.id, { userId: USER_ID, ip: null });
-
-    expect(result.terminated).toBe(true);
-    expect(registry.markClosedCalls).toHaveLength(1);
-    expect(sink.rows).toHaveLength(1);
   });
 });

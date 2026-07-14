@@ -17,13 +17,19 @@ const files = execFileSync(
 const failures = [];
 
 function slug(value) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      // Headings are compared as plain text. Removing delimiters individually is
+      // deterministic even for nested/malformed markup (and avoids incomplete
+      // multi-character tag sanitization).
+      .replaceAll('<', '')
+      .replaceAll('>', '')
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+  );
 }
 
 for (const file of files) {

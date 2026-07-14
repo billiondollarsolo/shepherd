@@ -15,6 +15,7 @@ import {
   Palette,
   Activity,
   UserCircle,
+  RadioTower,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -35,7 +36,10 @@ import { NodesSection } from './sections/NodesSection';
 import { AccountSection } from './sections/AccountSection';
 import { AboutSection } from './sections/AboutSection';
 import { OperationsSection } from './sections/OperationsSection';
+import { DeploymentPreviewSection } from './sections/DeploymentPreviewSection';
 import { PRODUCT_NAME } from '../../brand';
+import { useAuthOptional } from '../auth/AuthGate';
+import { TransportWarning } from '../auth/TransportWarning';
 
 interface SectionDef {
   id: SettingsSection;
@@ -59,10 +63,17 @@ export const SETTINGS_SECTIONS: readonly SectionDef[] = [
   { id: 'nodes', label: 'Nodes', Icon: HardDrive, Component: NodesSection },
   { id: 'account', label: 'Account', Icon: UserCircle, Component: AccountSection },
   { id: 'operations', label: 'Operations', Icon: Activity, Component: OperationsSection },
+  {
+    id: 'deployment-preview',
+    label: 'Deployment & Preview',
+    Icon: RadioTower,
+    Component: DeploymentPreviewSection,
+  },
   { id: 'about', label: 'About', Icon: Info, Component: AboutSection },
 ];
 
 export function SettingsPage(): JSX.Element {
+  const auth = useAuthOptional();
   const active = usePaddock((s) => s.settingsSection);
   const setSection = usePaddock((s) => s.setSettingsSection);
   const closeSettings = usePaddock((s) => s.closeSettings);
@@ -96,6 +107,11 @@ export function SettingsPage(): JSX.Element {
             </Button>
           </SimpleTooltip>
         </header>
+        {auth?.deployment?.warning ? (
+          <div className="px-3 pb-3">
+            <TransportWarning warning={auth.deployment.warning} />
+          </div>
+        ) : null}
         <div className="px-3 pb-1 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
           Settings
         </div>

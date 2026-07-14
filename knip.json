@@ -10,12 +10,7 @@
       "project": ["scripts/**/*.{js,mjs,ts}"]
     },
     "apps/orchestrator": {
-      "entry": [
-        "src/**/*.test.ts",
-        "src/**/*.int.test.ts",
-        "src/operations/vault-cli.ts",
-        "src/browser/worker.ts"
-      ],
+      "entry": ["src/**/*.test.ts", "src/**/*.int.test.ts", "src/operations/vault-cli.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "apps/web": {

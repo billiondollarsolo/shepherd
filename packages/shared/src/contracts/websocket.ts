@@ -83,19 +83,19 @@ export type ServerMessage = z.infer<typeof ServerMessage>;
 
 /**
  * Client→server control messages: subscribe/unsubscribe to channels and
- * forward PTY resize / browser input intents.
+ * forward PTY resize intents.
  */
 export const ClientSubscribeMessage = z.object({
   op: z.literal('subscribe'),
-  channel: z.enum(['status', 'nodes', 'pty', 'screencast']),
-  /** Required for the per-session channels (pty/screencast). */
+  channel: z.enum(['status', 'nodes', 'pty']),
+  /** Required for the per-session PTY channel. */
   sessionId: Uuid.optional(),
 });
 export type ClientSubscribeMessage = z.infer<typeof ClientSubscribeMessage>;
 
 export const ClientUnsubscribeMessage = z.object({
   op: z.literal('unsubscribe'),
-  channel: z.enum(['status', 'nodes', 'pty', 'screencast']),
+  channel: z.enum(['status', 'nodes', 'pty']),
   sessionId: Uuid.optional(),
 });
 export type ClientUnsubscribeMessage = z.infer<typeof ClientUnsubscribeMessage>;

@@ -1,0 +1,45 @@
+# Deliberate plain-HTTP edge for trusted LANs and encrypted overlay networks.
+# No HSTS or upgrade-insecure-requests is emitted because this topology has no TLS.
+:80 {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Keep this finite. Settings generates the exact origins for the configured
+		# public host and bounded Preview port range; an omitted value fails closed.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src {$FLOCK_PREVIEW_FRAME_SOURCES:'none'}"
+		Permissions-Policy "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Permitted-Cross-Domain-Policies "none"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy orchestrator:8080
+	}
+	handle /ws* {
+		reverse_proxy orchestrator:8080
+	}
+	handle /health* {
+		reverse_proxy orchestrator:8080
+	}
+	handle {
+		reverse_proxy web:80
+	}
+}
+
+# `preview.invalid` intentionally resolves nowhere. This optional hostname backend
+# remains disabled unless the operator supplies a real wildcard DNS suffix; the
+# default no-DNS port-pool backend bypasses Caddy on its dedicated bounded listeners.
+http://*.{$FLOCK_PREVIEW_DOMAIN:preview.invalid} {
+	@internalPreviewEndpoint path /_shepherd/caddy-ask /_shepherd/health
+	respond @internalPreviewEndpoint 404
+	reverse_proxy orchestrator:8081
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+}

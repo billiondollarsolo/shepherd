@@ -8,7 +8,7 @@
  *
  * They also encode the single authoritative session record invariant (spec
  * §4.2): the row `id` (the session_id) threads the tmux session name, the hook
- * token hash, and the browser CDP endpoint into ONE record.
+ * token hash into ONE record.
  */
 import type {
   AgentAuthority,
@@ -41,7 +41,7 @@ function toIsoOrNull(value: Date | string | null | undefined): string | null {
 
 /**
  * Map a persisted `agent_sessions` row to the shared `Session` domain type.
- * Threads the single authoritative identity (tmux + hook token + CDP) through
+ * Threads the single authoritative identity (tmux + hook token) through
  * the one session_id.
  */
 export function rowToSession(row: AgentSessionRow): SessionRecord {
@@ -52,7 +52,6 @@ export function rowToSession(row: AgentSessionRow): SessionRecord {
     agentType: row.agentType as AgentType,
     tmuxSessionName: row.tmuxSessionName,
     workingDir: row.workingDir,
-    browserCdpEndpoint: row.browserCdpEndpoint ?? null,
     hookTokenHash: row.hookTokenHash,
     status: row.status as Status,
     statusDetail: row.statusDetail ?? null,
@@ -68,7 +67,7 @@ export function rowToSession(row: AgentSessionRow): SessionRecord {
 
 /**
  * Map a shared `Session` to an insertable/updatable row. `id` is the session_id;
- * the threaded identity (tmux + hook token hash + CDP) is preserved exactly.
+ * the threaded identity (tmux + hook token hash) is preserved exactly.
  */
 export function sessionToRow(session: SessionRecord): NewAgentSessionRow {
   return {
@@ -78,7 +77,6 @@ export function sessionToRow(session: SessionRecord): NewAgentSessionRow {
     agentType: session.agentType,
     tmuxSessionName: session.tmuxSessionName,
     workingDir: session.workingDir,
-    browserCdpEndpoint: session.browserCdpEndpoint ?? null,
     hookTokenHash: session.hookTokenHash,
     status: session.status,
     statusDetail: session.statusDetail ?? null,

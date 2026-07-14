@@ -54,7 +54,6 @@ const session = {
   agentType: 'claude-code',
   tmuxSessionName: 'flock-test',
   workingDir: project.workingDir,
-  browserCdpEndpoint: null,
   hookTokenHash: 'hash',
   status: 'running',
   statusDetail: null,
@@ -70,7 +69,12 @@ const session = {
 function apiBody(path: string): unknown {
   if (path === '/api/diagnostics') return diagnosticsFixture(NOW);
   if (path === '/api/auth/me') return { user };
-  if (path === '/api/auth/status') return { setupRequired: false };
+  if (path === '/api/auth/status')
+    return {
+      setupRequired: false,
+      setupTokenRequired: false,
+      deployment: { mode: 'builtin-tls', transport: 'https', warning: null },
+    };
   if (path === '/api/nodes') return { nodes: [node] };
   if (path === '/api/projects') return { projects: [project] };
   if (path === '/api/sessions') return { sessions: [session] };

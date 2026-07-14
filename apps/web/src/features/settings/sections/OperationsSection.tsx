@@ -49,10 +49,20 @@ export function OperationsSection(): JSX.Element {
             </div>
           ) : null}
           <SettingCard>
+            <SettingRow title="Deployment mode">
+              <div className="flex items-center gap-2">
+                <Badge variant={data.deployment.transport === 'https' ? 'success' : 'warning'}>
+                  {data.deployment.transport.toUpperCase()}
+                </Badge>
+                <span className="text-xs text-flock-ink-muted">
+                  {data.deployment.mode.replaceAll('-', ' ')}
+                </span>
+              </div>
+            </SettingRow>
             {Object.entries({
               Database: data.health.database.status,
               Migrations: data.health.migrations.status,
-              'Browser runtime': data.health.browserRuntime.status,
+              Preview: data.health.preview.status,
               Push: data.health.push.status,
             }).map(([name, status]) => (
               <SettingRow key={name} title={name}>

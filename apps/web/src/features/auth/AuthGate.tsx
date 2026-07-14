@@ -11,7 +11,7 @@
  * reloads while the Postgres session cookie is still valid.
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { User } from '@flock/shared';
+import type { DeploymentStatus, User } from '@flock/shared';
 import { Sheep } from '../../components/SheepIcon';
 import { ApiError, authStatus, logout as apiLogout, me } from '../../routes/api';
 import { AuthScreen } from './AuthScreen';
@@ -19,12 +19,13 @@ import { AuthScreen } from './AuthScreen';
 type Phase =
   | { kind: 'loading' }
   | { kind: 'unreachable' }
-  | { kind: 'unauthed'; mode: 'signin' | 'setup' }
+  | { kind: 'unauthed'; mode: 'signin' | 'setup'; setupTokenRequired: boolean }
   | { kind: 'authed'; user: User };
 
 /** The signed-in user + actions, available to the whole paddock. */
 export interface AuthValue {
   user: User;
+  deployment: DeploymentStatus | null;
   logout: () => Promise<void>;
   /** Replace the cached user after a profile change (e.g. display name). */
   updateUser: (user: User) => void;
@@ -81,13 +82,17 @@ export async function resolveAuthSession(opts?: {
 
 export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [deployment, setDeployment] = useState<DeploymentStatus | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let alive = true;
     (async () => {
+      const statusPromise = authStatus().catch(() => null);
       const result = await resolveAuthSession();
+      const status = await statusPromise;
       if (!alive) return;
+      if (status) setDeployment(status.deployment);
 
       if (result.kind === 'authed') {
         setPhase({ kind: 'authed', user: result.user });
@@ -100,14 +105,10 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
         return;
       }
 
-      let mode: 'signin' | 'setup' = 'signin';
-      try {
-        const { setupRequired } = await authStatus();
-        mode = setupRequired ? 'setup' : 'signin';
-      } catch {
-        /* status unreachable — default to signin; the screen can toggle */
-      }
-      if (alive) setPhase({ kind: 'unauthed', mode });
+      const setupRequired = status?.setupRequired ?? false;
+      const mode: 'signin' | 'setup' = setupRequired ? 'setup' : 'signin';
+      const setupTokenRequired = setupRequired && (status?.setupTokenRequired ?? false);
+      if (alive) setPhase({ kind: 'unauthed', mode, setupTokenRequired });
     })();
     return () => {
       alive = false;
@@ -151,6 +152,8 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
     return (
       <AuthScreen
         initialMode={phase.mode}
+        setupTokenRequired={phase.setupTokenRequired}
+        transportWarning={deployment?.warning}
         onAuthenticated={(user) => setPhase({ kind: 'authed', user })}
       />
     );
@@ -166,14 +169,14 @@ export function AuthGate({ children }: { children: ReactNode }): JSX.Element {
     try {
       await apiLogout();
     } finally {
-      setPhase({ kind: 'unauthed', mode: 'signin' });
+      setPhase({ kind: 'unauthed', mode: 'signin', setupTokenRequired: false });
     }
   };
 
   const updateUser = (user: User): void => setPhase({ kind: 'authed', user });
 
   return (
-    <AuthContext.Provider value={{ user: phase.user, logout: doLogout, updateUser }}>
+    <AuthContext.Provider value={{ user: phase.user, deployment, logout: doLogout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

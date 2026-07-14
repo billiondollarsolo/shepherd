@@ -37,7 +37,6 @@ function fakeSession(over: Partial<SessionRecord> = {}): SessionRecord {
     agentType: 'claude-code',
     tmuxSessionName: 'flock-11111111-1111-4111-8111-111111111111',
     workingDir: '/work',
-    browserCdpEndpoint: null,
     hookTokenHash: 'hash:abc',
     status: 'starting',
     statusDetail: null,
@@ -99,7 +98,6 @@ describe('GET /api/sessions', () => {
       expect(res.json().sessions).toHaveLength(1);
       expect(res.json().sessions[0]).not.toHaveProperty('hookTokenHash');
       expect(res.json().sessions[0]).not.toHaveProperty('tmuxSessionName');
-      expect(res.json().sessions[0]).not.toHaveProperty('browserCdpEndpoint');
       expect(res.json().sessions[0]).not.toHaveProperty('createdBy');
       expect(service.listArg).toBe(PROJECT_ID);
     } finally {
@@ -123,7 +121,6 @@ describe('POST /api/sessions', () => {
       expect(res.json()).not.toHaveProperty('hookToken');
       expect(res.json().session).not.toHaveProperty('hookTokenHash');
       expect(res.json().session).not.toHaveProperty('tmuxSessionName');
-      expect(res.json().session).not.toHaveProperty('browserCdpEndpoint');
       expect(res.json().session).not.toHaveProperty('createdBy');
     } finally {
       await app.close();

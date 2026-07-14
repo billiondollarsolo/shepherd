@@ -29,6 +29,10 @@
   ],
   "linePatterns": [
     {
+      "pattern": "Guide Your Flock Of Agents|Guide your flock of agents",
+      "reason": "The canonical Shepherd tagline intentionally uses Flock as a collective noun for the user's agents."
+    },
+    {
       "pattern": "previously named Flock|Older docs may say .Flock",
       "reason": "The public transition notice names the former product once so retained technical identifiers are not confusing."
     },

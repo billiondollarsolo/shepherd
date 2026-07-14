@@ -9,8 +9,8 @@ difference with incompatibility or interrupting active agents.
 
 The policy separates four concerns that evolve at different rates:
 
-1. **Shepherd release version** — the orchestrator, web application, browser worker,
-   database migrations, and bundled daemon artifacts released together.
+1. **Shepherd release version** — the orchestrator, web application, edge/database
+   images, database migrations, and bundled daemon artifacts released together.
 2. **Daemon binary version** — identifies a particular `flock-agentd` build.
 3. **Control protocol version** — changes only when the wire contract is
    incompatible. Patch and feature releases should normally retain the protocol.
@@ -180,7 +180,7 @@ and why, without reading logs.
 ### Tasks
 
 - Make release validation check compatibility metadata alongside all package,
-  daemon, Compose, browser-image, and changelog versions.
+  daemon, Compose-image, and changelog versions.
 - Add a compatibility section to release notes whenever the minimum daemon or
   protocol range changes.
 - Keep application images version-coupled and immutable.
@@ -194,7 +194,7 @@ and why, without reading logs.
 
 ### Reasoning
 
-Daemon compatibility alone is insufficient if database, image, and browser-worker
+Daemon compatibility alone is insufficient if database, application, and edge-image
 upgrades can drift or eliminate rollback.
 
 ### Definition of done

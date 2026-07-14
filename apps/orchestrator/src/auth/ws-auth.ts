@@ -5,7 +5,7 @@
  * open a socket carrying the user's cookie (cross-site WebSocket hijacking). And
  * the surface guard only validates the cookie — it never checked that the user
  * OWNS the session, so any authed user could attach to any `/ws/pty/<id>` (read +
- * inject keystrokes) or `/ws/screencast/<id>`. This module closes both:
+ * inject keystrokes). This module closes both:
  *   - T5: reject upgrades whose Origin isn't our own.
  *   - T4: for a session-scoped socket, require the user to own it.
  */
@@ -41,7 +41,7 @@ export function originAllowed(req: IncomingMessage, allowedOrigins: ReadonlySet<
 
 /**
  * Build the WS upgrade authorizer. Returns `(req, sessionId?) => Promise<boolean>`:
- * with a sessionId it's a session-scoped socket (PTY/screencast) → exact owner;
+ * with a sessionId it's a session-scoped socket (PTY) → exact owner;
  * without (the global status stream) → any authed user. Origin is always checked.
  * Unknown and null-owner sessions fail closed. Human-role bypasses do not belong in
  * this boundary; Shepherd's supported product model has one explicit owner.

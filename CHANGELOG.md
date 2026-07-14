@@ -6,6 +6,48 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-14
+
+### Added
+
+- Added project-owned **Ports & Preview**: bounded agentd listener discovery, durable
+  service labels and auto-forward preferences, HTTP/HTTPS/WebSocket forwarding,
+  responsive desktop/mobile controls, and one-time launch capabilities.
+- Added two Preview backends: isolated random hostnames for TLS/DNS deployments and an
+  explicitly private, fixed no-DNS port pool for trusted Tailnets/LANs.
+- Added Deployment & Preview settings with a runtime kill switch, bounded TTL/policy,
+  effective topology/limits, finite CSP configuration, utilization, and live listener
+  validation.
+- Added release-candidate smoke coverage for fresh owner setup, login, a real supervised
+  preview server, capability exchange, proxying, revocation, and container readiness.
+- Added named bundled-TLS, external-TLS, and private-HTTP deployment modes with modular
+  Compose overrides, runtime validation, diagnostics, and visible transport posture.
+
+### Changed
+
+- Updated the Shepherd tagline to **Guide Your Flock Of Agents** across the
+  application, README, tests, and brand validation contract.
+- Removed the server-side Chrome/CDP/screencast runtime, browser worker, Docker-socket
+  dependency, and associated dead contracts and UI.
+- Hardened the production stack with a non-root Caddy runtime, read-only filesystems,
+  internal-only data services, explicit listener health checks, current patched base
+  packages, and four separately scanned Shepherd images.
+- Moved the stateless orchestrator runtime to current Debian stable, removed the legacy
+  tmux package and redundant PostgreSQL client install, and added an expiring image-risk
+  register that fails releases on new or overdue High/Critical findings.
+
+### Security
+
+- Public production modes now require HTTPS, an out-of-band fresh-install setup token,
+  host-only Secure session cookies, durable login throttling, and other-session
+  revocation after a password change. Deliberate private HTTP requires an explicit
+  acknowledgement, exact HTTP origins, restricted-network guidance, and a persistent UI
+  warning.
+- Preview uses 256-bit one-time launch capabilities, credential/header/cookie filtering,
+  global exact-Origin enforcement for unsafe control mutations, bounded resources,
+  service-worker denial, opener isolation, and immediate connection teardown on revoke,
+  expiry, node removal, runtime disable, or shutdown.
+
 ## [0.3.1] - 2026-07-13
 
 ### Fixed
@@ -62,5 +104,7 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.0
 [0.3.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.1
 [0.3.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.0

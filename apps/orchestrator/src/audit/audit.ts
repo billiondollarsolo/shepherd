@@ -2,8 +2,8 @@
  * Minimal, reusable audit-log utility (FR-A3, spec §6 `audit_log`).
  *
  * Append-only record of security-relevant actions. Kept deliberately tiny so
- * later phases (auth login, node add/remove, session create/terminate, browser
- * takeover, secret access) can all write rows through the same seam.
+ * auth login, node add/remove, session create/terminate, preview lifecycle, and
+ * secret access can all write rows through the same seam.
  *
  * The util does NOT own a DB connection. It takes an {@link AuditSink} —
  * anything that can persist one row — so it is trivially testable with an
