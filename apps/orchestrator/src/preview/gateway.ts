@@ -63,6 +63,52 @@ function rejectUpgrade(socket: Duplex, status: number, message: string): void {
   socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
 
+/**
+ * Node's HTTP agent accepts a custom `createConnection`, but its implementation
+ * treats the returned Duplex like a `net.Socket` and unconditionally calls the
+ * socket timing/tuning methods. SSH and agentd tunnels are intentionally generic
+ * Duplex streams, so adapt only that small socket surface here. Keeping the
+ * adapter at the HTTP boundary also leaves raw WebSocket tunnels untouched.
+ */
+function asHttpClientSocket(stream: Duplex): Duplex {
+  const socket = stream as Duplex & {
+    setTimeout?: (timeout: number, callback?: () => void) => Duplex;
+    setNoDelay?: (noDelay?: boolean) => Duplex;
+    setKeepAlive?: (enable?: boolean, initialDelay?: number) => Duplex;
+  };
+  let timeoutMs = 0;
+  let timer: NodeJS.Timeout | undefined;
+
+  const clearTimer = (): void => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const armTimer = (): void => {
+    clearTimer();
+    if (timeoutMs <= 0 || stream.destroyed) return;
+    timer = setTimeout(() => stream.emit('timeout'), timeoutMs);
+    timer.unref?.();
+  };
+
+  if (typeof socket.setTimeout !== 'function') {
+    socket.setTimeout = (timeout, callback) => {
+      timeoutMs = Math.max(0, timeout);
+      if (callback) stream.once('timeout', callback);
+      armTimer();
+      return stream;
+    };
+    // Match net.Socket's inactivity semantics closely enough for streaming
+    // responses: incoming data and completed buffered writes renew the timer.
+    stream.on('data', armTimer);
+    stream.on('drain', armTimer);
+    stream.once('close', clearTimer);
+    stream.once('end', clearTimer);
+  }
+  if (typeof socket.setNoDelay !== 'function') socket.setNoDelay = () => stream;
+  if (typeof socket.setKeepAlive !== 'function') socket.setKeepAlive = () => stream;
+  return stream;
+}
+
 function isServiceWorkerRequest(headers: IncomingHttpHeaders): boolean {
   return headers['service-worker'] === 'script' || headers['sec-fetch-dest'] === 'serviceworker';
 }
@@ -275,7 +321,7 @@ async function proxyHttp(
     createConnection: () =>
       record.protocol === 'https'
         ? tlsConnect({ socket: stream, servername: 'localhost', rejectUnauthorized: true })
-        : stream,
+        : asHttpClientSocket(stream),
   });
   const requestUpstream = record.protocol === 'https' ? httpsRequest : httpRequest;
   const upstream = requestUpstream({

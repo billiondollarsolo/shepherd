@@ -6,6 +6,18 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-14
+
+### Fixed
+
+- Adapted generic SSH and agentd Preview tunnels to the socket methods expected by
+  Node's HTTP client, preventing the orchestrator from crashing when proxying a remote
+  development server.
+- Allowed Ghostty Web to load its bundled WebAssembly data URL under the finite Content
+  Security Policy used by bundled TLS, private Tailnet HTTP, and local deployments.
+- Added regression coverage for generic Duplex Preview tunnels and every production
+  Content Security Policy mode.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added
@@ -104,7 +116,8 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.1
 [0.4.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.0
 [0.3.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.1
 [0.3.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.0

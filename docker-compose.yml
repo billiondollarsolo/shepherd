@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.caddy
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.4.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.4.1}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -79,7 +79,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.postgres
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.4.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.4.1}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -116,7 +116,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.4.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.4.1}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -236,7 +236,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.4.0}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.4.1}
     restart: unless-stopped
     read_only: true
     security_opt:

@@ -1,6 +1,7 @@
 import { createServer, request as httpRequest, type IncomingHttpHeaders } from 'node:http';
 import { createConnection } from 'node:net';
 import type { AddressInfo } from 'node:net';
+import { Duplex } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { Database } from '../db/client.js';
@@ -19,6 +20,33 @@ interface Response {
   status: number;
   headers: IncomingHttpHeaders;
   body: string;
+}
+
+function genericTcpTunnel(port: number): Duplex {
+  const upstream = createConnection({ host: '127.0.0.1', port });
+  const tunnel = new Duplex({
+    read() {
+      upstream.resume();
+    },
+    write(chunk, encoding, callback) {
+      upstream.write(chunk, encoding, callback);
+    },
+    final(callback) {
+      upstream.end(callback);
+    },
+    destroy(_error, callback) {
+      upstream.destroy();
+      callback(null);
+    },
+  });
+  upstream.pause();
+  upstream.on('data', (chunk) => {
+    if (!tunnel.push(chunk)) upstream.pause();
+  });
+  upstream.on('end', () => tunnel.push(null));
+  upstream.on('error', (error) => tunnel.destroy(error));
+  upstream.on('close', () => tunnel.destroy());
+  return tunnel;
 }
 
 function request(
@@ -119,7 +147,9 @@ describe('Remote Preview gateway', () => {
         throw new Error('unused');
       },
       dispose: async () => undefined,
-      dialTcp: async (port: number) => createConnection({ host: '127.0.0.1', port }),
+      // Model the real SSH/agentd path: it returns a generic Duplex rather than
+      // a net.Socket, so it has no setTimeout/setNoDelay/setKeepAlive methods.
+      dialTcp: async (port: number) => genericTcpTunnel(port),
     } as NodeTransport;
     const service = new PreviewService({
       db,

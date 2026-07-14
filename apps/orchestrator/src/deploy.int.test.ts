@@ -214,7 +214,7 @@ describe('NFR-SEC1: production browser security headers', () => {
     expect(caddy).toMatch(/frame-ancestors 'none'/);
     expect(caddy).toMatch(/script-src 'self' 'wasm-unsafe-eval'/);
     expect(caddy).not.toMatch(/(?:^|[\s;])'unsafe-eval'(?:[\s;]|$)/m);
-    expect(caddy).toMatch(/connect-src 'self'/);
+    expect(caddy).toMatch(/connect-src 'self' data:/);
     expect(caddy).toMatch(/upgrade-insecure-requests/);
   });
 
@@ -252,6 +252,7 @@ describe('explicit deployment modes', () => {
     expect(privateCaddy).not.toMatch(/^\s*Strict-Transport-Security\s/m);
     expect(privateCaddy).not.toMatch(/Content-Security-Policy[^\n]*upgrade-insecure-requests/);
     expect(privateCaddy).toMatch(/Content-Security-Policy/);
+    expect(privateCaddy).toMatch(/connect-src 'self' data:/);
     expect(privateCaddy).toMatch(/preview\.invalid/);
   });
 

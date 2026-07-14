@@ -41,9 +41,10 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Vite emits external module scripts. Ghostty needs WebAssembly compilation
-		# (`wasm-unsafe-eval`, not general `unsafe-eval`); React components use
+		# (`wasm-unsafe-eval`, not general `unsafe-eval`) and fetches its bundled WASM
+		# from a data: URL; React components use
 		# runtime style attributes, hence the narrowly documented style exception.
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://{$FLOCK_DOMAIN:localhost}; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src https://*.{$FLOCK_PREVIEW_DOMAIN:preview.localhost}; upgrade-insecure-requests"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: wss://{$FLOCK_DOMAIN:localhost}; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src https://*.{$FLOCK_PREVIEW_DOMAIN:preview.localhost}; upgrade-insecure-requests"
 		Permissions-Policy "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
