@@ -4,8 +4,11 @@
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS gosu-build
 ARG TARGETOS
 ARG TARGETARCH
-RUN GOBIN=/out CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
-    go install github.com/tianon/gosu@v0.0.0-20250923190938-6456aaa0f3c8
+WORKDIR /build
+RUN go mod init shepherd.local/gosu-build \
+    && go get github.com/tianon/gosu@v0.0.0-20250923190938-6456aaa0f3c8 \
+    && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
+        go build -trimpath -ldflags="-s -w" -o /out/gosu github.com/tianon/gosu
 
 FROM postgres:16-bookworm@sha256:da788743d2060767375896de4d646f7576f5911461444b372616f19ea61db2ec
 LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
