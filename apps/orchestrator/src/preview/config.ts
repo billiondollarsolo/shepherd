@@ -64,6 +64,11 @@ function validHostname(value: string): boolean {
   );
 }
 
+function urlHostname(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) return hostname;
+  return hostname.includes(':') ? `[${hostname}]` : hostname;
+}
+
 export function parsePreviewPortRange(raw: string | undefined): PreviewPortRange | null {
   if (!raw?.trim()) return null;
   const match = raw.trim().match(/^(\d{1,5})-(\d{1,5})$/);
@@ -159,8 +164,7 @@ export function readPreviewConfig(
       ? [`${scheme}://*.${domain}${resolvedPublicPort ? `:${resolvedPublicPort}` : ''}`]
       : backend === 'port_pool' && portRange && mainHostname
         ? Array.from({ length: portRange.capacity }, (_, index) => {
-            const host = mainHostname.includes(':') ? `[${mainHostname}]` : mainHostname;
-            return `${scheme}://${host}:${portRange.start + index}`;
+            return `${scheme}://${urlHostname(mainHostname)}:${portRange.start + index}`;
           })
         : [];
   const managedHostnameFrameSource =
@@ -248,6 +252,5 @@ export function poolPreviewOrigin(config: PreviewConfig, port: number): string {
   if (port < config.portRange.start || port > config.portRange.end) {
     throw new Error('Preview port is outside the configured pool');
   }
-  const host = config.publicHost.includes(':') ? `[${config.publicHost}]` : config.publicHost;
-  return `${config.scheme}://${host}:${port}`;
+  return `${config.scheme}://${urlHostname(config.publicHost)}:${port}`;
 }

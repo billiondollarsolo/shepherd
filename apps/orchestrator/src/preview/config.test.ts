@@ -166,4 +166,84 @@ describe('readPreviewConfig', () => {
       'http://abc.preview.localhost:11012',
     );
   });
+
+  it('fails closed for disabled, absent, invalid, and incomplete backend configuration', () => {
+    expect(readPreviewConfig({ FLOCK_PREVIEW_BACKEND: 'disabled' }).reason).toMatch(/disabled/);
+    expect(readPreviewConfig({}).reason).toMatch(/PUBLIC_BASE_URL/);
+    expect(() => readPreviewConfig({ FLOCK_PREVIEW_BACKEND: 'proxy' })).toThrow(
+      /must be hostname, port-pool, or disabled/,
+    );
+    expect(
+      readPreviewConfig({ FLOCK_PREVIEW_BACKEND: 'port-pool' }, 'http://localhost:11010').reason,
+    ).toMatch(/FLOCK_PREVIEW_PORT_RANGE/);
+    expect(
+      readPreviewConfig(
+        {
+          NODE_ENV: 'production',
+          FLOCK_PREVIEW_BACKEND: 'port_pool',
+          FLOCK_PREVIEW_PORT_RANGE: '12000-12001',
+        },
+        'https://shepherd.example.com',
+      ).reason,
+    ).toMatch(/private-http/);
+  });
+
+  it('validates hostnames, numeric limits, and both preview-pool boundaries', () => {
+    expect(
+      readPreviewConfig({ FLOCK_PREVIEW_DOMAIN: '-invalid.example.com' }, 'http://localhost:11010')
+        .reason,
+    ).toMatch(/plain DNS hostname/);
+    for (const value of ['0', '1.5']) {
+      expect(() =>
+        readPreviewConfig({ FLOCK_PREVIEW_TTL_MS: value }, 'http://localhost:11010'),
+      ).toThrow(/must be positive/);
+    }
+
+    const config = readPreviewConfig(
+      {
+        NODE_ENV: 'production',
+        FLOCK_DEPLOYMENT_MODE: 'private-http',
+        FLOCK_ALLOW_INSECURE_HTTP: '1',
+        FLOCK_PREVIEW_PORT_RANGE: '12000-12001',
+      },
+      'http://100.64.0.1:11010',
+    );
+    expect(config.backend).toBe('port_pool');
+    expect(() => poolPreviewOrigin(config, 11_999)).toThrow(/outside/);
+    expect(() => poolPreviewOrigin(config, 12_002)).toThrow(/outside/);
+    expect(() => poolPreviewOrigin({ ...config, publicHost: null }, 12_000)).toThrow(/unavailable/);
+    expect(() => poolPreviewOrigin({ ...config, portRange: null }, 12_000)).toThrow(/unavailable/);
+  });
+
+  it('rejects HTTPS port pools and listener overlap while formatting IPv6 pool links', () => {
+    expect(
+      readPreviewConfig(
+        {
+          FLOCK_PREVIEW_BACKEND: 'port-pool',
+          FLOCK_PREVIEW_PORT_RANGE: '12000-12001',
+        },
+        'https://shepherd.example.com',
+      ).reason,
+    ).toMatch(/private HTTP public URL/);
+
+    expect(
+      readPreviewConfig(
+        {
+          FLOCK_PREVIEW_BACKEND: 'port-pool',
+          FLOCK_PREVIEW_PORT_RANGE: '12000-12001',
+          FLOCK_PREVIEW_PORT: '12001',
+        },
+        'http://localhost:11010',
+      ).reason,
+    ).toMatch(/overlaps/);
+
+    const ipv6 = readPreviewConfig(
+      {
+        FLOCK_PREVIEW_BACKEND: 'port-pool',
+        FLOCK_PREVIEW_PORT_RANGE: '12000-12000',
+      },
+      'http://[::1]:11010',
+    );
+    expect(poolPreviewOrigin(ipv6, 12_000)).toBe('http://[::1]:12000');
+  });
 });

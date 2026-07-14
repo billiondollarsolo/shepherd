@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SHELL_NAV,
   openAgent,
+  clearSelection,
+  closeSettings,
   openMission,
+  openSettings,
   pathToShellNav,
+  selectProject,
   setChrome,
+  setLens,
   shellNavToPath,
   openTools,
   closeTools,
@@ -76,5 +81,64 @@ describe('shell-nav state machine', () => {
   it('setChrome does not clear selection', () => {
     const s = openAgent(DEFAULT_SHELL_NAV, { sessionId: 'x', projectId: 'y' });
     expect(setChrome(s, 'tools').selectedSessionId).toBe('x');
+  });
+
+  it('project and lens actions clear stale modal or session state', () => {
+    const settings = openSettings(DEFAULT_SHELL_NAV, 'nodes');
+    expect(settings).toMatchObject({ settings: true, settingsSection: 'nodes' });
+    expect(closeSettings(settings).settings).toBe(false);
+    expect(openSettings(DEFAULT_SHELL_NAV).settingsSection).toBe('appearance');
+
+    const selected = selectProject(settings, 'project-1');
+    expect(selected).toMatchObject({
+      settings: false,
+      activeProjectId: 'project-1',
+      selectedSessionId: null,
+      lens: 'agents',
+      chrome: 'stage',
+    });
+    expect(clearSelection(selected)).toMatchObject({
+      activeProjectId: null,
+      selectedSessionId: null,
+    });
+    expect(setLens(settings, 'agents')).toMatchObject({ settings: false, lens: 'agents' });
+  });
+
+  it.each([
+    ['/settings/deployment-preview', { settings: true, settingsSection: 'deployment-preview' }],
+    ['/settings/not-a-section', { settings: true }],
+    ['/n/node-1', { settings: false, nodeInfoNodeId: 'node-1', lens: 'mission' }],
+    [
+      '/agents',
+      {
+        settings: false,
+        lens: 'agents',
+        selectedSessionId: null,
+        activeProjectId: null,
+        nodeInfoNodeId: null,
+      },
+    ],
+    [
+      '/p/project-1',
+      {
+        settings: false,
+        lens: 'agents',
+        activeProjectId: 'project-1',
+        selectedSessionId: null,
+        nodeInfoNodeId: null,
+      },
+    ],
+  ])('maps %s into canonical shell state', (path, expected) => {
+    expect(pathToShellNav(path)).toMatchObject(expected);
+  });
+
+  it.each([
+    [{ ...DEFAULT_SHELL_NAV, settings: true, settingsSection: '' }, '/settings/appearance'],
+    [{ ...DEFAULT_SHELL_NAV, nodeInfoNodeId: 'node-1' }, '/n/node-1'],
+    [{ ...DEFAULT_SHELL_NAV, activeProjectId: 'project-1' }, '/p/project-1'],
+    [{ ...DEFAULT_SHELL_NAV, lens: 'agents' }, '/agents'],
+    [DEFAULT_SHELL_NAV, '/'],
+  ])('builds the canonical path for navigation state', (state, expected) => {
+    expect(shellNavToPath(state)).toBe(expected);
   });
 });
