@@ -43,6 +43,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Setup Go for dependency scanning
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: agentd/go.sum
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -89,10 +95,21 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # Vuln gate: fail the build on a known-vulnerable production npm dependency
-      # (high/critical). Keeps fastify/ws/drizzle/etc. patched over time.
-      - name: Audit (npm)
-        run: pnpm audit --prod --audit-level high
+      # npm retired the legacy audit endpoint used by pnpm (HTTP 410). Scan the
+      # immutable lockfile with the same pinned OSV scanner as release CI.
+      - name: Scan JavaScript dependencies with OSV
+        run: |
+          go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.4.0 scan source \
+            --lockfile=pnpm-lock.yaml --format=json --output-file=osv-report.json
+
+      - name: Upload dependency vulnerability report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-vulnerability-report
+          path: osv-report.json
+          if-no-files-found: warn
+          retention-days: 30
 
   agentd:
     name: agentd · vet · staticcheck · race · vuln · dist

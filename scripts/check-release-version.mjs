@@ -156,6 +156,18 @@ if (
 }
 
 const releaseWorkflow = readFileSync(resolve(root, '.github/workflows/release-images.yml'), 'utf8');
+const ciWorkflow = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8');
+for (const [name, workflow] of [
+  ['CI', ciWorkflow],
+  ['release', releaseWorkflow],
+]) {
+  if (!workflow.includes('osv-scanner@v2.4.0')) {
+    throw new Error(`${name} workflow does not use the pinned OSV dependency scanner`);
+  }
+  if (workflow.includes('pnpm audit')) {
+    throw new Error(`${name} workflow still calls the retired pnpm audit endpoint`);
+  }
+}
 if (releaseWorkflow.includes('shepherd-session-chrome')) {
   throw new Error('release workflow still publishes the retired session-Chrome image');
 }
