@@ -214,7 +214,7 @@ export function CommandPalette({
               <li key={group.label} role="presentation">
                 <div
                   role="presentation"
-                  className="px-4 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-flock-ink-muted"
+                  className="px-4 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-flock-ink-primary"
                 >
                   {group.label}
                 </div>
@@ -252,11 +252,11 @@ export function CommandPalette({
                             <Highlight text={command.title} indices={indices} />
                           </span>
                           {command.shortcut ? (
-                            <kbd className="shrink-0 text-2xs text-flock-ink-muted">
+                            <kbd className="shrink-0 text-2xs text-flock-ink-primary">
                               {command.shortcut}
                             </kbd>
                           ) : command.hint && command.hint !== group.label ? (
-                            <span className="shrink-0 text-2xs text-flock-ink-muted">
+                            <span className="shrink-0 text-2xs text-flock-ink-primary">
                               {command.hint}
                             </span>
                           ) : null}

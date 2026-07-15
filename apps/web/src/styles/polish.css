@@ -178,13 +178,18 @@
  * tailwind.config.cjs). The universal prefers-reduced-motion block below
  * collapses them to a near-instant, still-legible state.
  */
+/*
+ * Content entrance is TRANSFORM-ONLY (slide + slight scale, no opacity fade):
+ * the content carries text, and a fade would leave that text below full opacity
+ * for a couple of frames — long enough for an a11y scan to read it as a
+ * contrast failure. The scrim behind it fades separately (animate-scrim-in),
+ * which is where the "lift out of nothing" read actually comes from.
+ */
 @keyframes flock-overlay-in {
   from {
-    opacity: 0;
     transform: translateY(-4px) scale(0.98);
   }
   to {
-    opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
@@ -208,11 +213,9 @@
  */
 @keyframes flock-palette-in {
   from {
-    opacity: 0;
     transform: translateY(-8px) scale(0.97);
   }
   to {
-    opacity: 1;
     transform: translateY(0) scale(1);
   }
 }

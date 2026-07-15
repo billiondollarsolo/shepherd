@@ -17,7 +17,11 @@ export const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       'fixed inset-0 z-50 bg-flock-scrim backdrop-blur-scrim',
-      'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+      // Scrim fades (opacity only — no text). Enter only: an exit animation keeps
+      // the closing dialog mounted long enough to composite behind the next
+      // dialog's scrim (dialogs chain when a menu action swaps one for another),
+      // which trips axe color-contrast.
+      'data-[state=open]:animate-scrim-in',
       className,
     )}
     {...props}
@@ -37,7 +41,9 @@ export const DialogContent = React.forwardRef<
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100dvw-1rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-lg',
         'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         'rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-5 shadow-overlay',
-        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+        // Enter only — see DialogOverlay above (avoids a closing dialog lingering
+        // behind the next one).
+        'data-[state=open]:animate-overlay-in',
         className,
       )}
       {...props}

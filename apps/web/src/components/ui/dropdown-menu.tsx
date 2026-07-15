@@ -16,7 +16,9 @@ export const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 min-w-[11rem] overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-1 p-1 shadow-overlay',
-        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+        // Enter only — see popover.tsx: an exiting menu must not linger behind
+        // a dialog opened from a menu action (would trip axe color-contrast).
+        'data-[state=open]:animate-overlay-in',
         className,
       )}
       {...props}

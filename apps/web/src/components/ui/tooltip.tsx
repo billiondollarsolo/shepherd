@@ -16,7 +16,8 @@ export const TooltipContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-2 px-2 py-1 text-2xs font-medium text-flock-ink-primary shadow-overlay',
-        'data-[state=delayed-open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+        // Enter only — see popover.tsx (exiting overlay must not linger behind a dialog).
+        'data-[state=delayed-open]:animate-overlay-in',
         className,
       )}
       {...props}

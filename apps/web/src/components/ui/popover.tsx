@@ -17,7 +17,10 @@ export const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 rounded-md border border-[var(--flock-border)] bg-flock-surface-1 p-2 shadow-overlay outline-none',
-        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+        // Enter only: transient overlays unmount immediately on close so a
+        // closing menu never lingers behind a dialog that a menu action opens
+        // (an exiting overlay under the scrim trips axe color-contrast).
+        'data-[state=open]:animate-overlay-in',
         className,
       )}
       {...props}

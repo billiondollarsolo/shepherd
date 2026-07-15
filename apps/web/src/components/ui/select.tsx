@@ -94,7 +94,8 @@ export const SelectContent = React.forwardRef<
       position={position}
       className={cn(
         'relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border bg-flock-surface-1 shadow-overlay',
-        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+        // Enter only — see popover.tsx (exiting overlay must not linger behind a dialog).
+        'data-[state=open]:animate-overlay-in',
         position === 'popper' && 'data-[side=bottom]:translate-y-1',
         className,
       )}
