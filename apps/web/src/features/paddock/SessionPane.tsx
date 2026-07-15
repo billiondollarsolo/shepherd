@@ -33,6 +33,7 @@ import {
   SimpleTooltip,
   type BadgeProps,
 } from '../../components/ui';
+import { ResizeSeparator } from '../../components/ui/resize-separator';
 import { PRODUCT_NAME } from '../../brand';
 
 /** Common authed handoff targets (the source's own type is filtered out at render). */
@@ -323,27 +324,16 @@ export function SessionPane(): JSX.Element {
     }
   }, [panelWidth]);
 
-  // Drag the divider to resize the right panel (clamped; never starves the terminal).
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
+  // Drag the divider to resize the right panel (clamped; never starves the
+  // terminal). The pointer→width math lives here; ResizeSeparator owns the drag
+  // lifecycle, touch parity, keyboard stepping, and reset.
+  const onPanelDrag = useCallback((ev: PointerEvent): void => {
     const container = splitRef.current;
     if (!container) return;
-    const onMove = (ev: MouseEvent): void => {
-      const rect = container.getBoundingClientRect();
-      const next = rect.right - ev.clientX;
-      const max = Math.max(PANEL_MIN, rect.width - 360); // keep ≥360px for the terminal
-      setPanelWidth(Math.min(Math.max(next, PANEL_MIN), max));
-    };
-    const onUp = (): void => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+    const rect = container.getBoundingClientRect();
+    const next = rect.right - ev.clientX;
+    const max = Math.max(PANEL_MIN, rect.width - 360); // keep ≥360px for the terminal
+    setPanelWidth(Math.min(Math.max(next, PANEL_MIN), max));
   }, []);
 
   // GridView is the ONE always-mounted terminal surface. Stage header when a
@@ -402,12 +392,16 @@ export function SessionPane(): JSX.Element {
         {/* Terminal-first: no right icon-rail until tools are explicitly opened. */}
         {toolsOpen && panelSession ? (
           <>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize panel"
-              onMouseDown={onDragStart}
-              className="w-1 shrink-0 cursor-col-resize bg-[var(--flock-border)] hover:bg-flock-accent/50"
+            <ResizeSeparator
+              orientation="vertical"
+              label="Resize panel"
+              value={Math.round(panelWidth)}
+              min={PANEL_MIN}
+              max={PANEL_STORED_MAX}
+              step={24}
+              onDrag={onPanelDrag}
+              onValueChange={setPanelWidth}
+              onReset={() => setPanelWidth(PANEL_DEFAULT)}
             />
             <div className="min-w-0 shrink-0" style={{ width: panelWidth }}>
               <RightPanel session={panelSession} />

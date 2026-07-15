@@ -110,6 +110,18 @@ module.exports = {
         6: 'var(--flock-space-6)',
         7: 'var(--flock-space-7)',
         8: 'var(--flock-space-8)',
+        // Minimum comfortable touch target (WCAG 2.5.8 / iOS HIG = 44px). Kept as
+        // a literal for now; FOLLOWUP: promote to a --flock-touch var in polish.css
+        // so it lives alongside the other scale tokens.
+        touch: '44px',
+      },
+      // min-h-touch / min-w-touch read from minHeight/minWidth (not spacing), so
+      // bind the same 44px there too.
+      minHeight: {
+        touch: '44px',
+      },
+      minWidth: {
+        touch: '44px',
       },
       borderRadius: {
         xs: 'var(--flock-radius-xs)',

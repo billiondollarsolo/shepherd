@@ -398,8 +398,9 @@ export function AddSessionDialog(): JSX.Element {
         </Button>
         <Button
           type="submit"
+          loading={busy}
+          loadingText="Starting…"
           disabled={
-            busy ||
             !projectId ||
             daemonLaunchBlock !== null ||
             !agentAvailable(agentType) ||
@@ -407,7 +408,7 @@ export function AddSessionDialog(): JSX.Element {
             (effectiveAuthority === 'manage' && !confirmedManage)
           }
         >
-          {busy ? 'Starting…' : 'Start session'}
+          Start session
         </Button>
       </DialogFooter>
     </form>

@@ -154,15 +154,12 @@ export function PathBrowser({
             <Button
               size="sm"
               type="button"
+              loading={mkdir.isPending}
+              loadingText="Creating…"
               disabled={!newName.trim() || !canCreate}
               onClick={submitNewFolder}
             >
-              {mkdir.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Check className="size-4" />
-              )}
-              Create
+              <Check className="size-4" /> Create
             </Button>
             <Button
               size="icon-sm"

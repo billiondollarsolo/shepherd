@@ -5,6 +5,8 @@ import { cn } from '../../lib/utils';
 
 /** Dialog — modal built on Radix, flock-themed with a soft scrim + elevation. */
 export const Dialog = DialogPrimitive.Root;
+export const DialogTrigger = DialogPrimitive.Trigger;
+export const DialogClose = DialogPrimitive.Close;
 export const DialogPortal = DialogPrimitive.Portal;
 
 export const DialogOverlay = React.forwardRef<

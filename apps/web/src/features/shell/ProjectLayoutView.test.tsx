@@ -171,10 +171,14 @@ describe('ProjectLayoutView', () => {
     });
     render(<ProjectLayoutView layout={layout} onLayoutChange={onChange} renderLeaf={() => null} />);
     const sep = screen.getByTestId(`layout-separator-${splitId}`);
-    // Absolute mapping: clientX 100 / width 400 → ratio 0.25
-    fireEvent.mouseDown(sep, { clientX: 100, clientY: 100 });
-    fireEvent.mouseMove(document, { clientX: 100, clientY: 100 });
-    fireEvent.mouseUp(document);
+    // Absolute mapping: clientX 100 / width 400 → ratio 0.25.
+    // jsdom lacks PointerEvent, so dispatch coordinate-carrying MouseEvents typed
+    // as pointer events (ResizeSeparator listens on pointerdown/move/up).
+    sep.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 100, clientY: 100 }),
+    );
+    document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 100 }));
+    document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
     expect(onChange).toHaveBeenCalled();
     const next = onChange.mock.calls.at(-1)![0];
     expect(next.focusedLeafId).toBe(layout.focusedLeafId);
@@ -217,9 +221,11 @@ describe('ProjectLayoutView', () => {
     });
     render(<ProjectLayoutView layout={layout} onLayoutChange={onChange} renderLeaf={() => null} />);
     const sep = screen.getByTestId(`layout-separator-${splitId}`);
-    // clientY 150 / height 200 → ratio 0.75
-    fireEvent.mouseDown(sep, { clientX: 200, clientY: 150 });
-    fireEvent.mouseUp(document);
+    // clientY 150 / height 200 → ratio 0.75 (apply-once on pointerdown).
+    sep.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 200, clientY: 150 }),
+    );
+    document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
     const next = onChange.mock.calls.at(-1)![0];
     expect(next.root.type).toBe('split');
     if (next.root.type === 'split') {

@@ -8,14 +8,9 @@
  *   - Arrange: side-by-side (row), stacked (col), or 2×2 grid.
  *   - Split gutters are drag-resizable.
  */
-import {
-  useCallback,
-  useRef,
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  type ReactNode,
-} from 'react';
+import { useCallback, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Columns2, GripVertical, LayoutGrid, Maximize2, Rows2 } from 'lucide-react';
+import { ResizeSeparator } from '../../components/ui/resize-separator';
 import {
   collectLeaves,
   layoutArrangeMode,
@@ -44,8 +39,9 @@ export interface ProjectLayoutViewProps {
   ) => ReactNode;
 }
 
-/** Gutter thickness (px) — also the middle track in the CSS grid. */
-const GUTTER_PX = 6;
+/** Gutter thickness (px) — also the middle track in the CSS grid. Matches the
+ *  ResizeSeparator's ≥8px hit target so the handle fills the track exactly. */
+const GUTTER_PX = 8;
 
 /** Swap two leaf positions without changing the user's split geometry. */
 export function swapLayoutLeaves(
@@ -176,39 +172,21 @@ function SplitNode({
         flexDirection: 'column',
       };
 
-  const onSeparatorDown = (e: ReactMouseEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
+  // Absolute pointer position → ratio (more stable than start+delta for nested
+  // row splits where re-layout can shift the gutter mid-drag). ResizeSeparator
+  // owns the drag lifecycle, touch parity, keyboard stepping, and reset.
+  const measureRatio = (clientX: number, clientY: number): number => {
     const el = splitRef.current;
-    if (!el) return;
-
-    // Absolute pointer position → ratio (more stable than start+delta for nested
-    // row splits where re-layout can shift the gutter mid-drag).
-    const measure = (clientX: number, clientY: number): number => {
-      const r = el.getBoundingClientRect();
-      if (isRow) {
-        // Horizontal: pointer X as fraction of split width.
-        return (clientX - r.left) / (r.width || 1);
-      }
-      // Vertical: pointer Y as fraction of split height.
-      return (clientY - r.top) / (r.height || 1);
-    };
-
-    const onMove = (ev: MouseEvent): void => {
-      onResizeSplit(node.id, measure(ev.clientX, ev.clientY));
-    };
-    const onUp = (): void => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = isRow ? 'col-resize' : 'row-resize';
-    document.body.style.userSelect = 'none';
-    // Apply once so a click-without-move doesn't feel dead.
-    onResizeSplit(node.id, measure(e.clientX, e.clientY));
+    if (!el) return 0.5;
+    const r = el.getBoundingClientRect();
+    return isRow
+      ? // Horizontal drag: pointer X as fraction of split width.
+        (clientX - r.left) / (r.width || 1)
+      : // Vertical drag: pointer Y as fraction of split height.
+        (clientY - r.top) / (r.height || 1);
+  };
+  const onGutterDrag = (ev: PointerEvent): void => {
+    onResizeSplit(node.id, measureRatio(ev.clientX, ev.clientY));
   };
 
   return (
@@ -230,22 +208,19 @@ function SplitNode({
           renderLeaf={renderLeaf}
         />
       </div>
-      <div
-        role="separator"
-        aria-orientation={isRow ? 'vertical' : 'horizontal'}
-        aria-valuenow={Math.round(node.ratio * 100)}
-        aria-valuemin={5}
-        aria-valuemax={95}
-        aria-label={isRow ? 'Resize panes horizontally' : 'Resize panes vertically'}
+      <ResizeSeparator
+        orientation={isRow ? 'vertical' : 'horizontal'}
+        value={Math.round(node.ratio * 100)}
+        min={5}
+        max={95}
+        step={2}
+        disabled={anyZoom}
+        label={isRow ? 'Resize panes horizontally' : 'Resize panes vertically'}
         data-testid={`layout-separator-${node.id}`}
-        onMouseDown={anyZoom ? undefined : onSeparatorDown}
-        className={
-          anyZoom
-            ? 'hidden'
-            : isRow
-              ? 'relative z-20 w-full cursor-col-resize bg-[var(--flock-border)] hover:bg-flock-accent/70 active:bg-flock-accent'
-              : 'relative z-20 h-full cursor-row-resize bg-[var(--flock-border)] hover:bg-flock-accent/70 active:bg-flock-accent'
-        }
+        className={anyZoom ? 'hidden' : 'z-20'}
+        onDrag={onGutterDrag}
+        onValueChange={(pct) => onResizeSplit(node.id, pct / 100)}
+        onReset={() => onResizeSplit(node.id, 0.5)}
       />
       <div style={paneStyle}>
         <SplitNode

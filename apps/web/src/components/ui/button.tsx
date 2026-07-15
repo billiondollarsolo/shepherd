@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
+import { Spinner } from './spinner';
 
 /**
  * Button — shadcn-style, themed on the flock-theme tokens (US-31). One confident
@@ -44,13 +45,47 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * Busy state — renders a Spinner, disables the control, and sets `aria-busy`.
+   * The label is kept in the layout (opacity-swapped, not removed) so the button
+   * never resizes as it flips between idle and busy.
+   */
+  loading?: boolean;
+  /** Optional visible copy shown beside the spinner while `loading` (e.g. "Saving…"). */
+  loadingText?: string;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  (
+    { className, variant, size, asChild = false, loading = false, loadingText, disabled, children, ...props },
+    ref,
+  ) => {
     const Comp = asChild ? Slot : 'button';
+    // Slot demands a single child, so the busy overlay is only for a real <button>.
+    const showLoading = loading && !asChild;
     return (
-      <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />
+      <Comp
+        ref={ref}
+        className={cn(buttonVariants({ variant, size }), showLoading && 'relative', className)}
+        disabled={showLoading || disabled}
+        aria-busy={showLoading || undefined}
+        {...props}
+      >
+        {showLoading ? (
+          <>
+            {/* Overlay the spinner so the (opacity-0) label below still reserves width. */}
+            <span className="absolute inset-0 flex items-center justify-center gap-2">
+              <Spinner aria-hidden={loadingText ? true : undefined} />
+              {loadingText}
+            </span>
+            <span className="opacity-0" aria-hidden="true">
+              {children}
+            </span>
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
     );
   },
 );
