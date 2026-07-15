@@ -62,7 +62,8 @@ pnpm build
 pnpm typecheck
 pnpm lint
 pnpm test:unit
-pnpm audit --prod --audit-level high
+go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.4.0 scan source \
+  --lockfile=pnpm-lock.yaml --format=json --output-file=osv-report.json
 docker compose -f docker-compose.yml config --quiet
 
 (cd agentd && go vet ./... && go test ./... && \

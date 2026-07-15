@@ -171,6 +171,7 @@ for (const required of [
   'FLOCK_VERSION: candidate-${{ github.sha }}',
   'FLOCK_NODE_RUNTIME_VERSION: candidate-${{ github.sha }}',
   'IMAGE_VERSION=${{ github.ref_name }}',
+  'osv-scanner@v2.4.0',
   'test-node-runtime-migration.sh',
   'survived orchestrator recreation',
   'build-deployment-bundle.sh',
