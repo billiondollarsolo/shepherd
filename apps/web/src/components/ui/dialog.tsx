@@ -41,9 +41,10 @@ export const DialogContent = React.forwardRef<
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100dvw-1rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-lg',
         'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         'rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-5 shadow-overlay',
-        // Enter only — see DialogOverlay above (avoids a closing dialog lingering
-        // behind the next one).
-        'data-[state=open]:animate-overlay-in',
+        // Enter only (see DialogOverlay). dialog-in (not overlay-in) so the
+        // entrance keyframe carries the -translate-x/y-1/2 centering instead of
+        // clobbering it — otherwise the modal mis-centers and never settles.
+        'data-[state=open]:animate-dialog-in',
         className,
       )}
       {...props}

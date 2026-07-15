@@ -194,6 +194,22 @@
   }
 }
 
+/*
+ * Dialog content is centered with transform: translate(-50%, -50%), so its
+ * entrance keyframe MUST carry that same translate — a plain translate/scale
+ * keyframe would override the centering (mis-positioning the modal and leaving
+ * its box perpetually "unstable" for interaction). Transform-only (no opacity)
+ * keeps modal text at full contrast for a11y scans.
+ */
+@keyframes flock-dialog-in {
+  from {
+    transform: translate(-50%, calc(-50% + 6px)) scale(0.985);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 @keyframes flock-overlay-out {
   from {
     opacity: 1;

@@ -49,7 +49,14 @@ test.describe('installable PWA', () => {
       'Manage nodes, projects, and CLI coding agents from one web paddock.',
     );
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#06090d');
+    // Per-scheme theme-color (US-elite Phase 7): dark keeps the on-brand chrome,
+    // light pairs a matching light chrome so the PWA frame doesn't clash.
+    await expect(
+      page.locator('meta[name="theme-color"][media="(prefers-color-scheme: dark)"]'),
+    ).toHaveAttribute('content', '#06090d');
+    await expect(
+      page.locator('meta[name="theme-color"][media="(prefers-color-scheme: light)"]'),
+    ).toHaveAttribute('content', '#ffffff');
   });
 
   test('registers a service worker (Web Push + offline shell)', async ({ page }) => {

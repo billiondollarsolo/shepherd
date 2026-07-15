@@ -198,6 +198,8 @@ module.exports = {
         // polish.css collapses these to a near-instant state.
         'overlay-in': 'flock-overlay-in var(--flock-dur-base) var(--flock-ease-standard) both',
         'overlay-out': 'flock-overlay-out var(--flock-dur-base) var(--flock-ease-standard) both',
+        // Dialog entrance preserves the translate(-50%,-50%) centering (see keyframe).
+        'dialog-in': 'flock-dialog-in var(--flock-dur-base) var(--flock-ease-standard) both',
         // Command palette (6.1): a slightly springier lift on --flock-ease-out,
         // with a quick scrim fade. Collapsed by the reduced-motion block.
         'palette-in': 'flock-palette-in var(--flock-dur-base) var(--flock-ease-out) both',
