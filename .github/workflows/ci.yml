@@ -59,7 +59,7 @@ jobs:
         run: scripts/test-deployment-bundle.sh
 
       - name: Validate production Compose
-        run: docker compose -f docker-compose.yml config --quiet
+        run: docker compose --env-file .env.example -f docker-compose.yml config --quiet
 
       - name: Check formatting
         run: pnpm format:check
