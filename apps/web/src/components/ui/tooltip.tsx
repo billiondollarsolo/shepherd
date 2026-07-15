@@ -16,7 +16,7 @@ export const TooltipContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-2 px-2 py-1 text-2xs font-medium text-flock-ink-primary shadow-overlay',
-        'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95',
+        'data-[state=delayed-open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
         className,
       )}
       {...props}

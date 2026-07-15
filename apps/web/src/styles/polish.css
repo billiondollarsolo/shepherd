@@ -88,6 +88,25 @@
   --flock-shadow-overlay: 0 6px 24px -8px rgb(16 24 32 / 0.18), 0 1px 2px rgb(16 24 32 / 0.1);
   --flock-shadow-focus: 0 0 0 2px var(--flock-surface-0), 0 0 0 4px var(--flock-accent);
 
+  /* Overlay-depth ramp — layer-differentiated depth for stacked overlays ONLY
+     (menus / popovers / dialogs). Raised in-flow controls keep border-carried
+     elevation; do NOT reach for these on buttons/cards. The dark override below
+     adds depth + a hairline ring (not a flat 5% black). */
+  --flock-shadow-sm: 0 1px 2px rgb(16 24 32 / 0.08), 0 1px 3px -1px rgb(16 24 32 / 0.06);
+  --flock-shadow-md: 0 4px 12px -4px rgb(16 24 32 / 0.12), 0 1px 3px -1px rgb(16 24 32 / 0.08);
+  --flock-shadow-lg: 0 12px 32px -12px rgb(16 24 32 / 0.2), 0 2px 6px -2px rgb(16 24 32 / 0.1);
+
+  /* Focus ring with an overridable inner "gap" colour: defaults to the page
+     surface, but an elevated container (e.g. a popover on surface-2) can set
+     --flock-focus-ring-gap to its own surface so the gap matches its ground. */
+  --flock-focus-ring: 0 0 0 2px var(--flock-focus-ring-gap, var(--flock-surface-0)),
+    0 0 0 4px var(--flock-accent);
+
+  /* Subtle top-highlight ring on raised controls — replaces hardcoded
+     ring-white/[0.03]. Derived from ink so it is black ~4% in light and white
+     ~4% in dark (dark override drops it to ~3%). */
+  --flock-ring-highlight: color-mix(in srgb, var(--flock-ink-primary) 4%, transparent);
+
   /* --- motion (tasteful micro-motion) --- */
   --flock-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --flock-ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -98,9 +117,15 @@
   --flock-pulse-dur: 2000ms;
 }
 
-/* Slightly deeper overlay shadow in dark (explicit choice). */
+/* Deeper overlay shadows in dark (explicit choice). Each ramp step gains a
+ * hairline white ring so overlays separate on the near-black ground — depth +
+ * hairline, deliberately NOT a flat 5% black wash. */
 :root[data-theme='dark'] {
   --flock-shadow-overlay: 0 8px 28px -10px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.5);
+  --flock-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --flock-shadow-md: 0 4px 14px -4px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --flock-shadow-lg: 0 16px 44px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --flock-ring-highlight: color-mix(in srgb, var(--flock-ink-primary) 3%, transparent);
 }
 
 /*
@@ -141,6 +166,36 @@
   100% {
     box-shadow: 0 0 0 0
       color-mix(in srgb, var(--flock-indicator-color, currentColor) 0%, transparent);
+  }
+}
+
+/*
+ * Shared overlay enter/exit motion — one recipe for every Radix overlay (Dialog,
+ * Popover, Select, DropdownMenu, Tooltip). A subtle directional slide + fade +
+ * slight scale, bound to --flock-dur-base + --flock-ease-standard via the
+ * animate-overlay-in / animate-overlay-out utilities (registered in
+ * tailwind.config.cjs). The universal prefers-reduced-motion block below
+ * collapses them to a near-instant, still-legible state.
+ */
+@keyframes flock-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes flock-overlay-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
   }
 }
 

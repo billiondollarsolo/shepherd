@@ -19,6 +19,8 @@
  * Status tokens drive the sidebar status dots and mirror the shared StatusEnum
  * (starting | running | awaiting_input | idle | done | error | disconnected).
  * Per Appendix A.3 the awaiting_input colour is exposed as --flock-status-awaiting.
+ * `running` is a calm indigo, deliberately OFF the blue interaction accent
+ * (blue = interactive/selection; running = its own "working" hue — see tokens.ts).
  */
 
 :root,
@@ -37,7 +39,7 @@
   --flock-ink-primary-rgb: 28 32 36;
   --flock-ink-muted-rgb: 91 100 112;
   --flock-status-starting: #64748b;
-  --flock-status-running: #2563eb;
+  --flock-status-running: #5850c4;
   --flock-status-awaiting: #d97706;
   --flock-status-idle: #16a34a;
   --flock-status-done: #0d9488;
@@ -46,6 +48,44 @@
   --flock-diff-add: #e6f4ea;
   --flock-diff-remove: #fce8e6;
   --flock-diff-context: #f5f6f8;
+  /* Saturated diff line-text foregrounds — AA on the tint fills above. */
+  --flock-diff-add-fg: #0f7a34;
+  --flock-diff-remove-fg: #b3261e;
+  /* Semantic-intent fills + AA foregrounds (toasts / badges / destructive-confirm),
+     kept off the agent-status hues. */
+  --flock-intent-success: #15803d;
+  --flock-intent-success-foreground: #ffffff;
+  --flock-intent-warning: #b45309;
+  --flock-intent-warning-foreground: #ffffff;
+  --flock-intent-danger: #b91c1c;
+  --flock-intent-danger-foreground: #ffffff;
+  --flock-intent-info: #1d4ed8;
+  --flock-intent-info-foreground: #ffffff;
+  /* Modal/overlay backdrop + its backdrop-blur radius. */
+  --flock-scrim: rgba(0, 0, 0, 0.5);
+  --flock-scrim-blur: 2px;
+  /* Terminal palette (xterm/ghostty ITheme). term-bg = surface-0; ansi-0..15 is
+     the standard 16-colour palette (Atom "One Light" on the white surface). */
+  --flock-term-bg: #ffffff;
+  --flock-term-fg: #1c2024;
+  --flock-term-cursor: #1c2024;
+  --flock-term-selection: rgba(37, 99, 235, 0.22);
+  --flock-term-ansi-0: #383a42;
+  --flock-term-ansi-1: #e45649;
+  --flock-term-ansi-2: #50a14f;
+  --flock-term-ansi-3: #c18401;
+  --flock-term-ansi-4: #4078f2;
+  --flock-term-ansi-5: #a626a4;
+  --flock-term-ansi-6: #0184bc;
+  --flock-term-ansi-7: #a0a1a7;
+  --flock-term-ansi-8: #696c77;
+  --flock-term-ansi-9: #e45649;
+  --flock-term-ansi-10: #50a14f;
+  --flock-term-ansi-11: #c18401;
+  --flock-term-ansi-12: #4078f2;
+  --flock-term-ansi-13: #a626a4;
+  --flock-term-ansi-14: #0184bc;
+  --flock-term-ansi-15: #090a0b;
   --flock-font-ui: 'Inter Variable', 'Inter', 'Geist Variable', system-ui, -apple-system,
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* Display face for headings/branding. Linear-clean: the same Inter family as the
@@ -72,7 +112,7 @@
     --flock-ink-primary-rgb: 237 237 237;
     --flock-ink-muted-rgb: 140 140 140;
     --flock-status-starting: #8a8a8a;
-    --flock-status-running: #4f7cc4;
+    --flock-status-running: #7b74d4;
     --flock-status-awaiting: #f59e0b;
     --flock-status-idle: #3fb950;
     --flock-status-done: #2bb6a3;
@@ -81,6 +121,38 @@
     --flock-diff-add: #11261a;
     --flock-diff-remove: #2f1518;
     --flock-diff-context: #111111;
+    --flock-diff-add-fg: #3fb950;
+    --flock-diff-remove-fg: #f85149;
+    --flock-intent-success: #2f7d3a;
+    --flock-intent-success-foreground: #ffffff;
+    --flock-intent-warning: #8a5a08;
+    --flock-intent-warning-foreground: #ffffff;
+    --flock-intent-danger: #b5302e;
+    --flock-intent-danger-foreground: #ffffff;
+    --flock-intent-info: #2f5fb0;
+    --flock-intent-info-foreground: #ffffff;
+    --flock-scrim: rgba(0, 0, 0, 0.6);
+    --flock-scrim-blur: 2px;
+    --flock-term-bg: #080808;
+    --flock-term-fg: #c8ccd4;
+    --flock-term-cursor: #ededed;
+    --flock-term-selection: rgba(91, 140, 255, 0.3);
+    --flock-term-ansi-0: #282c34;
+    --flock-term-ansi-1: #e06c75;
+    --flock-term-ansi-2: #98c379;
+    --flock-term-ansi-3: #d19a66;
+    --flock-term-ansi-4: #61afef;
+    --flock-term-ansi-5: #c678dd;
+    --flock-term-ansi-6: #56b6c2;
+    --flock-term-ansi-7: #abb2bf;
+    --flock-term-ansi-8: #5c6370;
+    --flock-term-ansi-9: #e06c75;
+    --flock-term-ansi-10: #98c379;
+    --flock-term-ansi-11: #d19a66;
+    --flock-term-ansi-12: #61afef;
+    --flock-term-ansi-13: #c678dd;
+    --flock-term-ansi-14: #56b6c2;
+    --flock-term-ansi-15: #ffffff;
 
     color-scheme: dark;
   }
@@ -101,7 +173,7 @@
   --flock-ink-primary-rgb: 237 237 237;
   --flock-ink-muted-rgb: 140 140 140;
   --flock-status-starting: #8a8a8a;
-  --flock-status-running: #4f7cc4;
+  --flock-status-running: #7b74d4;
   --flock-status-awaiting: #f59e0b;
   --flock-status-idle: #3fb950;
   --flock-status-done: #2bb6a3;
@@ -110,6 +182,38 @@
   --flock-diff-add: #11261a;
   --flock-diff-remove: #2f1518;
   --flock-diff-context: #111111;
+  --flock-diff-add-fg: #3fb950;
+  --flock-diff-remove-fg: #f85149;
+  --flock-intent-success: #2f7d3a;
+  --flock-intent-success-foreground: #ffffff;
+  --flock-intent-warning: #8a5a08;
+  --flock-intent-warning-foreground: #ffffff;
+  --flock-intent-danger: #b5302e;
+  --flock-intent-danger-foreground: #ffffff;
+  --flock-intent-info: #2f5fb0;
+  --flock-intent-info-foreground: #ffffff;
+  --flock-scrim: rgba(0, 0, 0, 0.6);
+  --flock-scrim-blur: 2px;
+  --flock-term-bg: #080808;
+  --flock-term-fg: #c8ccd4;
+  --flock-term-cursor: #ededed;
+  --flock-term-selection: rgba(91, 140, 255, 0.3);
+  --flock-term-ansi-0: #282c34;
+  --flock-term-ansi-1: #e06c75;
+  --flock-term-ansi-2: #98c379;
+  --flock-term-ansi-3: #d19a66;
+  --flock-term-ansi-4: #61afef;
+  --flock-term-ansi-5: #c678dd;
+  --flock-term-ansi-6: #56b6c2;
+  --flock-term-ansi-7: #abb2bf;
+  --flock-term-ansi-8: #5c6370;
+  --flock-term-ansi-9: #e06c75;
+  --flock-term-ansi-10: #98c379;
+  --flock-term-ansi-11: #d19a66;
+  --flock-term-ansi-12: #61afef;
+  --flock-term-ansi-13: #c678dd;
+  --flock-term-ansi-14: #56b6c2;
+  --flock-term-ansi-15: #ffffff;
 
   color-scheme: dark;
 }

@@ -17,7 +17,7 @@ export const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 rounded-md border border-[var(--flock-border)] bg-flock-surface-1 p-2 shadow-overlay outline-none',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
         className,
       )}
       {...props}

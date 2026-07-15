@@ -29,6 +29,27 @@ module.exports = {
         'flock-diff-add': 'var(--flock-diff-add)',
         'flock-diff-remove': 'var(--flock-diff-remove)',
         'flock-diff-context': 'var(--flock-diff-context)',
+        // Diff line-text foregrounds (saturated, AA on the tints). Exposed two
+        // ways: flock-diff-add-fg/flock-diff-remove-fg AND the diff.add/remove
+        // shorthand so text-diff-add / text-diff-remove resolve (they were dead).
+        'flock-diff-add-fg': 'var(--flock-diff-add-fg)',
+        'flock-diff-remove-fg': 'var(--flock-diff-remove-fg)',
+        diff: {
+          add: 'var(--flock-diff-add-fg)',
+          remove: 'var(--flock-diff-remove-fg)',
+        },
+        // Semantic-intent fills + AA foregrounds (bg-intent-* / text-intent-*-foreground,
+        // also border-/ring-). Deliberately distinct from the agent-status hues.
+        intent: {
+          success: 'var(--flock-intent-success)',
+          'success-foreground': 'var(--flock-intent-success-foreground)',
+          warning: 'var(--flock-intent-warning)',
+          'warning-foreground': 'var(--flock-intent-warning-foreground)',
+          danger: 'var(--flock-intent-danger)',
+          'danger-foreground': 'var(--flock-intent-danger-foreground)',
+          info: 'var(--flock-intent-info)',
+          'info-foreground': 'var(--flock-intent-info-foreground)',
+        },
         // Status colours that drive the sidebar dots/rings (StatusIndicator
         // uses bg-status-* / ring-status-*). Keys mirror the shared StatusEnum;
         // `awaiting` is the Appendix A.3 alias of `awaiting_input`.
@@ -41,6 +62,18 @@ module.exports = {
           error: 'var(--flock-status-error)',
           disconnected: 'var(--flock-status-disconnected)',
         },
+      },
+      // First-class background utilities for the color-mix/translucent tokens
+      // (these can't take the /opacity modifier, so they bind straight through).
+      // Lets components drop the [var(--flock-*)] arbitrary-value escape hatch:
+      //   bg-flock-hover / bg-flock-accent-soft / bg-flock-accent-hover /
+      //   bg-flock-scrim / bg-flock-border (for hairline rules & separators).
+      backgroundColor: {
+        'flock-hover': 'var(--flock-surface-hover)',
+        'flock-accent-soft': 'var(--flock-accent-soft)',
+        'flock-accent-hover': 'var(--flock-accent-hover)',
+        'flock-scrim': 'var(--flock-scrim)',
+        'flock-border': 'var(--flock-border)',
       },
       fontFamily: {
         sans: ['var(--flock-font-ui)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -89,10 +122,22 @@ module.exports = {
         DEFAULT: 'var(--flock-border)',
         strong: 'var(--flock-border-strong)',
         accent: 'var(--flock-accent)',
+        'accent-soft': 'var(--flock-accent-soft)',
+      },
+      ringColor: {
+        // Subtle top-highlight ring on raised controls — replaces ring-white/[0.03].
+        highlight: 'var(--flock-ring-highlight)',
       },
       boxShadow: {
         overlay: 'var(--flock-shadow-overlay)',
         focus: 'var(--flock-shadow-focus)',
+        // Overlay-depth ramp (overlays only; distinct names so Tailwind's default
+        // shadow-sm/md/lg on raised controls are left untouched).
+        'flock-sm': 'var(--flock-shadow-sm)',
+        'flock-md': 'var(--flock-shadow-md)',
+        'flock-lg': 'var(--flock-shadow-lg)',
+        // Focus ring with an overridable inner-gap colour (--flock-focus-ring-gap).
+        'focus-ring': 'var(--flock-focus-ring)',
       },
       transitionTimingFunction: {
         standard: 'var(--flock-ease-standard)',
@@ -133,6 +178,17 @@ module.exports = {
       },
       animation: {
         'flock-pulse': 'flock-pulse var(--flock-pulse-dur) var(--flock-ease-out) infinite',
+        // Shared overlay enter/exit (Dialog/Popover/Select/DropdownMenu/Tooltip).
+        // Keyframes are hand-authored in styles/polish.css (flock-overlay-in/out)
+        // and bound here to --flock-dur-base + --flock-ease-standard. `both` keeps
+        // the start/end frame so there's no flash; the reduced-motion block in
+        // polish.css collapses these to a near-instant state.
+        'overlay-in': 'flock-overlay-in var(--flock-dur-base) var(--flock-ease-standard) both',
+        'overlay-out': 'flock-overlay-out var(--flock-dur-base) var(--flock-ease-standard) both',
+      },
+      // Backdrop blur for the modal/overlay scrim (backdrop-blur-scrim).
+      backdropBlur: {
+        scrim: 'var(--flock-scrim-blur)',
       },
     },
   },

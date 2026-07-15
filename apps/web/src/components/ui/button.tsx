@@ -17,14 +17,15 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          'bg-flock-accent text-[var(--flock-accent-foreground)] shadow-sm hover:bg-[var(--flock-accent-hover)] active:brightness-95',
+          'bg-flock-accent text-[var(--flock-accent-foreground)] shadow-sm hover:bg-flock-accent-hover active:brightness-95',
         secondary:
-          'bg-flock-surface-2 text-flock-ink-primary border border-[var(--flock-border)] hover:bg-[var(--flock-surface-hover)]',
+          'bg-flock-surface-2 text-flock-ink-primary border hover:bg-flock-hover',
         outline:
-          'border border-[var(--flock-border-strong)] bg-transparent text-flock-ink-primary hover:bg-[var(--flock-surface-hover)]',
+          'border border-strong bg-transparent text-flock-ink-primary hover:bg-flock-hover',
         ghost:
-          'bg-transparent text-flock-ink-muted hover:bg-[var(--flock-surface-hover)] hover:text-flock-ink-primary',
-        destructive: 'bg-status-error text-white shadow-sm hover:brightness-110',
+          'bg-transparent text-flock-ink-muted hover:bg-flock-hover hover:text-flock-ink-primary',
+        destructive:
+          'bg-intent-danger text-intent-danger-foreground shadow-sm hover:brightness-110',
         link: 'text-flock-accent underline-offset-4 hover:underline',
       },
       size: {

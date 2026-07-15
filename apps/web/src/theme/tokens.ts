@@ -68,11 +68,46 @@ export interface ThemeTokens {
     error: string;
     disconnected: string;
   };
-  /** Diff viewer line tints. */
+  /**
+   * Diff viewer. `add`/`remove`/`context` are the low-contrast line *tints*;
+   * `addForeground`/`removeForeground` are the saturated line *text* colours
+   * (WCAG-AA on their respective tint fills).
+   */
   diff: {
     add: string;
     remove: string;
     context: string;
+    addForeground: string;
+    removeForeground: string;
+  };
+  /**
+   * Semantic-intent fills + AA foregrounds (toasts, badges, destructive/confirm
+   * actions). Deliberately distinct from the agent-status hues.
+   */
+  intent: {
+    success: string;
+    successForeground: string;
+    warning: string;
+    warningForeground: string;
+    danger: string;
+    dangerForeground: string;
+    info: string;
+    infoForeground: string;
+  };
+  /** Modal/overlay backdrop (translucent) + its optional backdrop-blur radius. */
+  scrim: string;
+  scrimBlur: string;
+  /**
+   * Terminal palette. The xterm/ghostty `ITheme` is built from these vars.
+   * `bg` == `surface-0` (the app's true-black surface); `ansi` is the 16-colour
+   * palette, indices 0..15 in standard order.
+   */
+  term: {
+    bg: string;
+    fg: string;
+    cursor: string;
+    selection: string;
+    ansi: readonly string[];
   };
   /** Typography. */
   font: {
@@ -88,17 +123,24 @@ const FONT_CODE =
 
 /**
  * Status palette (light). Maps each StatusEnum state to a hue:
- *   starting   -> slate (spinning up, not yet active)
- *   running    -> blue  (agent is actively working)
- *   awaiting   -> amber (the money state: blocked on the human) — rings sidebar
- *   idle       -> green (connected, quiet)
- *   done       -> teal  (completed cleanly)
- *   error      -> red   (last run errored) — rings sidebar
- *   disconnected -> grey (node/tunnel down, stale)
+ *   starting   -> slate  (spinning up, not yet active)
+ *   running    -> indigo (agent is actively working)
+ *   awaiting   -> amber  (the money state: blocked on the human) — rings sidebar
+ *   idle       -> green  (connected, quiet)
+ *   done       -> teal   (completed cleanly)
+ *   error      -> red    (last run errored) — rings sidebar
+ *   disconnected -> grey  (node/tunnel down, stale)
+ *
+ * SINGLE-ACCENT RULE (US, Phase 1.5): **blue is reserved for interaction**
+ * (`accent` — selection, focus, links, primary actions). `running` therefore is
+ * a distinct, calm INDIGO — clearly off the interaction blue — so that in a dense
+ * grid a selected/focused cell never reads the same as a running agent. If you
+ * need "actively working", use `status.running`; if you need "interactive", use
+ * `accent`. Do not collapse the two back onto the same hue.
  */
 const STATUS_LIGHT = {
   starting: '#64748b',
-  running: '#2563eb',
+  running: '#5850c4', // calm indigo — deliberately NOT the blue interaction accent
   awaiting: '#d97706',
   idle: '#16a34a',
   done: '#0d9488',
@@ -108,13 +150,86 @@ const STATUS_LIGHT = {
 
 const STATUS_DARK = {
   starting: '#8a8a8a', // muted grey (spinning up)
-  running: '#4f7cc4', // active state uses the deliberate interaction blue
+  running: '#7b74d4', // calm indigo — its own "working" hue, off the interaction blue
   awaiting: '#f59e0b', // amber stays punchy — the "needs me" alert
   idle: '#3fb950', // calmer green (sits in the graphite palette, not neon)
   done: '#2bb6a3', // calmer teal
   error: '#ef4444', // red stays punchy — the alert state
   disconnected: '#6b7280',
 } as const;
+
+/**
+ * Semantic-intent fills + AA-verified foregrounds — the "solid action" colours
+ * (destructive/confirm buttons, toast types, badges). These are deliberately
+ * kept OFF the agent-status hues so a red "danger" button never reads as an
+ * errored agent. Every `*Foreground` below is WCAG-AA (>=4.5:1) on its own fill.
+ */
+const INTENT_LIGHT = {
+  success: '#15803d',
+  successForeground: '#ffffff',
+  warning: '#b45309',
+  warningForeground: '#ffffff',
+  danger: '#b91c1c',
+  dangerForeground: '#ffffff',
+  info: '#1d4ed8',
+  infoForeground: '#ffffff',
+} as const;
+
+const INTENT_DARK = {
+  success: '#2f7d3a',
+  successForeground: '#ffffff',
+  warning: '#8a5a08',
+  warningForeground: '#ffffff',
+  danger: '#b5302e',
+  dangerForeground: '#ffffff',
+  info: '#2f5fb0',
+  infoForeground: '#ffffff',
+} as const;
+
+/**
+ * Terminal ANSI palettes (indices 0..15, standard order: black, red, green,
+ * yellow, blue, magenta, cyan, white, then the 8 "bright" variants). Dark is
+ * Atom "One Dark"; light is Atom "One Light" — both chosen for legibility on the
+ * true-black / white terminal surface. Consumed by the xterm/ghostty ITheme,
+ * built from the `--flock-term-*` vars via getComputedStyle (Phase 4).
+ */
+const TERM_ANSI_LIGHT = [
+  '#383a42', // 0  black
+  '#e45649', // 1  red
+  '#50a14f', // 2  green
+  '#c18401', // 3  yellow
+  '#4078f2', // 4  blue
+  '#a626a4', // 5  magenta
+  '#0184bc', // 6  cyan
+  '#a0a1a7', // 7  white
+  '#696c77', // 8  bright black
+  '#e45649', // 9  bright red
+  '#50a14f', // 10 bright green
+  '#c18401', // 11 bright yellow
+  '#4078f2', // 12 bright blue
+  '#a626a4', // 13 bright magenta
+  '#0184bc', // 14 bright cyan
+  '#090a0b', // 15 bright white
+] as const;
+
+const TERM_ANSI_DARK = [
+  '#282c34', // 0  black
+  '#e06c75', // 1  red
+  '#98c379', // 2  green
+  '#d19a66', // 3  yellow
+  '#61afef', // 4  blue
+  '#c678dd', // 5  magenta
+  '#56b6c2', // 6  cyan
+  '#abb2bf', // 7  white
+  '#5c6370', // 8  bright black
+  '#e06c75', // 9  bright red
+  '#98c379', // 10 bright green
+  '#d19a66', // 11 bright yellow
+  '#61afef', // 12 bright blue
+  '#c678dd', // 13 bright magenta
+  '#56b6c2', // 14 bright cyan
+  '#ffffff', // 15 bright white
+] as const;
 
 /** Light theme — the default when the OS reports a light preference. */
 export const lightTheme: ThemeTokens = {
@@ -138,6 +253,18 @@ export const lightTheme: ThemeTokens = {
     add: '#e6f4ea',
     remove: '#fce8e6',
     context: '#f5f6f8',
+    addForeground: '#0f7a34',
+    removeForeground: '#b3261e',
+  },
+  intent: INTENT_LIGHT,
+  scrim: 'rgba(0, 0, 0, 0.5)',
+  scrimBlur: '2px',
+  term: {
+    bg: '#ffffff', // = surface-0
+    fg: '#1c2024', // = ink-primary
+    cursor: '#1c2024',
+    selection: 'rgba(37, 99, 235, 0.22)',
+    ansi: TERM_ANSI_LIGHT,
   },
   font: {
     ui: FONT_UI,
@@ -172,6 +299,18 @@ export const darkTheme: ThemeTokens = {
     add: '#11261a', // muted green wash, sits on graphite
     remove: '#2f1518', // muted red wash
     context: '#111111', // = surface-1
+    addForeground: '#3fb950', // saturated green, AA on the add wash
+    removeForeground: '#f85149', // saturated red, AA on the remove wash
+  },
+  intent: INTENT_DARK,
+  scrim: 'rgba(0, 0, 0, 0.6)',
+  scrimBlur: '2px',
+  term: {
+    bg: '#080808', // = surface-0, true near-black
+    fg: '#c8ccd4', // soft light-grey terminal text
+    cursor: '#ededed', // = ink-primary
+    selection: 'rgba(91, 140, 255, 0.3)',
+    ansi: TERM_ANSI_DARK,
   },
   font: {
     ui: FONT_UI,
@@ -199,7 +338,7 @@ export const themes: Record<ResolvedTheme, ThemeTokens> = {
  * `--flock-status-awaiting` variable (StatusIndicator does this).
  */
 export function tokensToCssVars(t: ThemeTokens): Record<string, string> {
-  return {
+  const vars: Record<string, string> = {
     '--flock-surface-0': t.surface[0],
     '--flock-surface-1': t.surface[1],
     '--flock-surface-2': t.surface[2],
@@ -218,9 +357,30 @@ export function tokensToCssVars(t: ThemeTokens): Record<string, string> {
     '--flock-diff-add': t.diff.add,
     '--flock-diff-remove': t.diff.remove,
     '--flock-diff-context': t.diff.context,
+    '--flock-diff-add-fg': t.diff.addForeground,
+    '--flock-diff-remove-fg': t.diff.removeForeground,
+    '--flock-intent-success': t.intent.success,
+    '--flock-intent-success-foreground': t.intent.successForeground,
+    '--flock-intent-warning': t.intent.warning,
+    '--flock-intent-warning-foreground': t.intent.warningForeground,
+    '--flock-intent-danger': t.intent.danger,
+    '--flock-intent-danger-foreground': t.intent.dangerForeground,
+    '--flock-intent-info': t.intent.info,
+    '--flock-intent-info-foreground': t.intent.infoForeground,
+    '--flock-scrim': t.scrim,
+    '--flock-scrim-blur': t.scrimBlur,
+    '--flock-term-bg': t.term.bg,
+    '--flock-term-fg': t.term.fg,
+    '--flock-term-cursor': t.term.cursor,
+    '--flock-term-selection': t.term.selection,
     '--flock-font-ui': t.font.ui,
     '--flock-font-code': t.font.code,
   };
+  // The 16-colour ANSI palette expands to --flock-term-ansi-0 .. -15.
+  t.term.ansi.forEach((colour, i) => {
+    vars[`--flock-term-ansi-${i}`] = colour;
+  });
+  return vars;
 }
 
 /** The complete list of `--flock-*` variable names (handy for tests/audits). */
@@ -246,18 +406,22 @@ export function statusCssVar(status: string): string {
 /* ------------------------------------------------------------------ */
 
 /**
- * Deliberate modular type scale (1.20 minor third, 14px base). Smallest →
- * largest. `name` matches the CSS custom property suffix
+ * Deliberate, hand-tuned readable type scale (11–24px, 14px base). NOTE: this is
+ * NOT a pure modular scale — the small end was bumped +1px (2026-06-08) for
+ * all-day legibility, so adjacent steps sit within a calm ratio (≤1.20) rather
+ * than a fixed minor third. These are the *shipped* polish.css figures, mirrored
+ * here 1:1 (polish.test.ts asserts px value-parity, not just name presence).
+ * Smallest → largest. `name` matches the CSS custom property suffix
  * (`--flock-text-<name>`).
  */
 export const TYPE_SCALE = [
-  { name: '3xs', px: 10 },
-  { name: '2xs', px: 11 },
-  { name: 'xs', px: 12 },
-  { name: 'sm', px: 13 },
-  { name: 'md', px: 14 },
-  { name: 'lg', px: 16 },
-  { name: 'xl', px: 19 },
+  { name: '3xs', px: 11 },
+  { name: '2xs', px: 12 },
+  { name: 'xs', px: 13 },
+  { name: 'sm', px: 14 },
+  { name: 'md', px: 15 },
+  { name: 'lg', px: 17 },
+  { name: 'xl', px: 20 },
   { name: '2xl', px: 24 },
 ] as const;
 
@@ -295,6 +459,17 @@ export const ELEVATION_TOKENS = [
   '--flock-shadow-none',
   '--flock-shadow-overlay',
   '--flock-shadow-focus',
+  // Overlay-depth ramp — layer-differentiated depth for stacked overlays ONLY
+  // (menus/popovers/dialogs). Raised in-flow controls keep border-carried
+  // elevation; the dark override adds depth + a hairline ring (not a flat 5% black).
+  '--flock-shadow-sm',
+  '--flock-shadow-md',
+  '--flock-shadow-lg',
+  // Focus ring whose inner "gap" colour defaults to surface-0 but is overridable
+  // per elevated container (via --flock-focus-ring-gap).
+  '--flock-focus-ring',
+  // Subtle top-highlight ring on raised controls (replaces hardcoded ring-white/[0.03]).
+  '--flock-ring-highlight',
 ] as const;
 
 export const MOTION_TOKENS = [

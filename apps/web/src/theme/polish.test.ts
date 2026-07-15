@@ -42,6 +42,16 @@ describe('US-37 polish tokens', () => {
     expect(Math.max(...ratios)).toBeLessThanOrEqual(1.5);
   });
 
+  it('type scale px values match the shipped polish.css declarations (value parity)', () => {
+    // Not just name presence — the actual px must agree so tokens.ts can't drift
+    // from polish.css (the historical 10/11/12/13/14/16/19/24 vs shipped bug).
+    for (const { name, px } of TYPE_SCALE) {
+      const m = polishCss.match(new RegExp(`--flock-text-${name}\\s*:\\s*(\\d+)px`));
+      expect(m, `polish.css missing --flock-text-${name}`).toBeTruthy();
+      expect(Number(m![1]), `--flock-text-${name} px drifted from polish.css`).toBe(px);
+    }
+  });
+
   it('declares motion durations and the signature pulse duration', () => {
     expect(MOTION_TOKENS).toContain('--flock-pulse-dur');
     expect(MOTION_TOKENS).toContain('--flock-dur-fast');
@@ -67,5 +77,35 @@ describe('US-37 signature micro-motion', () => {
 
   it('collapses motion under prefers-reduced-motion', () => {
     expect(polishCss).toContain('prefers-reduced-motion');
+  });
+});
+
+describe('Phase 1 — overlay motion + elevation ramp', () => {
+  it('hand-authors the shared overlay enter/exit keyframes in polish.css', () => {
+    // These are the source of the animate-overlay-in / animate-overlay-out
+    // utilities (registered in tailwind.config.cjs) — one recipe for every overlay.
+    expect(polishCss).toContain('@keyframes flock-overlay-in');
+    expect(polishCss).toContain('@keyframes flock-overlay-out');
+  });
+
+  it('declares the overlay-depth ramp + focus ring + ring highlight', () => {
+    for (const t of [
+      '--flock-shadow-sm',
+      '--flock-shadow-md',
+      '--flock-shadow-lg',
+      '--flock-focus-ring',
+      '--flock-ring-highlight',
+    ]) {
+      expect(polishCss, `polish.css missing ${t}`).toContain(t);
+    }
+  });
+
+  it('gives the dark overlay ramp a hairline ring, not a flat 5% black wash', () => {
+    // "borders/hairlines carry elevation" — dark depth is depth + white hairline.
+    expect(polishCss).toContain('rgb(255 255 255 / 0.04)');
+  });
+
+  it('makes the focus-ring inner gap overridable per elevated container', () => {
+    expect(polishCss).toContain('--flock-focus-ring-gap');
   });
 });

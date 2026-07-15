@@ -10,7 +10,7 @@ export const Input = React.forwardRef<
     ref={ref}
     type={type}
     className={cn(
-      'flex h-8 w-full rounded-md border border-[var(--flock-border-strong)] bg-flock-surface-0 px-2.5 text-sm text-flock-ink-primary',
+      'flex h-8 w-full rounded-md border border-strong bg-flock-surface-0 px-2.5 text-sm text-flock-ink-primary',
       'placeholder:text-flock-ink-muted shadow-sm transition-shadow duration-fast',
       'focus-visible:outline-none focus-visible:shadow-focus focus-visible:border-flock-accent',
       'disabled:cursor-not-allowed disabled:opacity-50',
@@ -30,7 +30,7 @@ export const Textarea = React.forwardRef<
   <textarea
     ref={ref}
     className={cn(
-      'flex min-h-[5rem] w-full rounded-md border border-[var(--flock-border-strong)] bg-flock-surface-0 px-2.5 py-2 font-mono text-xs text-flock-ink-primary',
+      'flex min-h-[5rem] w-full rounded-md border border-strong bg-flock-surface-0 px-2.5 py-2 font-mono text-xs text-flock-ink-primary',
       'placeholder:text-flock-ink-muted shadow-sm transition-shadow duration-fast',
       'focus-visible:outline-none focus-visible:shadow-focus focus-visible:border-flock-accent',
       'disabled:cursor-not-allowed disabled:opacity-50 resize-y',

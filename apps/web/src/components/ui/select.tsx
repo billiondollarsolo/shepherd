@@ -13,7 +13,7 @@ export const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-[var(--flock-border-strong)] bg-flock-surface-0 px-2.5 text-sm text-flock-ink-primary',
+      'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-strong bg-flock-surface-0 px-2.5 text-sm text-flock-ink-primary',
       'shadow-sm transition-shadow focus:outline-none focus-visible:shadow-focus focus-visible:border-flock-accent disabled:cursor-not-allowed disabled:opacity-50',
       'data-[placeholder]:text-flock-ink-muted [&>span]:truncate',
       className,
@@ -37,8 +37,8 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        'relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-1 shadow-overlay',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+        'relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border bg-flock-surface-1 shadow-overlay',
+        'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
         position === 'popper' && 'data-[side=bottom]:translate-y-1',
         className,
       )}

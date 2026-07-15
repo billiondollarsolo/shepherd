@@ -12,9 +12,9 @@ export function Toaster(): JSX.Element {
       toastOptions={{
         classNames: {
           toast:
-            'group rounded-md border border-[var(--flock-border)] bg-flock-surface-1 text-flock-ink-primary shadow-overlay text-sm',
+            'group rounded-md border bg-flock-surface-1 text-flock-ink-primary shadow-overlay text-sm',
           description: 'text-flock-ink-muted',
-          actionButton: 'bg-flock-accent text-white',
+          actionButton: 'bg-flock-accent text-[var(--flock-accent-foreground)]',
           cancelButton: 'bg-flock-surface-2 text-flock-ink-muted',
         },
       }}
