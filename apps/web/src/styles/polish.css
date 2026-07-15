@@ -200,6 +200,32 @@
   }
 }
 
+/*
+ * Command-palette entrance (6.1) — a dedicated fade + lift + slight scale on
+ * --flock-ease-out for the Cmd+K bar, plus a quick scrim fade. A touch more
+ * lift than the shared overlay recipe so the bar reads as a focal surface.
+ * The reduced-motion block below collapses both to a near-instant still state.
+ */
+@keyframes flock-palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes flock-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* small reusable keyboard-hint chip (Cmd+K / Cmd+J), Appendix A.2 */
 .flock-kbd {
   font-family: var(--flock-font-code);

@@ -198,6 +198,10 @@ module.exports = {
         // polish.css collapses these to a near-instant state.
         'overlay-in': 'flock-overlay-in var(--flock-dur-base) var(--flock-ease-standard) both',
         'overlay-out': 'flock-overlay-out var(--flock-dur-base) var(--flock-ease-standard) both',
+        // Command palette (6.1): a slightly springier lift on --flock-ease-out,
+        // with a quick scrim fade. Collapsed by the reduced-motion block.
+        'palette-in': 'flock-palette-in var(--flock-dur-base) var(--flock-ease-out) both',
+        'scrim-in': 'flock-scrim-in var(--flock-dur-fast) var(--flock-ease-out) both',
       },
       // Backdrop blur for the modal/overlay scrim (backdrop-blur-scrim).
       backdropBlur: {

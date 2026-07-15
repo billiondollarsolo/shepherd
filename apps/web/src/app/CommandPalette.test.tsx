@@ -26,19 +26,21 @@ describe('CommandPalette (US-30)', () => {
   });
 
   it('lists all commands and filters as the user types', () => {
+    // Matched query chars are highlighted (split into <span>/<mark> like
+    // SearchPanel), so assert via the option's accessible name, not one text node.
     render(<CommandPalette open commands={commands} onClose={() => {}} />);
-    expect(screen.getByText('Toggle shell drawer')).toBeInTheDocument();
-    expect(screen.getByText('Toggle theme')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /toggle shell drawer/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /toggle theme/i })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'drawer' } });
-    expect(screen.getByText('Toggle shell drawer')).toBeInTheDocument();
-    expect(screen.queryByText('Toggle theme')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /toggle shell drawer/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /toggle theme/i })).not.toBeInTheDocument();
   });
 
   it('runs the selected command and closes when an item is clicked', () => {
     const onClose = vi.fn();
     render(<CommandPalette open commands={commands} onClose={onClose} />);
-    fireEvent.click(screen.getByText('Toggle theme'));
+    fireEvent.click(screen.getByRole('option', { name: /toggle theme/i }));
     expect(commands[1].run).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
   });

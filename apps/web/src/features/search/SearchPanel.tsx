@@ -2,15 +2,39 @@
  * SearchPanel — Find-in-Files for a session's working dir, powered by ripgrep on
  * the node (gitignore-aware) via /api/nodes/:id/search. Case / whole-word / regex
  * toggles, grouped results, click a hit to open it in the file viewer.
+ *
+ * The query runs on a debounce as you type (live search), and the flat result list
+ * is a single roving-tabindex group: ArrowUp/Down move the focused hit, Enter opens
+ * it — so the whole panel is keyboard-drivable without leaving the input.
  */
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { CaseSensitive, Regex, Search, WholeWord } from 'lucide-react';
 import type { Session } from '@flock/shared';
 
 import { searchNode, type SearchResult, type SearchMatch } from '../../data/treeApi';
 import { usePaddock } from '../../store/paddock';
-import { ScrollArea, SimpleTooltip } from '../../components/ui';
+import { EmptyState, ScrollArea, SimpleTooltip } from '../../components/ui';
+import { Sheep } from '../../components/SheepIcon';
+
+/** How long the input stays quiet before a live search fires. */
+const DEBOUNCE_MS = 250;
+
+/** Debounce a rapidly-changing value. Pure hook — the delay is unit-tested via `debounce`. */
+export function debounce<A extends unknown[]>(
+  fn: (...args: A) => void,
+  ms: number,
+): ((...args: A) => void) & { cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const debounced = (...args: A): void => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+  debounced.cancel = (): void => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
+}
 
 /** Group flat ripgrep hits by file, preserving first-seen order. */
 function groupByFile(matches: SearchMatch[]): Array<[string, SearchMatch[]]> {
@@ -82,33 +106,105 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
   const [regex, setRegex] = useState(false);
+  const [active, setActive] = useState(0);
   const openFileInViewer = usePaddock((s) => s.openFileInViewer);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const run = useMutation<SearchResult, Error, void>({
-    mutationFn: () =>
-      searchNode(session.nodeId, session.workingDir, query.trim(), {
+  const run = useMutation<SearchResult, Error, string>({
+    mutationFn: (q: string) =>
+      searchNode(session.nodeId, session.workingDir, q, {
         caseSensitive,
         wholeWord,
         regex,
       }),
   });
 
-  function onSubmit(e: React.FormEvent): void {
-    e.preventDefault();
-    if (query.trim()) run.mutate();
-  }
+  // Live search: fire a debounced query as the operator types (or toggles an
+  // option). The mutate ref keeps the debounced fn stable across renders.
+  const mutateRef = useRef(run.mutate);
+  mutateRef.current = run.mutate;
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((q: string) => {
+        if (q.trim()) mutateRef.current(q.trim());
+      }, DEBOUNCE_MS),
+    [],
+  );
+
+  useEffect(() => {
+    debouncedSearch(query);
+    return () => debouncedSearch.cancel();
+  }, [query, caseSensitive, wholeWord, regex, debouncedSearch]);
 
   const result = run.data;
   const fileCount = result ? new Set(result.matches.map((m) => m.file)).size : 0;
 
+  // The flat, in-display order of every hit — the roving-tabindex spine.
+  const flatHits = useMemo(() => {
+    if (!result) return [] as SearchMatch[];
+    return groupByFile(result.matches).flatMap(([, hits]) => hits);
+  }, [result]);
+
+  // Clamp the active index whenever the result set changes.
+  useEffect(() => {
+    setActive((i) => (flatHits.length === 0 ? 0 : Math.min(i, flatHits.length - 1)));
+  }, [flatHits.length]);
+
+  const openHit = useCallback(
+    (m: SearchMatch) => openFileInViewer(`${session.workingDir}/${m.file}`),
+    [openFileInViewer, session.workingDir],
+  );
+
+  // Move the roving focus and keep the newly-active hit in view.
+  const move = useCallback(
+    (delta: number) => {
+      setActive((i) => {
+        const next = Math.max(0, Math.min(flatHits.length - 1, i + delta));
+        const el = listRef.current?.querySelector<HTMLElement>(`[data-hit-index="${next}"]`);
+        el?.scrollIntoView({ block: 'nearest' });
+        el?.focus();
+        return next;
+      });
+    },
+    [flatHits.length],
+  );
+
+  function onListKeyDown(e: React.KeyboardEvent): void {
+    if (flatHits.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      move(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      move(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const hit = flatHits[active];
+      if (hit) openHit(hit);
+    }
+  }
+
+  function onInputKeyDown(e: React.KeyboardEvent): void {
+    // From the input, ArrowDown dives into the result list.
+    if (e.key === 'ArrowDown' && flatHits.length > 0) {
+      e.preventDefault();
+      setActive(0);
+      const el = listRef.current?.querySelector<HTMLElement>('[data-hit-index="0"]');
+      el?.focus();
+    }
+  }
+
+  let hitIndex = -1;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <form onSubmit={onSubmit} className="border-b border-[var(--flock-border)] p-2">
+      <div className="border-b border-[var(--flock-border)] p-2">
         <div className="flex items-center gap-1 rounded-md border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1 focus-within:border-flock-accent">
           <Search className="size-3.5 shrink-0 text-flock-ink-muted" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onInputKeyDown}
             placeholder="Find in files…"
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm text-flock-ink-primary outline-none placeholder:text-flock-ink-muted"
@@ -134,7 +230,7 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
             {result.truncated ? ' (truncated)' : ''}
           </p>
         ) : null}
-      </form>
+      </div>
 
       <ScrollArea className="min-h-0 flex-1">
         {run.isPending ? (
@@ -142,17 +238,27 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
         ) : run.isError ? (
           <p className="p-3 text-sm text-status-error">{run.error.message}</p>
         ) : !result ? (
-          <p className="p-3 text-xs text-flock-ink-muted">
-            {query.trim()
-              ? 'Press Enter to search.'
-              : 'Type a query, then press Enter to search the working dir.'}
-          </p>
+          <EmptyState
+            icon={<Sheep className="text-flock-ink-muted" />}
+            title="Find in files"
+            description={
+              query.trim()
+                ? 'Searching the working dir…'
+                : 'Type a query to search the working dir. Results appear as you type.'
+            }
+          />
         ) : result.matches.length === 0 ? (
           <p className="p-3 text-sm text-flock-ink-muted">No matches.</p>
         ) : (
-          <ul className="p-1">
+          <div
+            ref={listRef}
+            role="listbox"
+            aria-label="Search results"
+            onKeyDown={onListKeyDown}
+            className="p-1"
+          >
             {groupByFile(result.matches).map(([file, hits]) => (
-              <li key={file} className="mb-1.5">
+              <div key={file} className="mb-1.5">
                 {/* file header — group all matches in a file under one collapsible-style row */}
                 <div className="flex items-center gap-1.5 px-2 py-1 text-2xs font-medium text-flock-ink-muted">
                   <span className="truncate font-mono text-flock-ink-primary/90">{file}</span>
@@ -160,25 +266,39 @@ export default function SearchPanel({ session }: { session: Session }): JSX.Elem
                     {hits.length}
                   </span>
                 </div>
-                {hits.map((m, i) => (
-                  <button
-                    key={`${m.line}:${i}`}
-                    type="button"
-                    onClick={() => openFileInViewer(`${session.workingDir}/${m.file}`)}
-                    className="flex w-full min-w-0 items-baseline gap-2 rounded py-0.5 pl-5 pr-2 text-left hover:bg-flock-surface-2"
-                    data-testid="search-result"
-                  >
-                    <span className="w-8 shrink-0 text-right font-mono text-2xs tabular-nums text-flock-ink-muted/70">
-                      {m.line}
-                    </span>
-                    <span className="truncate font-mono text-2xs text-flock-ink-primary/90">
-                      {highlight(m.text, query.trim(), !regex)}
-                    </span>
-                  </button>
-                ))}
-              </li>
+                {hits.map((m, i) => {
+                  hitIndex += 1;
+                  const idx = hitIndex;
+                  return (
+                    <button
+                      key={`${m.line}:${i}`}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === active}
+                      data-hit-index={idx}
+                      tabIndex={idx === active ? 0 : -1}
+                      onClick={() => {
+                        setActive(idx);
+                        openHit(m);
+                      }}
+                      onFocus={() => setActive(idx)}
+                      className={`flex w-full min-w-0 items-baseline gap-2 rounded py-0.5 pl-5 pr-2 text-left outline-none hover:bg-flock-surface-2 focus-visible:bg-flock-surface-2 ${
+                        idx === active ? 'bg-flock-accent/12' : ''
+                      }`}
+                      data-testid="search-result"
+                    >
+                      <span className="w-8 shrink-0 text-right font-mono text-2xs tabular-nums text-flock-ink-muted/70">
+                        {m.line}
+                      </span>
+                      <span className="truncate font-mono text-2xs text-flock-ink-primary/90">
+                        {highlight(m.text, query.trim(), !regex)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </ScrollArea>
     </div>

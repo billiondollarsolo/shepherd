@@ -2,6 +2,15 @@
  * Paddock command set — navigator + action runner for the herdr-aligned shell.
  */
 import { useEffect, useMemo } from 'react';
+import {
+  FolderPlus,
+  LayoutGrid,
+  PanelRight,
+  Server,
+  Settings,
+  SquareTerminal,
+  Terminal,
+} from 'lucide-react';
 import type { Node as FlockNode, Project, Session } from '@flock/shared';
 import { useShell } from './KeyboardProvider';
 import type { Command } from './commands';
@@ -50,19 +59,39 @@ export function buildPaddockCommands(args: {
       id: 'new-session',
       title: 'New session…',
       hint: 'Create',
+      icon: SquareTerminal,
       run: () => a.openDialog('session'),
     },
     {
       id: 'new-project',
       title: 'New project…',
       hint: 'Create',
+      icon: FolderPlus,
       run: () => a.openDialog('project'),
     },
-    { id: 'add-node', title: 'Add node…', hint: 'Create', run: () => a.openDialog('node') },
+    {
+      id: 'add-node',
+      title: 'Add node…',
+      hint: 'Create',
+      icon: Server,
+      run: () => a.openDialog('node'),
+    },
 
-    { id: 'lens-mission', title: 'Paddock', hint: 'View', run: () => a.openMission() },
+    {
+      id: 'lens-mission',
+      title: 'Paddock',
+      hint: 'View',
+      icon: LayoutGrid,
+      run: () => a.openMission(),
+    },
     { id: 'lens-agents', title: 'Agents lens', hint: 'View', run: () => a.setLens('agents') },
-    { id: 'open-tools', title: 'Open tools panel', hint: 'View', run: () => a.openTools() },
+    {
+      id: 'open-tools',
+      title: 'Open tools panel',
+      hint: 'View',
+      icon: PanelRight,
+      run: () => a.openTools(),
+    },
     {
       id: 'close-tools',
       title: 'Focus terminals (hide tools)',
@@ -86,7 +115,13 @@ export function buildPaddockCommands(args: {
     })),
 
     { id: 'mission-control', title: 'Paddock (all agents)', hint: 'Go', run: a.openMission },
-    { id: 'open-settings', title: 'Open settings', hint: 'Go', run: a.openSettings },
+    {
+      id: 'open-settings',
+      title: 'Open settings',
+      hint: 'Go',
+      icon: Settings,
+      run: a.openSettings,
+    },
   ];
 
   for (const s of sessions) {
@@ -95,6 +130,7 @@ export function buildPaddockCommands(args: {
       id: `goto-session-${s.id}`,
       title: `Go to session: ${sessionLabel(s)}`,
       hint: 'Session',
+      icon: Terminal,
       run: () => a.openAgent(s.id, s.projectId),
     });
   }

@@ -53,6 +53,7 @@ const AUTHORITY_LABEL: Record<AgentAuthority, string> = {
   manage: 'Manage',
 };
 import { useShell } from '../../app/KeyboardProvider';
+import { shortcutLabel } from '../../app/commands';
 import { usePaddock } from '../../store/paddock';
 import { useSessions, useSessionEvents, useGitStatus } from '../../data/queries';
 import { useLiveStatuses } from './liveData';
@@ -180,12 +181,12 @@ function Header({ session }: { session: Session }): JSX.Element {
       ) : null}
 
       <div className="ml-auto flex items-center gap-1">
-        <SimpleTooltip label="Command palette  ⌘K">
+        <SimpleTooltip label={`Command palette  ${shortcutLabel('command-palette')}`}>
           <Button size="icon-sm" variant="ghost" aria-label="Command palette" onClick={openPalette}>
             <Command className="size-4" />
           </Button>
         </SimpleTooltip>
-        <SimpleTooltip label="Shell drawer  ⌘J">
+        <SimpleTooltip label={`Shell drawer  ${shortcutLabel('shell-drawer')}`}>
           <Button
             size="icon-sm"
             variant="ghost"

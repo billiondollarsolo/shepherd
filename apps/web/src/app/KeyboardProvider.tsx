@@ -23,8 +23,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Keyboard } from 'lucide-react';
 import { CommandPalette } from './CommandPalette';
-import type { Command } from './commands';
+import { SHORTCUTS, shortcutLabel, type Command } from './commands';
+import { Kbd } from '../components/ui';
+import { PRODUCT_NAME } from '../brand';
 
 export interface ShellContextValue {
   readonly paletteOpen: boolean;
@@ -70,6 +73,7 @@ export function KeyboardProvider({
 }: KeyboardProviderProps): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [registered, setRegistered] = useState<readonly Command[]>([]);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
@@ -83,14 +87,24 @@ export function KeyboardProvider({
     };
   }, []);
 
-  // Built-in commands always available; mirror the keyboard shortcuts.
+  // Built-in commands always available; shortcut labels come from the single
+  // registry (commands.ts) so the palette hints and the `?` legend never drift.
   const builtins = useMemo<Command[]>(
     () => [
       {
         id: 'toggle-shell-drawer',
         title: 'Toggle shell drawer',
-        shortcut: '⌘J',
+        hint: 'View',
+        shortcut: shortcutLabel('shell-drawer'),
         run: () => setDrawerOpen((v) => !v),
+      },
+      {
+        id: 'show-shortcuts',
+        title: 'Keyboard shortcuts',
+        hint: 'Help',
+        shortcut: shortcutLabel('shortcuts'),
+        icon: Keyboard,
+        run: () => setCheatsheetOpen(true),
       },
     ],
     [],
@@ -104,13 +118,26 @@ export function KeyboardProvider({
   // Global key handling (Appendix A.2).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
-      // Escape always closes the palette if open.
-      if (e.key === 'Escape' && paletteOpen) {
-        setPaletteOpen(false);
-        return;
+      // Escape always closes the topmost overlay (cheatsheet, then palette).
+      if (e.key === 'Escape') {
+        if (cheatsheetOpen) {
+          setCheatsheetOpen(false);
+          return;
+        }
+        if (paletteOpen) {
+          setPaletteOpen(false);
+          return;
+        }
       }
       // Never hijack shortcuts while the user is typing.
       if (isEditableTarget(e.target)) return;
+
+      // `?` (Shift+/) toggles the shortcut cheatsheet — no modifier required.
+      if (e.key === '?') {
+        e.preventDefault();
+        setCheatsheetOpen((v) => !v);
+        return;
+      }
 
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
@@ -125,7 +152,7 @@ export function KeyboardProvider({
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [paletteOpen]);
+  }, [paletteOpen, cheatsheetOpen]);
 
   const value = useMemo<ShellContextValue>(
     () => ({
@@ -147,6 +174,62 @@ export function KeyboardProvider({
     <ShellContext.Provider value={value}>
       {children}
       <CommandPalette open={paletteOpen} commands={allCommands} onClose={closePalette} />
+      <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </ShellContext.Provider>
+  );
+}
+
+/**
+ * The global `?` cheatsheet — a calm centered legend of every keyboard shortcut,
+ * sourced from the single {@link SHORTCUTS} registry and rendered with the
+ * canonical {@link Kbd} chip so the palette hints and this legend never drift.
+ * Entrance motion reuses the palette recipe (collapsed under reduced-motion).
+ */
+function ShortcutCheatsheet({
+  open,
+  onClose,
+}: {
+  readonly open: boolean;
+  readonly onClose: () => void;
+}): JSX.Element | null {
+  if (!open) return null;
+  return (
+    <div
+      className="animate-scrim-in fixed inset-0 z-50 flex items-start justify-center bg-flock-scrim pt-[16vh] backdrop-blur-scrim"
+      onMouseDown={onClose}
+      data-testid="shortcut-cheatsheet-backdrop"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard shortcuts"
+        className="animate-palette-in w-[28rem] max-w-[90vw] overflow-hidden rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 shadow-overlay"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-[var(--flock-border)] px-4 py-3">
+          <h2 className="font-display text-sm font-semibold text-flock-ink-primary">
+            Keyboard shortcuts
+          </h2>
+          <p className="mt-0.5 text-2xs text-flock-ink-muted">
+            {PRODUCT_NAME} · press Esc to close
+          </p>
+        </div>
+        <ul className="max-h-[60vh] overflow-y-auto py-1">
+          {SHORTCUTS.map((s) => (
+            <li
+              key={s.id}
+              className="flex items-center justify-between gap-4 px-4 py-2 text-sm text-flock-ink-primary"
+            >
+              <span className="min-w-0 truncate">{s.label}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                {s.keys.map((k, i) => (
+                  <Kbd key={`${s.id}-${i}`}>{k}</Kbd>
+                ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
