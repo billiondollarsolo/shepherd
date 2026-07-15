@@ -85,7 +85,14 @@ COPY --from=pg-client /usr/lib/postgresql/16 /usr/lib/postgresql/16
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     LC_CTYPE=C.UTF-8
-RUN corepack enable
+# The Node base image can ship an older npm dependency tree after a new npm
+# security release. Keep the runtime package manager on the explicitly audited
+# version used by the local-node runtime, then restore the Corepack shims that
+# provide pnpm for the workspace entrypoint.
+RUN npm install -g npm@12.0.1 \
+    && npm cache clean --force \
+    && rm -rf /root/.npm \
+    && corepack enable
 ARG RELEASE_REFRESH=manual
 
 # Runtime OS deps:
