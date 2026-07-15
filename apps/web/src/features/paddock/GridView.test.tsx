@@ -161,6 +161,26 @@ describe('GridView (kanban — per-project, scroll, tabs)', () => {
     expect(cell).toHaveAttribute('data-status', 'awaiting_input');
   });
 
+  it('rings + pulses a pane awaiting input (the money state)', async () => {
+    mockStatuses = new Map([['a', 'awaiting_input']]);
+    render(<GridView />);
+    const cell = await screen.findByTestId('grid-cell-a');
+    expect(cell.className).toContain('ring-status-awaiting');
+    expect(cell.className).toContain('animate-flock-pulse');
+    // A non-attention pane keeps the neutral highlight ring, no pulse.
+    const quiet = screen.getByTestId('grid-cell-b');
+    expect(quiet.className).toContain('ring-highlight');
+    expect(quiet.className).not.toContain('animate-flock-pulse');
+  });
+
+  it('treats error as attention on a pane (rings identically to awaiting)', async () => {
+    mockStatuses = new Map([['a', 'error']]);
+    render(<GridView />);
+    const cell = await screen.findByTestId('grid-cell-a');
+    expect(cell.className).toContain('ring-status-error');
+    expect(cell.className).toContain('animate-flock-pulse');
+  });
+
   it('shows the telemetry footer when agentd health has usage', async () => {
     mockHealth = { sessions: { a: { live: true, tokens: 12000, tool: 'Edit app.ts' } } };
     render(<GridView />);

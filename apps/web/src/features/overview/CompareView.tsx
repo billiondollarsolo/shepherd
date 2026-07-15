@@ -3,16 +3,17 @@
  * side with their live status + git changes. Keep the winner and
  * the rest are terminated. Rendered as a full-screen layer when a race is active.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, ExternalLink, FileDiff, X } from 'lucide-react';
-import { statusLabel, type Session, type Status } from '@flock/shared';
+import { ringsSidebar, statusLabel, type Session, type Status } from '@flock/shared';
 import { useSessions, useGitStatus } from '../../data/queries';
 import { terminateSession } from '../../data/treeApi';
 import { useLiveStatuses } from '../paddock/liveData';
 import { usePaddock } from '../../store/paddock';
 import { ScrollArea, Button } from '../../components/ui';
 import { StatusDot } from '../../components/StatusDot';
+import { statusCssVar } from '../../theme/tokens';
 
 function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[] }): JSX.Element {
   const live = useLiveStatuses();
@@ -48,8 +49,24 @@ function RacerColumn({ session, raceIds }: { session: Session; raceIds: string[]
     }
     pick.mutate();
   };
+  // A blocked (awaiting_input) or errored racer rings + pulses so a stalled column
+  // is unmissable in the race — the same ringsSidebar() policy as tree/fleet/grid.
+  const attention = ringsSidebar(status);
   return (
-    <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 ring-1 ring-white/[0.03]">
+    <div
+      className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border bg-flock-surface-1 ring-1 ${
+        attention
+          ? `${status === 'error' ? 'border-status-error ring-status-error' : 'border-status-awaiting ring-status-awaiting'} animate-flock-pulse`
+          : 'border-[var(--flock-border)] ring-highlight'
+      }`}
+      // Colour the pulse with the status hue; the static ring persists under
+      // prefers-reduced-motion (the animation is neutralized globally).
+      style={
+        attention
+          ? ({ '--flock-indicator-color': `var(${statusCssVar(status)})` } as CSSProperties)
+          : undefined
+      }
+    >
       <header className="flex items-center gap-2 border-b border-[var(--flock-border)] px-3 py-2">
         <StatusDot status={status} />
         <span className="font-semibold text-flock-ink-primary">{session.agentType}</span>

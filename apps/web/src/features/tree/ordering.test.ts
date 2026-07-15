@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Status } from '@flock/shared';
-import { sortSessionsByAttention, groupNeedsAttention, type OrderableSession } from './ordering';
+import {
+  sortSessionsByAttention,
+  groupNeedsAttention,
+  groupAttentionCount,
+  groupAttentionStatus,
+  type OrderableSession,
+} from './ordering';
 
 const s = (id: string, status: Status): OrderableSession => ({ id, status });
 
@@ -81,5 +87,39 @@ describe('groupNeedsAttention (US-23)', () => {
   });
   it('is false for an empty group', () => {
     expect(groupNeedsAttention([])).toBe(false);
+  });
+});
+
+describe('groupAttentionCount (US-32 per-node "N need you" rollup)', () => {
+  it('counts exactly the awaiting_input/error sessions', () => {
+    const count = groupAttentionCount([
+      s('a', 'awaiting_input'),
+      s('b', 'error'),
+      s('c', 'running'),
+      s('d', 'awaiting_input'),
+      s('e', 'idle'),
+    ]);
+    expect(count).toBe(3);
+  });
+  it('is 0 when nothing needs attention', () => {
+    expect(groupAttentionCount([s('a', 'running'), s('b', 'done'), s('c', 'idle')])).toBe(0);
+  });
+  it('is 0 for an empty group', () => {
+    expect(groupAttentionCount([])).toBe(0);
+  });
+});
+
+describe('groupAttentionStatus (collapsed-branch dot colour)', () => {
+  it('returns the MOST-URGENT needs-you status (awaiting_input over error)', () => {
+    expect(groupAttentionStatus([s('a', 'error'), s('b', 'awaiting_input')])).toBe('awaiting_input');
+  });
+  it('returns error when only errors ring', () => {
+    expect(groupAttentionStatus([s('a', 'running'), s('b', 'error'), s('c', 'idle')])).toBe('error');
+  });
+  it('returns null when nothing rings (never a calm status)', () => {
+    expect(groupAttentionStatus([s('a', 'running'), s('b', 'idle'), s('c', 'done')])).toBeNull();
+  });
+  it('returns null for an empty group', () => {
+    expect(groupAttentionStatus([])).toBeNull();
   });
 });

@@ -1,8 +1,10 @@
 /** Paddock fleet home: node cards only; details live on the node page. */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { HardDrive } from 'lucide-react';
-import { displayStatus, type Session, type Status } from '@flock/shared';
+import { displayStatus, ringsSidebar, type Session, type Status } from '@flock/shared';
 import { StatusDot } from '../../components/StatusDot';
+import { Badge } from '../../components/ui';
+import { statusCssVar } from '../../theme/tokens';
 import { useNodeInfos, useNodes, useProjects, useSessions } from '../../data/queries';
 import { formatGB } from '../../lib/utils';
 import { orderNodes, usePaddock } from '../../store/paddock';
@@ -36,8 +38,10 @@ function Metric({
   value: string;
 }): JSX.Element {
   const width = Math.max(0, Math.min(100, Math.round(percent)));
-  const tone =
-    width >= 90 ? 'bg-status-error' : width >= 70 ? 'bg-status-awaiting' : 'bg-flock-accent';
+  // Infra telemetry bars are deliberately NEUTRAL (never accent/status): they must
+  // not out-shout the attention/status row that answers "which agent needs me"
+  // (Phase 3 §3.4). The percentage/value text carries the load; the bar is texture.
+  const tone = 'bg-flock-ink-muted/50';
   return (
     <span className="block">
       <span className="flex items-center text-2xs text-flock-ink-muted">
@@ -60,12 +64,47 @@ export function FleetView(): JSX.Element {
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
   const visibleNodes = useMemo(() => orderNodes(nodes, nodeOrder), [nodeOrder, nodes]);
   const [nodeLimit, setNodeLimit] = useState(FLEET_PAGE_SIZE);
-  const displayedNodes = visibleNodes.slice(0, nodeLimit);
+  const fleetIndex = useMemo(() => buildFleetIndex(projects, sessions), [projects, sessions]);
+  const statusOf = (session: Session): Status => live.get(session.id) ?? session.status;
+
+  // Per-node attention rollup: how many of a node's open sessions are in a state
+  // that "demands attention" (awaiting_input/error), decided ONCE via the shared
+  // ringsSidebar() policy so awaiting and error read identically here and in the
+  // tree. `status` is the node's dominant ringing state (awaiting outranks error)
+  // and drives the ring hue + the pulse's --flock-indicator-color.
+  const attentionByNode = useMemo(() => {
+    const map = new Map<string, { count: number; status: Status }>();
+    for (const node of visibleNodes) {
+      const nodeSessions = fleetIndex.openSessionsByNode.get(node.id) ?? [];
+      let count = 0;
+      let awaiting = false;
+      for (const session of nodeSessions) {
+        const status = live.get(session.id) ?? session.status;
+        if (!ringsSidebar(status)) continue;
+        count += 1;
+        if (status === 'awaiting_input') awaiting = true;
+      }
+      if (count > 0) map.set(node.id, { count, status: awaiting ? 'awaiting_input' : 'error' });
+    }
+    return map;
+  }, [visibleNodes, fleetIndex, live]);
+
+  // Float the nodes that need you to the top; a stable partition keeps the user's
+  // saved node order intact WITHIN each group.
+  const sortedNodes = useMemo(() => {
+    const needsAttention: typeof visibleNodes = [];
+    const rest: typeof visibleNodes = [];
+    for (const node of visibleNodes) {
+      if (attentionByNode.has(node.id)) needsAttention.push(node);
+      else rest.push(node);
+    }
+    return [...needsAttention, ...rest];
+  }, [visibleNodes, attentionByNode]);
+
+  const displayedNodes = sortedNodes.slice(0, nodeLimit);
   const nodeInfos = useNodeInfos(
     displayedNodes.filter((node) => node.connectionStatus === 'connected').map((node) => node.id),
   );
-  const fleetIndex = useMemo(() => buildFleetIndex(projects, sessions), [projects, sessions]);
-  const statusOf = (session: Session): Status => live.get(session.id) ?? session.status;
 
   return (
     <div className="h-full overflow-y-auto bg-flock-surface-0" data-testid="fleet-hierarchy">
@@ -81,6 +120,12 @@ export function FleetView(): JSX.Element {
           const nodeProjects = fleetIndex.projectsByNode.get(node.id) ?? [];
           const nodeSessions = fleetIndex.openSessionsByNode.get(node.id) ?? [];
           const info = nodeInfos.get(node.id);
+          const attention = attentionByNode.get(node.id);
+          const attentionRing =
+            attention &&
+            (attention.status === 'error'
+              ? 'border-status-error ring-2 ring-status-error'
+              : 'border-status-awaiting ring-2 ring-status-awaiting');
           const counts = new Map<Status, number>();
           for (const session of nodeSessions) {
             const status = statusOf(session);
@@ -91,7 +136,21 @@ export function FleetView(): JSX.Element {
               key={node.id}
               type="button"
               onClick={() => openNodeInfo(node.id)}
-              className="group flex min-h-56 flex-col rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-5 text-left shadow-sm transition-colors hover:border-flock-accent/50 hover:bg-flock-surface-2"
+              className={`group flex min-h-56 flex-col rounded-xl border bg-flock-surface-1 p-5 text-left shadow-sm transition-colors hover:bg-flock-surface-2 ${
+                attention
+                  ? `${attentionRing} animate-flock-pulse`
+                  : 'border-[var(--flock-border)] hover:border-flock-accent/50'
+              }`}
+              // The signature ring pulses with the dominant status hue; under
+              // prefers-reduced-motion the animation is neutralized globally and the
+              // static ring-2 persists as the still-legible fallback.
+              style={
+                attention
+                  ? ({
+                      '--flock-indicator-color': `var(${statusCssVar(attention.status)})`,
+                    } as CSSProperties)
+                  : undefined
+              }
               data-testid={`node-card-${node.id}`}
             >
               <div className="flex w-full items-start gap-3">
@@ -104,6 +163,8 @@ export function FleetView(): JSX.Element {
                       {node.name}
                     </span>
                     <span
+                      role="img"
+                      aria-label={`Connection: ${node.connectionStatus}`}
                       className={`size-2 rounded-full ${CONNECTION_COLOR[node.connectionStatus] ?? 'bg-status-disconnected'}`}
                     />
                   </span>
@@ -112,6 +173,16 @@ export function FleetView(): JSX.Element {
                     {node.host ? ` · ${node.host}` : ''}
                   </span>
                 </span>
+                {attention ? (
+                  <Badge
+                    variant={attention.status === 'error' ? 'danger' : 'warning'}
+                    dot
+                    className="shrink-0"
+                    data-testid={`node-attention-${node.id}`}
+                  >
+                    {attention.count} need{attention.count === 1 ? 's' : ''} you
+                  </Badge>
+                ) : null}
               </div>
 
               <div className="mt-5 grid w-full grid-cols-2 gap-2">
@@ -133,10 +204,18 @@ export function FleetView(): JSX.Element {
                 {STATUS_PRIORITY.flatMap((status) => {
                   const count = counts.get(status) ?? 0;
                   if (count === 0) return [];
+                  // Tint the "needs you" pills (awaiting_input/error) with their status
+                  // token so the two attention states stand out from the muted roster;
+                  // the ring/dot policy stays owned by ringsSidebar().
+                  const pillClass = ringsSidebar(status)
+                    ? status === 'error'
+                      ? 'border-status-error/40 bg-status-error/10 text-flock-ink-primary'
+                      : 'border-status-awaiting/40 bg-status-awaiting/10 text-flock-ink-primary'
+                    : 'border-[var(--flock-border)] bg-flock-surface-0 text-flock-ink-muted';
                   return [
                     <span
                       key={status}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1 text-2xs text-flock-ink-muted"
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-2xs ${pillClass}`}
                     >
                       <StatusDot status={status} />
                       {count} {displayStatus(status).label}

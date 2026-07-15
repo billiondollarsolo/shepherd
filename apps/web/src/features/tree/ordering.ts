@@ -9,7 +9,7 @@
  *
  * Pure + DOM-free so it unit-tests under `pnpm test:unit` without jsdom.
  */
-import { compareByAttention, statusPolicy, type Status } from '@flock/shared';
+import { compareByAttention, ringsSidebar, statusPolicy, type Status } from '@flock/shared';
 
 /** Minimal shape needed to order a session in the tree. */
 export interface OrderableSession {
@@ -43,10 +43,45 @@ export function sortSessionsByAttention<T extends OrderableSession>(sessions: re
 /**
  * True when ANY session in the group needs attention (`awaiting_input`/`error`).
  * Drives the "this branch has something for you" cue on collapsed Node/Project
- * rows so the user sees it without expanding (FR-UI3).
+ * rows so the user sees it without expanding (FR-UI3). Derives from the shared
+ * `ringsSidebar()` policy so a collapsed branch rings for EXACTLY the same states
+ * a single session does — the policy is never re-decided here.
  */
 export function groupNeedsAttention(sessions: readonly OrderableSession[]): boolean {
-  return sessions.some((s) => s.status === 'awaiting_input' || s.status === 'error');
+  return sessions.some((s) => ringsSidebar(s.status));
+}
+
+/**
+ * How many sessions in the group need attention — the per-branch "N need you"
+ * rollup shown on a Node header so the count is visible without expanding
+ * (FR-UI3). Counts exactly the `ringsSidebar()` states (awaiting_input/error).
+ */
+export function groupAttentionCount(sessions: readonly OrderableSession[]): number {
+  let count = 0;
+  for (const s of sessions) if (ringsSidebar(s.status)) count += 1;
+  return count;
+}
+
+/**
+ * The single MOST-URGENT needs-you status in the group (by
+ * `STATUS_POLICY.attentionRank`: `awaiting_input` outranks `error`), or `null`
+ * when nothing rings. Colours the pulsing dot on a collapsed Node/Project header
+ * so it reads identically to the top session inside the branch (FR-UI3). Only
+ * ever returns a `ringsSidebar()` status — the collapsed cue and the expanded
+ * session dot are the same signal.
+ */
+export function groupAttentionStatus(sessions: readonly OrderableSession[]): Status | null {
+  let best: Status | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const s of sessions) {
+    if (!ringsSidebar(s.status)) continue;
+    const rank = statusPolicy(s.status).attentionRank;
+    if (rank < bestRank) {
+      bestRank = rank;
+      best = s.status;
+    }
+  }
+  return best;
 }
 
 /**

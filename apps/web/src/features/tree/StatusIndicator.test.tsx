@@ -54,6 +54,33 @@ describe('StatusIndicator (US-23, FR-ST6)', () => {
     expect(el.className).toContain('ring-status-error');
   });
 
+  it('emits the signature flock-pulse for BOTH ringing states, never a bespoke pulse', () => {
+    for (const status of STATUS_VALUES) {
+      const el = renderIndicator(status);
+      if (ringsSidebar(status)) {
+        // The money state AND error read identically: ring + expanding pulse.
+        expect(el.className).toContain('animate-flock-pulse');
+      } else {
+        expect(el.className).not.toContain('animate-flock-pulse');
+      }
+      // The old generic Tailwind opacity pulse must be gone everywhere.
+      expect(el.className).not.toContain('animate-pulse ');
+      expect(el.className.split(' ')).not.toContain('animate-pulse');
+    }
+  });
+
+  it('colours the expanding pulse ripple with the status hue (--flock-indicator-color)', () => {
+    // awaiting_input aliases to the awaiting hue (Appendix A.3); error is direct.
+    const awaiting = renderIndicator('awaiting_input');
+    expect(awaiting.style.getPropertyValue('--flock-indicator-color')).toBe(
+      'var(--flock-status-awaiting)',
+    );
+    const error = renderIndicator('error');
+    expect(error.style.getPropertyValue('--flock-indicator-color')).toBe(
+      'var(--flock-status-error)',
+    );
+  });
+
   it('shows idle as a gentle (dimmed) dot with no ring', () => {
     const el = renderIndicator('idle');
     expect(el).toHaveAttribute('data-rings', 'false');

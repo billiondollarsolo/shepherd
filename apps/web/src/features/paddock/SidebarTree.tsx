@@ -13,18 +13,26 @@ import {
   X,
 } from 'lucide-react';
 import {
+  ringsSidebar,
   statusLabel,
   type Node as FlockNode,
   type Project,
   type Session,
   type Status,
 } from '@flock/shared';
-import { SimpleTooltip } from '../../components/ui';
+import { Badge, SimpleTooltip } from '../../components/ui';
 import { StatusDot as Dot } from '../../components/StatusDot';
 import { usePaddock } from '../../store/paddock';
 import { useProjects, useSessions, useStack } from '../../data/queries';
 import { AgentdHealthContext, LiveStatusContext, useLiveStatuses } from './liveData';
 import { isShellProcess } from '../../lib/utils';
+import {
+  groupAttentionCount,
+  groupAttentionStatus,
+  groupNeedsAttention,
+  sortGroupsByAttention,
+  type OrderableSession,
+} from '../tree/ordering';
 import { MODE_BADGE, STATUS_RANK, sessionLabel } from './sidebarModel';
 
 function useLiveStatus(session: Session): Status {
@@ -124,7 +132,9 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         data-testid={`session-${session.id}`}
       >
-        <Dot status={status} pulse={status === 'awaiting_input'} />
+        {/* Gate the pulse on the shared ringsSidebar() policy so an ERRORED agent
+            pulses identically to an awaiting one (never re-decided inline). */}
+        <Dot status={status} pulse={ringsSidebar(status)} />
         <SessionConn session={session} />
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -151,7 +161,10 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
         type="button"
         aria-label="Terminate session"
         onClick={() => confirmTerminate(session.id)}
-        className="shrink-0 opacity-0 transition-opacity group-hover/srow:opacity-100 hover:text-status-error"
+        // Low resting opacity (touch discoverability) that lifts on hover AND on
+        // keyboard focus — a destructive control must never be invisible to the
+        // keyboard (WCAG 2.4.7).
+        className="shrink-0 opacity-40 transition-opacity group-hover/srow:opacity-100 group-focus-within/srow:opacity-100 hover:text-status-error focus-visible:opacity-100"
       >
         <X className="size-3.5" />
       </button>
@@ -223,10 +236,30 @@ function ProjectRow({
   );
   const openDialog = usePaddock((s) => s.openDialog);
   const selectProject = usePaddock((s) => s.selectProject);
+  // The scoped project = the one the grid is currently scoped to (project clicked,
+  // no single session maximized). Mirror the SessionRow selected treatment on it.
+  const scoped = usePaddock((s) => s.selectedProjectId === project.id && s.selectedSessionId === null);
   const [open, setOpen] = useState(true);
+  // Branch-level attention (FR-UI3): when COLLAPSED, a pulsing dot stands in for the
+  // hidden session dots so an awaiting/errored agent is visible without expanding.
+  const orderable = useMemo<OrderableSession[]>(
+    () => sessions.map((s) => ({ id: s.id, status: live.get(s.id) ?? s.status })),
+    [sessions, live],
+  );
+  const needsAttention = groupNeedsAttention(orderable);
+  const attentionStatus = groupAttentionStatus(orderable);
   return (
     <div>
-      <div className="group/prow flex items-center gap-1.5 rounded-md py-1 pl-4 pr-1.5 text-sm text-flock-ink-primary hover:bg-flock-surface-2">
+      <div
+        className={`group/prow relative flex items-center gap-1.5 rounded-md py-1 pl-4 pr-1.5 text-sm ${
+          scoped
+            ? 'bg-flock-accent/12 text-flock-ink-primary'
+            : 'text-flock-ink-primary hover:bg-flock-surface-2'
+        }`}
+      >
+        {scoped ? (
+          <span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-flock-accent" />
+        ) : null}
         {/* Clicking a project both expands it AND scopes the grid to it (its
             `/p/:id` URL) — the side-by-side view of just that project. */}
         <button
@@ -246,12 +279,15 @@ function ProjectRow({
           <span className="truncate font-medium">{project.name}</span>
           <StackBadges project={project} nodeConnected={nodeConnected} />
         </button>
+        {!open && needsAttention && attentionStatus ? (
+          <Dot status={attentionStatus} pulse className="shrink-0" />
+        ) : null}
         <SimpleTooltip label="New session (launch an agent here)">
           <button
             type="button"
             aria-label="New session"
             onClick={() => openDialog('session', { projectId: project.id })}
-            className="opacity-0 transition-opacity group-hover/prow:opacity-100 hover:text-flock-accent"
+            className="opacity-40 transition-opacity group-hover/prow:opacity-100 group-focus-within/prow:opacity-100 hover:text-flock-accent focus-visible:opacity-100"
           >
             <Bot className="size-3.5" />
           </button>
@@ -280,10 +316,36 @@ export function NodeRow({
   onMove: (nodeId: string, direction: -1 | 1) => void;
 }): JSX.Element {
   const { data: allProjects = [] } = useProjects();
+  const { data: allSessions = [] } = useSessions();
+  const live = useLiveStatuses();
   const projects = useMemo(
     () => allProjects.filter((p) => p.nodeId === node.id),
     [allProjects, node.id],
   );
+  // Live sessions grouped by project (one pass), for the attention ordering + the
+  // per-node "N need you" rollup. Keyed off live status, not create-time status.
+  const sessionsByProject = useMemo(() => {
+    const byProject = new Map<string, OrderableSession[]>();
+    for (const s of allSessions) {
+      const os: OrderableSession = { id: s.id, status: live.get(s.id) ?? s.status };
+      const arr = byProject.get(s.projectId);
+      if (arr) arr.push(os);
+      else byProject.set(s.projectId, [os]);
+    }
+    return byProject;
+  }, [allSessions, live]);
+  // Manual node ORDER is preserved between nodes (the sidebar locks it); WITHIN a
+  // node the projects that need you bubble to the top (US-32, FR-UI3).
+  const orderedProjects = useMemo(
+    () => sortGroupsByAttention(projects, (p) => sessionsByProject.get(p.id) ?? []),
+    [projects, sessionsByProject],
+  );
+  const nodeSessions = useMemo(
+    () => projects.flatMap((p) => sessionsByProject.get(p.id) ?? []),
+    [projects, sessionsByProject],
+  );
+  const needCount = groupAttentionCount(nodeSessions);
+  const attentionStatus = groupAttentionStatus(nodeSessions);
   const openDialog = usePaddock((s) => s.openDialog);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
   const [open, setOpen] = useState(true);
@@ -295,7 +357,7 @@ export function NodeRow({
           clearly a different level from the project/session items nested under it.
           Drag the grip handle to reorder; the band is the drop target. */}
       <div
-        className={`group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-white/[0.03]'}`}
+        className={`group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-highlight'}`}
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -367,12 +429,27 @@ export function NodeRow({
           ) : null}
           <NodeConn node={node} />
         </button>
+        {/* Per-node "N need you" rollup (FR-UI3): the count is always visible, and
+            when the node is COLLAPSED a pulsing dot stands in for the hidden
+            session dots so an awaiting/errored branch signals without expanding. */}
+        {needCount > 0 ? (
+          <span
+            className="flex shrink-0 items-center gap-1"
+            title={`${needCount} need you`}
+            data-testid={`node-attention-${node.id}`}
+          >
+            {!open && attentionStatus ? <Dot status={attentionStatus} pulse /> : null}
+            <Badge variant="neutral" size="sm">
+              {needCount}
+            </Badge>
+          </span>
+        ) : null}
         <SimpleTooltip label="Node info (CPU / memory / agents)">
           <button
             type="button"
             aria-label="Node info"
             onClick={() => openNodeInfo(node.id)}
-            className="opacity-0 transition-opacity group-hover/nrow:opacity-100 hover:text-flock-accent"
+            className="opacity-40 transition-opacity group-hover/nrow:opacity-100 group-focus-within/nrow:opacity-100 hover:text-flock-accent focus-visible:opacity-100"
           >
             <Cpu className="size-3.5" />
           </button>
@@ -382,7 +459,7 @@ export function NodeRow({
             type="button"
             aria-label="New project"
             onClick={() => openDialog('project', { nodeId: node.id })}
-            className="opacity-0 transition-opacity group-hover/nrow:opacity-100 hover:text-flock-accent"
+            className="opacity-40 transition-opacity group-hover/nrow:opacity-100 group-focus-within/nrow:opacity-100 hover:text-flock-accent focus-visible:opacity-100"
           >
             <FolderPlus className="size-3.5" />
           </button>
@@ -391,10 +468,12 @@ export function NodeRow({
       {open && (
         // Tree guide — a vertical line ties the node's projects/sessions to their host.
         <div className="ml-3 mt-0.5 border-l border-[var(--flock-border)]">
-          {projects.length === 0 ? (
+          {orderedProjects.length === 0 ? (
             <p className="py-1 pl-4 text-xs text-flock-ink-muted/70">No projects</p>
           ) : (
-            projects.map((p) => <ProjectRow key={p.id} project={p} nodeConnected={connected} />)
+            orderedProjects.map((p) => (
+              <ProjectRow key={p.id} project={p} nodeConnected={connected} />
+            ))
           )}
         </div>
       )}
@@ -419,7 +498,7 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
   return (
     <div>
       <div
-        className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ring-white/[0.03]"
+        className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ring-highlight"
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
       >
         <HardDrive
@@ -434,7 +513,7 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
             type="button"
             aria-label="Node info"
             onClick={() => openNodeInfo(node.id)}
-            className="opacity-0 transition-opacity group-hover/nrow:opacity-100 hover:text-flock-accent"
+            className="opacity-40 transition-opacity group-hover/nrow:opacity-100 group-focus-within/nrow:opacity-100 hover:text-flock-accent focus-visible:opacity-100"
           >
             <Cpu className="size-3.5" />
           </button>
@@ -444,7 +523,7 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
             type="button"
             aria-label="New project"
             onClick={() => openDialog('project', { nodeId: node.id })}
-            className="opacity-0 transition-opacity group-hover/nrow:opacity-100 hover:text-flock-accent"
+            className="opacity-40 transition-opacity group-hover/nrow:opacity-100 group-focus-within/nrow:opacity-100 hover:text-flock-accent focus-visible:opacity-100"
           >
             <FolderPlus className="size-3.5" />
           </button>

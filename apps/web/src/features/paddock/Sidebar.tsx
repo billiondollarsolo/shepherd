@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { type Node as FlockNode, type Session, type Status } from '@flock/shared';
 import {
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -530,9 +531,14 @@ export function Sidebar(): JSX.Element {
           {/* Needs attention */}
           {attention.length > 0 && (
             <div className="px-2 pb-2">
-              <p className="px-1.5 pb-1 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
-                Needs you
-              </p>
+              <div className="flex items-center gap-1.5 px-1.5 pb-1">
+                <p className="text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
+                  Needs you
+                </p>
+                <Badge variant="neutral" size="sm" data-testid="needs-you-count">
+                  {attention.length}
+                </Badge>
+              </div>
               {attention.map((s) => (
                 <button
                   key={s.id}

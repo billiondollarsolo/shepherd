@@ -4,6 +4,7 @@ import { usePaddock } from '../../store/paddock';
 
 const openNodeInfo = vi.fn();
 const querySpies = vi.hoisted(() => ({ useNodeInfos: vi.fn() }));
+const liveState = vi.hoisted(() => ({ map: new Map<string, string>() }));
 
 vi.mock('../../data/queries', () => ({
   useNodes: () => ({
@@ -62,7 +63,7 @@ vi.mock('../../data/queries', () => ({
 }));
 
 vi.mock('../paddock/liveData', () => ({
-  useLiveStatuses: () => new Map([['s1', 'awaiting_input']]),
+  useLiveStatuses: () => liveState.map,
 }));
 
 import { FleetView } from './FleetView';
@@ -71,6 +72,7 @@ describe('FleetView hierarchy', () => {
   beforeEach(() => {
     openNodeInfo.mockReset();
     querySpies.useNodeInfos.mockReset();
+    liveState.map = new Map([['s1', 'awaiting_input']]);
     usePaddock.setState({ nodeOrder: [], openNodeInfo });
   });
 
@@ -87,7 +89,9 @@ describe('FleetView hierarchy', () => {
     expect(querySpies.useNodeInfos).toHaveBeenCalledWith(['n1']);
   });
 
-  it('uses the same saved node order as the sidebar', () => {
+  it('uses the same saved node order as the sidebar when nothing needs attention', () => {
+    // No ringing session → the attention partition is empty and the saved order wins.
+    liveState.map = new Map([['s1', 'running']]);
     usePaddock.setState({ nodeOrder: ['n2', 'n1'] });
     render(<FleetView />);
 
@@ -96,6 +100,30 @@ describe('FleetView hierarchy', () => {
       'node-card-n2',
       'node-card-n1',
     ]);
+  });
+
+  it('floats a node that needs you above the saved order, ringing + pulsing it', () => {
+    // n1 holds an awaiting_input session; n2 is quiet. Even though the saved order
+    // puts n2 first, the attention node must bubble to the top.
+    liveState.map = new Map([['s1', 'awaiting_input']]);
+    usePaddock.setState({ nodeOrder: ['n2', 'n1'] });
+    render(<FleetView />);
+
+    const cards = screen.getAllByTestId(/node-card-/);
+    expect(cards.map((card) => card.getAttribute('data-testid'))).toEqual([
+      'node-card-n1',
+      'node-card-n2',
+    ]);
+
+    // Signature ring + pulse on the attention card (static ring survives reduced motion).
+    const attentionCard = screen.getByTestId('node-card-n1');
+    expect(attentionCard.className).toContain('ring-status-awaiting');
+    expect(attentionCard.className).toContain('animate-flock-pulse');
+    // Rollup badge counts how many need you.
+    expect(screen.getByTestId('node-attention-n1')).toHaveTextContent('1 needs you');
+    // The quiet node neither rings nor shows a rollup.
+    expect(screen.getByTestId('node-card-n2').className).not.toContain('animate-flock-pulse');
+    expect(screen.queryByTestId('node-attention-n2')).toBeNull();
   });
 
   it('drills into a node card', () => {

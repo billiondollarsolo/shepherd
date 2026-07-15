@@ -11,8 +11,17 @@
  *   awaiting_input → ring (the money state)   error → ring
  *   idle           → gentle dot               disconnected → stale (dimmed) dot
  *   starting/running/done → plain dot
+ *
+ * Both ringing states (awaiting_input + error) emit the signature `flock-pulse`
+ * ripple. The ripple colour is driven by `--flock-indicator-color`, set here from
+ * the status hue via `statusCssVar()` — the SAME mapping `StatusDot` uses, so the
+ * two dot systems stay consistent. Under `prefers-reduced-motion` the animation is
+ * neutralized globally while the static `ring-2` persists (the still-legible
+ * fallback).
  */
+import type { CSSProperties } from 'react';
 import { ringsSidebar, statusLabel, statusPolicy, type Status } from '@flock/shared';
+import { statusCssVar } from '../../theme/tokens';
 
 /** Tailwind background class per status — `flock-theme` status.* tokens. */
 const DOT_COLOR: Readonly<Record<Status, string>> = {
@@ -54,10 +63,12 @@ export default function StatusIndicator({
     'inline-block h-2.5 w-2.5 rounded-full',
     DOT_COLOR[status],
     dim ? 'opacity-60' : '',
-    // The ring "demands attention" for awaiting_input/error (spec §7 table).
+    // The ring "demands attention" for awaiting_input/error (spec §7 table). The
+    // static ring-2 persists under reduced motion when the pulse is neutralized.
     rings ? `ring-2 ring-offset-1 ring-offset-flock-bg ${RING_COLOR[status]}` : '',
-    // A subtle pulse on the money state draws the eye without being loud.
-    status === 'awaiting_input' ? 'animate-pulse' : '',
+    // The signature expanding pulse — driven off the shared ringsSidebar() policy
+    // so awaiting_input AND error read identically (not a bespoke opacity pulse).
+    rings ? 'animate-flock-pulse' : '',
     className,
   ]
     .filter(Boolean)
@@ -72,6 +83,8 @@ export default function StatusIndicator({
       role="img"
       aria-label={statusLabel(status)}
       title={statusLabel(status)}
+      // Colour the expanding pulse ripple with the status hue (mirrors StatusDot).
+      style={{ '--flock-indicator-color': `var(${statusCssVar(status)})` } as CSSProperties}
       className={classes}
     />
   );

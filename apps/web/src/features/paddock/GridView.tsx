@@ -12,7 +12,7 @@
  * NOTE: deliberately NOT react-resizable-panels — that always fills 100% width and
  * can't scroll. The kanban floor + scroll replaces hand-resizing.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Bookmark,
   ChevronDown,
@@ -24,7 +24,8 @@ import {
   X,
 } from 'lucide-react';
 import { StatusDot } from '../../components/StatusDot';
-import { statusLabel, type Session, type Status } from '@flock/shared';
+import { ringsSidebar, statusLabel, type Session, type Status } from '@flock/shared';
+import { statusCssVar } from '../../theme/tokens';
 
 import { TerminalArea } from '../terminal/TerminalArea';
 import {
@@ -116,7 +117,9 @@ function GridCellInner({
   const selectThis = (): void => {
     if (usePaddock.getState().selectedSessionId !== session.id) selectSession(session.id);
   };
-  const attention = status === 'awaiting_input';
+  // Both "needs you" states (awaiting_input AND error) ring — decided by the shared
+  // ringsSidebar() policy so the grid reads identically to the tree and fleet.
+  const attention = ringsSidebar(status);
   const footerParts: string[] = [];
   if (usage?.model) footerParts.push(usage.model);
   if (usage?.tool) footerParts.push(usage.tool);
@@ -127,9 +130,16 @@ function GridCellInner({
     <div
       className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-flock-bg shadow-[0_8px_26px_-16px_rgba(0,0,0,0.7)] ${
         attention
-          ? 'border-status-awaiting ring-1 ring-status-awaiting'
-          : 'border-[var(--flock-border)] ring-1 ring-white/[0.03]'
+          ? `${status === 'error' ? 'border-status-error ring-1 ring-status-error' : 'border-status-awaiting ring-1 ring-status-awaiting'} animate-flock-pulse`
+          : 'border-[var(--flock-border)] ring-1 ring-highlight'
       }`}
+      // Colour the signature pulse with the status hue; the static ring persists
+      // under prefers-reduced-motion (the animation is neutralized globally).
+      style={
+        attention
+          ? ({ '--flock-indicator-color': `var(${statusCssVar(status)})` } as CSSProperties)
+          : undefined
+      }
       data-testid={`grid-cell-${session.id}`}
       data-status={status}
       onMouseDownCapture={selectThis}
@@ -387,7 +397,7 @@ function GridTabBar({
                 className="flex min-w-0 items-center gap-1.5"
                 title="Click to scroll into view · double-click to maximize · drag to reorder"
               >
-                <StatusDot status={status} className="shrink-0" />
+                <StatusDot status={status} pulse={ringsSidebar(status)} className="shrink-0" />
                 <span className="max-w-[11rem] truncate">{sessionLabel(s)}</span>
               </button>
               <button

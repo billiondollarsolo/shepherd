@@ -9,8 +9,14 @@
  * bare inline `<span className="flock-status-dot">` spans), which let the colour /
  * pulse policy drift. NOTE: the node *connection*-status dot is a different domain
  * (connected/connecting/disconnected) and intentionally not routed through here.
+ *
+ * The pulse (`animate-flock-pulse`) and the `--flock-indicator-color` colour var
+ * are the SAME signature affordance the tree's `StatusIndicator` uses; both derive
+ * the colour var from `statusCssVar()` (the one place the `awaiting_input → awaiting`
+ * remap lives) so the two dot systems stay consistent.
  */
 import type { CSSProperties } from 'react';
+import { statusCssVar } from '../theme/tokens';
 
 export interface StatusDotProps {
   /** A session work-status (`StatusEnum`); kept as string so callers don't import the enum just for a dot. */
@@ -28,7 +34,7 @@ export function StatusDot({ status, pulse, className }: StatusDotProps): JSX.Ele
       data-status={status}
       style={
         {
-          '--flock-indicator-color': `var(--flock-status-${status === 'awaiting_input' ? 'awaiting' : status})`,
+          '--flock-indicator-color': `var(${statusCssVar(status)})`,
         } as CSSProperties
       }
       aria-hidden
