@@ -45,7 +45,7 @@ export interface ActivitySidebarProps {
 
 function SectionHeading({ children }: { children: string }): JSX.Element {
   return (
-    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-flock-muted">
+    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-flock-ink-muted">
       {children}
     </h3>
   );
@@ -59,14 +59,14 @@ export function ActivitySidebar({
 }: ActivitySidebarProps): JSX.Element {
   return (
     <div className="flex h-full flex-col" data-testid="activity-sidebar">
-      <header className="shrink-0 border-b border-flock-muted/15 px-4 py-3">
+      <header className="shrink-0 border-b border-[var(--flock-border)] px-4 py-3">
         <h2 className="text-sm font-semibold tracking-tight">Activity</h2>
       </header>
 
       {session === null ? (
         <div
           data-testid="activity-empty"
-          className="flex flex-1 items-center justify-center px-4 py-6 text-center text-sm text-flock-muted"
+          className="flex flex-1 items-center justify-center px-4 py-6 text-center text-sm text-flock-ink-muted"
         >
           Select a session to see its timeline, metadata, and plan.
         </div>
@@ -88,7 +88,7 @@ function ActivityTimeline({ events }: { events: readonly Event[] }): JSX.Element
     <section className="mb-6">
       <SectionHeading>Status timeline</SectionHeading>
       {timeline.length === 0 ? (
-        <p className="text-sm text-flock-muted" data-testid="activity-timeline-empty">
+        <p className="text-sm text-flock-ink-muted" data-testid="activity-timeline-empty">
           No status events yet.
         </p>
       ) : (
@@ -103,16 +103,16 @@ function ActivityTimeline({ events }: { events: readonly Event[] }): JSX.Element
               <StatusIndicator status={entry.status} className="mt-1 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-flock-fg">{entry.status}</span>
+                  <span className="truncate text-flock-ink-primary">{entry.status}</span>
                   <time
                     dateTime={entry.ts}
-                    className="shrink-0 text-xs tabular-nums text-flock-muted"
+                    className="shrink-0 text-xs tabular-nums text-flock-ink-muted"
                   >
                     {formatTimelineTimestamp(entry.ts)}
                   </time>
                 </div>
                 {entry.detail ? (
-                  <p className="truncate text-xs text-flock-muted">{entry.detail}</p>
+                  <p className="truncate text-xs text-flock-ink-muted">{entry.detail}</p>
                 ) : null}
               </div>
             </li>
@@ -131,8 +131,8 @@ function SessionMetadata({ session }: { session: Session }): JSX.Element {
       <dl data-testid="activity-metadata" className="flex flex-col gap-1.5">
         {rows.map((row) => (
           <div key={row.key} className="flex items-baseline justify-between gap-2 text-sm">
-            <dt className="shrink-0 text-flock-muted">{row.label}</dt>
-            <dd className="min-w-0 truncate text-right font-mono text-xs text-flock-fg">
+            <dt className="shrink-0 text-flock-ink-muted">{row.label}</dt>
+            <dd className="min-w-0 truncate text-right font-mono text-xs text-flock-ink-primary">
               {row.value}
             </dd>
           </div>
@@ -187,7 +187,7 @@ function NoteEditor({
         readOnly={!onSave}
         rows={3}
         placeholder={onSave ? 'What is this session working on?' : 'No note.'}
-        className="w-full resize-y rounded border border-flock-muted/25 bg-transparent px-2 py-1.5 text-sm text-flock-fg placeholder:text-flock-muted focus:border-flock-accent focus:outline-none"
+        className="w-full resize-y rounded border border-[var(--flock-border)] bg-transparent px-2 py-1.5 text-sm text-flock-ink-primary placeholder:text-flock-ink-muted focus:border-flock-accent focus:outline-none"
       />
     </section>
   );
@@ -197,7 +197,7 @@ function NoteEditor({
 const PLAN_MARK: Record<PlanItem['status'], { glyph: string; cls: string }> = {
   completed: { glyph: '✓', cls: 'text-flock-diff-add-fg' },
   in_progress: { glyph: '◐', cls: 'text-flock-accent' },
-  pending: { glyph: '○', cls: 'text-flock-muted' },
+  pending: { glyph: '○', cls: 'text-flock-ink-muted' },
 };
 
 /**
@@ -213,7 +213,7 @@ function PlanSection({ plan }: { plan: SessionPlan | null }): JSX.Element {
       <SectionHeading>Plan</SectionHeading>
       <div data-testid="activity-plan">
         {planItems.length === 0 ? (
-          <p className="text-xs text-flock-muted">
+          <p className="text-xs text-flock-ink-muted">
             The agent’s task list appears here as it works.
           </p>
         ) : (
@@ -235,8 +235,8 @@ function PlanSection({ plan }: { plan: SessionPlan | null }): JSX.Element {
                   <span
                     className={`min-w-0 flex-1 ${
                       item.status === 'completed'
-                        ? 'text-flock-muted line-through'
-                        : 'text-flock-fg'
+                        ? 'text-flock-ink-muted line-through'
+                        : 'text-flock-ink-primary'
                     }`}
                   >
                     {item.content}

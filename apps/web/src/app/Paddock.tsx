@@ -133,7 +133,9 @@ export function Paddock(): JSX.Element {
                     <div className="min-h-0 flex-1">
                       <CenterPane />
                     </div>
-                    {chrome === 'tools' ? <BottomBar /> : null}
+                    {/* Persistent slim status strip: node health must stay visible in
+                        every chrome mode (terminal-first included), never only tools. */}
+                    <BottomBar />
                   </div>
                 }
                 drawer={<DrawerContent />}

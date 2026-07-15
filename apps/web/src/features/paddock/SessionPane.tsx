@@ -54,13 +54,7 @@ const AUTHORITY_LABEL: Record<AgentAuthority, string> = {
 };
 import { useShell } from '../../app/KeyboardProvider';
 import { usePaddock } from '../../store/paddock';
-import {
-  useNodes,
-  useProjects,
-  useSessions,
-  useSessionEvents,
-  useGitStatus,
-} from '../../data/queries';
+import { useSessions, useSessionEvents, useGitStatus } from '../../data/queries';
 import { useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
 
@@ -99,10 +93,6 @@ function BranchChip({ sessionId }: { sessionId: string }): JSX.Element | null {
 }
 
 function Header({ session }: { session: Session }): JSX.Element {
-  const { data: projects = [] } = useProjects();
-  const { data: nodes = [] } = useNodes();
-  const project = projects.find((p) => p.id === session.projectId);
-  const node = nodes.find((n) => n.id === session.nodeId);
   // Terminate is destructive → go through the confirm dialog (same as the grid),
   // never a direct mutate.
   const openDialog = usePaddock((s) => s.openDialog);
@@ -136,15 +126,11 @@ function Header({ session }: { session: Session }): JSX.Element {
   const liveStatus = liveStatuses.get(session.id) ?? session.status;
   const authority = session.orchestrationAuthority ?? 'callback_only';
 
-  // Status-driven accent (bold design language): the header underline reflects
-  // the agent's live state, tying the workspace to the same status colors as the
-  // Paddock home.
-  const accentVar = `var(--flock-status-${liveStatus === 'awaiting_input' ? 'awaiting' : liveStatus})`;
+  // Secondary context row: TopBar already carries the project/pen scope, so this
+  // row stays lean (agent identity + live status + actions) and rules with the
+  // one shell hairline instead of a second competing weight.
   return (
-    <header
-      className="flex h-topbar shrink-0 items-center gap-3 border-b-2 bg-flock-surface-1 px-4"
-      style={{ borderBottomColor: accentVar }}
-    >
+    <header className="flex h-subheader shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-4">
       {/* Leave single-agent zoom → show every open agent in this project. */}
       <Button
         size="sm"
@@ -159,12 +145,8 @@ function Header({ session }: { session: Session }): JSX.Element {
         All agents
       </Button>
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
-        <span className="truncate text-flock-ink-muted">{node?.name ?? 'node'}</span>
-        <span className="text-flock-ink-muted/50">/</span>
-        <span className="truncate text-flock-ink-muted">{project?.name ?? 'project'}</span>
-        <span className="text-flock-ink-muted/50">/</span>
         <span className="truncate font-medium text-flock-ink-primary">{session.agentType}</span>
-        <code className="ml-1 rounded bg-flock-surface-2 px-1 py-0.5 text-2xs text-flock-ink-muted">
+        <code className="rounded bg-flock-surface-2 px-1 py-0.5 text-2xs text-flock-ink-muted">
           {session.id.slice(0, 8)}
         </code>
       </div>
@@ -385,9 +367,13 @@ export function SessionPane(): JSX.Element {
           <RespondBar session={stageSession} />
         </>
       ) : null}
-      <div ref={splitRef} className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
-          <StageLayout />
+      <div ref={splitRef} className="flex min-h-0 flex-1 bg-flock-surface-1">
+        {/* Inset the always-on terminal as a subtly elevated card: a surface-0
+            stage floating in the surface-1 frame, ruled by the one shell hairline. */}
+        <div className="min-w-0 flex-1 p-2">
+          <div className="h-full overflow-hidden rounded-lg border border-[var(--flock-border)] bg-flock-surface-0">
+            <StageLayout />
+          </div>
         </div>
         {/* Terminal-first: no right icon-rail until tools are explicitly opened. */}
         {toolsOpen && panelSession ? (

@@ -92,7 +92,7 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--flock-border)] bg-flock-surface-1">
       {/* Context row: Talk / Code / Web */}
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--flock-border)] px-1.5">
+      <div className="flex h-subheader shrink-0 items-center gap-1 border-b border-[var(--flock-border)] px-1.5">
         {CONTEXTS.map((c) => {
           const Icon = c.icon;
           const active = ctx.id === c.id;
@@ -126,7 +126,7 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
 
       {/* Sub-tabs (only when the active context has more than one view) */}
       {ctx.tabs.length > 1 ? (
-        <div className="flex h-7 shrink-0 items-center gap-1 border-b border-[var(--flock-border)] px-1.5">
+        <div className="flex h-tab shrink-0 items-center gap-1 border-b border-[var(--flock-border)] px-1.5">
           {ctx.tabs.map((t) => (
             <button
               key={t.id}
@@ -163,7 +163,7 @@ export function RightPanel({ session }: { session: Session }): JSX.Element {
                 Notes (markdown)
               </p>
               <textarea
-                className="min-h-0 flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-bg p-2 font-mono text-xs text-flock-ink-primary"
+                className="min-h-0 flex-1 resize-none rounded border border-[var(--flock-border)] bg-flock-surface-0 p-2 font-mono text-xs text-flock-ink-primary"
                 defaultValue={session.note ?? ''}
                 placeholder="Supervisor notes for this agent…"
                 onBlur={(e) => {

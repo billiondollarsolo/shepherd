@@ -64,7 +64,8 @@
   --flock-sidebar-w: 252px;
   --flock-rail-w: 56px;
   --flock-activity-w: 320px;
-  --flock-topbar-h: 40px;
+  --flock-topbar-h: 48px;
+  --flock-subheader-h: 40px;
   --flock-drawer-h: 260px;
   --flock-row-h: 32px;
   --flock-indicator: 7px;

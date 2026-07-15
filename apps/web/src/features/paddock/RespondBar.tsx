@@ -69,7 +69,7 @@ export function RespondBar({ session }: { session: Session }): JSX.Element | nul
           if (e.key === 'Enter') sendReply();
         }}
         placeholder="…or type a reply"
-        className="min-w-0 flex-1 rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1 text-flock-fg placeholder:text-flock-muted focus:outline-none focus:ring-1 focus:ring-status-awaiting"
+        className="min-w-0 flex-1 rounded border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1 text-flock-ink-primary placeholder:text-flock-ink-muted focus:outline-none focus:ring-1 focus:ring-status-awaiting"
       />
       <Button size="sm" variant="secondary" data-testid="respond-send" onClick={sendReply}>
         Send

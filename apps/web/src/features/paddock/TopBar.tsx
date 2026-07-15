@@ -89,7 +89,7 @@ export function TopBar(): JSX.Element {
   const contextNode = nodes.find((node) => node.id === nodeInfoNodeId);
   const activePen = penGroups.find((pen) => pen.id === activePenId);
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3">
+    <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-4">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5 text-sm text-flock-ink-muted">
           <span className="truncate font-medium text-flock-ink-primary">

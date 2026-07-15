@@ -55,20 +55,26 @@ export function AppShell({
   // Browser/Diff/Activity live in the session pane's own right panel), the shell
   // is a 2-column tree | session grid.
   const hasActivity = activity != null;
-  // Collapsed → a fixed icon rail; expanded → a calm narrow tree.
-  const treeCol = treeCollapsed ? 'var(--flock-rail-w)' : 'minmax(15rem, 18rem)';
+  // Collapsed → a fixed icon rail; expanded → a fixed-width tree bound to the
+  // authoritative --flock-sidebar-w token (Codex-like; the phone path is handled
+  // elsewhere by ResponsivePaddock).
+  const treeCol = treeCollapsed ? 'var(--flock-rail-w)' : 'var(--flock-sidebar-w)';
   return (
     <div
       data-testid="app-shell"
-      className="grid h-full w-full overflow-hidden bg-flock-bg text-flock-fg"
+      // First-class surface-0 / ink-primary tokens (the bg-flock-bg / flock-fg
+      // legacy aliases are deprecated in shell files).
+      className="grid h-full w-full overflow-hidden bg-flock-surface-0 text-flock-ink-primary"
       style={{
-        // Calm Codex proportions: a narrow tree (or icon rail) + a wide session
-        // pane (+ a medium activity sidebar when present); an auto bottom row that
-        // collapses with no drawer.
+        // Calm Codex proportions: a fixed-width tree (or icon rail) + a wide
+        // session pane (+ a fixed-width activity sidebar when present), all bound
+        // to authoritative layout tokens. The bottom drawer row animates between
+        // 0 and --flock-drawer-h so opening/closing it is calm, not a hard jump;
+        // the drawer section itself is still mounted only when open.
         gridTemplateColumns: hasActivity
-          ? `${treeCol} minmax(0, 1fr) minmax(16rem, 22rem)`
+          ? `${treeCol} minmax(0, 1fr) var(--flock-activity-w)`
           : `${treeCol} minmax(0, 1fr)`,
-        gridTemplateRows: drawerOpen ? '1fr minmax(8rem, 16rem)' : '1fr',
+        gridTemplateRows: drawerOpen ? '1fr var(--flock-drawer-h)' : '1fr 0px',
         gridTemplateAreas: drawerOpen
           ? hasActivity
             ? '"tree session activity" "drawer drawer drawer"'
@@ -76,6 +82,9 @@ export function AppShell({
           : hasActivity
             ? '"tree session activity"'
             : '"tree session"',
+        // Calm layout motion: animate the drawer row height on the shared motion
+        // tokens (the global prefers-reduced-motion block collapses this).
+        transition: 'grid-template-rows var(--flock-dur-base) var(--flock-ease-standard)',
       }}
     >
       <nav
@@ -83,7 +92,7 @@ export function AppShell({
         aria-label="Sessions"
         data-slot="tree"
         data-testid="region-tree"
-        className="min-h-0 overflow-y-auto border-r border-flock-muted/15 bg-flock-surface"
+        className="min-h-0 overflow-y-auto border-r border-[var(--flock-border)] bg-flock-surface-1"
         style={{ gridArea: 'tree' }}
       >
         {tree}
@@ -106,7 +115,7 @@ export function AppShell({
           aria-label="Activity"
           data-slot="activity"
           data-testid="region-activity"
-          className="min-h-0 overflow-y-auto border-l border-flock-muted/15 bg-flock-surface"
+          className="min-h-0 overflow-y-auto border-l border-[var(--flock-border)] bg-flock-surface-1"
           style={{ gridArea: 'activity' }}
         >
           {activity}
@@ -118,7 +127,7 @@ export function AppShell({
           aria-label="Shell drawer"
           data-slot="drawer"
           data-testid="region-drawer"
-          className="min-h-0 overflow-hidden border-t border-flock-muted/15 bg-flock-surface"
+          className="min-h-0 overflow-hidden border-t border-[var(--flock-border)] bg-flock-surface-1"
           style={{ gridArea: 'drawer' }}
         >
           {drawer}

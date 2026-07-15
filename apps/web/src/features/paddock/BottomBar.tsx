@@ -31,7 +31,7 @@ export function BottomBar(): JSX.Element {
   const usage = session ? health?.sessions[session.id] : undefined;
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-3 text-2xs text-flock-ink-muted">
+    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--flock-border)] bg-flock-surface-1 px-4 text-2xs text-flock-ink-muted">
       {node ? (
         <button
           type="button"

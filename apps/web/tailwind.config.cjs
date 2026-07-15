@@ -168,6 +168,7 @@ module.exports = {
       },
       height: {
         topbar: 'var(--flock-topbar-h)',
+        subheader: 'var(--flock-subheader-h)',
         drawer: 'var(--flock-drawer-h)',
         row: 'var(--flock-row-h)',
         tab: 'var(--flock-tab-h)',
