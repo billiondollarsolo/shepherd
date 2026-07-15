@@ -55,6 +55,9 @@ jobs:
       - name: Validate synchronized version
         run: pnpm release:check
 
+      - name: Verify portable deployment bundle
+        run: scripts/test-deployment-bundle.sh
+
       - name: Validate production Compose
         run: docker compose -f docker-compose.yml config --quiet
 

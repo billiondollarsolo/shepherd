@@ -185,6 +185,7 @@ for (const required of [
   'IMAGE_VERSION=${{ github.ref_name }}',
   'osv-scanner@v2.4.0',
   'test-node-runtime-migration.sh',
+  'test-deployment-bundle.sh',
   'survived orchestrator recreation',
   'build-deployment-bundle.sh',
 ]) {

@@ -51,6 +51,9 @@ jobs:
           EXPECTED_VERSION: ${{ github.ref_name }}
         run: node scripts/check-release-version.mjs
 
+      - name: Verify portable deployment bundle
+        run: scripts/test-deployment-bundle.sh
+
       - name: Verify TypeScript release
         run: |
           pnpm format:check
@@ -530,7 +533,9 @@ jobs:
       - name: Build exact deployment bundle
         env:
           VERSION: ${{ github.ref_name }}
-        run: scripts/build-deployment-bundle.sh "$VERSION" release-candidates/digests dist/deployment
+        run: |
+          scripts/build-deployment-bundle.sh "$VERSION" release-candidates/digests dist/deployment
+          (cd dist/deployment && sha256sum -c shepherd-deployment-*.tar.gz.sha256)
 
       - name: Attest deployment bundle
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2

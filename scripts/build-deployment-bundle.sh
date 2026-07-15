@@ -39,7 +39,8 @@ jq --arg version "$VERSION" --argjson images "$images" \
 (cd "$root" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$stage/SHA256SUMS"
 mv "$stage/SHA256SUMS" "$root/SHA256SUMS"
 
-archive="$OUTPUT_DIR/shepherd-deployment-$VERSION.tar.gz"
+archive_name="shepherd-deployment-$VERSION.tar.gz"
+archive="$OUTPUT_DIR/$archive_name"
 tar -C "$stage" --sort=name --owner=0 --group=0 --numeric-owner -czf "$archive" "shepherd-$VERSION"
-sha256sum "$archive" > "$archive.sha256"
+(cd "$OUTPUT_DIR" && sha256sum "$archive_name" > "$archive_name.sha256")
 echo "$archive"
