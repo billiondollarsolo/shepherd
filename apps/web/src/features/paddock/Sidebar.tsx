@@ -46,7 +46,7 @@ import { useNodes, useSessions } from '../../data/queries';
 import { useLiveStatuses } from './liveData';
 import { AgentsSwitcher } from '../shell/AgentsSwitcher';
 import { FLOCK_VERSION } from '../../version';
-import { NodeRow, WorkspaceList } from './SidebarTree';
+import { NodeRow, SidebarTreeRoot, WorkspaceList } from './SidebarTree';
 import { NODE_CONN_BG, reorderNodeIds, sessionLabel } from './sidebarModel';
 import { FLEET_PAGE_SIZE, nextFleetLimit } from '../overview/fleetModel';
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from '../../brand';
@@ -569,14 +569,20 @@ export function Sidebar(): JSX.Element {
                 </div>
               ) : nodes.length === 1 ? (
                 // Single node: workspace-first (projects at the top, node as a header).
-                <WorkspaceList node={nodes[0]!} />
+                <SidebarTreeRoot label="Workspace">
+                  <WorkspaceList node={nodes[0]!} />
+                </SidebarTreeRoot>
               ) : (
                 // Multiple nodes: keep the node grouping so "which machine" is clear,
                 // with a divider between each node so the groups don't run together.
-                <div className="divide-y divide-[var(--flock-border)]">
-                  {displayedNodes.map((n) => (
-                    <NodeRow key={n.id} node={n} onReorder={reorderNode} onMove={moveNode} />
-                  ))}
+                <>
+                  <SidebarTreeRoot label="Nodes">
+                    <div className="divide-y divide-[var(--flock-border)]">
+                      {displayedNodes.map((n) => (
+                        <NodeRow key={n.id} node={n} onReorder={reorderNode} onMove={moveNode} />
+                      ))}
+                    </div>
+                  </SidebarTreeRoot>
                   {displayedNodes.length < orderedNodes.length ? (
                     <button
                       type="button"
@@ -592,7 +598,7 @@ export function Sidebar(): JSX.Element {
                       </span>
                     </button>
                   ) : null}
-                </div>
+                </>
               )}
             </div>
           </ScrollArea>

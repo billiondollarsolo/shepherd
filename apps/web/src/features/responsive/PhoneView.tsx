@@ -1,7 +1,7 @@
 /**
  * PhoneView — mobile Agents list + a live, driveable terminal stage.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Status } from '@flock/shared';
 import { loudStatusWord } from '@flock/shared';
 import { sortSessionsByAttention } from '../tree/ordering';
@@ -10,6 +10,7 @@ import GhosttyMobileTerminal from '../terminal/GhosttyMobileTerminal';
 import {
   Bot,
   Check,
+  Download,
   FolderPlus,
   GitBranch,
   HardDrive,
@@ -17,8 +18,11 @@ import {
   Menu,
   Plus,
   Settings,
+  Share,
   Trash2,
+  X,
 } from 'lucide-react';
+import StatusIndicator from '../tree/StatusIndicator';
 import { FlockMark } from '../../components/SheepIcon';
 import {
   DropdownMenu,
@@ -28,16 +32,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../components/ui';
-import { useVisualViewportWidth } from './useVisualViewport';
+import { useVisualViewportHeight, useVisualViewportWidth } from './useVisualViewport';
 import { PRODUCT_NAME } from '../../brand';
 import { useAuthOptional } from '../auth/AuthGate';
 import { TransportWarning } from '../auth/TransportWarning';
-
-const ATTENTION_STATUSES: ReadonlySet<Status> = new Set<Status>(['awaiting_input', 'error']);
-
-function needsAttention(status: Status): boolean {
-  return ATTENTION_STATUSES.has(status);
-}
 
 export interface PhoneSession {
   readonly id: string;
@@ -93,7 +91,6 @@ function SessionRow({
   session: PhoneSession;
   onSelectSession?: (id: string) => void;
 }): JSX.Element {
-  const rings = needsAttention(session.status);
   const loud = loudStatusWord(session.status);
 
   return (
@@ -108,10 +105,10 @@ function SessionRow({
         className="flex w-full items-center gap-3 text-left"
         onClick={() => onSelectSession?.(session.id)}
       >
-        <span
-          className={`size-2.5 shrink-0 rounded-full ${rings ? 'animate-pulse' : ''}`}
-          style={{ background: statusDotVar(session.status) }}
-        />
+        {/* The system attention indicator: rings + pulses for awaiting_input/error
+            (the shared ringsSidebar() policy) and keeps a static ring under
+            prefers-reduced-motion — no bespoke animate-pulse. */}
+        <StatusIndicator status={session.status} className="shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium text-flock-ink-primary">{session.label}</div>
           <div className="text-2xs text-flock-ink-muted">
@@ -162,6 +159,7 @@ function PhoneStage({
 }): JSX.Element {
   const auth = useAuthOptional();
   const viewportWidth = useVisualViewportWidth();
+  const viewportHeight = useVisualViewportHeight();
   const terminalInputRef = useRef<((text: string) => void) | null>(null);
   const terminalFocusRef = useRef<(() => void) | null>(null);
   const registerTerminalInput = useCallback((sendInput: ((text: string) => void) | null) => {
@@ -180,7 +178,13 @@ function PhoneStage({
     <div
       className="flex h-[100dvh] min-w-0 flex-col overflow-hidden bg-flock-bg"
       data-testid="phone-stage"
-      style={{ width: viewportWidth == null ? '100%' : `${viewportWidth}px` }}
+      style={{
+        width: viewportWidth == null ? '100%' : `${viewportWidth}px`,
+        // Ride the visual viewport height: when the software keyboard opens it
+        // shrinks, so the terminal + key strip stay above the keyboard instead of
+        // being pushed off-screen (h-[100dvh] is the no-visualViewport fallback).
+        height: viewportHeight == null ? undefined : `${viewportHeight}px`,
+      }}
     >
       <header className="flex h-11 min-w-0 shrink-0 items-center gap-2 border-b border-[var(--flock-border)] px-2">
         <DropdownMenu>
@@ -188,7 +192,7 @@ function PhoneStage({
             <button
               type="button"
               aria-label="Open mobile navigation"
-              className="flex size-9 shrink-0 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+              className="flex size-9 min-h-touch min-w-touch shrink-0 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
             >
               <Menu className="size-5" />
             </button>
@@ -266,7 +270,7 @@ function PhoneStage({
           <button
             key={k.label}
             type="button"
-            className="shrink-0 rounded border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1 text-2xs"
+            className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1 text-2xs"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => send(k.seq)}
           >
@@ -276,7 +280,7 @@ function PhoneStage({
         <button
           type="button"
           aria-label="Open terminal keyboard"
-          className="ml-auto flex size-7 shrink-0 items-center justify-center rounded border border-[var(--flock-border)] bg-flock-surface-0"
+          className="ml-auto flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded border border-[var(--flock-border)] bg-flock-surface-0"
           onPointerDown={(event) => {
             if (event.pointerType === 'touch' || event.pointerType === 'pen') {
               event.preventDefault();
@@ -288,6 +292,146 @@ function PhoneStage({
           <Keyboard className="size-3.5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The `beforeinstallprompt` event (Android/desktop Chromium) — not yet in lib.dom. */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+const INSTALL_DISMISSED_KEY = 'flock.pwa-install-dismissed';
+
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    // iOS Safari exposes standalone launch off navigator, not display-mode.
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isIosSafari(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const iDevice = /iphone|ipad|ipod/i.test(ua);
+  // iPadOS 13+ reports as Mac; a touch-capable "Mac" is really an iPad.
+  const iPadDesktop = /macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  const webkit = /webkit/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
+  return (iDevice || iPadDesktop) && webkit;
+}
+
+type InstallMode = 'android' | 'ios';
+
+/**
+ * Capture the platform install affordance: the Android/Chromium
+ * `beforeinstallprompt` event (deferred so we can trigger it from our own button)
+ * or, on iOS Safari where no such event exists, a static add-to-home-screen hint.
+ * Dismissal is remembered so the banner doesn't nag on every visit.
+ */
+function useInstallPrompt(): {
+  mode: InstallMode | null;
+  promptInstall: () => void;
+  dismiss: () => void;
+} {
+  const deferredRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const [mode, setMode] = useState<InstallMode | null>(null);
+
+  useEffect(() => {
+    if (isStandalone()) return;
+    let dismissed = false;
+    try {
+      dismissed = window.localStorage?.getItem(INSTALL_DISMISSED_KEY) === '1';
+    } catch {
+      dismissed = false;
+    }
+    if (dismissed) return;
+
+    const onBeforeInstallPrompt = (event: Event): void => {
+      event.preventDefault();
+      deferredRef.current = event as BeforeInstallPromptEvent;
+      setMode('android');
+    };
+    const onInstalled = (): void => {
+      deferredRef.current = null;
+      setMode(null);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+
+    // iOS never fires beforeinstallprompt — offer the manual hint instead.
+    if (isIosSafari()) setMode('ios');
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const dismiss = useCallback(() => {
+    try {
+      window.localStorage?.setItem(INSTALL_DISMISSED_KEY, '1');
+    } catch {
+      /* private mode / storage disabled — dismiss for this session only */
+    }
+    setMode(null);
+  }, []);
+
+  const promptInstall = useCallback(() => {
+    const deferred = deferredRef.current;
+    if (!deferred) return;
+    void deferred.prompt().finally(() => {
+      deferredRef.current = null;
+      setMode(null);
+    });
+  }, []);
+
+  return { mode, promptInstall, dismiss };
+}
+
+/** Dismissible, token-styled "install this app" affordance (Android + iOS). */
+function InstallPrompt(): JSX.Element | null {
+  const { mode, promptInstall, dismiss } = useInstallPrompt();
+  if (mode == null) return null;
+
+  return (
+    <div
+      data-testid="phone-install-prompt"
+      className="flex items-start gap-3 border-b border-[var(--flock-border)] bg-flock-surface-1 px-3 py-2.5"
+    >
+      <FlockMark className="mt-0.5 size-6 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-flock-ink-primary">Install {PRODUCT_NAME}</p>
+        {mode === 'ios' ? (
+          <p className="text-2xs text-flock-ink-muted">
+            Tap <Share className="inline-block size-3 align-text-bottom" aria-label="Share" /> then
+            &ldquo;Add to Home Screen&rdquo; for a full-screen app.
+          </p>
+        ) : (
+          <p className="text-2xs text-flock-ink-muted">
+            Add it to your home screen for a full-screen, app-like paddock.
+          </p>
+        )}
+      </div>
+      {mode === 'android' ? (
+        <button
+          type="button"
+          className="flex min-h-touch shrink-0 items-center gap-1.5 self-center rounded-md bg-flock-accent px-3 text-xs font-medium text-[var(--flock-accent-foreground)]"
+          onClick={promptInstall}
+        >
+          <Download className="size-3.5" /> Install
+        </button>
+      ) : null}
+      <button
+        type="button"
+        aria-label="Dismiss install prompt"
+        className="flex min-h-touch min-w-touch shrink-0 items-center justify-center self-center rounded-md text-flock-ink-muted hover:text-flock-ink-primary"
+        onClick={dismiss}
+      >
+        <X className="size-4" />
+      </button>
     </div>
   );
 }
@@ -400,7 +544,7 @@ export function PhoneView({
             <button
               type="button"
               aria-label="Open mobile navigation"
-              className="flex size-9 shrink-0 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+              className="flex size-9 min-h-touch min-w-touch shrink-0 items-center justify-center rounded-md text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary"
             >
               <Menu className="size-5" />
             </button>
@@ -466,6 +610,7 @@ export function PhoneView({
           </p>
         </div>
       </header>
+      <InstallPrompt />
       {grouped.length === 0 && selectedNodeId == null ? (
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-flock-ink-muted">
           No nodes yet. Use the menu to add your first node.
@@ -518,7 +663,7 @@ export function PhoneView({
                 <button
                   type="button"
                   aria-label={`View ${node.nodeName} details`}
-                  className="flex size-8 items-center justify-center text-flock-ink-muted"
+                  className="flex size-8 min-h-touch min-w-touch items-center justify-center text-flock-ink-muted"
                   onClick={() => node.nodeId && openNodeInfo(node.nodeId)}
                 >
                   <HardDrive className="size-4" />
@@ -526,7 +671,7 @@ export function PhoneView({
                 <button
                   type="button"
                   aria-label={`Add project to ${node.nodeName}`}
-                  className="flex size-8 items-center justify-center text-flock-accent"
+                  className="flex size-8 min-h-touch min-w-touch items-center justify-center text-flock-accent"
                   onClick={() =>
                     openDialog('project', node.nodeId ? { nodeId: node.nodeId } : undefined)
                   }
@@ -549,7 +694,7 @@ export function PhoneView({
                       <button
                         type="button"
                         aria-label={`Open Git for ${project.projectName}`}
-                        className="flex size-8 shrink-0 items-center justify-center rounded-md text-flock-ink-muted"
+                        className="flex size-8 min-h-touch min-w-touch shrink-0 items-center justify-center rounded-md text-flock-ink-muted"
                         onClick={() => project.projectId && openProjectGit(project.projectId)}
                       >
                         <GitBranch className="size-4" />
@@ -557,7 +702,7 @@ export function PhoneView({
                       <button
                         type="button"
                         aria-label={`Start agent in ${project.projectName}`}
-                        className="flex size-8 shrink-0 items-center justify-center rounded-md text-flock-accent"
+                        className="flex size-8 min-h-touch min-w-touch shrink-0 items-center justify-center rounded-md text-flock-accent"
                         onClick={() => {
                           const projectId = project.projectId;
                           openDialog('session', projectId ? { projectId } : undefined);

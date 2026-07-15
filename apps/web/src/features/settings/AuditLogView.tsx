@@ -11,8 +11,19 @@
  * small text — not loud badges. The audit-action set comes from the shared
  * `@flock/shared` enum so the filter options never drift from the contract.
  */
+import { RefreshCw, ScrollText, ShieldAlert } from 'lucide-react';
 import { AuditActionEnum, type AuditAction, type AuditEntry } from '@flock/shared';
 
+import {
+  Button,
+  EmptyState,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Skeleton,
+} from '../../components/ui';
 import { useAuditLog } from './useAuditLog';
 import type { FetchLike } from './auditApi';
 
@@ -23,81 +34,102 @@ export interface AuditLogViewProps {
 
 const ACTION_OPTIONS = AuditActionEnum.options as readonly AuditAction[];
 
+/** Radix Select forbids an empty-string item value, so "all actions" gets a sentinel. */
+const ALL_ACTIONS = '__all__';
+
 function formatTs(ts: string): string {
   const d = new Date(ts);
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
 }
 
-export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
+export function AuditLogView({ fetchImpl }: AuditLogViewProps = {}): JSX.Element {
   const { entries, loading, error, forbidden, action, setAction, refresh } = useAuditLog({
     fetchImpl,
   });
 
   return (
     <section className="flex h-full flex-col" aria-label="Audit log" data-testid="audit-log-view">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-flock-muted/15 px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-tight">Audit log</h2>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--flock-border)] px-4 py-3">
+        <h2 className="text-sm font-semibold tracking-tight text-flock-ink-primary">Audit log</h2>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-flock-muted">
+          <label className="flex items-center gap-1.5 text-xs text-flock-ink-muted">
             <span>Action</span>
-            <select
-              aria-label="Filter by action"
-              data-testid="audit-action-filter"
-              value={action ?? ''}
-              onChange={(e) =>
-                setAction(e.target.value === '' ? undefined : (e.target.value as AuditAction))
+            <Select
+              value={action ?? ALL_ACTIONS}
+              onValueChange={(value) =>
+                setAction(value === ALL_ACTIONS ? undefined : (value as AuditAction))
               }
-              className="rounded border border-flock-muted bg-transparent px-1 py-0.5 text-xs"
             >
-              <option value="">All actions</option>
-              {ACTION_OPTIONS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                aria-label="Filter by action"
+                data-testid="audit-action-filter"
+                className="h-7 w-40"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ACTIONS}>All actions</SelectItem>
+                {ACTION_OPTIONS.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={refresh}
             data-testid="audit-refresh"
-            className="rounded border border-flock-muted px-2 py-0.5 text-xs"
           >
+            <RefreshCw className="size-3.5" aria-hidden />
             Refresh
-          </button>
+          </Button>
         </div>
       </header>
 
       {forbidden ? (
-        <div
+        <EmptyState
           data-testid="audit-forbidden"
-          className="flex flex-1 items-center justify-center px-4 py-6 text-center text-sm text-flock-muted"
-        >
-          {error ?? 'Owner access is required to view the audit log.'}
-        </div>
+          className="flex-1"
+          icon={<ShieldAlert aria-hidden />}
+          title="Owner access required"
+          description={error ?? 'Owner access is required to view the audit log.'}
+        />
       ) : loading ? (
         <div
           data-testid="audit-loading"
-          className="flex flex-1 items-center justify-center px-4 py-6 text-sm text-flock-muted"
+          aria-label="Loading audit log"
+          aria-busy="true"
+          className="flex-1 space-y-2 px-4 py-4"
         >
-          Loading audit log…
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
         </div>
       ) : error ? (
-        <div role="alert" className="px-4 py-6 text-sm text-red-500" data-testid="audit-error">
+        <div
+          role="alert"
+          className="px-4 py-6 text-sm text-status-error"
+          data-testid="audit-error"
+        >
           {error}
         </div>
       ) : entries.length === 0 ? (
-        <div
+        <EmptyState
           data-testid="audit-empty"
-          className="flex flex-1 items-center justify-center px-4 py-6 text-sm text-flock-muted"
-        >
-          No audit entries.
-        </div>
+          className="flex-1"
+          icon={<ScrollText aria-hidden />}
+          title="No audit entries"
+          description="Owner-visible actions will appear here as they happen."
+        />
       ) : (
         <div className="flex-1 overflow-auto px-2 py-2">
           <table className="w-full border-collapse text-left text-sm" data-testid="audit-table">
             <thead>
-              <tr className="text-xs uppercase tracking-wide text-flock-muted">
+              <tr className="text-xs uppercase tracking-wide text-flock-ink-muted">
                 <th className="px-2 py-1 font-medium">Time</th>
                 <th className="px-2 py-1 font-medium">Action</th>
                 <th className="px-2 py-1 font-medium">User</th>
@@ -112,20 +144,20 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps): JSX.Element {
                   key={e.id}
                   data-testid="audit-row"
                   data-action={e.action}
-                  className="border-t border-flock-muted/10 align-top"
+                  className="border-t border-[var(--flock-border)] align-top"
                 >
-                  <td className="whitespace-nowrap px-2 py-1 tabular-nums text-flock-muted">
+                  <td className="whitespace-nowrap px-2 py-1 tabular-nums text-flock-ink-muted">
                     <time dateTime={e.ts}>{formatTs(e.ts)}</time>
                   </td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-fg">{e.action}</td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-primary">{e.action}</td>
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
                     {e.userId ?? '—'}
                   </td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
                     {e.targetType ? `${e.targetType}:${e.targetId ?? '—'}` : '—'}
                   </td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">{e.ip ?? '—'}</td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-muted">
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">{e.ip ?? '—'}</td>
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
                     {e.detail ?? '—'}
                   </td>
                 </tr>

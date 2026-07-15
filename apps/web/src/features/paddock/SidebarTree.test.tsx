@@ -58,7 +58,8 @@ const noop = (): void => {};
 describe('NodeRow branch-level attention (task 3.2)', () => {
   beforeEach(() => {
     SESSIONS = [sess('s-await', 'P1', 'awaiting_input'), sess('s-run', 'P2', 'running')];
-    usePaddock.setState({ selectedProjectId: null, selectedSessionId: null });
+    // Reset persisted expand/collapse so a prior test's collapse doesn't leak.
+    usePaddock.setState({ selectedProjectId: null, selectedSessionId: null, treeExpanded: {} });
   });
 
   it('floats the attention project above the calm one (sortGroupsByAttention)', () => {
@@ -100,7 +101,7 @@ describe('NodeRow branch-level attention (task 3.2)', () => {
 describe('NodeRow keyboard/touch-reachable actions (task 3.3, WCAG 2.4.7)', () => {
   beforeEach(() => {
     SESSIONS = [sess('s-await', 'P1', 'awaiting_input'), sess('s-run', 'P2', 'running')];
-    usePaddock.setState({ selectedProjectId: null, selectedSessionId: null });
+    usePaddock.setState({ selectedProjectId: null, selectedSessionId: null, treeExpanded: {} });
   });
 
   it('reveals the node action buttons on keyboard focus (not only hover)', () => {
@@ -123,6 +124,7 @@ describe('NodeRow keyboard/touch-reachable actions (task 3.3, WCAG 2.4.7)', () =
 describe('ProjectRow scoped highlight (task 3.3)', () => {
   beforeEach(() => {
     SESSIONS = [sess('s-run', 'P2', 'running')];
+    usePaddock.setState({ treeExpanded: {} });
   });
 
   it('mirrors the selected treatment on the currently-scoped project', () => {

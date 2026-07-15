@@ -12,7 +12,7 @@ export function TransportWarning({
   if (compact) {
     return (
       <span
-        role="status"
+        role="alert"
         aria-label={warning}
         title={warning}
         className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-flock-warning/40 bg-flock-warning/10 px-1.5 text-2xs font-medium text-flock-warning"
@@ -25,7 +25,7 @@ export function TransportWarning({
 
   return (
     <div
-      role="status"
+      role="alert"
       className="flex items-start gap-2 rounded-lg border border-flock-warning/40 bg-flock-warning/10 px-3 py-2 text-xs leading-relaxed text-flock-ink-primary"
     >
       <ShieldAlert className="mt-0.5 size-4 shrink-0 text-flock-warning" aria-hidden />

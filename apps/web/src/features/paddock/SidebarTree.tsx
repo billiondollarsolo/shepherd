@@ -1,4 +1,14 @@
-import { useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import {
   Bot,
   ChevronDown,
@@ -22,7 +32,12 @@ import {
 } from '@flock/shared';
 import { Badge, SimpleTooltip } from '../../components/ui';
 import { StatusDot as Dot } from '../../components/StatusDot';
-import { usePaddock } from '../../store/paddock';
+import {
+  resolveTreeExpanded,
+  treeKeydownAction,
+  usePaddock,
+  type TreeRow,
+} from '../../store/paddock';
 import { useProjects, useSessions, useStack } from '../../data/queries';
 import { AgentdHealthContext, LiveStatusContext, useLiveStatuses } from './liveData';
 import { isShellProcess } from '../../lib/utils';
@@ -34,6 +49,149 @@ import {
   type OrderableSession,
 } from '../tree/ordering';
 import { MODE_BADGE, STATUS_RANK, sessionLabel } from './sidebarModel';
+
+// ── ARIA tree wiring (task 7.3) ─────────────────────────────────────────────
+// The sidebar is one WAI-ARIA `tree`: node/project/session rows are `treeitem`s,
+// children live in `role="group"`, and a roving tabindex keeps exactly one row
+// in the tab order. Arrow traversal is resolved by the pure `treeKeydownAction`
+// model in the store; here we only glue it to focus/expand/open on the DOM.
+
+interface TreeNav {
+  readonly activeId: string | null;
+  readonly setActiveId: (id: string) => void;
+}
+const TreeNavContext = createContext<TreeNav | null>(null);
+
+/**
+ * Roving tabindex for a single treeitem row: only the active row sits in the tab
+ * order (tabIndex 0); the rest are -1 and reached via the arrow keys. Rendered
+ * outside a tree root (unit tests), every row stays tabbable so nothing is lost.
+ */
+function useTreeItem(id: string): { tabIndex: number; onFocus: () => void } {
+  const nav = useContext(TreeNavContext);
+  if (!nav) return { tabIndex: 0, onFocus: () => undefined };
+  return {
+    tabIndex: nav.activeId === id ? 0 : -1,
+    onFocus: () => nav.setActiveId(id),
+  };
+}
+
+/** Effective expanded state for a branch: persisted override, else attention-seeded. */
+function useBranchExpanded(id: string, needsAttention: boolean): boolean {
+  const override = usePaddock((s) => s.treeExpanded[id]);
+  return resolveTreeExpanded(override, needsAttention);
+}
+
+/**
+ * The `role="tree"` container: owns the roving-tabindex active row and the
+ * keyboard controller. Also declares the single `--flock-tree-indent` step every
+ * nested group indents by, so depth reads consistently at all three levels.
+ */
+export function SidebarTreeRoot({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}): JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const nav = useMemo<TreeNav>(() => ({ activeId, setActiveId }), [activeId]);
+
+  // Keep exactly one row tabbable. When the active row collapses/scrolls out of
+  // the tree, fall back to the aria-selected row, else the first visible row.
+  // Intentionally runs on every commit to reconcile against the live treeitem
+  // DOM (rows appear/disappear as branches expand); the `ids.includes(activeId)`
+  // guard makes it converge in one pass, so there is no update loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const items = Array.from(root.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+    if (items.length === 0) return;
+    const ids = items.map((el) => el.dataset.treeId ?? '');
+    if (activeId && ids.includes(activeId)) return;
+    const selected = items.find((el) => el.getAttribute('aria-selected') === 'true');
+    setActiveId(selected?.dataset.treeId ?? ids[0] ?? null);
+  });
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const active = document.activeElement;
+    // Only drive navigation from a focused ROW — never intercept keys aimed at an
+    // inner action button (its native Enter/Space and click stay intact).
+    if (!(active instanceof HTMLElement) || active.getAttribute('role') !== 'treeitem') return;
+    const NAV_KEYS = [
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'Home',
+      'End',
+      'Enter',
+      ' ',
+    ];
+    if (!NAV_KEYS.includes(event.key)) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const items = Array.from(root.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+    const rows: TreeRow[] = items.map((el) => ({
+      id: el.dataset.treeId ?? '',
+      level: Number(el.dataset.level ?? '1'),
+      expandable: el.getAttribute('aria-expanded') !== null,
+      expanded: el.getAttribute('aria-expanded') === 'true',
+    }));
+    const currentId = active.dataset.treeId;
+    if (!currentId) return;
+    const action = treeKeydownAction(rows, currentId, event.key);
+    if (!action) return;
+    event.preventDefault();
+    const byId = (id: string): HTMLElement | undefined =>
+      items.find((el) => el.dataset.treeId === id);
+    if (action.kind === 'focus') {
+      byId(action.id)?.focus();
+    } else if (action.kind === 'expand') {
+      usePaddock.getState().setTreeExpanded(action.id, true);
+    } else if (action.kind === 'collapse') {
+      usePaddock.getState().setTreeExpanded(action.id, false);
+    } else {
+      // activate → the row's primary control (open the session / scope the project).
+      byId(action.id)?.querySelector<HTMLElement>('[data-tree-primary]')?.click();
+    }
+  };
+
+  return (
+    <TreeNavContext.Provider value={nav}>
+      <div
+        ref={rootRef}
+        role="tree"
+        aria-label={label}
+        onKeyDown={onKeyDown}
+        style={{ '--flock-tree-indent': '0.75rem' } as CSSProperties}
+      >
+        {children}
+      </div>
+    </TreeNavContext.Provider>
+  );
+}
+
+/** One nested `role="group"` level — indents by exactly one `--flock-tree-indent`. */
+function TreeGroup({
+  children,
+  guide = true,
+}: {
+  children: ReactNode;
+  guide?: boolean;
+}): JSX.Element {
+  return (
+    <div
+      role="group"
+      className={`mt-0.5 ${guide ? 'border-l border-[var(--flock-border)]' : ''}`}
+      style={{ marginLeft: 'var(--flock-tree-indent)' }}
+    >
+      {children}
+    </div>
+  );
+}
 
 function useLiveStatus(session: Session): Status {
   return useContext(LiveStatusContext).get(session.id) ?? session.status;
@@ -112,9 +270,19 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
   const health = useContext(AgentdHealthContext);
   const fg = session.agentType === 'terminal' ? health?.sessions[session.id]?.tool : undefined;
   const foreground = fg && !isShellProcess(fg) ? fg : null;
+  const item = useTreeItem(session.id);
+  const label = sessionLabel(session);
   return (
     <div
-      className={`group/srow relative flex items-center gap-2 rounded-md py-1 pl-7 pr-1.5 text-sm transition-colors ${
+      role="treeitem"
+      aria-level={3}
+      aria-selected={selected}
+      aria-current={selected ? 'true' : undefined}
+      data-tree-id={session.id}
+      data-level={3}
+      tabIndex={item.tabIndex}
+      onFocus={item.onFocus}
+      className={`group/srow relative flex items-center gap-2 rounded-md py-1 pl-2 pr-1.5 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-flock-accent ${
         selected
           ? 'bg-flock-accent/12 text-flock-ink-primary'
           : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
@@ -128,6 +296,7 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
       ) : null}
       <button
         type="button"
+        data-tree-primary
         onClick={() => select(session.id, session.projectId)}
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         data-testid={`session-${session.id}`}
@@ -138,7 +307,9 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
         <SessionConn session={session} />
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate leading-tight">{sessionLabel(session)}</span>
+            <span className="truncate leading-tight" title={label}>
+              {label}
+            </span>
             {MODE_BADGE[session.permissionMode] ? (
               <span
                 title={MODE_BADGE[session.permissionMode]!.title}
@@ -239,7 +410,7 @@ function ProjectRow({
   // The scoped project = the one the grid is currently scoped to (project clicked,
   // no single session maximized). Mirror the SessionRow selected treatment on it.
   const scoped = usePaddock((s) => s.selectedProjectId === project.id && s.selectedSessionId === null);
-  const [open, setOpen] = useState(true);
+  const setTreeExpanded = usePaddock((s) => s.setTreeExpanded);
   // Branch-level attention (FR-UI3): when COLLAPSED, a pulsing dot stands in for the
   // hidden session dots so an awaiting/errored agent is visible without expanding.
   const orderable = useMemo<OrderableSession[]>(
@@ -248,10 +419,24 @@ function ProjectRow({
   );
   const needsAttention = groupNeedsAttention(orderable);
   const attentionStatus = groupAttentionStatus(orderable);
+  // Persisted per-id expand state, seeded OPEN when the branch needs you.
+  const open = useBranchExpanded(project.id, needsAttention);
+  const item = useTreeItem(project.id);
+  const toggle = (): void => {
+    setTreeExpanded(project.id, !open);
+    selectProject(project.id);
+  };
   return (
     <div>
       <div
-        className={`group/prow relative flex items-center gap-1.5 rounded-md py-1 pl-4 pr-1.5 text-sm ${
+        role="treeitem"
+        aria-level={2}
+        aria-expanded={open}
+        data-tree-id={project.id}
+        data-level={2}
+        tabIndex={item.tabIndex}
+        onFocus={item.onFocus}
+        className={`group/prow relative flex items-center gap-1.5 rounded-md py-1 pl-1.5 pr-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-flock-accent ${
           scoped
             ? 'bg-flock-accent/12 text-flock-ink-primary'
             : 'text-flock-ink-primary hover:bg-flock-surface-2'
@@ -264,10 +449,8 @@ function ProjectRow({
             `/p/:id` URL) — the side-by-side view of just that project. */}
         <button
           type="button"
-          onClick={() => {
-            setOpen((v) => !v);
-            selectProject(project.id);
-          }}
+          data-tree-primary
+          onClick={toggle}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
           {open ? (
@@ -276,7 +459,9 @@ function ProjectRow({
             <ChevronRight className="size-3.5 shrink-0 text-flock-ink-muted" />
           )}
           <FolderGit2 className="size-3.5 shrink-0 text-flock-ink-muted" />
-          <span className="truncate font-medium">{project.name}</span>
+          <span className="truncate font-medium" title={project.name}>
+            {project.name}
+          </span>
           <StackBadges project={project} nodeConnected={nodeConnected} />
         </button>
         {!open && needsAttention && attentionStatus ? (
@@ -294,13 +479,13 @@ function ProjectRow({
         </SimpleTooltip>
       </div>
       {open && (
-        <div className="mt-0.5">
+        <TreeGroup guide={false}>
           {sessions.length === 0 ? (
-            <p className="py-1 pl-7 text-xs text-flock-ink-muted/70">No sessions</p>
+            <p className="py-1 pl-2 text-xs text-flock-ink-muted/70">No sessions</p>
           ) : (
             sessions.map((s) => <SessionRow key={s.id} session={s} />)
           )}
-        </div>
+        </TreeGroup>
       )}
     </div>
   );
@@ -348,16 +533,29 @@ export function NodeRow({
   const attentionStatus = groupAttentionStatus(nodeSessions);
   const openDialog = usePaddock((s) => s.openDialog);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
-  const [open, setOpen] = useState(true);
+  const setTreeExpanded = usePaddock((s) => s.setTreeExpanded);
+  // Persisted per-id expand state, seeded OPEN when the node has agents needing you.
+  const open = useBranchExpanded(node.id, needCount > 0);
+  const item = useTreeItem(node.id);
+  const toggle = (): void => setTreeExpanded(node.id, !open);
   const [dragOver, setDragOver] = useState(false);
   const connected = node.connectionStatus === 'connected';
+  // Local machines are a CPU, remote hosts a drive (icon derived from node.kind).
+  const NodeIcon = node.kind === 'local' ? Cpu : HardDrive;
   return (
     <div className="py-1.5">
       {/* Host header BAND — a faint surface band so a node reads as a section header,
           clearly a different level from the project/session items nested under it.
           Drag the grip handle to reorder; the band is the drop target. */}
       <div
-        className={`group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-highlight'}`}
+        role="treeitem"
+        aria-level={1}
+        aria-expanded={open}
+        data-tree-id={node.id}
+        data-level={1}
+        tabIndex={item.tabIndex}
+        onFocus={item.onFocus}
+        className={`group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 outline-none ring-1 focus-visible:ring-flock-accent ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-highlight'}`}
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -374,7 +572,7 @@ export function NodeRow({
       >
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
           aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
           aria-expanded={open}
           className="shrink-0 text-flock-ink-muted hover:text-flock-ink-primary"
@@ -410,13 +608,17 @@ export function NodeRow({
         </button>
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          data-tree-primary
+          onClick={toggle}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <HardDrive
+          <NodeIcon
             className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
           />
-          <span className="truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
+          <span
+            className="truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted"
+            title={node.name}
+          >
             {node.name}
           </span>
           {node.pool ? (
@@ -467,15 +669,15 @@ export function NodeRow({
       </div>
       {open && (
         // Tree guide — a vertical line ties the node's projects/sessions to their host.
-        <div className="ml-3 mt-0.5 border-l border-[var(--flock-border)]">
+        <TreeGroup>
           {orderedProjects.length === 0 ? (
-            <p className="py-1 pl-4 text-xs text-flock-ink-muted/70">No projects</p>
+            <p className="py-1 pl-1.5 text-xs text-flock-ink-muted/70">No projects</p>
           ) : (
             orderedProjects.map((p) => (
               <ProjectRow key={p.id} project={p} nodeConnected={connected} />
             ))
           )}
-        </div>
+        </TreeGroup>
       )}
     </div>
   );
@@ -494,19 +696,55 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
   );
   const openDialog = usePaddock((s) => s.openDialog);
   const openNodeInfo = usePaddock((s) => s.openNodeInfo);
+  const setTreeExpanded = usePaddock((s) => s.setTreeExpanded);
+  const open = useBranchExpanded(node.id, false);
+  const item = useTreeItem(node.id);
+  const toggle = (): void => setTreeExpanded(node.id, !open);
   const connected = node.connectionStatus === 'connected';
+  // Local machines are a CPU, remote hosts a drive (icon derived from node.kind).
+  const NodeIcon = node.kind === 'local' ? Cpu : HardDrive;
   return (
     <div>
       <div
-        className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 ring-1 ring-highlight"
+        role="treeitem"
+        aria-level={1}
+        aria-expanded={open}
+        data-tree-id={node.id}
+        data-level={1}
+        tabIndex={item.tabIndex}
+        onFocus={item.onFocus}
+        className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 outline-none ring-1 ring-highlight focus-visible:ring-flock-accent"
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
       >
-        <HardDrive
-          className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
-        />
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
-          {node.name}
-        </span>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
+          aria-expanded={open}
+          className="shrink-0 text-flock-ink-muted hover:text-flock-ink-primary"
+        >
+          {open ? (
+            <ChevronDown className="size-3.5 shrink-0" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0" />
+          )}
+        </button>
+        <button
+          type="button"
+          data-tree-primary
+          onClick={toggle}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          <NodeIcon
+            className={`size-3.5 shrink-0 ${connected ? 'text-status-idle' : 'text-flock-ink-muted'}`}
+          />
+          <span
+            className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-label text-flock-ink-muted"
+            title={node.name}
+          >
+            {node.name}
+          </span>
+        </button>
         <NodeConn node={node} />
         <SimpleTooltip label="Node info (CPU / memory / agents)">
           <button
@@ -529,13 +767,15 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
           </button>
         </SimpleTooltip>
       </div>
-      <div className="ml-3 mt-0.5 border-l border-[var(--flock-border)]">
-        {projects.length === 0 ? (
-          <p className="py-1 pl-4 text-2xs text-flock-ink-muted/70">No projects</p>
-        ) : (
-          projects.map((p) => <ProjectRow key={p.id} project={p} nodeConnected={connected} />)
-        )}
-      </div>
+      {open && (
+        <TreeGroup>
+          {projects.length === 0 ? (
+            <p className="py-1 pl-1.5 text-2xs text-flock-ink-muted/70">No projects</p>
+          ) : (
+            projects.map((p) => <ProjectRow key={p.id} project={p} nodeConnected={connected} />)
+          )}
+        </TreeGroup>
+      )}
     </div>
   );
 }

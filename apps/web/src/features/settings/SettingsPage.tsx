@@ -16,6 +16,7 @@ import {
   Activity,
   UserCircle,
   RadioTower,
+  ScrollText,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -23,7 +24,9 @@ import {
   ScrollArea,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
   SimpleTooltip,
@@ -37,16 +40,28 @@ import { AccountSection } from './sections/AccountSection';
 import { AboutSection } from './sections/AboutSection';
 import { OperationsSection } from './sections/OperationsSection';
 import { DeploymentPreviewSection } from './sections/DeploymentPreviewSection';
+import { AuditLogView } from './AuditLogView';
 import { PRODUCT_NAME } from '../../brand';
 import { useAuthOptional } from '../auth/AuthGate';
 import { TransportWarning } from '../auth/TransportWarning';
+
+/** Nav clusters — a flat 7+ item list reads as a wall, so sections group by scope. */
+type SettingsGroup = 'personal' | 'workspace' | 'system';
 
 interface SectionDef {
   id: SettingsSection;
   label: string;
   Icon: LucideIcon;
   Component: () => JSX.Element;
+  group: SettingsGroup;
 }
+
+/** Cluster order + headings for the inner nav (desktop list + mobile Select groups). */
+const SETTINGS_GROUPS: readonly { id: SettingsGroup; label: string }[] = [
+  { id: 'personal', label: 'Personal' },
+  { id: 'workspace', label: 'Workspace' },
+  { id: 'system', label: 'System' },
+];
 
 /** The default/first section, kept as a named constant so it is never undefined. */
 const DEFAULT_SECTION: SectionDef = {
@@ -54,22 +69,46 @@ const DEFAULT_SECTION: SectionDef = {
   label: 'Appearance',
   Icon: Palette,
   Component: AppearanceSection,
+  group: 'personal',
 };
 
 /** The single source of truth for settings sections — extend this list to grow. */
 export const SETTINGS_SECTIONS: readonly SectionDef[] = [
   DEFAULT_SECTION,
-  { id: 'notifications', label: 'Notifications', Icon: Bell, Component: NotificationsSection },
-  { id: 'nodes', label: 'Nodes', Icon: HardDrive, Component: NodesSection },
-  { id: 'account', label: 'Account', Icon: UserCircle, Component: AccountSection },
-  { id: 'operations', label: 'Operations', Icon: Activity, Component: OperationsSection },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    Icon: Bell,
+    Component: NotificationsSection,
+    group: 'personal',
+  },
+  { id: 'account', label: 'Account', Icon: UserCircle, Component: AccountSection, group: 'personal' },
+  { id: 'nodes', label: 'Nodes', Icon: HardDrive, Component: NodesSection, group: 'workspace' },
   {
     id: 'deployment-preview',
     label: 'Deployment & Preview',
     Icon: RadioTower,
     Component: DeploymentPreviewSection,
+    group: 'workspace',
   },
-  { id: 'about', label: 'About', Icon: Info, Component: AboutSection },
+  {
+    id: 'operations',
+    label: 'Operations',
+    Icon: Activity,
+    Component: OperationsSection,
+    group: 'system',
+  },
+  {
+    // Owner-only surface. There is no client-side owner-role signal, so the
+    // section is always listed and AuditLogView renders its server-gated
+    // "forbidden" state for non-owners rather than being conditionally hidden.
+    id: 'audit',
+    label: 'Audit',
+    Icon: ScrollText,
+    Component: AuditLogView,
+    group: 'system',
+  },
+  { id: 'about', label: 'About', Icon: Info, Component: AboutSection, group: 'system' },
 ];
 
 export function SettingsPage(): JSX.Element {
@@ -112,10 +151,11 @@ export function SettingsPage(): JSX.Element {
             <TransportWarning warning={auth.deployment.warning} />
           </div>
         ) : null}
-        <div className="px-3 pb-1 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
-          Settings
-        </div>
+        {/* Mobile: a single grouped Select stands in for the desktop clusters. */}
         <div className="px-3 pb-3 sm:hidden">
+          <div className="pb-1 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
+            Settings
+          </div>
           <Select
             value={current.id}
             onValueChange={(value) => setSection(value as SettingsSection)}
@@ -124,38 +164,59 @@ export function SettingsPage(): JSX.Element {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SETTINGS_SECTIONS.map(({ id, label }) => (
-                <SelectItem key={id} value={id}>
-                  {label}
-                </SelectItem>
-              ))}
+              {SETTINGS_GROUPS.map((group) => {
+                const sections = SETTINGS_SECTIONS.filter((s) => s.group === group.id);
+                if (sections.length === 0) return null;
+                return (
+                  <SelectGroup key={group.id}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {sections.map(({ id, label }) => (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
+        {/* Desktop: the same clusters as labelled sub-lists. */}
         <ScrollArea className="hidden w-full px-2 py-2 sm:block sm:min-h-0 sm:flex-1">
-          <ul className="grid gap-0.5">
-            {SETTINGS_SECTIONS.map(({ id, label, Icon }) => {
-              const selected = id === current.id;
-              return (
-                <li key={id}>
-                  <button
-                    type="button"
-                    onClick={() => setSection(id)}
-                    aria-current={selected ? 'page' : undefined}
-                    data-testid={`settings-nav-${id}`}
-                    className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-                      selected
-                        ? 'bg-flock-accent/15 font-medium text-flock-ink-primary ring-1 ring-flock-accent/20'
-                        : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
-                    }`}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    {label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {SETTINGS_GROUPS.map((group, groupIndex) => {
+            const sections = SETTINGS_SECTIONS.filter((s) => s.group === group.id);
+            if (sections.length === 0) return null;
+            return (
+              <div key={group.id} className={groupIndex > 0 ? 'mt-3' : undefined}>
+                <div className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
+                  {group.label}
+                </div>
+                <ul className="grid gap-0.5">
+                  {sections.map(({ id, label, Icon }) => {
+                    const selected = id === current.id;
+                    return (
+                      <li key={id}>
+                        <button
+                          type="button"
+                          onClick={() => setSection(id)}
+                          aria-current={selected ? 'page' : undefined}
+                          data-testid={`settings-nav-${id}`}
+                          className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                            selected
+                              ? 'bg-flock-accent/15 font-medium text-flock-ink-primary ring-1 ring-flock-accent/20'
+                              : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
+                          }`}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          {label}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </ScrollArea>
       </nav>
 

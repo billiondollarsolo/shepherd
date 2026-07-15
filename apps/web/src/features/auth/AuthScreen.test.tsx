@@ -39,7 +39,7 @@ describe('AuthScreen first-run confirmation', () => {
         onAuthenticated={() => {}}
       />,
     );
-    expect(screen.getByRole('status')).toHaveTextContent(/traffic is not encrypted/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/traffic is not encrypted/i);
   });
 
   it('uses the current Shepherd hierarchy and capability terminology', () => {
@@ -134,6 +134,11 @@ describe('AuthScreen first-run confirmation', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/at least 12/i));
     expect(setupOwner).not.toHaveBeenCalled();
+  });
+
+  it('enforces the 12-char minimum on the setup password field (matches the rule)', () => {
+    render(<AuthScreen initialMode="setup" onAuthenticated={() => {}} />);
+    expect(screen.getByLabelText('Password')).toHaveAttribute('minlength', '12');
   });
 
   it('does not offer first-run setup on a configured sign-in screen', () => {

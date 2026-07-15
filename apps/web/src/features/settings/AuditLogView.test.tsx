@@ -3,7 +3,7 @@
  * Renders the owner audit table from the injected fetch, filters by action, and
  * shows the access-denied message when the server rejects the request (403).
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AuditLogView } from './AuditLogView';
@@ -47,33 +47,22 @@ describe('AuditLogView (US-40)', () => {
     expect(screen.getAllByTestId('audit-row')).toHaveLength(2);
   });
 
-  it('filters by action via the dropdown (re-requests with action=...)', async () => {
-    const fetchImpl = vi.fn(async (url: string) =>
-      response({
-        entries: url.includes('action=node_remove')
-          ? [entry('node_remove', '33333333-3333-4333-8333-333333333333')]
-          : [entry('login', '11111111-1111-4111-8111-111111111111')],
-      }),
+  it('renders the action filter as a labelled Select defaulting to all actions', async () => {
+    const fetchImpl = vi.fn(async () =>
+      response({ entries: [entry('login', '11111111-1111-4111-8111-111111111111')] }),
     );
 
     render(<AuditLogView fetchImpl={fetchImpl as unknown as typeof fetch} />);
     await waitFor(() => expect(screen.getByTestId('audit-table')).toBeTruthy());
 
-    fireEvent.change(screen.getByTestId('audit-action-filter'), {
-      target: { value: 'node_remove' },
-    });
-
-    await waitFor(() => {
-      const lastUrl = (fetchImpl.mock.calls.at(-1)![0] as string) ?? '';
-      expect(lastUrl).toContain('action=node_remove');
-    });
-    await waitFor(() => {
-      const rows = screen.getAllByTestId('audit-row');
-      expect(rows.every((r) => r.getAttribute('data-action') === 'node_remove')).toBe(true);
-    });
+    // The native <select> was replaced by the ui Select primitive (a combobox
+    // trigger). The re-request-on-filter behaviour is covered by useAuditLog.test.ts.
+    const filter = screen.getByRole('combobox', { name: 'Filter by action' });
+    expect(filter).toBeTruthy();
+    expect(filter).toHaveTextContent(/all actions/i);
   });
 
-  it('shows an access-denied message when the server rejects the request (403)', async () => {
+  it('shows an access-denied empty state when the server rejects the request (403)', async () => {
     const fetchImpl = vi.fn(async () =>
       response({ error: { code: 'forbidden', message: 'Owner access required.' } }, false, 403),
     );
@@ -81,6 +70,7 @@ describe('AuditLogView (US-40)', () => {
     render(<AuditLogView fetchImpl={fetchImpl as unknown as typeof fetch} />);
 
     await waitFor(() => expect(screen.getByTestId('audit-forbidden')).toBeTruthy());
+    expect(screen.getByTestId('audit-forbidden')).toHaveTextContent(/owner access is required/i);
     expect(screen.queryByTestId('audit-table')).toBeNull();
   });
 });

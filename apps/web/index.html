@@ -17,11 +17,16 @@
          the terminal/code. No CDN — instant paint, works air-gapped. -->
 
     <!-- US-36 (FR-UI6) — installable PWA: link the manifest + declare the
-         on-brand chrome colour (matches flock-theme dark surface #06090d). -->
+         on-brand chrome colour per colour-scheme (dark surface #06090d /
+         light surface #ffffff, matching flock-theme --flock-surface-0). -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#06090d" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#06090d" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <!-- Apple ignores SVG for the home-screen icon, so point at the rasterized
+         180×180 PNG produced by scripts/generate-pwa-icons.mjs (run that once a
+         rasterizer — e.g. sharp — is available; see the script header). -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
     <!-- Full-screen standalone launch on Android (modern) + iOS 16.4+ (legacy
          Apple key, still required for home-screen install). -->

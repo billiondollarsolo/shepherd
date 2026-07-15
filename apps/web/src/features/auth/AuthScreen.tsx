@@ -290,7 +290,7 @@ export function AuthScreen({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={isSetup ? 8 : undefined}
+                minLength={isSetup ? 12 : undefined}
                 className="h-10 text-base sm:text-sm"
               />
               {isSetup && <p className="text-2xs text-flock-ink-muted">At least 12 characters.</p>}

@@ -51,6 +51,17 @@ describe('useIsPhone (US-36)', () => {
     expect(PHONE_MEDIA_QUERY).toMatch(/max-width/);
   });
 
+  it('is device-aware: also matches short touch (landscape) phones', () => {
+    // A wide-but-short touch device is a landscape phone; the second OR-ed clause
+    // gates on a coarse pointer + limited height so it gets the PhoneView too,
+    // while short *desktop* windows (fine pointer) stay on the dense shell.
+    expect(PHONE_MEDIA_QUERY).toMatch(/pointer:\s*coarse/);
+    expect(PHONE_MEDIA_QUERY).toMatch(/max-height/);
+    // The two conditions are OR-ed (comma) so either a narrow width or a short
+    // touch device triggers the collapse.
+    expect(PHONE_MEDIA_QUERY).toContain(',');
+  });
+
   it('returns true when the viewport matches the phone query', () => {
     installMatchMedia(true);
     const { result } = renderHook(() => useIsPhone());

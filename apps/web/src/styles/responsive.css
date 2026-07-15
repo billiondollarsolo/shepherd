@@ -2,7 +2,7 @@
  * Responsive styles for US-36 (FR-UI6).
  *
  * The desktop ⇄ phone surface swap is driven in JS by `useIsPhone`
- * (matchMedia '(max-width: 767px)'), so only one of the two layouts is ever in
+ * (matchMedia PHONE_MEDIA_QUERY), so only one of the two layouts is ever in
  * the DOM. These rules are the CSS-side guarantees that pair with that swap:
  *
  *  1. A single breakpoint token, kept in lock-step with PHONE_MEDIA_QUERY, so
@@ -15,12 +15,16 @@
  */
 
 :root {
-  /* Mirror of PHONE_MEDIA_QUERY (apps/web/src/features/responsive/useIsPhone.ts). */
+  /* Mirror of PHONE_MEDIA_QUERY (apps/web/src/features/responsive/useIsPhone.ts).
+     Custom properties can't parameterize a @media query, so the breakpoint below
+     is hand-kept in lock-step with that string:
+       (max-width: 767px), (pointer: coarse) and (max-height: 575px) */
   --flock-phone-max: 767px;
 }
 
-/* Comfortable tap targets + edge padding on phones. */
-@media (max-width: 767px) {
+/* Comfortable tap targets + edge padding on phones (mirror of PHONE_MEDIA_QUERY —
+   portrait phones/narrow windows OR short touch devices = landscape phones). */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 575px) {
   html,
   body,
   #root {
@@ -33,12 +37,16 @@
   [data-testid='phone-view'],
   [data-testid='phone-stage'],
   [data-mobile-viewport] {
-    /* Respect the iOS notch / home indicator when launched as a PWA. */
+    /* Respect the iOS notch / home indicator when launched as a PWA — all four
+       edges, so a landscape phone's rounded corners / camera cutout don't clip
+       chrome on the left or right either. */
     max-width: 100dvw;
     min-width: 0;
     overflow-x: hidden;
     padding-top: env(safe-area-inset-top, 0);
     padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
   }
 
   [data-testid='auth-screen'] {
@@ -69,11 +77,6 @@
     left: 1px !important;
     z-index: 0 !important;
     pointer-events: none !important;
-  }
-
-  /* Decision buttons (Approve / Deny) keep a 44px minimum touch target. */
-  [data-testid='phone-decision'] button {
-    min-height: 44px;
   }
 
   /* Defensive: if the desktop grid shell ever renders on a phone, let it scroll

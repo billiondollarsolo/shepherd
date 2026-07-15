@@ -47,6 +47,7 @@ export type SettingsSection =
   | 'account'
   | 'operations'
   | 'deployment-preview'
+  | 'audit'
   | 'about';
 
 /** Which view the right-hand session panel shows (Codex-style side panel). */
@@ -83,6 +84,94 @@ export function orderNodes<T extends { id: string; name: string }>(
   });
 }
 
+// ── Sidebar ARIA-tree model (task 7.3) ──────────────────────────────────────
+// Pure, DOM-free helpers so the expand/collapse persistence and the keyboard
+// traversal model unit-test without jsdom.
+
+/**
+ * Resolve a tree branch's expanded state. An explicit persisted override always
+ * wins; with no override the branch is SEEDED open when it needs attention
+ * (FR-UI3 — an awaiting/errored branch reveals itself), otherwise it falls back
+ * to `defaultOpen` (the sidebar keeps its historic all-open default).
+ */
+export function resolveTreeExpanded(
+  override: boolean | undefined,
+  needsAttention: boolean,
+  defaultOpen = true,
+): boolean {
+  if (override !== undefined) return override;
+  return needsAttention ? true : defaultOpen;
+}
+
+/** One visible row of the flattened tree, in top-to-bottom (DOM) order. */
+export interface TreeRow {
+  readonly id: string;
+  /** 1 = node, 2 = project, 3 = session. */
+  readonly level: number;
+  /** A branch (has an aria-expanded state); leaves are false. */
+  readonly expandable: boolean;
+  readonly expanded: boolean;
+}
+
+/** What a key press resolves to against the visible tree (interpreted by the view). */
+export type TreeKeyAction =
+  | { readonly kind: 'focus'; readonly id: string }
+  | { readonly kind: 'expand'; readonly id: string }
+  | { readonly kind: 'collapse'; readonly id: string }
+  | { readonly kind: 'activate'; readonly id: string };
+
+/**
+ * The WAI-ARIA `tree` traversal model (roving tabindex): Up/Down move between
+ * visible rows; Right expands (or steps into the first child); Left collapses
+ * (or steps out to the parent); Enter/Space activate; Home/End jump to the ends.
+ * Pure — returns the intent; the caller focuses/toggles/opens accordingly.
+ */
+export function treeKeydownAction(
+  rows: readonly TreeRow[],
+  currentId: string,
+  key: string,
+): TreeKeyAction | null {
+  const index = rows.findIndex((r) => r.id === currentId);
+  if (index < 0) return null;
+  const row = rows[index]!;
+  switch (key) {
+    case 'ArrowDown': {
+      const next = rows[index + 1];
+      return next ? { kind: 'focus', id: next.id } : null;
+    }
+    case 'ArrowUp': {
+      const prev = rows[index - 1];
+      return prev ? { kind: 'focus', id: prev.id } : null;
+    }
+    case 'Home':
+      return rows.length > 0 ? { kind: 'focus', id: rows[0]!.id } : null;
+    case 'End':
+      return rows.length > 0 ? { kind: 'focus', id: rows[rows.length - 1]!.id } : null;
+    case 'ArrowRight': {
+      if (row.expandable && !row.expanded) return { kind: 'expand', id: row.id };
+      if (row.expandable && row.expanded) {
+        const next = rows[index + 1];
+        // Only step IN when the next visible row is actually a child (deeper).
+        return next && next.level > row.level ? { kind: 'focus', id: next.id } : null;
+      }
+      return null;
+    }
+    case 'ArrowLeft': {
+      if (row.expandable && row.expanded) return { kind: 'collapse', id: row.id };
+      // Otherwise move OUT to the parent: nearest previous shallower row.
+      for (let i = index - 1; i >= 0; i -= 1) {
+        if (rows[i]!.level < row.level) return { kind: 'focus', id: rows[i]!.id };
+      }
+      return null;
+    }
+    case 'Enter':
+    case ' ':
+      return { kind: 'activate', id: row.id };
+    default:
+      return null;
+  }
+}
+
 const SIDEBAR_KEY = 'flock.sidebarCollapsed';
 function loadSidebarCollapsed(): boolean {
   try {
@@ -116,6 +205,30 @@ function saveGridLayout(v: GridLayout): void {
 }
 
 export type LayoutPreset = SavedLayoutPreset;
+
+// Persisted per-id sidebar expand/collapse overrides (task 7.3). Absence of an
+// entry means "use the attention-seeded default" (see resolveTreeExpanded).
+const TREE_EXPANDED_KEY = 'flock.treeExpanded';
+function loadTreeExpanded(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(TREE_EXPANDED_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, boolean>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+function saveTreeExpanded(v: Record<string, boolean>): void {
+  try {
+    localStorage.setItem(TREE_EXPANDED_KEY, JSON.stringify(v));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 const ASSIST_KEY = 'flock.assistivePanels';
 function loadAssistive(): boolean {
@@ -168,6 +281,8 @@ export interface PaddockUiState {
   dialogSessionId: string | null;
 
   sidebarCollapsed: boolean;
+  /** Persisted per-id sidebar tree expand/collapse overrides (task 7.3). */
+  treeExpanded: Record<string, boolean>;
   gridLayout: GridLayout;
   layoutPresets: LayoutPreset[];
   race: ActiveRace | null;
@@ -220,6 +335,8 @@ export interface PaddockUiState {
   openNodeInfo: (nodeId: string) => void;
   closeNodeInfo: () => void;
   toggleSidebar: () => void;
+  /** Set a sidebar tree branch's expand/collapse override (persisted). */
+  setTreeExpanded: (id: string, expanded: boolean) => void;
   toggleGridLayout: () => void;
   openRight: (tab: RightTab) => void;
   openProjectGit: (projectId: string) => void;
@@ -256,6 +373,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   dialogSessionId: null,
 
   sidebarCollapsed: loadSidebarCollapsed(),
+  treeExpanded: loadTreeExpanded(),
   gridLayout: loadGridLayout(),
   layoutPresets: [],
   race: null,
@@ -425,6 +543,12 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       const v = !s.sidebarCollapsed;
       saveSidebarCollapsed(v);
       return { sidebarCollapsed: v };
+    }),
+  setTreeExpanded: (id, expanded) =>
+    set((s) => {
+      const next = { ...s.treeExpanded, [id]: expanded };
+      saveTreeExpanded(next);
+      return { treeExpanded: next };
     }),
   toggleGridLayout: () =>
     set((s) => {

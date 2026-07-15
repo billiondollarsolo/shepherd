@@ -12,8 +12,21 @@
  */
 import { useEffect, useState } from 'react';
 
-/** The phone breakpoint. Tailwind's `md` is 768px, so "below tablet" = phone. */
-export const PHONE_MEDIA_QUERY = '(max-width: 767px)';
+/**
+ * The phone breakpoint. Two OR-ed clauses:
+ *
+ *  1. `(max-width: 767px)` — Tailwind's `md` is 768px, so "below tablet" = phone
+ *     (portrait phones, narrow windows).
+ *  2. `(pointer: coarse) and (max-height: 575px)` — a touch device that is short
+ *     is a *landscape* phone: wide enough to pass clause 1 on width, but with no
+ *     room for the dense desktop paddock. Gating on `pointer: coarse` keeps short
+ *     desktop windows (fine pointer) on the desktop shell.
+ *
+ * SINGLE SOURCE OF TRUTH — mirror any change by hand in `styles/responsive.css`
+ * (custom properties can't parameterize a `@media` query).
+ */
+export const PHONE_MEDIA_QUERY =
+  '(max-width: 767px), (pointer: coarse) and (max-height: 575px)';
 
 function getMql(): MediaQueryList | null {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
