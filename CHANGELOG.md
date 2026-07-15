@@ -6,15 +6,15 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
-## [0.5.2] - 2026-07-15
+## [0.5.3] - 2026-07-15
 
 ### Changed
 
 - Replaced Shepherd-built Caddy and PostgreSQL wrapper images with digest-pinned
   official Traefik 3.7 and PostgreSQL 16 images.
 - Reduced the release surface to the three Shepherd-owned application images. Release
-  CI now scans the exact upstream Traefik and PostgreSQL manifests on amd64 and arm64
-  without republishing them.
+  CI resolves amd64 and arm64 child manifests from the pinned upstream Traefik and
+  PostgreSQL indexes, scans each exact digest, and never republishes them.
 - Moved bundled routing, WebSocket forwarding, HTTPS redirects, security headers, and
   private-HTTP policy to reusable Traefik file-provider templates. The edge uses no
   Docker provider, Docker socket, dashboard, or anonymous telemetry.
@@ -215,8 +215,8 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.2...HEAD
-[0.5.2]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.2
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.3
 [0.5.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.1
 [0.5.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.0
 [0.4.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.1

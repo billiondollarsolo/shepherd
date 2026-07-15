@@ -255,9 +255,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .trivy-cache trivy-reports
+          manifest_json="$(docker manifest inspect "$IMAGE")"
+          repository="${IMAGE%%@*}"
           for platform in linux/amd64 linux/arm64; do
             platform_slug="${platform//\//-}"
-            docker pull --platform "$platform" "$IMAGE"
+            platform_os="${platform%/*}"
+            platform_arch="${platform#*/}"
+            platform_digest="$(
+              jq -er --arg os "$platform_os" --arg arch "$platform_arch" \
+                '[.manifests[] | select(.platform.os == $os and .platform.architecture == $arch) | .digest][0]' \
+                <<<"$manifest_json"
+            )"
+            platform_image="$repository@$platform_digest"
+            docker pull --platform "$platform" "$platform_image"
             docker run --rm --user 0 \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
@@ -265,7 +275,7 @@ jobs:
               aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
               --platform "$platform" --scanners vuln --format json \
               --output "/reports/${REPORT}-${platform_slug}-full.json" \
-              --severity HIGH,CRITICAL "$IMAGE"
+              --severity HIGH,CRITICAL "$platform_image"
             docker run --rm --user 0 \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
@@ -273,7 +283,7 @@ jobs:
               aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
               --platform "$platform" --exit-code 1 --quiet --scanners vuln \
               --ignorefile /workspace/.trivyignore.yaml \
-              --severity HIGH,CRITICAL "$IMAGE"
+              --severity HIGH,CRITICAL "$platform_image"
           done
 
       - name: Upload upstream scan evidence

@@ -77,7 +77,7 @@ docker compose config --quiet
 # which would prevent Traefik (or an external proxy) from taking ownership.
 RETIRED_EDGE_CONTAINER="$(docker compose ps --all -q caddy 2>/dev/null | head -n1 || true)"
 
-# v0.5.2 replaces Caddy's local CA with upstream Traefik. A bundled-TLS
+# v0.5.3 replaces Caddy's local CA with upstream Traefik. A bundled-TLS
 # localhost/IP installation must deliberately select private HTTP or configure a
 # real certificate-bearing DNS name; silently starting an unusable edge is worse.
 current_compose_json="$(docker compose config --format json)"
@@ -89,7 +89,7 @@ if [[ "$current_mode" == builtin-tls ]] && {
     [[ "$current_domain" == *:* ]]
 }; then
   cat >&2 <<'EOF'
-This installation uses bundled TLS with localhost or a raw IP. Shepherd 0.5.2 moves to
+This installation uses bundled TLS with localhost or a raw IP. Shepherd 0.5.3 moves to
 upstream Traefik, which intentionally does not mint a host-local CA certificate.
 Before upgrading, choose one supported edge:
   - a real DNS name with bundled/external TLS, or

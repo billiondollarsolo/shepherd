@@ -140,9 +140,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.node-runtime
       args:
-        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.2}
+        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.3}
         VCS_REF: ${FLOCK_VCS_REF:-unknown}
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.2}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.3}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -200,7 +200,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.2}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.3}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -327,7 +327,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.2}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.3}
     restart: unless-stopped
     read_only: true
     security_opt:
