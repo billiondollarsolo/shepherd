@@ -55,11 +55,11 @@ export function BottomBar(): JSX.Element {
               </span>
             </>
           ) : (
-            <span className="opacity-60">…</span>
+            <span>…</span>
           )}
         </button>
       ) : (
-        <span className="opacity-60">No node</span>
+        <span>No node</span>
       )}
 
       {session ? (
