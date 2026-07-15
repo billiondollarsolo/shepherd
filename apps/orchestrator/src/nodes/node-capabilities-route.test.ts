@@ -185,4 +185,141 @@ describe('node capabilities routes', () => {
     });
     await app.close();
   });
+
+  it('validates node ids before invoking any capability operation', async () => {
+    const inspect = vi.fn<NodeCapabilitiesRouteDeps['inspect']>();
+    const installTool = vi.fn<NodeCapabilitiesRouteDeps['installTool']>();
+    const configureDocker = vi.fn<NodeCapabilitiesRouteDeps['configureDocker']>();
+    const app = appFor({ inspect, installTool, configureDocker });
+
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/nodes/not-a-uuid/capabilities', headers }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/nodes/not-a-uuid/tools/install',
+          headers,
+          payload: { tool: 'amp', confirm: 'INSTALL' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/nodes/not-a-uuid/docker',
+          headers,
+          payload: { action: 'install', confirm: 'INSTALL DOCKER' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(inspect).not.toHaveBeenCalled();
+    expect(installTool).not.toHaveBeenCalled();
+    expect(configureDocker).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('distinguishes unavailable inventory, missing nodes, and a busy node', async () => {
+    const missingApp = appFor({
+      inspect: async () => null,
+      installTool: async () => null,
+      configureDocker: async () => null,
+    });
+    expect(
+      (
+        await missingApp.inject({
+          method: 'GET',
+          url: `/api/nodes/${NODE_ID}/capabilities`,
+          headers,
+        })
+      ).statusCode,
+    ).toBe(503);
+    expect(
+      (
+        await missingApp.inject({
+          method: 'POST',
+          url: `/api/nodes/${NODE_ID}/tools/install`,
+          headers,
+          payload: { tool: 'amp', confirm: 'INSTALL' },
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(
+      (
+        await missingApp.inject({
+          method: 'POST',
+          url: `/api/nodes/${NODE_ID}/docker`,
+          headers,
+          payload: { action: 'install', confirm: 'INSTALL DOCKER' },
+        })
+      ).statusCode,
+    ).toBe(404);
+    await missingApp.close();
+
+    const unavailableApp = appFor({
+      inspect: async () => {
+        throw new NodeCapabilityOperationError('node_unavailable', 'Node is offline.');
+      },
+      installTool: async () => {
+        throw new NodeCapabilityOperationError('operation_in_progress', 'Node is busy.');
+      },
+    });
+    expect(
+      (
+        await unavailableApp.inject({
+          method: 'GET',
+          url: `/api/nodes/${NODE_ID}/capabilities`,
+          headers,
+        })
+      ).statusCode,
+    ).toBe(503);
+    expect(
+      (
+        await unavailableApp.inject({
+          method: 'POST',
+          url: `/api/nodes/${NODE_ID}/tools/install`,
+          headers,
+          payload: { tool: 'amp', confirm: 'INSTALL' },
+        })
+      ).statusCode,
+    ).toBe(409);
+    await unavailableApp.close();
+  });
+
+  it('lets unexpected failures reach the global error boundary', async () => {
+    const app = appFor({
+      inspect: async () => {
+        throw new Error('unexpected');
+      },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/nodes/${NODE_ID}/capabilities`,
+      headers,
+    });
+    expect(response.statusCode).toBe(500);
+    await app.close();
+  });
+
+  it('returns structured Docker operation failures', async () => {
+    const app = appFor({
+      configureDocker: async () => {
+        throw new NodeCapabilityOperationError('operation_failed', 'Docker setup failed.');
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/nodes/${NODE_ID}/docker`,
+      headers,
+      payload: { action: 'install', confirm: 'INSTALL DOCKER' },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      error: { code: 'operation_failed', message: 'Docker setup failed.' },
+    });
+    await app.close();
+  });
 });
