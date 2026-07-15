@@ -1,7 +1,7 @@
 # PostgreSQL with a current gosu build. The glibc-based upstream image is kept
 # so existing Shepherd 0.3.x data volumes retain compatible collation semantics;
 # only its stale Go-compiled privilege-drop helper is replaced.
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS gosu-build
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS gosu-build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /build
@@ -10,7 +10,7 @@ RUN go mod init shepherd.local/gosu-build \
     && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
         go build -trimpath -ldflags="-s -w" -o /out/gosu github.com/tianon/gosu
 
-FROM postgres:16-bookworm@sha256:da788743d2060767375896de4d646f7576f5911461444b372616f19ea61db2ec
+FROM postgres:18-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296
 LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
       org.opencontainers.image.licenses="MIT"
 COPY --from=gosu-build /out/gosu /usr/local/bin/gosu
