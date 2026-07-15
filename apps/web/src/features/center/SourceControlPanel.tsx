@@ -37,21 +37,14 @@ import {
   useUnstageFiles,
 } from '../../data/queries';
 import { fetchSessionDiff } from './diffApi';
-import { isEmptyDiff, parseDiff, type DiffLineKind } from './diffLines';
-
-const LINE_CLASS: Record<DiffLineKind, string> = {
-  add: 'text-diff-add',
-  remove: 'text-diff-remove',
-  hunk: 'text-flock-accent',
-  meta: 'text-flock-muted',
-  context: 'text-flock-fg',
-};
+import { DiffBody } from './DiffTab';
+import { isEmptyDiff, parseDiff } from './diffLines';
 
 /** Single-letter badge per change kind (matches git's short status letters). */
 const KIND_BADGE: Record<GitFileStatus['kind'], { letter: string; cls: string }> = {
-  added: { letter: 'A', cls: 'text-diff-add' },
+  added: { letter: 'A', cls: 'text-flock-diff-add-fg' },
   modified: { letter: 'M', cls: 'text-flock-accent' },
-  deleted: { letter: 'D', cls: 'text-diff-remove' },
+  deleted: { letter: 'D', cls: 'text-flock-diff-remove-fg' },
   renamed: { letter: 'R', cls: 'text-flock-accent' },
   copied: { letter: 'C', cls: 'text-flock-accent' },
   typechange: { letter: 'T', cls: 'text-flock-accent' },
@@ -436,15 +429,9 @@ function FileDiffPreview({
         ) : isEmptyDiff(preview.data?.diff ?? '') ? (
           <Centered testid="sc-preview-empty">No changes for this file.</Centered>
         ) : (
-          <pre className="m-0 min-w-full p-3 font-mono text-xs leading-relaxed">
-            <code>
-              {parseDiff(preview.data!.diff).map((line, i) => (
-                <div key={i} className={`whitespace-pre ${LINE_CLASS[line.kind]}`}>
-                  {line.text === '' ? ' ' : line.text}
-                </div>
-              ))}
-            </code>
-          </pre>
+          <div className="py-3">
+            <DiffBody lines={parseDiff(preview.data!.diff)} />
+          </div>
         )}
       </div>
     </div>

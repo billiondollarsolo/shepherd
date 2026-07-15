@@ -16,6 +16,7 @@ import { usePaddock } from '../../store/paddock';
 import { useWriteNodeFile } from '../../data/queries';
 import { bytesToBase64 } from '../files/base64';
 import { toast } from '../../components/ui';
+import { TERMINAL_BG_VAR } from './termTheme';
 
 const Terminal = lazy(() => import('./Terminal'));
 
@@ -83,8 +84,9 @@ export function TerminalArea({
         <Suspense
           fallback={
             <div
-              className="flex h-full items-center justify-center bg-[#090909] text-xs text-[#a1a1aa]"
+              className="flex h-full items-center justify-center text-xs text-flock-ink-muted"
               role="status"
+              style={{ backgroundColor: TERMINAL_BG_VAR }}
             >
               Loading terminal…
             </div>

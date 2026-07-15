@@ -255,7 +255,7 @@ function FileViewer({
             onClick={save}
             disabled={write.isPending}
             data-testid="file-save"
-            className="flex items-center gap-1 rounded bg-flock-accent px-2 py-0.5 text-2xs font-medium text-white disabled:opacity-50"
+            className="flex items-center gap-1 rounded bg-flock-accent px-2 py-0.5 text-2xs font-medium text-[var(--flock-accent-foreground)] disabled:opacity-50"
           >
             <Save className="size-3" /> {write.isPending ? 'Saving…' : 'Save'}
           </button>

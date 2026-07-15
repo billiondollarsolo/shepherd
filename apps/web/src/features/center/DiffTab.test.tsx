@@ -8,10 +8,16 @@
  *   - surfaces an error state on a non-2xx response;
  *   - includes the session id in the requested URL.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 import DiffTab from './DiffTab';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // Unmount + clear the jsdom document between tests so rendered diff nodes do not
 // leak across this file OR into later test files (no global auto-cleanup).
@@ -83,5 +89,66 @@ describe('DiffTab (US-33)', () => {
 
     const err = await screen.findByTestId('diff-error');
     expect(err).toHaveTextContent('not a git repository');
+  });
+});
+
+/**
+ * Regression guard for the "monochrome diff" bug: the add/remove rows MUST carry
+ * the real, resolving diff tokens. The class name is only half the chain — this
+ * also verifies the tailwind binding and the per-theme CSS var exist, so a class
+ * can never silently no-op (resolve to nothing) again the way `text-diff-add`
+ * did before Phase 1.
+ */
+describe('DiffTab diff-token wiring (Phase 4.1)', () => {
+  it('renders add/remove rows with line-tint + saturated-foreground tokens', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        sessionId: SESSION_ID,
+        diff: SAMPLE_DIFF,
+        generatedAt: '2026-05-29T01:00:00.000Z',
+      }),
+    );
+
+    render(<DiffTab sessionId={SESSION_ID} fetchImpl={fetchImpl as unknown as typeof fetch} />);
+    const view = await screen.findByTestId('diff-view');
+
+    const addRow = view.querySelector('[data-diff-kind="add"]')!;
+    expect(addRow.className).toContain('bg-flock-diff-add');
+    expect(addRow.className).toContain('text-flock-diff-add-fg');
+
+    const removeRow = view.querySelector('[data-diff-kind="remove"]')!;
+    expect(removeRow.className).toContain('bg-flock-diff-remove');
+    expect(removeRow.className).toContain('text-flock-diff-remove-fg');
+
+    // Hunk headers keep the accent (no tint).
+    expect(view.querySelector('[data-diff-kind="hunk"]')!.className).toContain('text-flock-accent');
+  });
+
+  it('binds those diff classes to real CSS variables in the tailwind config', () => {
+    const twConfig = readFileSync(resolve(HERE, '../../../tailwind.config.cjs'), 'utf8');
+    // bg-flock-diff-add / bg-flock-diff-remove come from the `colors` map…
+    expect(twConfig).toContain("'flock-diff-add': 'var(--flock-diff-add)'");
+    expect(twConfig).toContain("'flock-diff-remove': 'var(--flock-diff-remove)'");
+    // …and text-flock-diff-add-fg / -remove-fg from the *-fg entries.
+    expect(twConfig).toContain("'flock-diff-add-fg': 'var(--flock-diff-add-fg)'");
+    expect(twConfig).toContain("'flock-diff-remove-fg': 'var(--flock-diff-remove-fg)'");
+  });
+
+  it('defines each diff variable with a real value in BOTH themes', () => {
+    const themeCss = readFileSync(resolve(HERE, '../../styles/theme.css'), 'utf8');
+    for (const name of [
+      '--flock-diff-add',
+      '--flock-diff-remove',
+      '--flock-diff-add-fg',
+      '--flock-diff-remove-fg',
+    ]) {
+      // A definition must exist for BOTH the light root and the dark override
+      // (each var appears in the light `:root` and again under dark), and every
+      // occurrence must assign a non-empty value — an empty var re-introduces the
+      // no-op the tokens are meant to prevent.
+      const decls = [...themeCss.matchAll(new RegExp(`${name}:\\s*([^;]+);`, 'g'))];
+      expect(decls.length).toBeGreaterThanOrEqual(2);
+      for (const d of decls) expect(d[1]!.trim().length).toBeGreaterThan(0);
+    }
   });
 });

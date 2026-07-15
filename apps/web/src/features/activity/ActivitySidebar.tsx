@@ -195,7 +195,7 @@ function NoteEditor({
 
 /** Glyph + tailwind tone per plan-item status (calm Codex density). */
 const PLAN_MARK: Record<PlanItem['status'], { glyph: string; cls: string }> = {
-  completed: { glyph: '✓', cls: 'text-diff-add' },
+  completed: { glyph: '✓', cls: 'text-flock-diff-add-fg' },
   in_progress: { glyph: '◐', cls: 'text-flock-accent' },
   pending: { glyph: '○', cls: 'text-flock-muted' },
 };

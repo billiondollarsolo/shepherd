@@ -19,7 +19,7 @@
  * size). The xterm + WS factories are injectable so this is unit-testable.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Terminal as XTerm, type ITerminalOptions, type ITheme } from '@xterm/xterm';
+import { Terminal as XTerm, type ITerminalOptions } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -29,6 +29,12 @@ import '@xterm/xterm/css/xterm.css';
 import { usePtyWebSocket, type WsFactory } from './usePtyWebSocket';
 import { loadTerminalFont } from '../../styles/terminal-fonts';
 import { stripTerminalReports } from './vt-reports';
+import {
+  buildTerminalTheme,
+  observeThemeChange,
+  prefersReducedMotion,
+  TERMINAL_BG_VAR,
+} from './termTheme';
 
 /** Minimal xterm surface used here (lets tests inject a fake terminal). */
 export interface XtermLike {
@@ -88,43 +94,8 @@ export interface TerminalProps {
   initialCommand?: string;
 }
 
-/** The single terminal background, shared by xterm AND the wrapper so the
- *  unfilled letterbox margin blends in (no mismatched border). */
-const TERMINAL_BG = '#090909';
-
-/**
- * A polished, widely-loved 16-colour palette (One Dark family) on the Shepherd dark
- * background. Tuned for legibility + matching the paddock's accent so the
- * terminal feels native to the app, not bolted on.
- */
-const THEME: ITheme = {
-  background: TERMINAL_BG,
-  foreground: '#c8ccd4',
-  cursor: '#e6e6e6',
-  cursorAccent: TERMINAL_BG,
-  selectionBackground: '#3a4860',
-  selectionForeground: '#ffffff',
-  black: '#3f4451',
-  red: '#e06c75',
-  green: '#98c379',
-  yellow: '#e5c07b',
-  blue: '#61afef',
-  magenta: '#c678dd',
-  cyan: '#56b6c2',
-  white: '#c8ccd4',
-  brightBlack: '#5c6370',
-  brightRed: '#ef7780',
-  brightGreen: '#a6d189',
-  brightYellow: '#f0ca8a',
-  brightBlue: '#74bdf2',
-  brightMagenta: '#d49ae6',
-  brightCyan: '#6cc7d6',
-  brightWhite: '#ffffff',
-};
-
 const DEFAULT_OPTS: ITerminalOptions = {
   convertEol: false,
-  cursorBlink: true,
   cursorStyle: 'block',
   cursorInactiveStyle: 'outline',
   // A LITERAL stack — never a CSS var(). xterm applies this both as an inline
@@ -153,7 +124,9 @@ const DEFAULT_OPTS: ITerminalOptions = {
   allowProposedApi: true,
   // Let the agent (not the browser) own right-click etc.; allow native selection.
   rightClickSelectsWord: true,
-  theme: THEME,
+  // cursorBlink + theme are applied at creation time (below) from live tokens:
+  // cursorBlink is gated on prefers-reduced-motion, and the palette is built from
+  // the --flock-term-* CSS vars so the terminal follows the app theme.
 };
 
 export default function Terminal({
@@ -234,7 +207,13 @@ export default function Terminal({
 
     const usingFake = xtermFactory !== undefined;
     const make: XtermFactory = xtermFactory ?? ((opts) => new XTerm(opts) as unknown as XtermLike);
-    const term = make(DEFAULT_OPTS);
+    // Build the palette from the live --flock-term-* vars (CSS is loaded by now,
+    // this being a layout effect) and gate the blinking cursor on reduced-motion.
+    const term = make({
+      ...DEFAULT_OPTS,
+      cursorBlink: !prefersReducedMotion(),
+      theme: buildTerminalTheme(),
+    });
     const fit = new FitAddon();
     term.loadAddon(fit);
     termRef.current = term;
@@ -450,8 +429,18 @@ export default function Terminal({
     const outer = outerRef.current;
     if (outer) io?.observe(outer);
 
+    // Re-theme on toggle: rebuild the palette from the (now-updated) --flock-term-*
+    // vars whenever the ThemeProvider flips `data-theme`. Reading here — after the
+    // attribute change — avoids capturing stale values from before the switch.
+    const unobserveTheme = observeThemeChange(() => {
+      if (disposed) return;
+      const themed = term as unknown as { options?: { theme?: ITerminalOptions['theme'] } };
+      if (themed.options) themed.options.theme = buildTerminalTheme();
+    });
+
     return () => {
       disposed = true;
+      unobserveTheme();
       cancelAnimationFrame(raf);
       clearTimeout(t);
       if (resizeTimer) clearTimeout(resizeTimer);
@@ -533,7 +522,7 @@ export default function Terminal({
       data-session-id={sessionId}
       data-pty-state={state}
       data-blank-suspect={blankSuspect ? '1' : '0'}
-      style={{ backgroundColor: TERMINAL_BG }}
+      style={{ backgroundColor: TERMINAL_BG_VAR }}
     >
       <div
         ref={containerRef}
@@ -544,14 +533,14 @@ export default function Terminal({
       {state === 'exited' ? (
         <div
           data-testid="terminal-status"
-          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-black/70 px-3 py-1.5 text-xs text-white"
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-flock-surface-1/90 px-3 py-1.5 text-xs text-flock-ink-primary ring-1 ring-flock-border"
         >
           Process exited — the session has ended.
         </div>
       ) : state !== 'open' ? (
         <div
           data-testid="terminal-status"
-          className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white"
+          className="pointer-events-none absolute right-2 top-2 rounded bg-flock-surface-1/90 px-2 py-0.5 text-xs text-flock-ink-muted ring-1 ring-flock-border"
         >
           {state === 'connecting' ? 'connecting…' : 'reconnecting…'}
         </div>
@@ -559,14 +548,14 @@ export default function Terminal({
       {blankSuspect && state === 'open' ? (
         <div
           data-testid="terminal-blank-recover"
-          className="absolute inset-x-2 bottom-2 z-10 flex items-center justify-between gap-2 rounded-md border border-status-awaiting/40 bg-black/80 px-3 py-2 text-xs text-white shadow-lg"
+          className="absolute inset-x-2 bottom-2 z-10 flex items-center justify-between gap-2 rounded-md border border-status-awaiting/40 bg-flock-surface-1/95 px-3 py-2 text-xs text-flock-ink-primary shadow-lg"
         >
-          <span className="min-w-0 truncate text-flock-ink-muted" style={{ color: '#c8ccd4' }}>
+          <span className="min-w-0 truncate text-flock-ink-muted">
             {lastError ?? 'Pane looks blank.'} Try recovering the PTY attach.
           </span>
           <button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded bg-flock-accent px-2.5 py-1 font-medium text-white hover:brightness-110"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded bg-flock-accent px-2.5 py-1 font-medium text-[var(--flock-accent-foreground)] hover:brightness-110"
             onClick={onRecover}
           >
             <RefreshCw className="size-3.5" />

@@ -26,6 +26,42 @@
   height: 0;
 }
 
+/*
+ * Global thin, themed scrollbars. ~25 app scroll surfaces (sidebars, lists,
+ * panels, menus) otherwise fall back to the bright native OS scrollbar, which
+ * breaks the calm surface ramp in both light and dark. The thumb rides the
+ * surface-3 step and brightens to the strong hairline on hover.
+ *
+ * The terminal (.xterm) owns its own scroll chrome — its more specific rules
+ * above (scrollbar-width: none / width: 0) win over these universal rules, so
+ * the terminal is excluded and never restyled here.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--flock-surface-3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--flock-surface-3);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--flock-border-strong);
+}
+
 /* The terminal owns its cell geometry. Only make its outer shell fill the pane;
    stretching screen/row/span render layers corrupts cursor and selection size. */
 .xterm {

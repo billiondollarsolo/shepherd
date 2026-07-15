@@ -20,7 +20,7 @@
   gap: 0.75rem;
   height: 28px;
   padding: 0 0.5rem;
-  border-bottom: 1px solid var(--flock-muted, #24262e);
+  border-bottom: 1px solid var(--flock-border, #24262e);
   font-size: 12px;
   user-select: none;
 }
@@ -62,7 +62,7 @@
 
 .flock-shell-drawer__close:hover {
   color: var(--flock-fg, #e6e6e6);
-  background: var(--flock-muted, #24262e);
+  background: var(--flock-surface-2, #24262e);
 }
 
 .flock-shell-drawer__close:focus-visible {

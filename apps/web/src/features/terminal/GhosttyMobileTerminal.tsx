@@ -6,8 +6,13 @@ import {
   TERMINAL_SYMBOL_FONT_FAMILY,
 } from '../../styles/terminal-fonts';
 import { usePtyWebSocket } from './usePtyWebSocket';
+import {
+  buildTerminalTheme,
+  observeThemeChange,
+  prefersReducedMotion,
+  TERMINAL_BG_VAR,
+} from './termTheme';
 
-const TERMINAL_BG = '#090909';
 const SCROLLBACK_LINES = 10_000;
 
 type GhosttyModule = typeof import('ghostty-web');
@@ -48,24 +53,27 @@ export default function GhosttyMobileTerminal({
     let disposed = false;
     let created: Runtime | null = null;
 
+    // Re-theme on toggle: rebuild the palette from the updated --flock-term-* vars
+    // whenever `data-theme` flips (reading after the change, never stale values).
+    const unobserveTheme = observeThemeChange(() => {
+      if (disposed || !created) return;
+      created.terminal.options.theme = buildTerminalTheme();
+    });
+
     void ensureGhostty()
       .then(({ FitAddon: GhosttyFitAddon, Terminal }) => {
         if (disposed) return;
         const terminal = new Terminal({
-          cursorBlink: true,
+          // Gate the blinking cursor on reduced-motion.
+          cursorBlink: !prefersReducedMotion(),
           cursorStyle: 'block',
           fontFamily: `'${TERMINAL_FONT_FAMILY}', '${TERMINAL_SYMBOL_FONT_FAMILY}', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`,
           fontSize: 14,
           scrollback: SCROLLBACK_LINES,
           smoothScrollDuration: 0,
-          theme: {
-            background: TERMINAL_BG,
-            foreground: '#c8ccd4',
-            cursor: '#e6e6e6',
-            cursorAccent: TERMINAL_BG,
-            selectionBackground: '#3a4860',
-            selectionForeground: '#ffffff',
-          },
+          // Palette built from the live --flock-term-* vars (shared with desktop
+          // xterm) so the mobile terminal follows the app theme.
+          theme: buildTerminalTheme(),
         });
         const fit = new GhosttyFitAddon();
         terminal.loadAddon(fit);
@@ -87,6 +95,7 @@ export default function GhosttyMobileTerminal({
 
     return () => {
       disposed = true;
+      unobserveTheme();
       setRuntime(null);
       created?.fit.dispose();
       created?.terminal.dispose();
@@ -98,7 +107,7 @@ export default function GhosttyMobileTerminal({
     <div
       className="relative h-full w-full overflow-hidden"
       data-testid="ghostty-mobile-terminal"
-      style={{ backgroundColor: TERMINAL_BG }}
+      style={{ backgroundColor: TERMINAL_BG_VAR }}
     >
       <div ref={hostRef} className="h-full w-full touch-none" />
       {runtime ? (
@@ -364,7 +373,7 @@ function TerminalNotice({
 }): JSX.Element {
   return (
     <div
-      className={`absolute inset-x-2 bottom-2 rounded bg-black/75 px-2 py-1 text-center text-2xs ${tone === 'error' ? 'text-status-error' : 'text-white/70'}`}
+      className={`absolute inset-x-2 bottom-2 rounded bg-flock-surface-1/90 px-2 py-1 text-center text-2xs ring-1 ring-flock-border ${tone === 'error' ? 'text-status-error' : 'text-flock-ink-muted'}`}
     >
       {children}
     </div>

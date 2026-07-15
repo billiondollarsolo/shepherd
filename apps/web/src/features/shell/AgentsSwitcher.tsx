@@ -212,7 +212,7 @@ export function AgentsSwitcher(): JSX.Element {
           >
             {penMode ? (
               <div
-                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-ink-primary' : 'text-flock-ink-muted'}`}
+                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-ink-primary' : 'text-flock-ink-muted'}`}
               >
                 <button
                   type="button"
@@ -365,11 +365,11 @@ export function AgentsSwitcher(): JSX.Element {
                       }}
                       title="Drag to move between Pens; Alt+Up/Down reorders; click to focus"
                       aria-label={`${item.label}; Alt+Up or Alt+Down reorders within this Pen`}
-                      className={`flex min-w-0 flex-1 cursor-grab items-start gap-1.5 py-2 pl-1.5 text-left text-[15px] active:cursor-grabbing ${
+                      className={`flex min-w-0 flex-1 cursor-grab items-start gap-1.5 py-2 pl-1.5 text-left text-sm active:cursor-grabbing ${
                         active ? 'bg-flock-accent/10' : ''
                       }`}
                     >
-                      <GripVertical className="size-3.5 shrink-0 self-center text-flock-ink-muted/45 transition-colors group-hover:text-flock-ink-muted" />
+                      <GripVertical className="size-3.5 shrink-0 self-center text-flock-ink-muted opacity-0 transition-opacity group-hover:opacity-100" />
                       <StatusDot status={item.status} className="self-center" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
