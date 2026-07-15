@@ -113,7 +113,10 @@ jq -e --arg version "$TARGET" '
 docker compose --env-file .env -f "$DEPLOY/docker-compose.yml" config --quiet
 
 HAS_RUNTIME=0
-if docker compose config --services | grep -qx node-runtime; then HAS_RUNTIME=1; fi
+# Inspect created project containers, not only the current Compose definition.
+# An operator commonly pulls newer deployment files before running this helper;
+# a newly defined service is still a legacy topology until its container exists.
+if docker compose ps --all --services | grep -qx node-runtime; then HAS_RUNTIME=1; fi
 LEGACY=$((1 - HAS_RUNTIME))
 CURRENT_RUNTIME_VERSION="$(sed -n 's/^FLOCK_NODE_RUNTIME_VERSION=//p' .env | tail -n1)"
 if [[ -z "$CURRENT_RUNTIME_VERSION" && $HAS_RUNTIME -eq 1 ]]; then CURRENT_RUNTIME_VERSION="$OLD_VERSION"; fi
