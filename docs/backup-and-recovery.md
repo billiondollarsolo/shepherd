@@ -24,10 +24,10 @@ pass it through an already-open file descriptor:
 install -m 0600 /dev/null /tmp/flock-vault-password
 $EDITOR /tmp/flock-vault-password
 docker compose exec -T orchestrator sh -lc \
-  'FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault create /backups/flock.flockvault 3<&0' \
+  'FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js create /backups/flock.flockvault 3<&0' \
   < /tmp/flock-vault-password
 docker compose exec -T orchestrator sh -lc \
-  'FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault verify /backups/flock.flockvault 3<&0' \
+  'FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js verify /backups/flock.flockvault 3<&0' \
   < /tmp/flock-vault-password
 ```
 
@@ -46,7 +46,7 @@ operator explicitly supplies `--allow-active`:
 ```bash
 docker compose stop caddy web orchestrator
 docker compose run --rm -T orchestrator sh -lc \
-  'FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault restore /backups/flock.flockvault \
+  'FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js restore /backups/flock.flockvault \
     --rollback-output /backups/pre-restore.flockvault 3<&0' \
   < /tmp/flock-vault-password
 docker compose up -d --wait

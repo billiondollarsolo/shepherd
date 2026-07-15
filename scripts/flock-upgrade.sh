@@ -217,9 +217,9 @@ if ((SKIP_BACKUP == 0)); then
   mode="$(stat -c %a "$PASSWORD_FILE")"; [[ "$mode" == 600 || "$mode" == 400 ]] || { echo "Vault password file must be 0600 or 0400." >&2; exit 1; }
   BACKUP="/backups/pre-upgrade-$OLD_VERSION-to-$TARGET-$STAMP.flockvault"
   docker compose exec -T orchestrator sh -lc \
-    "HOME=/home/flock-control FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault create '$BACKUP' 3<&0" < "$PASSWORD_FILE"
+    "FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js create '$BACKUP' 3<&0" < "$PASSWORD_FILE"
   docker compose exec -T orchestrator sh -lc \
-    "HOME=/home/flock-control FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault verify '$BACKUP' 3<&0" < "$PASSWORD_FILE"
+    "FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js verify '$BACKUP' 3<&0" < "$PASSWORD_FILE"
 else
   BACKUP='skipped by operator'; echo "WARNING: proceeding without a verified database vault." >&2
 fi
