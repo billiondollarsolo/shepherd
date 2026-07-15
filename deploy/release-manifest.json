@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "topologyGeneration": 2,
+  "controlPlaneVersion": "0.5.0",
+  "runtime": {
+    "preferredVersion": "0.5.0",
+    "minimumVersion": "0.5.0",
+    "requiredCapabilities": ["exec_v1", "tcp_tunnel_v1"]
+  },
+  "services": ["orchestrator", "node-runtime", "web", "caddy", "postgres"],
+  "upgradeScript": "scripts/flock-upgrade.sh"
+}

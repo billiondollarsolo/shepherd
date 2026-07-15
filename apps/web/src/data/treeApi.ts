@@ -33,6 +33,7 @@ import {
   PreviewRoutingTestResponse as PreviewRoutingTestResponseSchema,
   SessionPlanResponse as SessionPlanResponseSchema,
   SessionResponse as SessionResponseSchema,
+  TerminateSessionResponse as TerminateSessionResponseSchema,
   type CreateNodeRequest,
   type CreateProjectRequest,
   type CreateSessionRequest,
@@ -67,6 +68,7 @@ import {
   type NodeResponse,
   type NodeEnvResponse,
   type SessionResponse,
+  type TerminateSessionResponse,
   type UpdateSessionRequest,
   type UpdateNodeRequest,
   type UpdateProjectAgentPolicyRequest,
@@ -274,8 +276,11 @@ export function createSession(input: CreateSessionRequest): Promise<CreateSessio
     schema: CreateSessionResponseSchema,
   });
 }
-export function terminateSession(id: string): Promise<void> {
-  return apiRequest(`/api/sessions/${id}`, { method: 'DELETE', response: 'void' });
+export function terminateSession(id: string): Promise<TerminateSessionResponse> {
+  return apiRequest(`/api/sessions/${id}`, {
+    method: 'DELETE',
+    schema: TerminateSessionResponseSchema,
+  });
 }
 export function updateSession(id: string, patch: UpdateSessionRequest): Promise<SessionResponse> {
   return apiRequest(`/api/sessions/${id}`, {

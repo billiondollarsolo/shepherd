@@ -26,7 +26,7 @@ import type {
   NodeFsTreeResponse,
 } from '@flock/shared';
 
-import type { NodeTransport } from './transport/transport.js';
+import type { NodeCommandTransport } from './transport/transport.js';
 
 /** Thrown when the node has no live transport (unreachable ssh node) → 422. */
 export class NodeUnreachableError extends Error {
@@ -49,7 +49,7 @@ export class NodePathError extends Error {
 
 /** Resolves the live {@link NodeTransport} for a node id (async; may connect). */
 export interface NodeFsTransportResolver {
-  transportForNode(nodeId: string): Promise<NodeTransport | null>;
+  transportForNode(nodeId: string): Promise<NodeCommandTransport | null>;
 }
 
 export interface NodeFsServiceOptions {

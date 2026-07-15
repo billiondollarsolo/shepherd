@@ -27,7 +27,7 @@ import type {
   GitStatusResponse,
 } from '@flock/shared';
 
-import type { ExecResult, NodeTransport } from '../nodes/transport/transport.js';
+import type { ExecResult, NodeCommandTransport } from '../nodes/transport/transport.js';
 import {
   DiffSessionNotFoundError,
   gitHasHeadArgv,
@@ -337,7 +337,7 @@ export class GitService {
 
   private async resolve(
     sessionId: string,
-  ): Promise<{ workingDir: string; transport: NodeTransport }> {
+  ): Promise<{ workingDir: string; transport: NodeCommandTransport }> {
     const session = await this.sessions.getSession(sessionId);
     if (!session) throw new DiffSessionNotFoundError(sessionId);
     const transport = await this.transports.transportForNode(session.nodeId);
@@ -346,7 +346,7 @@ export class GitService {
   }
 
   private async run(
-    transport: NodeTransport,
+    transport: NodeCommandTransport,
     workingDir: string,
     argv: string[],
     timeoutMs = this.timeoutMs,
@@ -361,7 +361,7 @@ export class GitService {
     return result;
   }
 
-  private async hasHead(transport: NodeTransport, workingDir: string): Promise<boolean> {
+  private async hasHead(transport: NodeCommandTransport, workingDir: string): Promise<boolean> {
     try {
       const r = await transport.exec(gitHasHeadArgv(workingDir), {
         cwd: workingDir,

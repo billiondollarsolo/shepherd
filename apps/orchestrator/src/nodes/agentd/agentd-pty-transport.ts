@@ -8,20 +8,19 @@
  * session id + spec, so `openPty()` (which carries no id) knows which daemon
  * session to open/subscribe. A `StringDecoder` reassembles multibyte UTF-8 across
  * chunk boundaries (PtySession re-encodes the string back to bytes), matching
- * node-pty's behaviour so glyphs/box-drawing never split.
+ * the prior local decoder behavior so glyphs/box-drawing never split.
  */
 import { StringDecoder } from 'node:string_decoder';
 
 import type {
-  ExecResult,
-  NodeTransport,
+  NodePtyTransport,
   OpenPtyOptions,
   PtyExit,
   PtyHandle,
 } from '../transport/transport.js';
 import type { AgentdSessionSpec, NodeAgentdClient } from './agentd-client.js';
 
-export class AgentdPtyTransport implements NodeTransport {
+export class AgentdPtyTransport implements NodePtyTransport {
   readonly kind = 'local' as const; // informational; the bytes are daemon-sourced
 
   /**
@@ -37,10 +36,6 @@ export class AgentdPtyTransport implements NodeTransport {
     private readonly spec: AgentdSessionSpec,
     private readonly opts: { attachOnly?: boolean } = {},
   ) {}
-
-  async exec(): Promise<ExecResult> {
-    throw new Error('AgentdPtyTransport: exec is not supported (PTY only)');
-  }
 
   async dispose(): Promise<void> {
     // The NodeAgentdClient is shared per node and owned elsewhere; nothing to do.

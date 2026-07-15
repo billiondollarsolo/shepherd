@@ -5,8 +5,8 @@ piece of behavior lives and how a session's data flows.
 
 ## The one-paragraph model
 
-Shepherd runs agents on **nodes** (machines you reach over SSH; one of them is the
-orchestrator's own host, the "local" node). Each node runs **`flock-agentd`**, a daemon
+Shepherd runs agents on **nodes** (machines reached over SSH plus a bundled isolated
+local runtime). Each node runs **`flock-agentd`**, a daemon
 that owns the agents' terminals and watches what they're doing. The **orchestrator** —
 the always-on brain — talks to every node's daemon, normalizes everything into one
 status + telemetry model, and serves a REST + WebSocket API. The **web** app is a thin
@@ -45,6 +45,9 @@ PTY live **inside the daemon**, not inside any client connection.
   read-only snapshot of loopback/wildcard HTTP candidates with short process, cwd, and
   known-session association. Older compatible daemons remain usable through manual
   project Port entry.
+- **Node operations.** Local Git/filesystem/workspace calls use bounded `exec_v1`;
+  Preview uses a separate, numeric-loopback-only `tcp_tunnel_v1`. Bulk traffic never
+  competes with the PTY/status control link.
 
 Why a purpose-built daemon instead of tmux: see [flock-agentd-design.md](flock-agentd-design.md).
 
@@ -97,8 +100,8 @@ orchestrator and web import these, so the wire shape is never duplicated.
 
 A **node** is a machine Shepherd can run agents on:
 
-- **local** — the orchestrator's own host. Reached via a unix socket to the bundled
-  `flock-agentd`.
+- **local** — the separate `node-runtime` container. It owns the daemon, workspaces,
+  tools, and live processes and is reached over a mutually authenticated Unix socket.
 - **SSH nodes** — any host you have SSH access to. The orchestrator bootstraps
   `flock-agentd` onto it, then reaches it over an SSH loopback channel. Credentials
   (key/passphrase/password) are stored encrypted.
@@ -132,9 +135,9 @@ Postgres is not involved in steps 2–4 — it only records the durable history.
 
 ## Persistence & failure model
 
-- **Sessions** live in `flock-agentd` on always-on nodes → survive client disconnects,
-  orchestrator restarts (it reconnects), and node daemon restarts (supervised; sessions
-  are re-attached where possible).
+- **Sessions** live in `flock-agentd` on always-on nodes → survive client disconnects
+  and orchestrator replacement. Runtime/daemon or host loss terminates live processes;
+  recovering PTYs across daemon death is separate work.
 - **Management state** (who/what/where) lives in Postgres.
 - Remote nodes' daemons run under a process supervisor; the orchestrator reconnects with
   backoff and re-establishes the hook tunnel (with retry) on reconnect.

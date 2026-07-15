@@ -118,6 +118,10 @@ export interface BuildServerDeps {
    * bottom status bar). Returns null when the node's daemon link is down.
    */
   nodeInfo?: (nodeId: string) => Promise<unknown | null>;
+  /** Classifies a failed node-info lookup without weakening the nullable data path. */
+  nodeInfoUnavailableScope?: (
+    nodeId: string,
+  ) => Promise<'local-runtime' | 'remote-node' | 'unknown'>;
   /** Read-only preparation/workspace/tool readiness for one execution node. */
   nodePreflight?: (nodeId: string) => Promise<unknown | null>;
   /**
@@ -432,6 +436,16 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
       const id = (req.params as { id: string }).id;
       const info = await nodeInfo(id);
       if (info == null) {
+        const scope = (await deps.nodeInfoUnavailableScope?.(id)) ?? 'unknown';
+        if (scope === 'local-runtime') {
+          return reply.code(503).send({
+            error: {
+              code: 'local_runtime_unavailable',
+              message:
+                'The bundled local runtime is unavailable. Existing local sessions cannot be reached until node-runtime is healthy.',
+            },
+          });
+        }
         return reply
           .code(503)
           .send({ error: { code: 'node_unreachable', message: 'node daemon link is down.' } });

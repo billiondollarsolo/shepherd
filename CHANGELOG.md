@@ -6,6 +6,35 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-15
+
+### Added
+
+- Added the separately pinned `shepherd-node-runtime` image, which owns the bundled
+  local daemon, coding-agent tools, workspaces, PTYs, bounded node commands, and
+  loopback Preview tunnels independently of the control plane.
+- Added authenticated `exec_v1` and `tcp_tunnel_v1` daemon capabilities with clean
+  runtime identity, process-group cancellation, output and time bounds, numeric-loopback
+  enforcement, backpressure, concurrency limits, idle timeout, and maximum lifetime.
+- Added signed/checksummed deployment bundles, topology generation metadata, separate
+  runtime image digests, and session-aware migration/upgrade tooling.
+
+### Changed
+
+- Local node status now follows the authenticated daemon link instead of being assumed
+  connected. The UI reports runtime compatibility, handshake time, active sessions, and
+  the exact operator-side maintenance command.
+- Control-plane upgrades preserve a compatible runtime container and live local agents;
+  release smoke proves the daemon and agent PID survive forced orchestrator replacement.
+- Removed the legacy orchestrator-local transport and `node-pty` dependency. Local Git,
+  diff, filesystem, workspace, hooks, metrics, and Preview operations cross agentd.
+
+### Security
+
+- The orchestrator no longer mounts the local runtime home or daemon state and no longer
+  contains coding-agent executables. The runtime has no published port, database network,
+  application secrets, or Docker socket and runs read-only with explicit capabilities.
+
 ## [0.4.1] - 2026-07-14
 
 ### Fixed
@@ -122,7 +151,8 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.0
 [0.4.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.1
 [0.4.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.0
 [0.3.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.3.1

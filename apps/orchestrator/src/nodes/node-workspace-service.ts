@@ -13,7 +13,7 @@
  * All scripts pass the dir + query POSITIONALLY (never interpolated into the
  * script text) so there's no shell injection.
  */
-import type { NodeTransport } from './transport/transport.js';
+import type { NodeCommandTransport } from './transport/transport.js';
 import type { NodeFsTransportResolver } from './node-fs-service.js';
 import { NodePathError, NodeUnreachableError } from './node-fs-service.js';
 
@@ -122,7 +122,7 @@ export class NodeWorkspaceService {
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
-  private async transport(nodeId: string): Promise<NodeTransport> {
+  private async transport(nodeId: string): Promise<NodeCommandTransport> {
     const t = await this.transports.transportForNode(nodeId);
     if (!t) throw new NodeUnreachableError(nodeId);
     return t;

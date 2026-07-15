@@ -40,6 +40,16 @@ Production JavaScript dependencies retain their upstream license files. Notably,
 `web-push` is distributed under the Mozilla Public License 2.0. A generated dependency
 SBOM accompanies release container images.
 
+## Edge proxy and DNS modules
+
+The edge image bundles [Caddy](https://github.com/caddyserver/caddy) and the
+[Cloudflare DNS module](https://github.com/caddy-dns/cloudflare), licensed under the
+Apache License 2.0, plus the [Route53 DNS module](https://github.com/caddy-dns/route53),
+copyright 2022 caddy-dns and licensed under the MIT License. Their complete license
+texts are installed under `/usr/share/licenses/shepherd/edge/` in the edge image.
+Transitive Go dependencies retain their upstream licenses and are enumerated in the
+release image SBOM.
+
 ## JetBrains Mono Nerd Font Mono
 
 The terminal includes patched JetBrains Mono webfonts from Nerd Fonts v3.4.0.

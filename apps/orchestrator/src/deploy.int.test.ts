@@ -26,11 +26,16 @@ const composePath = resolve(repoRoot, 'docker-compose.yml');
 const readmePath = resolve(repoRoot, 'README.md');
 const privateHttpComposePath = resolve(repoRoot, 'docker-compose.private-http.yml');
 const externalProxyComposePath = resolve(repoRoot, 'docker-compose.external-proxy.yml');
+const cloudflareDnsComposePath = resolve(repoRoot, 'docker-compose.dns-cloudflare.yml');
+const route53DnsComposePath = resolve(repoRoot, 'docker-compose.dns-route53.yml');
 const orchDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.orchestrator');
 const orchEntrypoint = resolve(repoRoot, 'docker', 'orchestrator-entrypoint.sh');
+const runtimeDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.node-runtime');
+const runtimeEntrypoint = resolve(repoRoot, 'docker', 'node-runtime-entrypoint.sh');
 const secretStager = resolve(repoRoot, 'docker', 'stage-secret.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
 const caddyDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.caddy');
+const caddyEntrypoint = resolve(repoRoot, 'docker', 'caddy-entrypoint.sh');
 const postgresDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.postgres');
 const envExample = resolve(repoRoot, '.env.example');
 const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
@@ -81,12 +86,21 @@ describe('US-38: production deploy artifacts exist', () => {
   it('ships a multi-stage orchestrator Dockerfile', () => {
     expect(existsSync(orchDockerfile)).toBe(true);
   });
+  it('ships the isolated local runtime image and entrypoint', () => {
+    expect(existsSync(runtimeDockerfile)).toBe(true);
+    expect(existsSync(runtimeEntrypoint)).toBe(true);
+  });
   it('ships a web Dockerfile that serves static assets', () => {
     expect(existsSync(webDockerfile)).toBe(true);
   });
   it('ships security-patched edge and database Dockerfiles', () => {
     expect(existsSync(caddyDockerfile)).toBe(true);
     expect(existsSync(postgresDockerfile)).toBe(true);
+  });
+  it('ships optional Cloudflare and Route53 DNS-01 profiles', () => {
+    expect(existsSync(cloudflareDnsComposePath)).toBe(true);
+    expect(existsSync(route53DnsComposePath)).toBe(true);
+    expect(existsSync(caddyEntrypoint)).toBe(true);
   });
   it('ships a .env.example template', () => {
     expect(existsSync(envExample)).toBe(true);
@@ -112,6 +126,16 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
     expect(compose).toMatch(/^\s{2}caddy:/m);
   });
 
+  it('declares an authenticated isolated node runtime dependency', () => {
+    expect(compose).toMatch(/^\s{2}node-runtime:/m);
+    expect(extractServiceBlock(compose, 'orchestrator')).toMatch(
+      /node-runtime:[\s\S]*condition:\s*service_healthy/,
+    );
+    expect(extractServiceBlock(compose, 'node-runtime')).toMatch(
+      /- flock-agentd[\s\S]*- probe[\s\S]*--secret-file/,
+    );
+  });
+
   it('orchestrator depends on postgres being healthy', () => {
     // depends_on with a health condition keeps Postgres off the boot race.
     expect(compose).toMatch(/depends_on:[\s\S]*postgres:[\s\S]*condition:\s*service_healthy/);
@@ -129,13 +153,19 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
 describe('NFR-DEP1: Docker access is absent and Preview is isolated', () => {
   const compose = read(composePath);
 
-  it('declares only the four production services', () => {
+  it('declares only the five production services', () => {
     const servicesBlock = extractTopLevelBlock(compose, 'services');
     const serviceNames = Array.from(
       servicesBlock.matchAll(/^\s{2}([a-z0-9_-]+):\s*$/gm),
       (m) => m[1],
     );
-    expect(serviceNames.sort()).toEqual(['caddy', 'orchestrator', 'postgres', 'web']);
+    expect(serviceNames.sort()).toEqual([
+      'caddy',
+      'node-runtime',
+      'orchestrator',
+      'postgres',
+      'web',
+    ]);
   });
 
   it('mounts no Docker socket into any service', () => {
@@ -153,7 +183,7 @@ describe('NFR-DEP1: Docker access is absent and Preview is isolated', () => {
   });
 
   it('hardens every long-running container', () => {
-    for (const service of ['caddy', 'postgres', 'orchestrator', 'web']) {
+    for (const service of ['caddy', 'node-runtime', 'postgres', 'orchestrator', 'web']) {
       const block = extractServiceBlock(compose, service);
       expect(block).toMatch(/read_only:\s*true/);
       expect(block).toMatch(/no-new-privileges:true/);
@@ -237,6 +267,8 @@ describe('explicit deployment modes', () => {
   const privateCompose = read(privateHttpComposePath);
   const externalCompose = read(externalProxyComposePath);
   const privateCaddy = read(privateHttpCaddyfile);
+  const cloudflareDnsCompose = read(cloudflareDnsComposePath);
+  const route53DnsCompose = read(route53DnsComposePath);
 
   it('keeps bundled TLS as the base-stack default', () => {
     expect(extractServiceBlock(compose, 'orchestrator')).toMatch(
@@ -251,6 +283,7 @@ describe('explicit deployment modes', () => {
     expect(privateCompose).toMatch(/Caddyfile\.private-http/);
     expect(privateCaddy).not.toMatch(/^\s*Strict-Transport-Security\s/m);
     expect(privateCaddy).not.toMatch(/Content-Security-Policy[^\n]*upgrade-insecure-requests/);
+    expect(privateCaddy).not.toMatch(/Cross-Origin-Opener-Policy/);
     expect(privateCaddy).toMatch(/Content-Security-Policy/);
     expect(privateCaddy).toMatch(/connect-src 'self' data:/);
     expect(privateCaddy).toMatch(/preview\.invalid/);
@@ -284,6 +317,23 @@ describe('explicit deployment modes', () => {
     expect(externalCompose).toMatch(/18081}:80/);
     expect(externalCompose).toMatch(/18082}:8081/);
   });
+
+  it('builds pinned DNS providers and loads their credentials from secret files', () => {
+    const edgeImage = read(caddyDockerfile);
+    const entrypoint = read(caddyEntrypoint);
+    expect(edgeImage).toMatch(/xcaddy\/cmd\/xcaddy@v0\.4\.6/);
+    expect(edgeImage).toMatch(/caddy-dns\/cloudflare@v0\.2\.4/);
+    expect(edgeImage).toMatch(/caddy-dns\/route53@v1\.6\.2/);
+    expect(edgeImage).toMatch(/\/out\/licenses \/usr\/share\/licenses\/shepherd\/edge\//);
+    expect(read(caddyfile)).toMatch(/import \/tmp\/shepherd-dns-provider\.caddy/);
+    expect(cloudflareDnsCompose).toMatch(/CF_API_TOKEN_FILE:\s*\/run\/secrets\//);
+    expect(route53DnsCompose).toMatch(/AWS_ACCESS_KEY_ID_FILE:\s*\/run\/secrets\//);
+    expect(route53DnsCompose).toMatch(/AWS_SECRET_ACCESS_KEY_FILE:\s*\/run\/secrets\//);
+    expect(entrypoint).toMatch(/acme_dns cloudflare \{env\.CF_API_TOKEN\}/);
+    expect(entrypoint).toMatch(/acme_dns route53/);
+    expect(cloudflareDnsCompose).not.toMatch(/^\s+CF_API_TOKEN:\s/m);
+    expect(route53DnsCompose).not.toMatch(/^\s+AWS_SECRET_ACCESS_KEY:\s/m);
+  });
 });
 
 describe('public deployment guidance', () => {
@@ -295,6 +345,9 @@ describe('public deployment guidance', () => {
     expect(readme).toMatch(/docker-compose\.private-http\.yml up -d --wait/);
     expect(readme).toMatch(/FLOCK_ALLOW_INSECURE_HTTP=1/);
     expect(readme).toMatch(/Private DNS with HTTP and Remote Preview/);
+    expect(readme).toMatch(/Optional DNS-01 with Cloudflare or Route53/);
+    expect(readme).toMatch(/docker-compose\.dns-cloudflare\.yml/);
+    expect(readme).toMatch(/docker-compose\.dns-route53\.yml/);
   });
 
   it('documents custom topology freedom without hiding the risk', () => {
@@ -318,29 +371,28 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     expect(orch).toMatch(/FROM\s+node:22/);
   });
 
-  it('installs runtime tools the orchestrator needs without legacy tmux', () => {
+  it('keeps only control-plane tools and no legacy local PTY runtime', () => {
     expect(orch).not.toMatch(/^\s*tmux\s*\\/m);
     expect(orch).toMatch(/openssh-client/);
-    expect(orch).toMatch(/\bgit\b/);
+    expect(orch).not.toMatch(/node-pty/);
   });
 
-  it('bundles current open-source local-node agent CLIs and fails on installer errors', () => {
-    expect(orch).toMatch(/@openai\/codex@latest/);
-    expect(orch).toMatch(/opencode\.ai\/install/);
-    expect(orch).not.toMatch(/WARN: (codex|opencode) install skipped/);
+  it('moves coding-agent CLIs exclusively into node-runtime', () => {
+    const runtime = read(runtimeDockerfile);
+    expect(runtime).toMatch(/@openai\/codex@latest/);
+    expect(runtime).toMatch(/opencode\.ai\/install/);
+    expect(orch).not.toMatch(/@openai\/codex|opencode\.ai\/install/);
   });
 
-  it('checks latest Claude Code on every start without redistributing its binary', () => {
-    const entry = read(orchEntrypoint);
-    expect(orch).not.toMatch(/RUN[\s\S]*claude\.ai\/install\.sh/);
-    expect(entry).toMatch(/claude\.ai\/install\.sh[\s\S]*bash -s -- latest/);
-    expect(entry).toMatch(/FLOCK_INSTALL_CLAUDE_CODE:-1/);
-    expect(entry).not.toMatch(/! -x "\$CLAUDE_BIN"/);
+  it('performs a bounded best-effort latest Claude update only in runtime', () => {
+    const entry = read(runtimeEntrypoint);
+    expect(entry).toMatch(/claude\.ai\/install\.sh[\s\S]*bash/);
+    expect(entry).toMatch(/timeout 120/);
+    expect(read(orchEntrypoint)).not.toMatch(/claude\.ai\/install\.sh/);
   });
 
   it('runs migrations before starting the server (via the entrypoint, T10)', () => {
-    // T10 moved the boot sequence into orchestrator-entrypoint.sh (which also
-    // supervises flock-agentd). Assert the entrypoint runs migrate before start.
+    // The control-plane entrypoint only stages secrets, migrates, and starts.
     const entry = read(orchEntrypoint);
     expect(orch).toMatch(/flock-entrypoint\.sh/); // CMD invokes the entrypoint
     expect(entry).toMatch(
@@ -348,15 +400,12 @@ describe('US-38: orchestrator image is a lean multi-stage prod build', () => {
     );
   });
 
-  it('ships + supervises flock-agentd as the local-node PTY transport (T10)', () => {
-    // The single-box deploy must run the daemon in this image. Built from a Go
-    // stage and copied to /usr/local/bin; the orchestrator + daemon agree on the
-    // socket via FLOCK_AGENTD_SOCKET.
+  it('keeps remote daemon artifacts but never supervises a local daemon', () => {
     expect(orch).toMatch(/AS\s+agentd-build/);
-    expect(orch).toMatch(/\/usr\/local\/bin\/flock-agentd/);
-    expect(orch).toMatch(/FLOCK_AGENTD_SOCKET/);
-    const entry = read(orchEntrypoint);
-    expect(entry).toMatch(/flock-agentd serve/);
+    expect(orch).not.toMatch(/\/usr\/local\/bin\/flock-agentd/);
+    expect(read(orchEntrypoint)).not.toMatch(/flock-agentd serve/);
+    expect(read(runtimeDockerfile)).toMatch(/\/usr\/local\/bin\/flock-agentd/);
+    expect(read(runtimeEntrypoint)).toMatch(/exec env -i[\s\S]*flock-agentd serve/);
   });
 
   it('ships both supported remote-node agentd architectures', () => {
@@ -393,17 +442,20 @@ describe('production node and stack lifecycle', () => {
     expect(script).toMatch(/sshd -t/);
   });
 
-  it('ships a backup-gated version-coupled stack upgrade command', () => {
+  it('ships a bundle-validated, backup-gated, runtime-aware upgrade command', () => {
     const script = read(upgradeScript);
     expect(script).toMatch(/vault create/);
     expect(script).toMatch(/vault verify/);
     expect(script).toMatch(/FLOCK_VERSION/);
     expect(script).not.toMatch(/BROWSER_IMAGE=/);
     expect(script).toMatch(/\/ready/);
-    expect(script).toMatch(/agentd-compatibility\.json/);
+    expect(script).toMatch(/shepherd-deployment-\$TARGET\.tar\.gz/);
+    expect(script).toMatch(/gh attestation verify/);
+    expect(script).toMatch(/FLOCK_NODE_RUNTIME_VERSION/);
+    expect(script).toMatch(/--force-stop-local-sessions/);
+    expect(script).toMatch(/flock-agentd inspect/);
     expect(script).toMatch(/--acknowledge-node-policy-change/);
-    expect(script).toMatch(/removedProtocols/);
-    expect(script).toMatch(/addedCapabilities/);
+    expect(script).toMatch(/docker compose pull "\$\{pull\[@\]\}"/);
     expect(script).not.toMatch(/docker compose down -v/);
   });
 });
@@ -486,5 +538,31 @@ describe('US-38: docker compose config is valid (smoke, when Docker is present)'
         },
       ),
     ).not.toThrow();
+  });
+
+  it('parses both DNS-01 provider overrides without embedding credential values', () => {
+    let hasDocker = true;
+    try {
+      execFileSync('docker', ['--version'], { stdio: 'ignore' });
+    } catch {
+      hasDocker = false;
+    }
+    if (!hasDocker) return;
+
+    const env = {
+      ...process.env,
+      CLOUDFLARE_API_TOKEN_FILE: '/dev/null',
+      ROUTE53_ACCESS_KEY_ID_FILE: '/dev/null',
+      ROUTE53_SECRET_ACCESS_KEY_FILE: '/dev/null',
+    };
+    for (const override of [cloudflareDnsComposePath, route53DnsComposePath]) {
+      expect(() =>
+        execFileSync('docker', ['compose', '-f', composePath, '-f', override, 'config'], {
+          cwd: repoRoot,
+          stdio: 'pipe',
+          env,
+        }),
+      ).not.toThrow();
+    }
   });
 });

@@ -1,4 +1,5 @@
 import net, { type Socket } from 'node:net';
+import { once } from 'node:events';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +9,7 @@ import { controlCredentialId } from './control-auth.js';
 import {
   AGENTD_PROTOCOL_VERSION,
   encodeControl,
+  encodeFrame,
   FrameDecoder,
   FrameType,
   type AgentdControl,
@@ -17,7 +19,14 @@ const identity = {
   nodeId: 'node-client-test',
   credential: '0123456789abcdef0123456789abcdef',
 };
-const capabilities = ['pty', 'resize', 'scrollback', 'listening_ports_v1'];
+const capabilities = [
+  'pty',
+  'resize',
+  'scrollback',
+  'listening_ports_v1',
+  'exec_v1',
+  'tcp_tunnel_v1',
+];
 const daemonVersion = '0.3.0';
 const sockets: Socket[] = [];
 const servers: net.Server[] = [];
@@ -29,6 +38,7 @@ afterEach(() => {
 
 async function connectToFakeDaemon(
   handler: (control: AgentdControl, socket: Socket) => void,
+  frameHandler?: (type: number, payload: Buffer, socket: Socket) => void,
 ): Promise<NodeAgentdClient> {
   const server = net.createServer((socket) => {
     sockets.push(socket);
@@ -37,6 +47,8 @@ async function connectToFakeDaemon(
       decoder.push(chunk, (type, payload) => {
         if (type === FrameType.Control) {
           handler(JSON.parse(payload.toString('utf8')) as AgentdControl, socket);
+        } else {
+          frameHandler?.(type, payload, socket);
         }
       });
     });
@@ -188,5 +200,127 @@ describe('NodeAgentdClient v2 handshake', () => {
     });
     await expect(client.hello(identity)).rejects.toThrow(/unauthenticated handshake/);
     client.dispose();
+  });
+
+  it('executes bounded commands on a dedicated authenticated operation link', async () => {
+    let challenge: AgentdControl | undefined;
+    const client = await connectToFakeDaemon((control, socket) => {
+      if (control.op === 'hello') {
+        expect(control.connectionRole).toBe('operation');
+        challenge = {
+          op: 'challenge',
+          protocolVersion: AGENTD_PROTOCOL_VERSION,
+          nodeId: identity.nodeId,
+          clientNonce: control.clientNonce,
+          serverNonce: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+          daemonVersion,
+          capabilities,
+          credentialId: controlCredentialId(identity.credential),
+          connectionRole: 'operation',
+        };
+        challenge.serverMac = controlMac({
+          credential: identity.credential,
+          role: 'server',
+          nodeId: identity.nodeId,
+          clientNonce: challenge.clientNonce!,
+          serverNonce: challenge.serverNonce!,
+          daemonVersion,
+          capabilities,
+        });
+        socket.write(encodeControl(challenge));
+      } else if (control.op === 'authenticate') {
+        socket.write(
+          encodeControl({
+            op: 'helloOk',
+            protocolVersion: AGENTD_PROTOCOL_VERSION,
+            nodeId: identity.nodeId,
+            daemonVersion,
+            capabilities,
+            connectionRole: 'operation',
+          }),
+        );
+      } else if (control.op === 'exec') {
+        expect(control.command).toEqual(['sh', '-c', 'printf ok']);
+        socket.write(
+          encodeControl({
+            op: 'execResult',
+            id: control.id,
+            code: 7,
+            stdout: 'out',
+            stderr: 'err',
+            stdoutTruncated: true,
+          }),
+        );
+      }
+    });
+    await client.hello(identity, AGENTD_PROTOCOL_VERSION, 'operation');
+    await expect(client.exec({ command: ['sh', '-c', 'printf ok'] })).resolves.toEqual({
+      exitCode: 7,
+      signal: null,
+      stdout: 'out',
+      stderr: 'err',
+      timedOut: false,
+      stdoutTruncated: true,
+      stderrTruncated: false,
+    });
+    client.dispose();
+  });
+
+  it('relays TCP data on a dedicated operation link', async () => {
+    let challenge: AgentdControl | undefined;
+    const client = await connectToFakeDaemon(
+      (control, socket) => {
+        if (control.op === 'hello') {
+          challenge = {
+            op: 'challenge',
+            protocolVersion: AGENTD_PROTOCOL_VERSION,
+            nodeId: identity.nodeId,
+            clientNonce: control.clientNonce,
+            serverNonce: 'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
+            daemonVersion,
+            capabilities,
+            credentialId: controlCredentialId(identity.credential),
+            connectionRole: 'operation',
+          };
+          challenge.serverMac = controlMac({
+            credential: identity.credential,
+            role: 'server',
+            nodeId: identity.nodeId,
+            clientNonce: challenge.clientNonce!,
+            serverNonce: challenge.serverNonce!,
+            daemonVersion,
+            capabilities,
+          });
+          socket.write(encodeControl(challenge));
+        } else if (control.op === 'authenticate') {
+          socket.write(
+            encodeControl({
+              op: 'helloOk',
+              protocolVersion: AGENTD_PROTOCOL_VERSION,
+              nodeId: identity.nodeId,
+              daemonVersion,
+              capabilities,
+              connectionRole: 'operation',
+            }),
+          );
+        } else if (control.op === 'dialTcp') {
+          expect(control).toMatchObject({ targetHost: '127.0.0.1', targetPort: 4173 });
+          socket.write(encodeControl({ op: 'tcpConnected', id: control.id }));
+        }
+      },
+      (type, payload, socket) => {
+        if (type === FrameType.TcpInput) {
+          socket.write(
+            encodeFrame(FrameType.TcpOutput, Buffer.concat([Buffer.from('echo:'), payload])),
+          );
+        }
+      },
+    );
+    await client.hello(identity, AGENTD_PROTOCOL_VERSION, 'operation');
+    const tunnel = await client.dialTcp(4173);
+    tunnel.write('hello');
+    const [data] = (await once(tunnel, 'data')) as [Buffer];
+    expect(data.toString()).toBe('echo:hello');
+    tunnel.destroy();
   });
 });

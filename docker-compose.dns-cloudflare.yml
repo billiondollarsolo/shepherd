@@ -1,0 +1,15 @@
+# Optional Cloudflare DNS-01 certificate issuance.
+#
+# This changes only ACME validation. Operators must still point the control-plane
+# and wildcard Preview DNS records at the Shepherd edge themselves.
+services:
+  caddy:
+    environment:
+      FLOCK_DNS_PROVIDER: cloudflare
+      CF_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
+    secrets:
+      - cloudflare_api_token
+
+secrets:
+  cloudflare_api_token:
+    file: ${CLOUDFLARE_API_TOKEN_FILE:-./secrets/cloudflare_api_token}

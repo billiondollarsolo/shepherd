@@ -10,6 +10,7 @@ import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import { registerSessionRestRoutes } from './session-rest-routes.js';
 import {
+  SessionLaunchBlockedError,
   SessionPolicyViolationError,
   SessionProjectNotFoundError,
 } from './session-rest-service.js';
@@ -55,6 +56,7 @@ class FakeSessionService {
   listArg: string | undefined;
   notFound = false;
   policyDenied = false;
+  launchBlocked = false;
   async listSessions(projectId?: string): Promise<SessionRecord[]> {
     this.listArg = projectId;
     return [fakeSession()];
@@ -62,6 +64,14 @@ class FakeSessionService {
   async createSession(input: CreateSessionRequest) {
     if (this.notFound) throw new SessionProjectNotFoundError(input.projectId);
     if (this.policyDenied) throw new SessionPolicyViolationError();
+    if (this.launchBlocked) {
+      throw new SessionLaunchBlockedError({
+        status: 'blocked',
+        code: 'agentd_upgrade_required',
+        message: 'Cannot start a new agent until the node daemon is upgraded.',
+        details: { installedVersion: '0.2.9', minimumVersion: '0.3.0' },
+      });
+    }
     return { session: fakeSession({ agentType: input.agentType }), hookToken: 'plain-token' };
   }
 }
@@ -162,6 +172,30 @@ describe('POST /api/sessions', () => {
       });
       expect(res.statusCode).toBe(403);
       expect(res.json().error.code).toBe('policy_denied');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('409 with actionable compatibility details when the daemon blocks new sessions', async () => {
+    const service = new FakeSessionService();
+    service.launchBlocked = true;
+    const app = buildApp(service);
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        headers: COOKIE,
+        payload: { projectId: PROJECT_ID, agentType: 'codex' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'agentd_upgrade_required',
+          message: 'Cannot start a new agent until the node daemon is upgraded.',
+          details: { installedVersion: '0.2.9', minimumVersion: '0.3.0' },
+        },
+      });
     } finally {
       await app.close();
     }

@@ -5,16 +5,15 @@
  * write the contract suite once, run twice").
  *
  * A transport is a DUMB COURIER (PRD §6.4, spec §4.3, §5.1): it runs commands
- * and opens PTYs on a node on the orchestrator's behalf. It holds NO product
- * logic, NO status model, NO daemon — just `exec`, `openPty`, `dispose`.
- *   - LocalTransport (US-7) runs against the orchestrator host/container.
- *   - SshTransport (US-8) runs the SAME operations over a managed ssh2 hop;
- *     "local = SSH minus the hop".
+ * and opens PTYs on a node on the orchestrator's behalf. Command and PTY
+ * capabilities are deliberately separate: the bundled local runtime executes
+ * commands through agentd while interactive sessions use the persistent agentd
+ * PTY channel. SSH happens to implement both capabilities.
  *
  * The interface intentionally deals in LIVE handles (an exec result, a PTY
  * handle), not serializable wire types — wire framing for the PTY ⇄ WebSocket
  * bridge (US-11) lives elsewhere. Keeping this orchestrator-internal avoids
- * leaking node-pty/ssh2 shapes into `packages/shared`.
+ * leaking implementation-specific PTY/SSH shapes into `packages/shared`.
  */
 
 /** Options for a one-shot command execution. */
@@ -64,7 +63,7 @@ export interface OpenPtyOptions {
 }
 
 /**
- * A live PTY handle. Mirrors the subset of node-pty / ssh2 stream behaviour the
+ * A live PTY handle. Mirrors the subset of local/SSH stream behaviour the
  * orchestrator needs for the PTY ⇄ WebSocket bridge (US-11), so both transports
  * expose ONE handle shape the rest of the orchestrator can program against.
  */
@@ -103,22 +102,27 @@ export interface PtyExit {
  * Implementations MUST be safe to `dispose()` more than once and MUST clean up
  * any spawned PTYs / connections on dispose.
  */
-export interface NodeTransport {
+export interface NodeTransportLifecycle {
   /** How this transport reaches the node (informational; matches NodeKind). */
   readonly kind: 'local' | 'ssh';
 
-  /** Run a command to completion and capture its output. */
-  exec(command: string[], options?: ExecOptions): Promise<ExecResult>;
-
-  /** Open an interactive PTY (e.g. to attach a flock-agentd session). */
-  openPty(options?: OpenPtyOptions): Promise<PtyHandle>;
-
-  /**
-   * Release all resources: kill outstanding PTYs, close connections. After
-   * dispose the transport must reject further `exec`/`openPty` calls. Idempotent.
-   */
+  /** Release owned resources. Must be idempotent. */
   dispose(): Promise<void>;
 }
+
+/** Bounded, non-interactive node command capability. */
+export interface NodeCommandTransport extends NodeTransportLifecycle {
+  /** Run a command to completion and capture its output. */
+  exec(command: string[], options?: ExecOptions): Promise<ExecResult>;
+}
+
+/** Interactive PTY capability. */
+export interface NodePtyTransport extends NodeTransportLifecycle {
+  openPty(options?: OpenPtyOptions): Promise<PtyHandle>;
+}
+
+/** Composite transport implemented by SSH and retained for contract tests. */
+export interface NodeTransport extends NodeCommandTransport, NodePtyTransport {}
 
 /** Thrown when a transport is used after {@link NodeTransport.dispose}. */
 export class TransportDisposedError extends Error {

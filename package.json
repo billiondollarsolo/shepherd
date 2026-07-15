@@ -1,6 +1,6 @@
 {
   "name": "flock",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "Shepherd — manage nodes, projects, and CLI coding agents from one web paddock.",
   "license": "MIT",
@@ -43,6 +43,7 @@
     "test:unit": "pnpm -r test:unit",
     "test:coverage": "pnpm --filter @flock/shared exec vitest run --coverage && pnpm --filter @flock/orchestrator exec vitest run --coverage && pnpm --filter @flock/web exec vitest run --coverage",
     "test:int": "pnpm -r test:int",
+    "test:runtime-migration": "bash scripts/test-node-runtime-migration.sh",
     "e2e:prepare": "pnpm --filter @flock/shared build",
     "test:e2e": "pnpm e2e:prepare && playwright test",
     "test:e2e:smoke": "pnpm e2e:prepare && playwright test apps/web/e2e/accessibility.spec.ts apps/web/e2e/agent-policy.spec.ts apps/web/e2e/brand.spec.ts apps/web/e2e/mobile-routes.spec.ts apps/web/e2e/terminal.spec.ts",

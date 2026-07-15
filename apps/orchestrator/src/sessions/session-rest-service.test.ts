@@ -17,6 +17,7 @@ import {
 import { AuditLogger } from '../audit/audit.js';
 import { nodes, projects } from '../db/schema.js';
 import {
+  SessionLaunchBlockedError,
   SessionProjectNotFoundError,
   SessionPolicyViolationError,
   SessionRestService,
@@ -65,6 +66,15 @@ class FakeDb {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delete(_table: unknown): any {
+    return {
+      where: async () => {
+        this.sessions = [];
+      },
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   select(_cols?: unknown): any {
     return {
       from: (table: unknown) => {
@@ -86,8 +96,11 @@ function makeService(
   opts: {
     nodeKind?: 'local' | 'ssh';
     agentdLaunch?: SessionRestServiceDeps['agentdLaunch'];
+    agentdLaunchPreflight?: SessionRestServiceDeps['agentdLaunchPreflight'];
     sessionEnv?: SessionRestServiceDeps['sessionEnv'];
     issueOrchestrationCapability?: SessionRestServiceDeps['issueOrchestrationCapability'];
+    onSessionCreated?: SessionRestServiceDeps['onSessionCreated'];
+    onSessionCreateAborted?: SessionRestServiceDeps['onSessionCreateAborted'];
     projectPolicy?: ProjectAgentPolicy;
   } = {},
 ) {
@@ -109,8 +122,11 @@ function makeService(
     hashToken: async (t) => `hash:${t.slice(0, 6)}`,
     audit: new AuditLogger({ async write() {} }),
     agentdLaunch: opts.agentdLaunch,
+    agentdLaunchPreflight: opts.agentdLaunchPreflight,
     sessionEnv: opts.sessionEnv,
     issueOrchestrationCapability: opts.issueOrchestrationCapability,
+    onSessionCreated: opts.onSessionCreated,
+    onSessionCreateAborted: opts.onSessionCreateAborted,
     logger: { warn() {} },
   });
   return { service, db };
@@ -157,6 +173,61 @@ describe('SessionRestService.createSession', () => {
     const { service } = makeService({ nodeKind: 'ssh', agentdLaunch });
     const { session } = await service.createSession(REQ, { userId: USER_ID });
     expect(calls).toEqual([{ id: session.id, nodeKind: 'ssh' }]);
+  });
+
+  it('allows a supported older daemon through launch preflight', async () => {
+    let launches = 0;
+    const { service, db } = makeService({
+      agentdLaunchPreflight: async () => null,
+      agentdLaunch: async () => {
+        launches += 1;
+        return 'launched';
+      },
+    });
+
+    await expect(service.createSession(REQ, { userId: USER_ID })).resolves.toBeDefined();
+    expect(launches).toBe(1);
+    expect(db.sessions).toHaveLength(1);
+  });
+
+  it('refuses a mandatory daemon upgrade before persisting a session', async () => {
+    const { service, db } = makeService({
+      agentdLaunchPreflight: async () => ({
+        status: 'blocked',
+        code: 'agentd_upgrade_required',
+        message: 'Daemon 0.2.9 is below the supported minimum 0.3.0.',
+        details: { installedVersion: '0.2.9', minimumVersion: '0.3.0' },
+      }),
+    });
+
+    await expect(service.createSession(REQ, { userId: USER_ID })).rejects.toMatchObject({
+      name: 'SessionLaunchBlockedError',
+      code: 'agentd_upgrade_required',
+      details: { installedVersion: '0.2.9', minimumVersion: '0.3.0' },
+    });
+    expect(db.sessions).toHaveLength(0);
+  });
+
+  it('removes the session and live binding when compatibility blocks during open', async () => {
+    const tracked: string[] = [];
+    const aborted: string[] = [];
+    const { service, db } = makeService({
+      agentdLaunchPreflight: async () => null,
+      onSessionCreated: (session) => tracked.push(session.id),
+      onSessionCreateAborted: (sessionId) => aborted.push(sessionId),
+      agentdLaunch: async () => ({
+        status: 'blocked',
+        code: 'agentd_upgrade_required',
+        message: 'The daemon became incompatible during launch.',
+      }),
+    });
+
+    await expect(service.createSession(REQ, { userId: USER_ID })).rejects.toBeInstanceOf(
+      SessionLaunchBlockedError,
+    );
+    expect(tracked).toHaveLength(1);
+    expect(aborted).toEqual(tracked);
+    expect(db.sessions).toHaveLength(0);
   });
 
   it('defaults to callback-only and injects a distinct token only for requested authority', async () => {

@@ -12,6 +12,8 @@ export const FrameType = {
   Control: 0x01,
   PtyOutput: 0x02,
   PtyInput: 0x03,
+  TcpOutput: 0x04,
+  TcpInput: 0x05,
 } as const;
 
 /** Flat control message (mirrors the Go `Control` struct). */
@@ -27,6 +29,7 @@ export interface AgentdControl {
   capabilities?: string[];
   credentialId?: string;
   newCredential?: string;
+  connectionRole?: 'control' | 'operation';
   id?: string;
   kind?: string;
   cwd?: string;
@@ -37,6 +40,20 @@ export interface AgentdControl {
   cols?: number;
   rows?: number;
   code?: number;
+  signal?: string;
+  // exec_v1.
+  input?: string;
+  timeoutMs?: number;
+  stdoutLimit?: number;
+  stderrLimit?: number;
+  stdout?: string;
+  stderr?: string;
+  timedOut?: boolean;
+  stdoutTruncated?: boolean;
+  stderrTruncated?: boolean;
+  // tcp_tunnel_v1.
+  targetHost?: '127.0.0.1' | '::1';
+  targetPort?: number;
   message?: string;
   sessions?: Array<{ id: string; kind: string; cwd: string }>;
   listeningPorts?: AgentdListeningPort[];
@@ -111,6 +128,10 @@ function encodeDataPayload(sid: string, data: Buffer): Buffer {
 
 export function encodePtyInput(sid: string, data: Buffer): Buffer {
   return encodeFrame(FrameType.PtyInput, encodeDataPayload(sid, data));
+}
+
+export function encodeTcpInput(data: Buffer): Buffer {
+  return encodeFrame(FrameType.TcpInput, data);
 }
 
 export function decodeDataPayload(payload: Buffer): { sid: string; data: Buffer } {

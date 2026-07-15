@@ -37,6 +37,11 @@ export interface AgentdBootstrapConfig {
     nodeId: string,
     event: 'installed' | 'upgraded' | 'service_started' | 'rolled_back',
   ) => void;
+  /** Bounded readiness policy; override only in deterministic tests. */
+  readiness?: {
+    attempts: number;
+    intervalMs: number;
+  };
 }
 
 export interface AgentdEndpoint {
@@ -64,6 +69,7 @@ export class AgentdBootstrap {
   private readonly binaries: AgentdBinaryProvider;
   private readonly logger: { warn(msg: string): void };
   private readonly onEvent?: AgentdBootstrapConfig['onEvent'];
+  private readonly readiness: NonNullable<AgentdBootstrapConfig['readiness']>;
 
   constructor(cfg: AgentdBootstrapConfig) {
     this.version = cfg.version;
@@ -85,6 +91,10 @@ export class AgentdBootstrap {
       },
     };
     this.onEvent = cfg.onEvent;
+    this.readiness = cfg.readiness ?? { attempts: 40, intervalMs: 250 };
+    if (this.readiness.attempts < 1 || this.readiness.intervalMs < 0) {
+      throw new Error('agentd: invalid readiness policy');
+    }
   }
 
   async ensureRunning(
@@ -115,6 +125,7 @@ export class AgentdBootstrap {
     if (binaryUpgradeRequired || !running || !servicePrepared) {
       await this.installCredential(host, identity.credential);
       await this.installAndStartService(host, identity.nodeId, binaryUpgradeRequired);
+      await this.waitUntilListening(host);
       this.onEvent?.(identity.nodeId, 'service_started');
     }
     return { host: '127.0.0.1', port: this.port };
@@ -157,6 +168,7 @@ export class AgentdBootstrap {
   /** Restore the retained daemon and re-activate it after post-start validation fails. */
   async rollback(host: AgentdHost, nodeId: string): Promise<void> {
     await this.run(host, `sudo -n ${ADMIN_HELPER} rollback`);
+    await this.waitUntilListening(host);
     this.onEvent?.(nodeId, 'rolled_back');
   }
 
@@ -168,6 +180,21 @@ export class AgentdBootstrap {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * systemd's active state only proves that exec succeeded; agentd may still be
+   * restoring session state before it binds the control socket. Do not hand an
+   * endpoint to callers until SSH can actually open that loopback port.
+   */
+  private async waitUntilListening(host: AgentdHost): Promise<void> {
+    for (let attempt = 0; attempt < this.readiness.attempts; attempt += 1) {
+      if (await this.isListening(host)) return;
+      if (attempt + 1 < this.readiness.attempts && this.readiness.intervalMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.readiness.intervalMs));
+      }
+    }
+    throw new Error(`agentd: service did not become ready on 127.0.0.1:${this.port} after restart`);
   }
 
   private async detectPlatform(host: AgentdHost): Promise<AgentdPlatform> {

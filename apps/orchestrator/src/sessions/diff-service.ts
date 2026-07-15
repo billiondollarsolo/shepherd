@@ -20,7 +20,7 @@
  */
 import type { DiffResponse } from '@flock/shared';
 
-import type { ExecResult, NodeTransport } from '../nodes/transport/transport.js';
+import type { ExecResult, NodeCommandTransport } from '../nodes/transport/transport.js';
 
 /**
  * Thrown when no session record exists for the given id (maps to HTTP 404).
@@ -70,11 +70,13 @@ export interface DiffSessionInfo {
 
 /**
  * Resolves the {@link NodeTransport} for a node id. Production supplies the
- * per-node managed transport (LocalTransport / SshTransport); tests inject a
+ * per-node managed command transport; tests inject a
  * fake transport. Returns null when the node has no live transport.
  */
 export interface DiffTransportResolver {
-  transportForNode(nodeId: string): Promise<NodeTransport | null> | NodeTransport | null;
+  transportForNode(
+    nodeId: string,
+  ): Promise<NodeCommandTransport | null> | NodeCommandTransport | null;
 }
 
 /** Optional knobs (kept tiny; defaults match a sensible read-only diff). */

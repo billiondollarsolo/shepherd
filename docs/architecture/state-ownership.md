@@ -36,6 +36,21 @@ retryable. Owner deletion cascades this row. PostgreSQL backup includes it.
 Future JSON changes require a new literal `version` and an explicit migration.
 Unknown fields are rejected; the application never guesses at a newer document.
 
+## Bundled local runtime ownership
+
+| State                                                 | Authoritative owner/store              | Survives orchestrator replacement | Backup/recovery                                                      |
+| ----------------------------------------------------- | -------------------------------------- | --------------------------------- | -------------------------------------------------------------------- |
+| Agent credentials, workspaces, config, and tool state | `node-runtime`, `flock_agent_home`     | Yes                               | Separate operator filesystem backup; excluded from `.flockvault`     |
+| Daemon layout/state                                   | `node-runtime`, `flock_agentd_state`   | Yes                               | Separate volume backup when continuity matters                       |
+| Stable local node ID and control credential           | `node-runtime`, `flock_agentd_control` | Yes                               | Protect with deployment storage backup; never emitted in diagnostics |
+| Unix control socket                                   | `node-runtime`, `flock_agentd_control` | Recreated by daemon               | Ephemeral; never restore a socket inode                              |
+| Live agents, PTYs, scrollback, dev servers            | `node-runtime` process/kernel state    | Yes                               | Not backup data; runtime/host loss terminates it                     |
+| Runtime image pin                                     | `.env` (`FLOCK_NODE_RUNTIME_VERSION`)  | Yes                               | Preserve with the validated deployment definition                    |
+
+The orchestrator has read-only access only to the control volume. It has no runtime-home
+or daemon-state mount. See the
+[local runtime lifecycle ADR](../decisions/local-node-runtime-lifecycle.md).
+
 ## Device-local preferences
 
 These values intentionally use `localStorage` because sharing them across a phone

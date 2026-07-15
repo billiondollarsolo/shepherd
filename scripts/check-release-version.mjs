@@ -129,10 +129,30 @@ for (const image of ['orchestrator', 'web', 'caddy', 'postgres']) {
     throw new Error(`docker-compose.yml does not couple shepherd-${image} to ${canonical}`);
   }
 }
+if (!compose.includes(`shepherd-node-runtime:\${FLOCK_NODE_RUNTIME_VERSION:-${canonical}}`)) {
+  throw new Error(`docker-compose.yml does not pin shepherd-node-runtime independently`);
+}
 
 const envExample = readFileSync(resolve(root, '.env.example'), 'utf8');
 if (!envExample.includes(`FLOCK_VERSION=${canonical}`)) {
   throw new Error(`.env.example does not pin FLOCK_VERSION=${canonical}`);
+}
+if (!envExample.includes(`FLOCK_NODE_RUNTIME_VERSION=${canonical}`)) {
+  throw new Error(`.env.example does not pin FLOCK_NODE_RUNTIME_VERSION=${canonical}`);
+}
+
+const deploymentManifest = JSON.parse(
+  readFileSync(resolve(root, 'deploy/release-manifest.json'), 'utf8'),
+);
+if (
+  deploymentManifest.schemaVersion !== 1 ||
+  deploymentManifest.topologyGeneration !== 2 ||
+  deploymentManifest.controlPlaneVersion !== canonical ||
+  deploymentManifest.runtime?.preferredVersion !== canonical ||
+  !deploymentManifest.runtime?.requiredCapabilities?.includes('exec_v1') ||
+  !deploymentManifest.runtime?.requiredCapabilities?.includes('tcp_tunnel_v1')
+) {
+  throw new Error('deploy/release-manifest.json is not synchronized with the runtime topology');
 }
 
 const releaseWorkflow = readFileSync(resolve(root, '.github/workflows/release-images.yml'), 'utf8');
@@ -144,6 +164,20 @@ if (releaseWorkflow.includes('/api/sessions/$session_id/preview')) {
 }
 if (!releaseWorkflow.includes('/api/projects/$project_id/ports/$service_id/forward')) {
   throw new Error('release workflow does not smoke the project-owned Ports API');
+}
+for (const required of [
+  'docker/Dockerfile.node-runtime',
+  'shepherd-node-runtime',
+  'FLOCK_VERSION: candidate-${{ github.sha }}',
+  'FLOCK_NODE_RUNTIME_VERSION: candidate-${{ github.sha }}',
+  'IMAGE_VERSION=${{ github.ref_name }}',
+  'test-node-runtime-migration.sh',
+  'survived orchestrator recreation',
+  'build-deployment-bundle.sh',
+]) {
+  if (!releaseWorkflow.includes(required)) {
+    throw new Error(`release workflow is missing runtime evidence: ${required}`);
+  }
 }
 
 const changelog = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8');

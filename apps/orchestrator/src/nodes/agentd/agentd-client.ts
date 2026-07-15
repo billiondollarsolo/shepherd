@@ -8,7 +8,8 @@
  * scrollback replay (as the first data callbacks) then live output; `write()` /
  * `resize()` go straight to the daemon's raw PTY (no tmux).
  */
-import type { Duplex } from 'node:stream';
+import { randomUUID } from 'node:crypto';
+import { Duplex } from 'node:stream';
 
 import type { NodeControlIdentity } from './node-control-credentials.js';
 import {
@@ -26,6 +27,7 @@ import {
   decodeDataPayload,
   encodeControl,
   encodePtyInput,
+  encodeTcpInput,
   type AgentdControl,
   type AgentdListeningPort,
   type AgentdStatusMeta,
@@ -67,6 +69,26 @@ export interface AgentdListeningPortsSnapshot {
   degradedReason: string | null;
 }
 
+export interface AgentdExecRequest {
+  command: string[];
+  cwd?: string;
+  env?: string[];
+  input?: string;
+  timeoutMs?: number;
+  stdoutLimit?: number;
+  stderrLimit?: number;
+}
+
+export interface AgentdExecResult {
+  exitCode: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+}
+
 export class AgentdCapabilityUnavailableError extends Error {
   constructor(public readonly capability: string) {
     super(`agentd capability unavailable: ${capability}`);
@@ -92,6 +114,7 @@ export class NodeAgentdClient {
   private closed = false;
   private authenticatedIdentity: AuthenticatedAgentdIdentity | null = null;
   private openBlockedReason: string | null = null;
+  private tcpTunnel: AgentdTcpDuplex | null = null;
 
   constructor(private readonly sock: Duplex) {
     sock.on('data', (chunk: Buffer) => this.onChunk(chunk));
@@ -102,6 +125,10 @@ export class NodeAgentdClient {
   private onChunk(chunk: Buffer): void {
     try {
       this.decoder.push(chunk, (type, payload) => {
+        if (type === FrameType.TcpOutput) {
+          this.tcpTunnel?.receive(payload);
+          return;
+        }
         if (type === FrameType.PtyOutput) {
           const { sid, data } = decodeDataPayload(payload);
           this.dataHandlers.get(sid)?.(data);
@@ -122,6 +149,9 @@ export class NodeAgentdClient {
           // the telemetry fields), so pass it through directly.
           if (ctrl.op === 'status' && ctrl.id) {
             this.statusHandler?.(ctrl.id, ctrl.state ?? '', ctrl);
+          }
+          if (ctrl.op === 'tcpClosed') {
+            this.tcpTunnel?.remoteClose(ctrl.message);
           }
           for (let i = this.waiters.length - 1; i >= 0; i--) {
             if (this.waiters[i]!.match(ctrl)) {
@@ -146,6 +176,8 @@ export class NodeAgentdClient {
     // persists every session. Report a TRANSIENT disconnect so the client
     // reconnects + resumes, instead of declaring sessions dead ('exited').
     for (const [, h] of this.exitHandlers) h(-1, 'disconnect');
+    this.tcpTunnel?.disconnect(err);
+    this.tcpTunnel = null;
     this.dataHandlers.clear();
     this.exitHandlers.clear();
   }
@@ -159,6 +191,18 @@ export class NodeAgentdClient {
       this.sock.write(encodeControl(c));
     } catch {
       /* link dropped mid-write; onClose handles reconnect/exit notification */
+    }
+  }
+
+  private writeFrame(frame: Buffer, callback?: (error?: Error | null) => void): void {
+    if (this.closed) {
+      callback?.(new Error('agentd connection closed'));
+      return;
+    }
+    try {
+      this.sock.write(frame, callback);
+    } catch (error) {
+      callback?.(error instanceof Error ? error : new Error('agentd write failed'));
     }
   }
 
@@ -197,6 +241,7 @@ export class NodeAgentdClient {
   async hello(
     identity: NodeControlIdentity,
     protocolVersion = AGENTD_PROTOCOL_VERSION,
+    connectionRole: 'control' | 'operation' = 'control',
   ): Promise<AuthenticatedAgentdIdentity> {
     const clientNonce = controlNonce();
     const credentialId = controlCredentialId(identity.credential);
@@ -206,6 +251,7 @@ export class NodeAgentdClient {
       nodeId: identity.nodeId,
       clientNonce,
       credentialId,
+      connectionRole,
     });
     const challenge = await this.await(
       (c) => c.op === 'challenge' || c.op === 'helloOk' || c.op === 'error',
@@ -226,6 +272,9 @@ export class NodeAgentdClient {
       !challenge.serverMac
     ) {
       throw new Error('agentd returned an invalid authentication challenge');
+    }
+    if (connectionRole === 'operation' && challenge.connectionRole !== 'operation') {
+      throw new Error('agentd does not support authenticated operation connections');
     }
     const expected = controlMac({
       credential: identity.credential,
@@ -263,6 +312,9 @@ export class NodeAgentdClient {
       JSON.stringify(ok.capabilities ?? []) !== JSON.stringify(capabilities)
     ) {
       throw new Error('agentd authenticated identity changed during handshake');
+    }
+    if (connectionRole === 'operation' && ok.connectionRole !== 'operation') {
+      throw new Error('agentd operation connection role changed during handshake');
     }
     this.authenticatedIdentity = {
       daemonVersion: challenge.daemonVersion,
@@ -385,6 +437,57 @@ export class NodeAgentdClient {
     };
   }
 
+  /** Execute one bounded command over a dedicated authenticated operation link. */
+  async exec(request: AgentdExecRequest): Promise<AgentdExecResult> {
+    if (!this.supports('exec_v1')) throw new AgentdCapabilityUnavailableError('exec_v1');
+    const id = randomUUID();
+    this.send({ op: 'exec', id, ...request });
+    const response = await this.await(
+      (control) => control.id === id && (control.op === 'execResult' || control.op === 'error'),
+      Math.max(10_000, Math.min((request.timeoutMs ?? 30_000) + 5_000, 125_000)),
+    );
+    if (response.op === 'error') {
+      throw new Error(`agentd exec failed: ${response.message ?? 'unknown error'}`);
+    }
+    return {
+      exitCode: response.signal ? null : (response.code ?? 0),
+      signal: response.signal ?? null,
+      stdout: response.stdout ?? '',
+      stderr: response.stderr ?? '',
+      timedOut: response.timedOut === true,
+      stdoutTruncated: response.stdoutTruncated === true,
+      stderrTruncated: response.stderrTruncated === true,
+    };
+  }
+
+  /** Dial runtime loopback over a dedicated authenticated operation link. */
+  async dialTcp(port: number, host: '127.0.0.1' | '::1' = '127.0.0.1'): Promise<Duplex> {
+    if (!this.supports('tcp_tunnel_v1')) {
+      throw new AgentdCapabilityUnavailableError('tcp_tunnel_v1');
+    }
+    if (this.tcpTunnel) throw new Error('agentd operation link already owns a TCP tunnel');
+    const id = randomUUID();
+    const tunnel = new AgentdTcpDuplex({
+      write: (data, callback) => this.writeFrame(encodeTcpInput(data), callback),
+      closeWrite: () => this.send({ op: 'tcpCloseWrite', id }),
+      dispose: () => this.dispose(),
+      pause: () => this.sock.pause(),
+      resume: () => this.sock.resume(),
+    });
+    this.tcpTunnel = tunnel;
+    this.send({ op: 'dialTcp', id, targetHost: host, targetPort: port });
+    const response = await this.await(
+      (control) => control.id === id && (control.op === 'tcpConnected' || control.op === 'error'),
+      5_000,
+    );
+    if (response.op === 'error') {
+      this.tcpTunnel = null;
+      tunnel.destroy();
+      throw new Error(`agentd TCP tunnel failed: ${response.message ?? 'unknown error'}`);
+    }
+    return tunnel;
+  }
+
   /**
    * Poll until a session id appears on the daemon, or `timeoutMs` elapses.
    * Used by the attach path to wait out the create/attach race with the launch
@@ -404,5 +507,69 @@ export class NodeAgentdClient {
   dispose(): void {
     this.onClose(new Error('disposed'));
     this.sock.end();
+  }
+}
+
+interface AgentdTcpDuplexDeps {
+  write(data: Buffer, callback: (error?: Error | null) => void): void;
+  closeWrite(): void;
+  dispose(): void;
+  pause(): void;
+  resume(): void;
+}
+
+/** Backpressure-aware stream facade for one dedicated agentd TCP tunnel. */
+class AgentdTcpDuplex extends Duplex {
+  private remoteEnded = false;
+  private disposed = false;
+
+  constructor(private readonly deps: AgentdTcpDuplexDeps) {
+    super({ readableHighWaterMark: 64 << 10, writableHighWaterMark: 64 << 10 });
+  }
+
+  receive(data: Buffer): void {
+    if (this.remoteEnded || this.destroyed) return;
+    if (!this.push(data)) this.deps.pause();
+  }
+
+  remoteClose(message?: string): void {
+    if (this.remoteEnded) return;
+    this.remoteEnded = true;
+    if (message) {
+      this.destroy(new Error(message));
+    } else {
+      this.push(null);
+    }
+  }
+
+  disconnect(error: Error): void {
+    if (this.destroyed) return;
+    this.destroy(this.remoteEnded ? undefined : error);
+  }
+
+  override _read(): void {
+    this.deps.resume();
+  }
+
+  override _write(
+    chunk: Buffer | string,
+    encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+    this.deps.write(data, callback);
+  }
+
+  override _final(callback: (error?: Error | null) => void): void {
+    this.deps.closeWrite();
+    callback();
+  }
+
+  override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
+    if (!this.disposed) {
+      this.disposed = true;
+      this.deps.dispose();
+    }
+    callback(error);
   }
 }

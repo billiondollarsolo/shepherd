@@ -6,10 +6,10 @@ contain the Shepherd master key, live processes, node filesystems, worktrees, TL
 keys, or in-memory terminal scrollback.
 
 The manifest inventories declared durable volumes and their disposition. `pgdata` is
-captured by the vault. `flock_agent_home`, Caddy state, and the vault destination require
-separate filesystem/storage backup when those categories matter to the installation;
-agentd runtime identity/process state is reconciled rather than presented as a process
-snapshot.
+captured by the vault. `flock_agent_home`, `flock_agentd_state`,
+`flock_agentd_control`, Caddy state, and the vault destination require separate
+filesystem/storage backup when those categories matter. Never restore the Unix socket
+inode. Live processes and PTYs are not backup data.
 
 Back up the matching `secrets/flock_master_key` separately. A database vault without
 that key cannot decrypt stored SSH credentials; a master key without the database does
@@ -49,7 +49,7 @@ docker compose run --rm -T orchestrator sh -lc \
   'FLOCK_VAULT_PASSWORD_FD=3 pnpm --filter @flock/orchestrator vault restore /backups/flock.flockvault \
     --rollback-output /backups/pre-restore.flockvault 3<&0' \
   < /tmp/flock-vault-password
-docker compose up -d
+docker compose up -d --wait
 ```
 
 The restore process:
@@ -68,6 +68,11 @@ preferences, events, saved `project_services`, Preview runtime preferences, capa
 and encrypted credential envelopes are durable. Active Preview origins, launch tokens,
 cookie material, sockets, listener snapshots, and running processes are not snapshotted;
 restored project services correctly return as stopped and require a fresh capability.
+
+Restoring PostgreSQL does not restart or roll back `node-runtime`. Keep its image pin and
+three volumes paired with the deployment backup. If the runtime is still live, restore
+only the control plane and let it reauthenticate. Stop runtime only when intentionally
+restoring its volumes; that action terminates all local sessions.
 
 ## Validation schedule
 

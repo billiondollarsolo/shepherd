@@ -51,13 +51,64 @@ services:
       FLOCK_PREVIEW_PUBLIC_PORT: '48081'
       FLOCK_MASTER_KEY: ${FLOCK_MASTER_KEY}
       FLOCK_MASTER_KEY_VERSION: '1'
+      FLOCK_AGENTD_SOCKET: /run/flock-agentd/flock-agentd.sock
+      FLOCK_AGENTD_SECRET_FILE: /run/flock-agentd/control.key
+      FLOCK_AGENTD_NODE_ID_FILE: /run/flock-agentd/node-id
+      FLOCK_LOCAL_HOOK_BASE_URL: http://orchestrator:8080
     volumes:
       - .:/workspace
+      - flock-local-control:/run/flock-agentd:ro
     depends_on:
       postgres:
         condition: service_healthy
+      node-runtime:
+        condition: service_healthy
     networks:
       - flock-local
+      - runtime
+
+  node-runtime:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node-runtime
+    image: shepherd-node-runtime:dev
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
+    environment:
+      FLOCK_AGENTD_SOCKET: /run/flock-agentd/flock-agentd.sock
+      FLOCK_AGENTD_SECRET_FILE: /run/flock-agentd/control.key
+      FLOCK_AGENTD_NODE_ID_FILE: /run/flock-agentd/node-id
+      FLOCK_AGENTD_STATE_DIR: /var/lib/flock-agentd
+      FLOCK_RUNTIME_HOME: /home/flock-agent
+      FLOCK_RUNTIME_USER: flock-agent
+      FLOCK_RUNTIME_UID: '701'
+      FLOCK_RUNTIME_GID: '701'
+      FLOCK_AGENTD_CLAUDE_POLICY: ${FLOCK_AGENTD_CLAUDE_POLICY:-best-effort-latest}
+    volumes:
+      - flock-local-home:/home/flock-agent
+      - flock-local-state:/var/lib/flock-agentd
+      - flock-local-control:/run/flock-agentd
+    tmpfs: [/tmp:rw, noexec, nosuid, nodev, size=256m, /run:rw, nosuid, nodev, size=16m]
+    healthcheck:
+      test:
+        [
+          CMD,
+          flock-agentd,
+          probe,
+          --socket,
+          /run/flock-agentd/flock-agentd.sock,
+          --secret-file,
+          /run/flock-agentd/control.key,
+          --node-id-file,
+          /run/flock-agentd/node-id,
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [runtime]
 
   caddy:
     image: caddy:2-alpine
@@ -77,6 +128,11 @@ services:
 networks:
   flock-local:
     driver: bridge
+  runtime:
+    driver: bridge
 
 volumes:
   flock-local-pg:
+  flock-local-home:
+  flock-local-state:
+  flock-local-control:

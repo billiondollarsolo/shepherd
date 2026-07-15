@@ -9,7 +9,7 @@
  * so the builder can authenticate as `flock` over the internal `flock` network.
  *
  * Two halves:
- *   1. CONTRACT — the SAME `runTransportContract` battery that LocalTransport
+ *   1. CONTRACT — the reusable composite `runTransportContract` battery
  *      passes (US-7) is run against SshTransport here ("local = SSH minus the
  *      hop"). Each assertion gets a fresh transport off ONE supervised
  *      connection, exercising exec / openPty / dispose over the real ssh2 hop.
@@ -80,8 +80,7 @@ function waitForStatus(
 // One probe connection proves the network/key are usable before the battery and
 // fails fast (with a clear message) if the dockerized sshd / shared key volume
 // isn't up. The contract battery itself uses a FRESH connection per assertion so
-// each runs in full isolation — exactly like LocalTransport's `new
-// LocalTransport()` per test — avoiding shared-ssh2-client listener buildup.
+// each runs in full isolation, avoiding shared-ssh2-client listener buildup.
 let probeConn: SupervisedSshConnection;
 const openConnections: SupervisedSshConnection[] = [];
 

@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import type { AuditLogger } from '../audit/audit.js';
 import type { Database } from '../db/client.js';
 import { nodes, previewRuntimeSettings, projectServices, projects } from '../db/schema.js';
-import type { NodeTransport } from '../nodes/transport/transport.js';
+import type { NodeCommandTransport } from '../nodes/transport/transport.js';
 import { hasNodeTcpDialer } from '../nodes/transport/tcp-dialer.js';
 import {
   poolPreviewOrigin,
@@ -44,7 +44,9 @@ export interface PreviewServiceDeps {
   db: Database;
   audit: AuditLogger;
   config: PreviewConfig;
-  transportForNode(nodeId: string): Promise<NodeTransport | null> | NodeTransport | null;
+  transportForNode(
+    nodeId: string,
+  ): Promise<NodeCommandTransport | null> | NodeCommandTransport | null;
   now?: () => number;
   randomToken?: () => string;
   randomSlug?: () => string;
@@ -155,7 +157,7 @@ export class PreviewService {
       allocationReserved = false;
     };
 
-    let transport: NodeTransport | null;
+    let transport: NodeCommandTransport | null;
     try {
       transport = await this.deps.transportForNode(service.nodeId);
       if (!transport || !hasNodeTcpDialer(transport)) {

@@ -1,6 +1,6 @@
 {
   "name": "@flock/orchestrator",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Shepherd orchestrator: SSH/agentd orchestration, live status fan-out, event history, and secure remote development access.",
@@ -40,7 +40,6 @@
     "cookie": "1.0.2",
     "drizzle-orm": "0.45.2",
     "fastify": "5.8.5",
-    "node-pty": "1.0.0",
     "pg": "8.13.1",
     "ssh2": "1.16.0",
     "web-push": "3.6.7",

@@ -118,6 +118,8 @@ jobs:
         include:
           - image: shepherd-orchestrator
             dockerfile: docker/Dockerfile.orchestrator
+          - image: shepherd-node-runtime
+            dockerfile: docker/Dockerfile.node-runtime
           - image: shepherd-web
             dockerfile: docker/Dockerfile.web
           - image: shepherd-caddy
@@ -159,6 +161,8 @@ jobs:
             org.opencontainers.image.licenses=MIT
           build-args: |
             RELEASE_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
+            IMAGE_VERSION=${{ github.ref_name }}
+            VCS_REF=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max
@@ -228,6 +232,10 @@ jobs:
       packages: read
     env:
       CANDIDATE_TAG: candidate-${{ github.sha }}
+      # Every compose invocation in this job, including the later forced
+      # orchestrator recreation, must resolve to the exact candidate images.
+      FLOCK_VERSION: candidate-${{ github.sha }}
+      FLOCK_NODE_RUNTIME_VERSION: candidate-${{ github.sha }}
       FLOCK_IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
       HTTP_HOST_PORT: '18080'
       HTTPS_HOST_PORT: '18443'
@@ -256,14 +264,15 @@ jobs:
 
       - name: Pull exact candidates
         run: |
-          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
             docker pull "$FLOCK_IMAGE_REGISTRY/$image:$CANDIDATE_TAG"
           done
 
+      - name: Verify previous-topology runtime migration
+        run: scripts/test-node-runtime-migration.sh "$FLOCK_IMAGE_REGISTRY/shepherd-node-runtime:$CANDIDATE_TAG"
+
       - name: Start clean candidate stack
-        env:
-          FLOCK_VERSION: ${{ env.CANDIDATE_TAG }}
-        run: docker compose up -d --no-build --wait postgres orchestrator web caddy
+        run: docker compose up -d --no-build --wait postgres node-runtime orchestrator web caddy
 
       - name: Verify migrations, readiness, setup, login, and API
         run: |
@@ -289,11 +298,11 @@ jobs:
             "$origin/api/auth/me" | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure "$origin/" \
             | grep -q '<div id="root">'
-          docker compose exec -T orchestrator flock-agentd version | tee -a release-smoke.log
+          docker compose exec -T node-runtime flock-agentd version | tee -a release-smoke.log
           {
-            docker compose exec -T orchestrator codex --version
-            docker compose exec -T orchestrator opencode --version
-            docker compose exec -T orchestrator sh -lc 'claude --version 2>/dev/null || echo "claude: runtime installer disabled in candidate smoke"'
+            docker compose exec -T node-runtime gosu flock-agent codex --version
+            docker compose exec -T node-runtime gosu flock-agent opencode --version
+            docker compose exec -T node-runtime sh -lc 'gosu flock-agent claude --version 2>/dev/null || echo "claude: runtime installer disabled in candidate smoke"'
           } | tee agent-versions.txt | tee -a release-smoke.log
           curl --fail --silent --show-error --insecure -b release-cookies.txt \
             "$origin/api/diagnostics" | tee release-diagnostics.json
@@ -375,6 +384,35 @@ jobs:
             -b release-preview-cookies.txt -o /dev/null -w '%{http_code}' \
             "$preview_origin/")"
           test "$revoked_status" = 404
+
+          # Core lifecycle invariant: replacing only the control plane must not
+          # replace the runtime or its live local session process.
+          runtime_container_before="$(docker compose ps -q node-runtime)"
+          runtime_start_before="$(docker compose exec -T node-runtime awk '{print $22}' /proc/1/stat)"
+          session_pid_before=''
+          for _attempt in $(seq 1 30); do
+            session_pid_before="$(curl --fail --silent --show-error --insecure -b release-cookies.txt \
+              "$origin/api/nodes/$node_id/info" | jq -r --arg id "$session_id" '.processes[$id].pid // empty')"
+            [ -n "$session_pid_before" ] && break
+            sleep 1
+          done
+          test -n "$session_pid_before"
+          docker compose up -d --no-build --no-deps --force-recreate orchestrator
+          for _attempt in $(seq 1 60); do
+            if docker compose exec -T orchestrator node -e \
+              "fetch('http://127.0.0.1:8080/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker compose ps -q node-runtime)" = "$runtime_container_before"
+          test "$(docker compose exec -T node-runtime awk '{print $22}' /proc/1/stat)" = "$runtime_start_before"
+          session_pid_after="$(curl --fail --silent --show-error --insecure -b release-cookies.txt \
+            "$origin/api/nodes/$node_id/info" | jq -r --arg id "$session_id" '.processes[$id].pid // empty')"
+          test "$session_pid_after" = "$session_pid_before"
+          printf 'runtime=%s session=%s pid=%s survived orchestrator recreation\n' \
+            "$runtime_container_before" "$session_id" "$session_pid_before" | tee -a release-smoke.log
+
           curl --fail --silent --show-error --insecure "${auth[@]}" -X DELETE \
             "$origin/api/sessions/$session_id" >/dev/null
 
@@ -407,7 +445,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - name: Download candidate digests
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -440,12 +482,12 @@ jobs:
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
-          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
             digest="$(cat "release-candidates/digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
             annotations=''
-            if [ "$image" = shepherd-orchestrator ]; then
+            if [ "$image" = shepherd-node-runtime ]; then
               codex_version="$(sed -n '1s/.* //p' release-smoke/agent-versions.txt)"
               opencode_version="$(sed -n '2s/.* //p' release-smoke/agent-versions.txt)"
               annotations="--annotation index:io.flock.agent.codex-version=$codex_version --annotation index:io.flock.agent.opencode-version=$opencode_version"
@@ -469,7 +511,7 @@ jobs:
           docker logout ghcr.io
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
-          for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
             if ! manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"; then
               printf '::error::%s must be public before this release can be published. Set Package settings → Change visibility → Public, then rerun failed jobs.\n' "$REGISTRY/$image"
               exit 1
@@ -477,6 +519,23 @@ jobs:
             printf '%s\n' "$manifest" | grep -q 'linux/amd64'
             printf '%s\n' "$manifest" | grep -q 'linux/arm64'
           done
+
+      - name: Build exact deployment bundle
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: scripts/build-deployment-bundle.sh "$VERSION" release-candidates/digests dist/deployment
+
+      - name: Attest deployment bundle
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: dist/deployment/shepherd-deployment-*.tar.gz
+
+      - name: Upload deployment bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: deployment-bundle
+          path: dist/deployment/
+          retention-days: 90
 
   release:
     name: Publish GitHub release last
@@ -494,6 +553,12 @@ jobs:
         with:
           name: release-smoke
           path: release-smoke
+
+      - name: Download deployment bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: deployment-bundle
+          path: deployment-bundle
 
       - name: Create release only after image verification
         env:
@@ -531,4 +596,7 @@ jobs:
           # shellcheck disable=SC2086
           gh release create "$TAG" --verify-tag --notes-file release-tool-versions.md --title "Shepherd ${TAG#v}" $prerelease
           cp agentd/COMPATIBILITY.json agentd-compatibility.json
-          gh release upload "$TAG" release-smoke/release-diagnostics.json release-smoke/agent-versions.txt agentd-compatibility.json
+          gh release upload "$TAG" \
+            release-smoke/release-diagnostics.json release-smoke/agent-versions.txt \
+            agentd-compatibility.json deployment-bundle/shepherd-deployment-*.tar.gz \
+            deployment-bundle/shepherd-deployment-*.tar.gz.sha256

@@ -5,8 +5,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 	"github.com/billiondollarsolo/flock/agentd/internal/listeners"
 	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
+	"github.com/billiondollarsolo/flock/agentd/internal/nodeexec"
 	"github.com/billiondollarsolo/flock/agentd/internal/session"
 	"github.com/billiondollarsolo/flock/agentd/proto"
 )
@@ -43,31 +46,45 @@ type Server struct {
 	layout         LayoutStore
 	runtime        *identity.Runtime
 	stats          controlStats
+	tunnelSlots    chan struct{}
+	tunnelLifetime time.Duration
 }
 
 type controlStats struct {
-	connections    atomic.Uint64
-	authFailures   atomic.Uint64
-	malformed      atomic.Uint64
-	writeTimeouts  atomic.Uint64
-	sessionsOpened atomic.Uint64
-	sessionsClosed atomic.Uint64
-	rotations      atomic.Uint64
+	connections     atomic.Uint64
+	authFailures    atomic.Uint64
+	malformed       atomic.Uint64
+	writeTimeouts   atomic.Uint64
+	sessionsOpened  atomic.Uint64
+	sessionsClosed  atomic.Uint64
+	rotations       atomic.Uint64
+	execRequests    atomic.Uint64
+	execFailures    atomic.Uint64
+	execTimeouts    atomic.Uint64
+	execTruncations atomic.Uint64
+	tcpTunnels      atomic.Uint64
+	tunnelRejects   atomic.Uint64
 }
 
 type ControlDiagnostics struct {
-	Mode           string `json:"mode"`
-	Protocol       int    `json:"protocol"`
-	NodeID         string `json:"nodeId"`
-	DaemonVersion  string `json:"daemonVersion"`
-	Connections    uint64 `json:"connections"`
-	AuthFailures   uint64 `json:"authFailures"`
-	Malformed      uint64 `json:"malformedFrames"`
-	WriteTimeouts  uint64 `json:"writeTimeouts"`
-	DroppedOutput  uint64 `json:"droppedOutputBytes"`
-	SessionsOpened uint64 `json:"sessionsOpened"`
-	SessionsClosed uint64 `json:"sessionsClosed"`
-	Rotations      uint64 `json:"credentialRotations"`
+	Mode            string `json:"mode"`
+	Protocol        int    `json:"protocol"`
+	NodeID          string `json:"nodeId"`
+	DaemonVersion   string `json:"daemonVersion"`
+	Connections     uint64 `json:"connections"`
+	AuthFailures    uint64 `json:"authFailures"`
+	Malformed       uint64 `json:"malformedFrames"`
+	WriteTimeouts   uint64 `json:"writeTimeouts"`
+	DroppedOutput   uint64 `json:"droppedOutputBytes"`
+	SessionsOpened  uint64 `json:"sessionsOpened"`
+	SessionsClosed  uint64 `json:"sessionsClosed"`
+	Rotations       uint64 `json:"credentialRotations"`
+	ExecRequests    uint64 `json:"execRequests"`
+	ExecFailures    uint64 `json:"execFailures"`
+	ExecTimeouts    uint64 `json:"execTimeouts"`
+	ExecTruncations uint64 `json:"execTruncations"`
+	TCPTunnels      uint64 `json:"tcpTunnels"`
+	TunnelRejects   uint64 `json:"tunnelRejects"`
 }
 
 // LayoutStore persists per-workspace pane layouts (implemented in task #22).
@@ -77,10 +94,18 @@ type LayoutStore interface {
 }
 
 func New(mgr *session.Manager, version, nodeID, secret, credentialFile string, layout LayoutStore, runtime *identity.Runtime) *Server {
-	return &Server{mgr: mgr, version: version, nodeID: nodeID, secret: secret, credentialFile: credentialFile, layout: layout, runtime: runtime}
+	return &Server{
+		mgr: mgr, version: version, nodeID: nodeID, secret: secret,
+		credentialFile: credentialFile, layout: layout, runtime: runtime,
+		tunnelSlots:    make(chan struct{}, 32),
+		tunnelLifetime: 8 * time.Hour,
+	}
 }
 
-var controlCapabilities = []string{"pty", "resize", "scrollback", "status", "node-info", "layout", "acp", "listening_ports_v1"}
+var controlCapabilities = []string{
+	"pty", "resize", "scrollback", "status", "node-info", "layout", "acp",
+	"listening_ports_v1", "exec_v1", "tcp_tunnel_v1",
+}
 
 // conn is the per-connection state.
 type conn struct {
@@ -92,6 +117,15 @@ type conn struct {
 	statusSub *session.StatusSub
 	authed    bool
 	challenge *authChallenge
+	ctx       context.Context
+	cancel    context.CancelFunc
+	role      string
+
+	operationMu      sync.Mutex
+	operationStarted bool
+	upstream         net.Conn
+	tunnelSlot       bool
+	tunnelDeadline   time.Time
 }
 
 type authChallenge struct {
@@ -108,7 +142,8 @@ func (s *Server) HandleConn(raw net.Conn) {
 			fmt.Fprintf(os.Stderr, "[flock-agentd] connection handler panic: %v\n", r)
 		}
 	}()
-	c := &conn{s: s, raw: raw, subs: make(map[string]*session.Subscription)}
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &conn{s: s, raw: raw, subs: make(map[string]*session.Subscription), ctx: ctx, cancel: cancel}
 	defer c.cleanup()
 	for {
 		typ, payload, err := proto.ReadFrame(raw)
@@ -130,6 +165,23 @@ func (s *Server) HandleConn(raw net.Conn) {
 			}
 			if sess := s.mgr.Get(sid); sess != nil {
 				_ = sess.Write(data)
+			}
+		case proto.TypeTCPInput:
+			if !c.authed || c.role != "operation" {
+				continue
+			}
+			c.operationMu.Lock()
+			upstream := c.upstream
+			c.operationMu.Unlock()
+			if upstream != nil {
+				deadline := time.Now().Add(writeTimeout)
+				if !c.tunnelDeadline.IsZero() && c.tunnelDeadline.Before(deadline) {
+					deadline = c.tunnelDeadline
+				}
+				_ = upstream.SetWriteDeadline(deadline)
+				if _, writeErr := upstream.Write(payload); writeErr != nil {
+					_ = raw.Close()
+				}
 			}
 		}
 	}
@@ -161,6 +213,15 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			c.reject("authentication unavailable")
 			return
 		}
+		role := ctrl.ConnectionRole
+		if role == "" {
+			role = "control"
+		}
+		if role != "control" && role != "operation" {
+			c.reject("invalid connection role")
+			return
+		}
+		c.role = role
 		c.challenge = &authChallenge{clientNonce: ctrl.ClientNonce, serverNonce: serverNonce, secret: secret}
 		c.sendControl(proto.Control{
 			Op:              "challenge",
@@ -171,6 +232,7 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			ServerNonce:     serverNonce,
 			Capabilities:    controlCapabilities,
 			CredentialID:    ctrl.CredentialID,
+			ConnectionRole:  role,
 			ServerMAC: controlauth.MAC(secret, "server", c.s.nodeID,
 				ctrl.ClientNonce, serverNonce, c.s.version, controlCapabilities),
 		})
@@ -197,8 +259,11 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			DaemonVersion:   c.s.version,
 			NodeID:          c.s.nodeID,
 			Capabilities:    controlCapabilities,
+			ConnectionRole:  c.role,
 		})
-		c.startStatusForwarder()
+		if c.role == "control" {
+			c.startStatusForwarder()
+		}
 		return
 	}
 	if !c.authed {
@@ -275,6 +340,26 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			Op: "listeningPorts", ListeningPorts: ports,
 			ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), DiscoveryError: discoveryError,
 		})
+	case "exec":
+		if c.role != "operation" || !c.beginOperation() {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "exec requires a fresh operation connection"})
+			return
+		}
+		c.s.stats.execRequests.Add(1)
+		go c.runExec(ctrl)
+	case "dialTcp":
+		if c.role != "operation" || !c.beginOperation() {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "TCP tunnel requires a fresh operation connection"})
+			return
+		}
+		go c.startTCPTunnel(ctrl)
+	case "tcpCloseWrite":
+		c.operationMu.Lock()
+		upstream := c.upstream
+		c.operationMu.Unlock()
+		if writer, ok := upstream.(interface{ CloseWrite() error }); ok {
+			_ = writer.CloseWrite()
+		}
 	case "getLayout":
 		if c.s.layout != nil {
 			c.sendControl(proto.Control{Op: "layout", Workspace: ctrl.Workspace, Layout: c.s.layout.Get(ctrl.Workspace)})
@@ -338,7 +423,125 @@ func (s *Server) diagnostics() ControlDiagnostics {
 		Malformed: s.stats.malformed.Load(), WriteTimeouts: s.stats.writeTimeouts.Load(),
 		DroppedOutput:  s.mgr.DroppedOutputBytes(),
 		SessionsOpened: s.stats.sessionsOpened.Load(), SessionsClosed: s.stats.sessionsClosed.Load(),
-		Rotations: s.stats.rotations.Load(),
+		Rotations:    s.stats.rotations.Load(),
+		ExecRequests: s.stats.execRequests.Load(), ExecFailures: s.stats.execFailures.Load(),
+		ExecTimeouts: s.stats.execTimeouts.Load(), ExecTruncations: s.stats.execTruncations.Load(),
+		TCPTunnels:    s.stats.tcpTunnels.Load(),
+		TunnelRejects: s.stats.tunnelRejects.Load(),
+	}
+}
+
+func (c *conn) beginOperation() bool {
+	c.operationMu.Lock()
+	defer c.operationMu.Unlock()
+	if c.operationStarted {
+		return false
+	}
+	c.operationStarted = true
+	return true
+}
+
+func (c *conn) runExec(control proto.Control) {
+	result, err := nodeexec.New(c.s.runtime).Run(c.ctx, nodeexec.Request{
+		Command:     control.Command,
+		Cwd:         control.Cwd,
+		Env:         control.Env,
+		Input:       control.Input,
+		Timeout:     time.Duration(control.TimeoutMS) * time.Millisecond,
+		StdoutLimit: control.StdoutLimit,
+		StderrLimit: control.StderrLimit,
+	})
+	if err != nil {
+		c.s.stats.execFailures.Add(1)
+		if c.ctx.Err() == nil {
+			c.sendControl(proto.Control{Op: "error", ID: control.ID, Message: err.Error()})
+		}
+		return
+	}
+	if result.TimedOut {
+		c.s.stats.execTimeouts.Add(1)
+	}
+	if result.StdoutTruncated || result.StderrTruncated {
+		c.s.stats.execTruncations.Add(1)
+	}
+	c.sendControl(proto.Control{
+		Op: "execResult", ID: control.ID,
+		Code: result.ExitCode, Signal: result.Signal,
+		Stdout: result.Stdout, Stderr: result.Stderr, TimedOut: result.TimedOut,
+		StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated,
+	})
+}
+
+func (c *conn) startTCPTunnel(control proto.Control) {
+	if control.TargetHost != "127.0.0.1" && control.TargetHost != "::1" {
+		c.s.stats.tunnelRejects.Add(1)
+		c.sendControl(proto.Control{Op: "error", ID: control.ID, Message: "TCP tunnel target must be a literal loopback address"})
+		return
+	}
+	if control.TargetPort < 1 || control.TargetPort > 65535 {
+		c.s.stats.tunnelRejects.Add(1)
+		c.sendControl(proto.Control{Op: "error", ID: control.ID, Message: "TCP tunnel port is invalid"})
+		return
+	}
+	select {
+	case c.s.tunnelSlots <- struct{}{}:
+		c.operationMu.Lock()
+		c.tunnelSlot = true
+		c.operationMu.Unlock()
+	default:
+		c.s.stats.tunnelRejects.Add(1)
+		c.sendControl(proto.Control{Op: "error", ID: control.ID, Message: "TCP tunnel limit reached"})
+		return
+	}
+
+	dialer := net.Dialer{Timeout: 3 * time.Second}
+	upstream, err := dialer.DialContext(c.ctx, "tcp", net.JoinHostPort(control.TargetHost, fmt.Sprint(control.TargetPort)))
+	if err != nil {
+		c.releaseTunnelSlot()
+		if c.ctx.Err() == nil {
+			c.sendControl(proto.Control{Op: "error", ID: control.ID, Message: "TCP tunnel target is unavailable"})
+		}
+		return
+	}
+	c.operationMu.Lock()
+	c.upstream = upstream
+	c.tunnelDeadline = time.Now().Add(c.s.tunnelLifetime)
+	c.operationMu.Unlock()
+	c.s.stats.tcpTunnels.Add(1)
+	c.sendControl(proto.Control{Op: "tcpConnected", ID: control.ID})
+
+	buffer := make([]byte, 64<<10)
+	for {
+		readDeadline := time.Now().Add(2 * time.Minute)
+		c.operationMu.Lock()
+		lifetimeDeadline := c.tunnelDeadline
+		c.operationMu.Unlock()
+		if lifetimeDeadline.Before(readDeadline) {
+			readDeadline = lifetimeDeadline
+		}
+		_ = upstream.SetReadDeadline(readDeadline)
+		count, readErr := upstream.Read(buffer)
+		if count > 0 {
+			c.sendTCPData(buffer[:count])
+		}
+		if readErr != nil {
+			if readErr != io.EOF && c.ctx.Err() == nil {
+				c.sendControl(proto.Control{Op: "tcpClosed", ID: control.ID, Message: "upstream connection closed"})
+			} else if c.ctx.Err() == nil {
+				c.sendControl(proto.Control{Op: "tcpClosed", ID: control.ID})
+			}
+			_ = c.raw.Close()
+			return
+		}
+	}
+}
+
+func (c *conn) releaseTunnelSlot() {
+	c.operationMu.Lock()
+	defer c.operationMu.Unlock()
+	if c.tunnelSlot {
+		c.tunnelSlot = false
+		<-c.s.tunnelSlots
 	}
 }
 
@@ -508,6 +711,17 @@ func statusControl(ev session.StatusEvent) proto.Control {
 }
 
 func (c *conn) cleanup() {
+	if c.cancel != nil {
+		c.cancel()
+	}
+	c.operationMu.Lock()
+	upstream := c.upstream
+	c.upstream = nil
+	c.operationMu.Unlock()
+	if upstream != nil {
+		_ = upstream.Close()
+	}
+	c.releaseTunnelSlot()
 	if c.statusSub != nil {
 		c.statusSub.Close()
 	}
@@ -538,6 +752,18 @@ func (c *conn) sendData(sid string, data []byte) {
 	defer c.wmu.Unlock()
 	_ = c.raw.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if err := proto.WriteFrame(c.raw, proto.TypePtyOutput, proto.EncodeData(sid, data)); err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			c.s.stats.writeTimeouts.Add(1)
+		}
+		_ = c.raw.Close()
+	}
+}
+
+func (c *conn) sendTCPData(data []byte) {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_ = c.raw.SetWriteDeadline(time.Now().Add(writeTimeout))
+	if err := proto.WriteFrame(c.raw, proto.TypeTCPOutput, data); err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			c.s.stats.writeTimeouts.Add(1)
 		}

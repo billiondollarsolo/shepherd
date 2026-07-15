@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Bot } from 'lucide-react';
+import { AlertTriangle, Bot } from 'lucide-react';
 import {
   AgentAuthorityEnum,
   authorityAllows,
   type AgentAuthority,
   type AgentType,
   type LauncherPreset,
+  type NodeInfo,
   type SessionPermissionMode,
 } from '@flock/shared';
 import {
@@ -90,6 +91,19 @@ const MODE_HINTS: Record<SessionPermissionMode, string> = {
   autonomous: '⚠ No prompts at all. Use only on an isolated / sandboxed node.',
 };
 
+/** Explain only mandatory compatibility blocks; supported older daemons stay usable. */
+export function daemonLaunchBlockMessage(info: NodeInfo | undefined): string | null {
+  const lifecycle = info?.lifecycle;
+  const compatibility = lifecycle?.daemonCompatibility;
+  if (compatibility?.state !== 'required') return null;
+  const activeSessions = lifecycle?.upgrade?.activeSessions ?? 0;
+  const protectedSessions =
+    activeSessions > 0
+      ? ` ${activeSessions} existing session${activeSessions === 1 ? '' : 's'} remain protected and must finish first; Shepherd will then upgrade the node daemon before accepting new work.`
+      : '';
+  return `${compatibility.detail}${protectedSessions} Upgrade the node daemon from Node details, then try again.`;
+}
+
 /**
  * The permission modes each agent ACTUALLY supports — mirrors the orchestrator's
  * per-agent flag mapping (agent-launch.ts). The options used to be the same four
@@ -167,6 +181,7 @@ export function AddSessionDialog(): JSX.Element {
   // with "executable not found". Fail-OPEN while detection is unknown (loading, or
   // a node that doesn't report info) so we never block every agent.
   const nodeInfoQuery = useNodeInfo(project?.nodeId ?? null);
+  const daemonLaunchBlock = daemonLaunchBlockMessage(nodeInfoQuery.data);
   const detected = useMemo(
     () => new Set((nodeInfoQuery.data?.agents ?? []).map((a) => a.name)),
     [nodeInfoQuery.data],
@@ -348,6 +363,18 @@ export function AddSessionDialog(): JSX.Element {
           </span>
         </label>
       ) : null}
+      {daemonLaunchBlock ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-status-error/40 bg-status-error/10 p-3 text-xs text-flock-ink-primary"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-error" aria-hidden="true" />
+          <span>
+            <span className="block font-semibold">New sessions are paused on this node</span>
+            <span className="mt-0.5 block text-flock-ink-muted">{daemonLaunchBlock}</span>
+          </span>
+        </div>
+      ) : null}
       {isDev ? (
         <Field
           label="Command"
@@ -374,6 +401,7 @@ export function AddSessionDialog(): JSX.Element {
           disabled={
             busy ||
             !projectId ||
+            daemonLaunchBlock !== null ||
             !agentAvailable(agentType) ||
             (isDev && !devCommand.trim()) ||
             (effectiveAuthority === 'manage' && !confirmedManage)

@@ -18,7 +18,7 @@
  * registry never accumulates idle state. The agent process itself is never
  * killed here (NFR-AV1) — only the orchestrator's attachment + buffer.
  */
-import type { NodeTransport, PtyExit } from '../../nodes/transport/transport.js';
+import type { NodePtyTransport, PtyExit } from '../../nodes/transport/transport.js';
 import {
   PtySession,
   type PtySessionOptions,
@@ -40,7 +40,7 @@ export interface PtySessionResolver {
 
 /** Everything needed to open a session's shared PTY (resolved per session). */
 export interface PtySessionBinding {
-  transport: NodeTransport;
+  transport: NodePtyTransport;
   /** Builds the argv that ATTACHES this session's PTY (run inside the PTY). */
   attachCommand: () => string[];
   workingDir?: string;

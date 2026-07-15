@@ -73,15 +73,16 @@ docker run --rm -v "$PWD:/repo:ro" \
   git /repo --no-banner --redact
 ```
 
-Build all four images locally at least once when their Dockerfiles change:
+Build all five images locally at least once when their Dockerfiles change:
 
 ```bash
 docker build -f docker/Dockerfile.orchestrator -t shepherd-orchestrator:test .
+docker build -f docker/Dockerfile.node-runtime -t shepherd-node-runtime:test .
 docker build -f docker/Dockerfile.web -t shepherd-web:test .
 docker build -f docker/Dockerfile.caddy -t shepherd-caddy:test .
 docker build -f docker/Dockerfile.postgres -t shepherd-postgres:test .
 
-for image in shepherd-orchestrator shepherd-web shepherd-caddy shepherd-postgres; do
+for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
   docker run --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$PWD:/workspace:ro" \

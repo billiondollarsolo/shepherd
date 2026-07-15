@@ -19,6 +19,7 @@ import { NodeService, NodeFsService, preflightRemoteNode } from './nodes/index.j
 import { NodeWorkspaceService } from './nodes/node-workspace-service.js';
 import { AgentdActiveSessionsError, AgentdConnections } from './nodes/agentd/agentd-connections.js';
 import { AgentdPtyTransport } from './nodes/agentd/agentd-pty-transport.js';
+import { AgentdLocalTransport } from './nodes/agentd/agentd-local-transport.js';
 import { AgentdBootstrap } from './nodes/agentd/agentd-bootstrap.js';
 import { FsAgentdBinaryProvider } from './nodes/agentd/agentd-binary-provider.js';
 import type { NodeAgentdClient } from './nodes/agentd/agentd-client.js';
@@ -49,6 +50,7 @@ import {
   DrizzleSessionRegistry,
   DiffService,
   GitService,
+  type AgentdLaunchBlock,
 } from './sessions/index.js';
 import { renderHookConfig } from './sessions/config-injection/index.js';
 import {
@@ -150,8 +152,8 @@ export async function main(): Promise<void> {
   const secrets = new SecretStore({ audit: auditLogger });
   secrets.assertReady(); // fail loud at boot on a missing/malformed master key
 
-  // Node connection manager: owns live transports — a shared LocalTransport for
-  // the local node and a supervised ssh2 connection per SSH node (US-8). Adding
+  // Node connection manager: owns live transports — an agentd-backed operation
+  // transport for the local runtime and a supervised ssh2 connection per SSH node. Adding
   // an SSH node triggers a real connect; status is mirrored to the node row.
   // US-9: each SSH node gets a loopback reverse tunnel so agents can POST hook
   // callbacks to `127.0.0.1:<remotePort>` (forwarded over the managed connection
@@ -313,6 +315,7 @@ export async function main(): Promise<void> {
   };
   const expectedAgentdVersion = resolveAgentdVersion();
   const agentdCompatibilityPolicy = loadAgentdCompatibilityPolicy(expectedAgentdVersion);
+  let localNodeId = '';
   const agentdConns = new AgentdConnections({
     socketPath: process.env.FLOCK_AGENTD_SOCKET || undefined,
     supportedProtocolVersions: [
@@ -324,6 +327,15 @@ export async function main(): Promise<void> {
     identityFor: (nodeId, kind) => nodeControlCredentials.forNode(nodeId, kind),
     onStatus: (id, state, meta) => forwardAgentdStatus(id, state, meta),
     onAudit: recordNodeControlEvent,
+    compatibilityPolicy: agentdCompatibilityPolicy,
+    onConnectionState: (nodeId, state) => {
+      if (!localNodeId || nodeId !== localNodeId) return;
+      const status = state === 'connected' ? 'connected' : 'disconnected';
+      void nodes
+        .setConnectionStatus(nodeId, status)
+        .then(() => onConnectivityChange(nodeId, status, undefined))
+        .catch((error) => recordFailure('agentd', 'persist-local-status', error, { nodeId }));
+    },
   });
   // Enrollment for REMOTE nodes: verifies and installs the arch-matched binary
   // as a root-owned system service, then drops sessions to flock-agent.
@@ -337,7 +349,7 @@ export async function main(): Promise<void> {
     ),
     onEvent: recordNodeControlEvent,
   });
-  let localNodeId = '';
+  connections.setLocalTransport(new AgentdLocalTransport(agentdConns, () => localNodeId));
 
   // Resolve the daemon client for a node: local → unix socket; remote → SSH
   // bootstrap + direct-tcpip. Returns null if the daemon link can't be
@@ -597,6 +609,14 @@ export async function main(): Promise<void> {
         ...info,
         lifecycle: {
           expectedDaemonVersion: expectedAgentdVersion,
+          runtimeKind: node.kind === 'local' ? 'bundled-local' : 'ssh-node',
+          reachable: true,
+          lastSuccessfulHandshake: agentdConns.lastHandshakeFor(nodeId),
+          activeSessions: Object.keys((info.processes as Record<string, unknown>) ?? {}).length,
+          operatorUpgradeCommand:
+            node.kind === 'local' && daemonCompatibility.state !== 'compatible'
+              ? `./scripts/flock-upgrade.sh ${expectedAgentdVersion} --upgrade-runtime`
+              : null,
           daemonCompatibility,
           upgrade: agentdConns.upgradeFor(nodeId),
         },
@@ -853,6 +873,36 @@ export async function main(): Promise<void> {
   // (the reverse tunnel forwards it back); locally it hits the orchestrator
   // directly. PUBLIC_BASE_URL is the orchestrator's own origin.
   const hookBaseUrl = originPolicy.publicBaseUrl ?? `http://localhost:${process.env.PORT ?? 8080}`;
+  const localHookBaseUrl =
+    process.env.FLOCK_LOCAL_HOOK_BASE_URL?.replace(/\/$/, '') ?? hookBaseUrl.replace(/\/$/, '');
+
+  /**
+   * Convert the authenticated compatibility state into one stable, actionable
+   * launch refusal. Recommended older daemons intentionally return null.
+   */
+  const agentdLaunchBlockForNode = (nodeId: string, nodeName: string): AgentdLaunchBlock | null => {
+    const compatibility = agentdConns.compatibilityFor(nodeId);
+    if (compatibility?.state !== 'required') return null;
+    const rollout = agentdConns.upgradeFor(nodeId);
+    const activeSessions = rollout?.activeSessions ?? 0;
+    const drainMessage =
+      activeSessions > 0
+        ? ` ${activeSessions} existing session${activeSessions === 1 ? '' : 's'} remain protected. Finish ${activeSessions === 1 ? 'it' : 'them'}; Shepherd will upgrade the node daemon before accepting new work.`
+        : ' Upgrade the node daemon from Node details, then try again.';
+    return {
+      status: 'blocked',
+      code: 'agentd_upgrade_required',
+      message: `Cannot start a new agent on “${nodeName}”. ${compatibility.detail}${drainMessage}`,
+      details: {
+        nodeId,
+        reason: compatibility.reason,
+        installedVersion: compatibility.installedVersion,
+        preferredVersion: compatibility.preferredVersion,
+        minimumVersion: compatibility.minimumVersion,
+        activeSessions,
+      },
+    };
+  };
 
   // Session create launches the agent on the target node's flock-agentd daemon
   // (local OR ssh), injecting the per-session Shepherd hook env (US-19) so the agent
@@ -864,11 +914,28 @@ export async function main(): Promise<void> {
     audit: auditLogger,
     issueOrchestrationCapability: (session, scopes) =>
       agentCapabilities.issue(session.id, session.projectId, scopes),
+    agentdLaunchPreflight: async ({ nodeId, nodeName, nodeKind }) => {
+      const client = await agentdClientForNode(nodeId, nodeKind);
+      if (!client) {
+        const failure = agentdConns.failureFor(nodeId);
+        if (failure?.code !== 'protocol') return null;
+        return {
+          status: 'blocked',
+          code: 'agentd_upgrade_required',
+          message:
+            `Cannot start a new agent on “${nodeName}”. Its node daemon control protocol ` +
+            'is not supported by this Shepherd release. Existing sessions were not modified. ' +
+            'Drain the node outside Shepherd, then upgrade or reprovision its daemon.',
+          details: { nodeId, reason: 'unsupported-protocol' },
+        };
+      }
+      return agentdLaunchBlockForNode(nodeId, nodeName);
+    },
     // flock-agentd is the transport for ALL nodes (local + ssh). It is MANDATORY:
     // 'launched' on success, 'failed' on any error (the session then shows a
     // disconnected dot instead of a silent shell).
     agentdLaunch: useAgentd
-      ? async ({ session, nodeKind, command, env, mode }) => {
+      ? async ({ session, nodeName, nodeKind, command, env, mode }) => {
           // agentd is the ONLY transport (local + ssh). On a hard failure mark the
           // session 'error' (red dot + reason) rather than blank — never a silent shell.
           const fail = (reason: string) => {
@@ -877,6 +944,8 @@ export async function main(): Promise<void> {
           };
           const client = await agentdClientForNode(session.nodeId, nodeKind);
           if (!client) return fail('flock-agentd unreachable on node');
+          const compatibilityBlock = agentdLaunchBlockForNode(session.nodeId, nodeName);
+          if (compatibilityBlock) return compatibilityBlock;
           // Scoped hook-config (US-19, T1): agentd seeds it on the node so the agent
           // calls back into Shepherd's hook endpoint (→ awaiting_input, Plan, Web Push).
           // ACP sessions (Gemini) skip hook injection — status + chat come from the
@@ -924,6 +993,8 @@ export async function main(): Promise<void> {
               configBaseSubdir: scoped?.configBaseSubdir,
             });
           } catch (err) {
+            const raceBlock = agentdLaunchBlockForNode(session.nodeId, nodeName);
+            if (raceBlock) return raceBlock;
             return fail(`agent launch failed: ${err instanceof Error ? err.message : String(err)}`);
           }
           return 'launched';
@@ -941,6 +1012,7 @@ export async function main(): Promise<void> {
         statusDetail: session.statusDetail,
       });
     },
+    onSessionCreateAborted: (sessionId) => liveChannels.untrackSession(sessionId),
     sessionEnv: async (session, hookToken, orchestrationToken) => {
       // Over an SSH node the agent must curl the node-local reverse-tunnel port
       // (US-9); the tunnel forwards it back to the orchestrator. Locally it hits
@@ -948,7 +1020,11 @@ export async function main(): Promise<void> {
       // tunnel not up) falls back to the orchestrator's own base URL.
       const tunnelPort = connections.hookTunnelPort(session.nodeId);
       const hookBase =
-        tunnelPort != null ? `http://127.0.0.1:${tunnelPort}` : hookBaseUrl.replace(/\/$/, '');
+        session.nodeId === localNodeId
+          ? localHookBaseUrl
+          : tunnelPort != null
+            ? `http://127.0.0.1:${tunnelPort}`
+            : hookBaseUrl.replace(/\/$/, '');
       const hookUrl = `${hookBase}/api/hooks/${session.id}`;
       return {
         FLOCK_SESSION_ID: session.id,
@@ -1132,6 +1208,9 @@ export async function main(): Promise<void> {
   // Boot seeding: ensure a single `local` node exists so the paddock tree is
   // never empty. Idempotent — a restart never creates a duplicate.
   localNodeId = (await nodes.ensureLocalNode()).id;
+  void agentdConns
+    .clientForLocal(localNodeId)
+    .catch((error) => recordFailure('agentd', 'connect-local-runtime', error));
 
   // Hydrate the live binding from surviving sessions so the terminal can attach
   // and status shows after an orchestrator restart (NFR-AV1). Rehydrate first,
@@ -1235,6 +1314,13 @@ export async function main(): Promise<void> {
       }
     },
     nodeInfo: useAgentd ? nodeInfo : undefined,
+    nodeInfoUnavailableScope: useAgentd
+      ? async (nodeId: string) => {
+          const node = await nodes.getNode(nodeId);
+          if (!node) return 'unknown' as const;
+          return node.kind === 'local' ? ('local-runtime' as const) : ('remote-node' as const);
+        }
+      : undefined,
     nodePreflight: useAgentd ? nodePreflight : undefined,
     // Kill a split-pane shell on the daemon when the user closes the pane, then
     // drop the orchestrator's PtySession so a re-split builds a FRESH shell

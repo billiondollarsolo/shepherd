@@ -20,6 +20,9 @@ class FakeHost implements AgentdHost {
   execs: string[] = [];
   uploads: Array<{ local: string; remote: string; mode?: number; content?: string }> = [];
   listening = false;
+  autoListenOnRestart = true;
+  listenOnForwardAttempt: number | null = null;
+  forwardAttempts = 0;
 
   constructor(private readonly rules: ExecRule[]) {}
 
@@ -29,6 +32,9 @@ class FakeHost implements AgentdHost {
       if (rule.match.test(command)) {
         return { code: 0, stdout: '', stderr: '', ...rule.result };
       }
+    }
+    if (this.autoListenOnRestart && /flock-node-admin (?:restart|rollback)(?:\s|$)/.test(command)) {
+      this.listening = true;
     }
     return { code: 0, stdout: '', stderr: '' };
   }
@@ -42,6 +48,13 @@ class FakeHost implements AgentdHost {
   }
 
   async forwardOut(): Promise<Duplex> {
+    this.forwardAttempts += 1;
+    if (
+      this.listenOnForwardAttempt !== null &&
+      this.forwardAttempts >= this.listenOnForwardAttempt
+    ) {
+      this.listening = true;
+    }
     if (!this.listening) throw new Error('connection refused');
     return new PassThrough();
   }
@@ -84,6 +97,51 @@ describe('AgentdBootstrap secure system service', () => {
     expect(host.uploads.filter((upload) => upload.mode === 0o600)).toHaveLength(1);
     expect(host.execs.some((command) => command.includes('install-service'))).toBe(true);
     expect(host.execs.some((command) => command.includes('flock-node-admin restart'))).toBe(true);
+  });
+
+  it('waits for the daemon port after systemd reports the service active', async () => {
+    const host = new FakeHost([
+      {
+        match: /^\/usr\/local\/lib\/flock-agentd\/flock-agentd version/,
+        result: { stdout: '1.2.3\n' },
+      },
+      { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
+    ]);
+    host.autoListenOnRestart = false;
+    host.listenOnForwardAttempt = 4;
+    const bootstrap = new AgentdBootstrap({
+      version: '1.2.3',
+      port: 48222,
+      binaries,
+      readiness: { attempts: 4, intervalMs: 0 },
+    });
+
+    await expect(bootstrap.ensureRunning(host, IDENTITY)).resolves.toEqual({
+      host: '127.0.0.1',
+      port: 48222,
+    });
+    expect(host.forwardAttempts).toBe(4);
+  });
+
+  it('fails safely when an activated daemon never binds its control port', async () => {
+    const host = new FakeHost([
+      {
+        match: /^\/usr\/local\/lib\/flock-agentd\/flock-agentd version/,
+        result: { stdout: '1.2.3\n' },
+      },
+      { match: /printf %s "\$HOME"/, result: { stdout: '/home/admin' } },
+    ]);
+    host.autoListenOnRestart = false;
+    const bootstrap = new AgentdBootstrap({
+      version: '1.2.3',
+      port: 48222,
+      binaries,
+      readiness: { attempts: 2, intervalMs: 0 },
+    });
+
+    await expect(bootstrap.ensureRunning(host, IDENTITY)).rejects.toThrow(
+      /service did not become ready/,
+    );
   });
 
   it('leaves a healthy matching daemon and live sessions untouched', async () => {
@@ -269,6 +327,7 @@ describe('AgentdBootstrap secure system service', () => {
     const host = new FakeHost([]);
     await bootstrap.rollback(host, IDENTITY.nodeId);
     expect(host.execs).toContain('sudo -n /usr/local/sbin/flock-node-admin rollback');
+    expect(host.forwardAttempts).toBe(1);
     expect(events).toEqual(['rolled_back']);
   });
 });

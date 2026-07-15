@@ -190,6 +190,7 @@ func (m *Manager) CloseAll() {
 
 // ProcStat is a live session's resource usage, surfaced in nodeInfo.
 type ProcStat struct {
+	PID      int     `json:"pid"`
 	RSSBytes uint64  `json:"rssBytes"`
 	CPUPct   float64 `json:"cpuPct"`
 }
@@ -228,7 +229,7 @@ func (m *Manager) ProcessStats() map[string]ProcStat {
 			}
 		}
 		next[id] = procSample{proc: proc, total: total}
-		out[id] = ProcStat{RSSBytes: metrics.ProcRSSBytes(pid), CPUPct: math.Round(cpu*10) / 10}
+		out[id] = ProcStat{PID: pid, RSSBytes: metrics.ProcRSSBytes(pid), CPUPct: math.Round(cpu*10) / 10}
 	}
 	m.procSamples = next
 	m.procMu.Unlock()

@@ -3,7 +3,7 @@
  * (the piece that makes an `ssh` node actually CONNECT, not just sit in the DB).
  *
  * For each node it resolves a {@link NodeTransport}:
- *   - `local` → a shared {@link LocalTransport} (no hop).
+ *   - `local` → the authenticated agentd command/TCP transport.
  *   - `ssh`   → a {@link SupervisedSshConnection} (managed ssh2 + autossh-style
  *               reconnect, US-8). It decrypts the node's private key via the
  *               {@link SecretStore} (US-3), connects, and mirrors the live
@@ -22,8 +22,7 @@ import { SECRET_NONCE_BYTES } from '@flock/shared';
 import type { Database } from '../db/client.js';
 import { nodes, secrets } from '../db/schema.js';
 import type { SecretStore } from '../secrets/secret-store.js';
-import { LocalTransport } from './transport/local-transport.js';
-import type { NodeTransport } from './transport/transport.js';
+import type { NodeCommandTransport } from './transport/transport.js';
 import { SupervisedSshConnection, type SshConnectionConfig } from './transport/ssh-connection.js';
 import type { HookEndpointTarget } from './tunnel/reverse-tunnel.js';
 import type { AgentdHost } from './agentd/ssh-agentd-host.js';
@@ -32,6 +31,8 @@ import { DEFAULT_SSH_PORT, parseCredential } from './node-service.js';
 export interface NodeConnectionManagerDeps {
   db: Database;
   secrets: SecretStore;
+  /** Local runtime command/TCP transport. May be installed after construction. */
+  localTransport?: NodeCommandTransport;
   /** Reconnect policy override (tests use fast backoff). */
   reconnect?: SshConnectionConfig['reconnect'];
   logger?: { warn(msg: string, err?: unknown): void; info?(msg: string): void };
@@ -67,8 +68,8 @@ export class NodeConnectionManager {
   private readonly onConnectivityChange?: NodeConnectionManagerDeps['onConnectivityChange'];
   private readonly hookTunnel?: NodeConnectionManagerDeps['hookTunnel'];
 
-  /** One shared local transport for all local-node work. */
-  private readonly local = new LocalTransport();
+  /** One shared agentd-backed transport for local-node commands and TCP dials. */
+  private local: NodeCommandTransport | null;
   /** Live SSH connections by node id. */
   private readonly ssh = new Map<string, SupervisedSshConnection>();
   /** In-flight connectNode() per node id — coalesces concurrent connects so a
@@ -79,10 +80,21 @@ export class NodeConnectionManager {
   constructor(deps: NodeConnectionManagerDeps) {
     this.db = deps.db;
     this.secrets = deps.secrets;
+    this.local = deps.localTransport ?? null;
     this.reconnect = deps.reconnect;
     this.logger = deps.logger ?? { warn: (m, e) => console.warn(`[node-conn] ${m}`, e ?? '') };
     this.onConnectivityChange = deps.onConnectivityChange;
     this.hookTunnel = deps.hookTunnel;
+  }
+
+  /** Install the local runtime transport once its authenticated agentd owner exists. */
+  setLocalTransport(transport: NodeCommandTransport): void {
+    if (this.local && this.local !== transport) {
+      void this.local
+        .dispose()
+        .catch((error) => this.logger.warn('previous local transport dispose failed', error));
+    }
+    this.local = transport;
   }
 
   /**
@@ -221,10 +233,13 @@ export class NodeConnectionManager {
   }
 
   /** Resolve a transport for a node id (local → shared; ssh → live connection). */
-  async transportFor(nodeId: string): Promise<NodeTransport> {
+  async transportFor(nodeId: string): Promise<NodeCommandTransport> {
     const [row] = await this.db.select().from(nodes).where(eq(nodes.id, nodeId)).limit(1);
     if (!row) throw new Error(`Node ${nodeId} not found.`);
-    if (row.kind === 'local') return this.local;
+    if (row.kind === 'local') {
+      if (!this.local) throw new Error('The local runtime transport is not initialized.');
+      return this.local;
+    }
 
     let conn = this.ssh.get(nodeId);
     if (!conn) {
@@ -308,7 +323,7 @@ export class NodeConnectionManager {
     );
     this.ssh.clear();
     await this.local
-      .dispose()
+      ?.dispose()
       .catch((error) => this.logger.warn('local transport dispose failed', error));
   }
 

@@ -9,7 +9,7 @@ import { previewRuntimeSettings } from '../db/schema.js';
 import type { NodeTransport } from '../nodes/transport/transport.js';
 import { AuditLogger } from '../audit/audit.js';
 import { createPreviewGateway, type PreviewGateway } from './gateway.js';
-import { PreviewService } from './service.js';
+import { PreviewService, type ActivePreview } from './service.js';
 
 const SERVICE_ID = '11111111-1111-4111-8111-111111111111';
 const OWNER_ID = '22222222-2222-4222-8222-222222222222';
@@ -337,5 +337,87 @@ describe('Remote Preview gateway', () => {
     await expect(tester!()).resolves.toEqual([
       expect.objectContaining({ id: 'gateway', status: 'pass' }),
     ]);
+  });
+
+  it('omits ineffective COOP from private non-loopback HTTP previews', async () => {
+    upstream = createServer((_req, res) => {
+      // A development server may emit this itself. The gateway must strip it
+      // because the public private-HTTP origin is not a trustworthy context.
+      res.setHeader('cross-origin-opener-policy', 'same-origin');
+      res.end('private preview');
+    });
+    await new Promise<void>((resolve) => upstream!.listen(0, '127.0.0.1', resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+
+    const reservation = createServer();
+    await new Promise<void>((resolve) => reservation.listen(0, '127.0.0.1', resolve));
+    const publicPort = (reservation.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => reservation.close(() => resolve()));
+
+    const record: ActivePreview = {
+      id: SERVICE_ID,
+      serviceId: SERVICE_ID,
+      projectId: PROJECT_ID,
+      nodeId: NODE_ID,
+      targetHost: '127.0.0.1',
+      port: upstreamPort,
+      protocol: 'http',
+      backend: 'port-pool',
+      hostname: '100.64.0.1',
+      publicPort,
+      origin: `http://100.64.0.1:${publicPort}`,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      tokenHash: Buffer.alloc(32),
+      launchAvailable: true,
+      cookieName: 'shepherd_preview_private',
+      embedding: 'unknown',
+      embeddingReason: null,
+    };
+    const fakeService = {
+      onInactive: () => () => undefined,
+      setGatewayHealthy: vi.fn(),
+      setRoutingTester: vi.fn(),
+      limits: () => ({
+        maxConnectionsPerPreview: 4,
+        maxRequestBytes: 1024,
+        maxResponseBytes: 1024,
+        connectTimeoutMs: 100,
+        upstreamTimeoutMs: 1000,
+      }),
+      recordForPublicPort: () => record,
+      recordForHostname: () => null,
+      isActiveHostname: () => false,
+      authorize: () => true,
+      authenticate: () => true,
+      cookieName: () => record.cookieName,
+      cookieMaxAge: () => 60,
+      dial: () => Promise.resolve(genericTcpTunnel(upstreamPort)),
+      noteEmbeddingHeaders: vi.fn(),
+    };
+    gateway = createPreviewGateway(fakeService as unknown as PreviewService, {
+      host: '127.0.0.1',
+      port: 0,
+      pool: { host: '127.0.0.1', ports: [publicPort] },
+    });
+    await gateway.listen();
+    const host = `100.64.0.1:${publicPort}`;
+
+    const bootstrap = await request(publicPort, '/_shepherd/authorize', { host });
+    expect(bootstrap.status).toBe(200);
+    expect(bootstrap.headers['cross-origin-opener-policy']).toBeUndefined();
+
+    const authorized = await request(publicPort, '/_shepherd/authorize', {
+      host,
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: record.origin },
+      body: JSON.stringify({ token: 'private-preview-token' }),
+    });
+    expect(authorized.status).toBe(204);
+    const cookie = authorized.headers['set-cookie']![0]!.split(';', 1)[0]!;
+    const proxied = await request(publicPort, '/', { host, headers: { cookie } });
+    expect(proxied.status).toBe(200);
+    expect(proxied.body).toBe('private preview');
+    expect(proxied.headers['cross-origin-opener-policy']).toBeUndefined();
   });
 });

@@ -1,7 +1,6 @@
 /**
- * SshTransport — a {@link NodeTransport} that runs the SAME operations as
- * LocalTransport but over a managed ssh2 hop (US-8, spec §3 "Node transport":
- * "local = SSH minus the hop"). It carries `exec`, `openPty`, `dispose` across an
+ * SshTransport — a composite {@link NodeTransport} over a managed ssh2 hop.
+ * It carries `exec`, `openPty`, and `dispose` across an
  * already-established ssh2 {@link Client}; the connection lifecycle + autossh
  * supervision live in {@link SupervisedSshConnection} (ssh-connection.ts).
  *
@@ -37,7 +36,7 @@ const NODE_ADMIN_HELPER = '/usr/local/sbin/flock-node-admin';
 /**
  * Builds a single shell command line from an argv array, with optional cwd / env
  * prefixes. We always run through `sh -c` on the remote so behaviour matches
- * LocalTransport's `sh -c`-based contract assertions (redirection, `$VAR`, etc.).
+ * the shared `sh -c` contract assertions (redirection, `$VAR`, etc.).
  *
  * sshd typically refuses arbitrary `AcceptEnv`, so env is injected as inline
  * `KEY=value` assignments rather than relying on the ssh2 `env` channel option.
@@ -102,7 +101,7 @@ class SshPtyHandle implements PtyHandle {
     });
     // ssh2 emits 'exit' (with code OR signal) before the stream 'close'. We
     // record the exit details on 'exit' and finalise on 'close' so onData has
-    // drained, mirroring node-pty's single onExit semantics.
+    // drained, preserving single onExit semantics.
     channel.on('exit', (code: number | null, signal?: string) => {
       this.pendingExitCode = typeof code === 'number' ? code : null;
       this.pendingSignal = normaliseSignal(signal ?? null);

@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.caddy
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.4.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.5.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -79,7 +79,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.postgres
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.4.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.5.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -108,6 +108,68 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
+  # Bundled local node runtime — owns flock-agentd, agent CLIs, PTYs, workspaces,
+  # and node-local development servers. It is deliberately versioned and
+  # restarted independently from the control plane so active local sessions
+  # survive orchestrator/web/Caddy upgrades.
+  # ---------------------------------------------------------------------------
+  node-runtime:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node-runtime
+      args:
+        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.0}
+        VCS_REF: ${FLOCK_VCS_REF:-unknown}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.0}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      # agentd hardens and atomically replaces runtime-user-owned config/temp
+      # paths; FOWNER is required to enforce their modes after ownership exists.
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    pids_limit: 2048
+    stop_grace_period: 15s
+    environment:
+      FLOCK_AGENTD_SOCKET: /run/flock-agentd/control.sock
+      FLOCK_AGENTD_SECRET_FILE: /run/flock-agentd/control.key
+      FLOCK_AGENTD_NODE_ID_FILE: /run/flock-agentd/node-id
+      FLOCK_INSTALL_CLAUDE_CODE: ${FLOCK_INSTALL_CLAUDE_CODE:-1}
+    volumes:
+      - 'flock_agent_home:/home/flock-agent'
+      - 'flock_agentd_state:/var/lib/flock-agentd'
+      - 'flock_agentd_control:/run/flock-agentd'
+    tmpfs:
+      - /tmp:size=512m,mode=1777,noexec,nosuid,nodev
+    networks:
+      - runtime
+    healthcheck:
+      test:
+        - CMD
+        - flock-agentd
+        - probe
+        - --socket
+        - /run/flock-agentd/control.sock
+        - --secret-file
+        - /run/flock-agentd/control.key
+        - --node-id-file
+        - /run/flock-agentd/node-id
+        - --timeout
+        - 2s
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # Orchestrator — the brain. Status model, hooks, SSH, preview gateway, auth.
   # This service has no Docker socket. TLS is terminated by an upstream proxy
   # (US-39 / NFR-SEC1) — this service speaks plain HTTP/WS internally.
@@ -116,7 +178,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.4.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -125,6 +187,8 @@ services:
     stop_grace_period: 30s
     depends_on:
       postgres:
+        condition: service_healthy
+      node-runtime:
         condition: service_healthy
     environment:
       NODE_ENV: production
@@ -184,9 +248,13 @@ services:
       # binary's version → ensureRunning re-ships+relaunches the daemon on every
       # connect (kills live sessions). Leave empty unless intentionally overriding.
       FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-}
-      # Installs the latest Claude Code from Anthropic on first container start.
-      # Set to 0 when a custom image/volume supplies a user-managed version.
-      FLOCK_INSTALL_CLAUDE_CODE: ${FLOCK_INSTALL_CLAUDE_CODE:-1}
+      FLOCK_AGENTD_SOCKET: /run/flock-agentd/control.sock
+      FLOCK_AGENTD_SECRET_FILE: /run/flock-agentd/control.key
+      FLOCK_AGENTD_NODE_ID_FILE: /run/flock-agentd/node-id
+      # Local agents use the same authenticated hook surface over the private
+      # runtime network; this avoids treating localhost inside the runtime as the
+      # orchestrator in IP-only and localhost deployments.
+      FLOCK_LOCAL_HOOK_BASE_URL: http://orchestrator:8080
       # Orchestrator sits behind Caddy (one hop) → trust it so request.ip is the
       # real client (correct login-throttle keying + audit actor IP).
       FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}
@@ -199,10 +267,8 @@ services:
       - source: setup_token
         target: setup_token
     volumes:
-      # Runtime home/workspaces/tool credentials belong only to flock-agent.
-      - 'flock_agent_home:/home/flock-agent'
-      # Root-owned daemon state and its control credential persist independently.
-      - 'flock_agentd_state:/var/lib/flock-agentd'
+      # Only the protected socket/identity/credential cross the runtime boundary.
+      - 'flock_agentd_control:/run/flock-agentd:ro'
       # Operator-managed encrypted vault destination; keep it on separate storage.
       - '${FLOCK_BACKUP_DIR:-./backups}:/backups'
     tmpfs:
@@ -218,6 +284,7 @@ services:
     networks:
       - edge
       - data
+      - runtime
     healthcheck:
       test:
         - 'CMD-SHELL'
@@ -236,7 +303,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.4.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -267,6 +334,7 @@ volumes:
   # Separate durable agent runtime home and root-owned daemon control state.
   flock_agent_home:
   flock_agentd_state:
+  flock_agentd_control:
   # Caddy TLS certificates + ACME account keys (US-39, NFR-SEC1/DEP2). Persisted
   # so certs survive restarts and are never baked into an image.
   caddy_data:
@@ -277,10 +345,12 @@ volumes:
 # -----------------------------------------------------------------------------
 networks:
   edge:
-    name: shepherd_edge
+    name: ${FLOCK_EDGE_NETWORK_NAME:-shepherd_edge}
   data:
-    name: shepherd_data
+    name: ${FLOCK_DATA_NETWORK_NAME:-shepherd_data}
     internal: true
+  runtime:
+    name: ${FLOCK_RUNTIME_NETWORK_NAME:-shepherd_runtime}
 
 # -----------------------------------------------------------------------------
 # Secret files (NFR-DEP2) — populate these on the host before `compose up`.

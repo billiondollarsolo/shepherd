@@ -48,7 +48,7 @@ func resolveVersion() string {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: flock-agentd <serve|version>")
+		fmt.Fprintln(os.Stderr, "usage: flock-agentd <serve|probe|inspect|version>")
 		os.Exit(2)
 	}
 	switch os.Args[1] {
@@ -56,6 +56,10 @@ func main() {
 		fmt.Println(resolveVersion())
 	case "serve":
 		serve(os.Args[2:])
+	case "probe":
+		probe(os.Args[2:])
+	case "inspect":
+		inspect(os.Args[2:])
 	case "sandbox-exec":
 		sandboxExec(os.Args[2:])
 	default:

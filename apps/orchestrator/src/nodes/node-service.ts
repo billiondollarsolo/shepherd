@@ -13,7 +13,7 @@
  *
  * Persistence + listing is the requirement: creating an `ssh` node does NOT block
  * on a live SSH connect; its `connectionStatus` starts `disconnected` and is
- * driven later by the reconcile loop. A `local` node is `connected` immediately.
+ * driven later by authenticated SSH/agentd link state. Local is never assumed up.
  *
  * Collaborators (db, secret store, audit logger) are injected so this service is
  * unit-testable without real Postgres or crypto-at-rest wiring. Postgres here is
@@ -23,6 +23,7 @@ import { eq } from 'drizzle-orm';
 
 import type {
   CreateNodeRequest,
+  ConnectionStatus,
   Node as SharedNode,
   SshAuthMethod,
   UpdateNodeRequest,
@@ -294,7 +295,7 @@ export class NodeService {
         envRef,
         pool: input.pool ?? null,
         // local nodes are reachable immediately; ssh nodes connect lazily.
-        connectionStatus: input.kind === 'local' ? 'connected' : 'disconnected',
+        connectionStatus: 'disconnected',
         createdBy: ctx.userId,
       })
       .returning();
@@ -469,11 +470,16 @@ export class NodeService {
 
     const [row] = await this.db
       .insert(nodes)
-      .values({ name: 'local', kind: 'local', connectionStatus: 'connected' })
+      .values({ name: 'local', kind: 'local', connectionStatus: 'disconnected' })
       .returning();
     if (!row) {
       throw new Error('Failed to seed the local node.');
     }
     return rowToNode(row);
+  }
+
+  /** Mirror an authenticated transport link; local is never assumed connected. */
+  async setConnectionStatus(id: string, connectionStatus: ConnectionStatus): Promise<void> {
+    await this.db.update(nodes).set({ connectionStatus }).where(eq(nodes.id, id));
   }
 }

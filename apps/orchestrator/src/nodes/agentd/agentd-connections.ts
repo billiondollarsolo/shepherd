@@ -7,14 +7,20 @@
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import type { Duplex } from 'node:stream';
 
 import type { AgentdCompatibility } from '@flock/shared';
 
-import { NodeAgentdClient } from './agentd-client.js';
+import {
+  NodeAgentdClient,
+  type AgentdExecRequest,
+  type AgentdExecResult,
+} from './agentd-client.js';
 import type { AgentdBootstrap } from './agentd-bootstrap.js';
 import type { AgentdHost } from './ssh-agentd-host.js';
 import type { NodeControlIdentity } from './node-control-credentials.js';
 import { evaluateAgentdCompatibility } from './agentd-compatibility.js';
+import type { ResolvedAgentdCompatibilityPolicy } from './agentd-compatibility.js';
 import type { AuthenticatedAgentdIdentity } from './agentd-client.js';
 import { AGENTD_PROTOCOL_VERSION } from './protocol.js';
 
@@ -84,6 +90,14 @@ export interface AgentdConnectionsDeps {
       | 'protocol_failed'
       | 'enrollment_failed',
   ) => void;
+  /** Preferred policy is also applied to the immutable bundled local runtime. */
+  compatibilityPolicy?: ResolvedAgentdCompatibilityPolicy;
+  /** Truthful authenticated daemon-link state for node persistence and reconcile. */
+  onConnectionState?: (
+    nodeId: string,
+    state: 'connected' | 'disconnected',
+    identity: AuthenticatedAgentdIdentity | null,
+  ) => void;
 }
 
 /** The daemon's default socket path (mirrors agentd/main.go defaultSocket). */
@@ -96,12 +110,15 @@ export function defaultLocalSocket(): string {
 export class AgentdConnections {
   private local: NodeAgentdClient | null = null;
   private localPending: Promise<NodeAgentdClient> | null = null;
+  private localReconnectTimer: NodeJS.Timeout | null = null;
+  private localReconnectAttempt = 0;
   private readonly remotes = new Map<string, NodeAgentdClient>();
   private readonly remotePending = new Map<string, Promise<NodeAgentdClient>>();
   private readonly failures = new Map<string, AgentdConnectionFailure>();
   private readonly upgrades = new Map<string, AgentdUpgradeState>();
   private readonly compatibilities = new Map<string, AgentdCompatibility>();
   private readonly connectedNodes = new Set<string>();
+  private readonly lastHandshakes = new Map<string, string>();
 
   constructor(private readonly deps: AgentdConnectionsDeps) {}
 
@@ -135,6 +152,10 @@ export class AgentdConnections {
     return this.compatibilities.get(nodeId) ?? null;
   }
 
+  lastHandshakeFor(nodeId: string): string | null {
+    return this.lastHandshakes.get(nodeId) ?? null;
+  }
+
   private recordFailure(nodeId: string, error: unknown): void {
     const code = classifyAgentdFailure(error);
     const previous = this.failures.get(nodeId);
@@ -144,6 +165,7 @@ export class AgentdConnections {
       at: new Date().toISOString(),
     });
     const wasConnected = this.connectedNodes.delete(nodeId);
+    if (wasConnected) this.deps.onConnectionState?.(nodeId, 'disconnected', null);
     if (previous?.code === code && !wasConnected) return;
     const event =
       code === 'authentication'
@@ -156,10 +178,13 @@ export class AgentdConnections {
     this.deps.onAudit?.(nodeId, event);
   }
 
-  private connected(nodeId: string): void {
+  private connected(nodeId: string, identity?: AuthenticatedAgentdIdentity): void {
     const transition = !this.connectedNodes.has(nodeId);
     this.connectedNodes.add(nodeId);
     this.failures.delete(nodeId);
+    this.lastHandshakes.set(nodeId, new Date().toISOString());
+    this.localReconnectAttempt = 0;
+    if (transition) this.deps.onConnectionState?.(nodeId, 'connected', identity ?? null);
     if (transition) this.deps.onAudit?.(nodeId, 'connected');
   }
 
@@ -182,8 +207,8 @@ export class AgentdConnections {
         const channel = await host.forwardOut('127.0.0.1', port);
         client = new NodeAgentdClient(channel);
         const identity = await this.deps.identityFor(nodeId, 'ssh');
-        await client.hello(identity, protocolVersion);
-        this.connected(nodeId);
+        const authenticated = await client.hello(identity, protocolVersion);
+        this.connected(nodeId, authenticated);
         return true;
       } catch (error) {
         lastError = error;
@@ -211,7 +236,22 @@ export class AgentdConnections {
       if (this.deps.onStatus) client.onStatus(this.deps.onStatus);
       try {
         const identity = await this.deps.identityFor(nodeId, 'local');
-        await client.hello(identity);
+        const authenticated = await client.hello(identity);
+        if (this.deps.compatibilityPolicy) {
+          const compatibility = evaluateAgentdCompatibility(this.deps.compatibilityPolicy, {
+            installedVersion: authenticated.daemonVersion,
+            protocolVersion: authenticated.protocolVersion,
+            capabilities: authenticated.capabilities,
+            runtimeVerified: true,
+            servicePrepared: true,
+          });
+          this.compatibilities.set(nodeId, compatibility);
+          if (compatibility.state === 'required') {
+            client.blockNewSessions(
+              'The local runtime must be upgraded before starting new sessions.',
+            );
+          }
+        }
       } catch (err) {
         // T23: a failed handshake otherwise leaks the socket + frame decoder.
         client.dispose();
@@ -223,10 +263,11 @@ export class AgentdConnections {
         if (this.local === client) {
           this.local = null;
           this.recordFailure(nodeId, new Error('agentd connection closed'));
+          this.scheduleLocalReconnect(nodeId);
         }
       });
       this.local = client;
-      this.connected(nodeId);
+      this.connected(nodeId, client.identity() ?? undefined);
       return client;
     })();
     try {
@@ -236,6 +277,63 @@ export class AgentdConnections {
       throw error;
     } finally {
       this.localPending = null;
+    }
+  }
+
+  private scheduleLocalReconnect(nodeId: string): void {
+    if (this.local || this.localPending || this.localReconnectTimer) return;
+    const delay = Math.min(30_000, 250 * 2 ** Math.min(this.localReconnectAttempt, 7));
+    this.localReconnectAttempt += 1;
+    this.localReconnectTimer = setTimeout(() => {
+      this.localReconnectTimer = null;
+      void this.clientForLocal(nodeId).catch(() => this.scheduleLocalReconnect(nodeId));
+    }, delay);
+    this.localReconnectTimer.unref();
+  }
+
+  /** Open a short-lived, mutually authenticated local operation connection. */
+  private async localOperationClient(nodeId: string): Promise<NodeAgentdClient> {
+    const socketPath = this.deps.socketPath ?? defaultLocalSocket();
+    const socket = net.connect(socketPath);
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+    });
+    const client = new NodeAgentdClient(socket);
+    try {
+      const identity = await this.deps.identityFor(nodeId, 'local');
+      await client.hello(identity, AGENTD_PROTOCOL_VERSION, 'operation');
+      return client;
+    } catch (error) {
+      client.dispose();
+      socket.destroy();
+      this.recordFailure(nodeId, error);
+      throw error;
+    }
+  }
+
+  /** Execute one bounded command in the local runtime namespace. */
+  async execLocal(nodeId: string, request: AgentdExecRequest): Promise<AgentdExecResult> {
+    const client = await this.localOperationClient(nodeId);
+    try {
+      return await client.exec(request);
+    } finally {
+      client.dispose();
+    }
+  }
+
+  /** Dial loopback in the local runtime namespace. The stream owns its operation link. */
+  async dialLocalTcp(
+    nodeId: string,
+    port: number,
+    host: '127.0.0.1' | '::1' = '127.0.0.1',
+  ): Promise<Duplex> {
+    const client = await this.localOperationClient(nodeId);
+    try {
+      return await client.dialTcp(port, host);
+    } catch (error) {
+      client.dispose();
+      throw error;
     }
   }
 

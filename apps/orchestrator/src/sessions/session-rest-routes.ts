@@ -2,12 +2,12 @@
  * Session list/create routes (spec §8.1, FR-S2/FR-S3, NFR-SEC6).
  *
  *   GET  /api/sessions[?projectId=...]   { sessions: Session[] }
- *   POST /api/sessions                   body CreateSessionRequest → 201
+ *   POST /api/sessions                   body CreateSessionRequest → 201 / 409
  *                                        CreateSessionResponse { session }
  *
  * Cookie-authed via the shared `requireAuth` guard. Query/body validated with the
  * shared zod contracts (`ListSessionsQuery`, `CreateSessionRequest`); an unknown
- * project on create maps to 404. The success body is the shared
+ * project on create maps to 404 and a mandatory daemon upgrade maps to 409. The success body is the shared
  * `CreateSessionResponse`. Agent-only hook capability material stays inside the
  * orchestrator and is never serialized to the browser.
  *
@@ -27,6 +27,7 @@ import { badRequest } from '../http/reply.js';
 import type { AuthGuardDeps } from '../auth/middleware.js';
 import { makeRequireAuth } from '../auth/middleware.js';
 import {
+  SessionLaunchBlockedError,
   SessionPolicyViolationError,
   SessionProjectNotFoundError,
   type SessionRestService,
@@ -81,6 +82,11 @@ export function registerSessionRestRoutes(
         }
         if (err instanceof SessionPolicyViolationError) {
           return reply.code(403).send({ error: { code: 'policy_denied', message: err.message } });
+        }
+        if (err instanceof SessionLaunchBlockedError) {
+          return reply.code(409).send({
+            error: { code: err.code, message: err.message, details: err.details },
+          });
         }
         throw err;
       }

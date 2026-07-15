@@ -24,7 +24,7 @@
  * costs nothing. The daemon session itself is NOT killed on detach — only the
  * orchestrator's attachment is released; the daemon keeps the agent alive (NFR-AV1).
  */
-import type { NodeTransport, PtyExit, PtyHandle } from '../../nodes/transport/transport.js';
+import type { NodePtyTransport, PtyExit, PtyHandle } from '../../nodes/transport/transport.js';
 
 /** UTF-8 locale for the PTY so multibyte glyphs/box-drawing render correctly. */
 const PTY_UTF8_LOCALE: Readonly<Record<string, string>> = {
@@ -82,8 +82,8 @@ export interface PtySubscriber {
 export interface PtySessionOptions {
   /** The session id (authoritative record id, spec §4.2) this PTY belongs to. */
   sessionId: string;
-  /** Transport for the session's node (LocalTransport / SshTransport). */
-  transport: NodeTransport;
+  /** PTY capability for the session's node. */
+  transport: NodePtyTransport;
   /**
    * Builds the argv that ATTACHES this session's PTY (run inside the PTY).
    * Injected so the session stays decoupled from how a node opens/attaches a PTY
@@ -158,7 +158,7 @@ export class ResumeRing {
 export class PtySession {
   readonly sessionId: string;
 
-  private readonly transport: NodeTransport;
+  private readonly transport: NodePtyTransport;
   private readonly attachCommand: () => string[];
   private readonly workingDir?: string;
   private readonly onOutput?: (chunk: Buffer) => void;

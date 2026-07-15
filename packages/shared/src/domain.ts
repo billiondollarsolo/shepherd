@@ -348,7 +348,14 @@ export const NodeInfoSchema = z.object({
    *  CPU% (share of total host CPU since the last poll) — for attributing a node's
    *  RAM/CPU to specific sessions. Omitted by older daemons. */
   processes: z
-    .record(z.string(), z.object({ rssBytes: z.number(), cpuPct: z.number() }))
+    .record(
+      z.string(),
+      z.object({
+        pid: z.number().int().positive().optional(),
+        rssBytes: z.number(),
+        cpuPct: z.number(),
+      }),
+    )
     .optional(),
   control: z
     .object({
@@ -364,11 +371,22 @@ export const NodeInfoSchema = z.object({
       sessionsOpened: z.number().int().nonnegative(),
       sessionsClosed: z.number().int().nonnegative(),
       credentialRotations: z.number().int().nonnegative(),
+      execRequests: z.number().int().nonnegative().optional(),
+      execFailures: z.number().int().nonnegative().optional(),
+      execTimeouts: z.number().int().nonnegative().optional(),
+      execTruncations: z.number().int().nonnegative().optional(),
+      tcpTunnels: z.number().int().nonnegative().optional(),
+      tunnelRejects: z.number().int().nonnegative().optional(),
     })
     .optional(),
   lifecycle: z
     .object({
       expectedDaemonVersion: z.string(),
+      runtimeKind: z.enum(['bundled-local', 'ssh-node']).optional(),
+      reachable: z.boolean().optional(),
+      lastSuccessfulHandshake: z.string().datetime().nullable().optional(),
+      activeSessions: z.number().int().nonnegative().optional(),
+      operatorUpgradeCommand: z.string().nullable().optional(),
       daemonCompatibility: AgentdCompatibilitySchema,
       upgrade: z
         .object({

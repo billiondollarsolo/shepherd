@@ -10,6 +10,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
+import { isIP } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
 import type { Duplex } from 'node:stream';
 import type { PreviewRoutingTestResponse } from '@flock/shared';
@@ -119,6 +120,28 @@ function hasExactPreviewOrigin(request: IncomingMessage, record: ActivePreview):
   return raw === new URL(record.origin).origin;
 }
 
+/**
+ * Browsers honor COOP only in a potentially trustworthy context. Emitting it on
+ * a Tailnet/LAN HTTP address is ineffective and produces a misleading warning;
+ * HTTPS and loopback HTTP origins can use it normally.
+ */
+function supportsOpenerIsolation(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol === 'https:') return true;
+    if (parsed.protocol !== 'http:') return false;
+    const hostname = parsed.hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+      .replace(/\.$/, '');
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+    if (isIP(hostname) === 4) return hostname.split('.')[0] === '127';
+    return isIP(hostname) === 6 && hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
 function isReservedCookie(name: string): boolean {
   const normalized = name.toLowerCase();
   return normalized.startsWith('__host-shepherd_') || normalized.startsWith('shepherd_');
@@ -208,7 +231,13 @@ function downstreamHeaders(
     }
   }
   clean['cache-control'] ??= 'no-store';
-  clean['cross-origin-opener-policy'] = 'same-origin';
+  if (supportsOpenerIsolation(record.origin)) {
+    clean['cross-origin-opener-policy'] = 'same-origin';
+  } else {
+    // Strip an upstream development server's header too: the browser cannot
+    // honor it on this transport and would surface the same console warning.
+    delete clean['cross-origin-opener-policy'];
+  }
   clean['permissions-policy'] =
     'camera=(), microphone=(), geolocation=(), payment=(), serial=(), usb=(), publickey-credentials-get=()';
   clean['referrer-policy'] = 'no-referrer';
@@ -234,7 +263,7 @@ async function readJsonToken(request: IncomingMessage): Promise<string | null> {
   }
 }
 
-function renderBootstrap(response: ServerResponse): void {
+function renderBootstrap(response: ServerResponse, record: ActivePreview): void {
   const nonce = randomBytes(18).toString('base64url');
   const script = `
     const params = new URLSearchParams(location.hash.slice(1));
@@ -250,15 +279,18 @@ function renderBootstrap(response: ServerResponse): void {
     }).catch((error) => { document.body.textContent = error.message; });
   `;
   const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Opening preview…</title></head><body>Opening secure preview…<script nonce="${nonce}">${script}</script></body></html>`;
-  response.writeHead(200, {
+  const headers: OutgoingHttpHeaders = {
     'content-type': 'text/html; charset=utf-8',
     'content-length': Buffer.byteLength(body),
     'cache-control': 'no-store',
     'content-security-policy': `default-src 'none'; connect-src 'self'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
-    'cross-origin-opener-policy': 'same-origin',
     'referrer-policy': 'no-referrer',
     'x-content-type-options': 'nosniff',
-  });
+  };
+  if (supportsOpenerIsolation(record.origin)) {
+    headers['cross-origin-opener-policy'] = 'same-origin';
+  }
+  response.writeHead(200, headers);
   response.end(body);
 }
 
@@ -540,7 +572,7 @@ export function createPreviewGateway(
           return writePlain(response, 403, 'Preview request Origin was rejected.');
         }
         if (url.pathname === BOOTSTRAP_PATH && request.method === 'GET') {
-          return renderBootstrap(response);
+          return renderBootstrap(response, record);
         }
         if (url.pathname === BOOTSTRAP_PATH && request.method === 'POST') {
           if (

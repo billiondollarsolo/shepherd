@@ -69,7 +69,9 @@ describe('CRUD integration — node → project → session round-trip', () => {
       { userId: ACTOR },
     );
     expect(created.kind).toBe('local');
-    expect(created.connectionStatus).toBe('connected');
+    // Persistence alone does not prove an authenticated runtime link. The
+    // connection manager promotes this to connected only after agentd hello.
+    expect(created.connectionStatus).toBe('disconnected');
 
     const list = await nodeService.listNodes();
     expect(list.map((n) => n.id)).toContain(created.id);

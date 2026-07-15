@@ -1,5 +1,5 @@
 import type { Duplex } from 'node:stream';
-import type { NodeTransport } from './transport.js';
+import type { NodeCommandTransport } from './transport.js';
 
 /** Transport capability used by the Remote Preview gateway. */
 export interface NodeTcpDialer {
@@ -8,7 +8,7 @@ export interface NodeTcpDialer {
 }
 
 export function hasNodeTcpDialer(
-  transport: NodeTransport,
-): transport is NodeTransport & NodeTcpDialer {
+  transport: NodeCommandTransport,
+): transport is NodeCommandTransport & NodeTcpDialer {
   return typeof (transport as Partial<NodeTcpDialer>).dialTcp === 'function';
 }

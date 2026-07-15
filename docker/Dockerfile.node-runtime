@@ -1,0 +1,71 @@
+# Shepherd bundled local node runtime. It owns flock-agentd, coding-agent CLIs,
+# PTYs, workspaces, and node-local development servers independently of the
+# orchestrator lifecycle.
+FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS agentd-build
+WORKDIR /agentd
+COPY agentd/ ./
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+      go build -ldflags "-s -w -X main.Version=$(cat VERSION)" -o /out/flock-agentd . \
+    && CGO_ENABLED=0 go install github.com/tianon/gosu@v0.0.0-20250923190938-6456aaa0f3c8
+
+FROM node:22-trixie-slim@sha256:4228fca437e45714a3ebd1d4ecd1dcc583cf79f5a940aa025e286b472d93b67c
+ARG IMAGE_VERSION=dev
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="$IMAGE_VERSION" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      io.shepherd.runtime="local-node"
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LC_CTYPE=C.UTF-8 \
+    FLOCK_AGENTD_SOCKET=/run/flock-agentd/control.sock \
+    FLOCK_AGENTD_SECRET_FILE=/run/flock-agentd/control.key \
+    FLOCK_AGENTD_NODE_ID_FILE=/run/flock-agentd/node-id
+ARG RELEASE_REFRESH=manual
+RUN echo "$RELEASE_REFRESH" >/dev/null \
+    && apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates curl git gh ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system --gid 700 flock-control \
+    && groupadd --system --gid 701 flock-agent \
+    && useradd --system --uid 701 --create-home --home-dir /home/flock-agent \
+      --gid flock-agent --shell /bin/bash flock-agent
+
+RUN npm install -g npm@12.0.1 \
+    && npm install -g @openai/codex@latest \
+    && npm cache clean --force \
+    && rm -rf /root/.npm
+RUN set -eu; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /root/.opencode /tmp/opencode-install.sh; \
+      if curl --fail --silent --show-error --location \
+          --retry 5 --retry-all-errors --connect-timeout 15 --max-time 120 \
+          --output /tmp/opencode-install.sh https://opencode.ai/install \
+        && bash /tmp/opencode-install.sh --no-modify-path \
+        && install -m 0755 /root/.opencode/bin/opencode /usr/local/bin/opencode \
+        && opencode --version; then \
+        rm -rf /root/.opencode /tmp/opencode-install.sh; \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      sleep "$((attempt * 5))"; \
+    done
+
+COPY --from=agentd-build /out/flock-agentd /usr/local/bin/flock-agentd
+COPY --from=agentd-build /go/bin/gosu /usr/local/bin/gosu
+COPY agentd/VERSION /usr/share/shepherd/agentd-version
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/shepherd/
+COPY docker/node-runtime-entrypoint.sh /usr/local/bin/shepherd-node-runtime
+RUN chmod 0755 /usr/local/bin/flock-agentd /usr/local/bin/gosu /usr/local/bin/shepherd-node-runtime \
+    && install -d -o flock-agent -g flock-agent -m 0750 /home/flock-agent/workspace \
+    && install -d -o root -g flock-control -m 0750 /var/lib/flock-agentd /run/flock-agentd \
+    && { codex --version; opencode --version; gh --version | head -n 1; } \
+      > /usr/share/shepherd/agent-versions.txt
+
+USER root
+CMD ["/usr/local/bin/shepherd-node-runtime"]

@@ -289,6 +289,170 @@ func authenticateWithSecret(t *testing.T, cli net.Conn, secret string) proto.Con
 	return readControlOp(t, cli, "helloOk", 2*time.Second)
 }
 
+func authenticateOperation(t *testing.T, cli net.Conn) proto.Control {
+	t.Helper()
+	clientNonce := mustNonce(t)
+	mustControl(t, cli, proto.Control{
+		Op: "hello", ProtocolVersion: proto.ProtocolVersion,
+		NodeID: testNodeID, ClientNonce: clientNonce,
+		CredentialID: controlauth.CredentialID(testSecret), ConnectionRole: "operation",
+	})
+	challenge := readControlOp(t, cli, "challenge", 2*time.Second)
+	if challenge.ConnectionRole != "operation" {
+		t.Fatalf("operation role not acknowledged: %+v", challenge)
+	}
+	expectedServerMAC := controlauth.MAC(testSecret, "server", testNodeID, clientNonce,
+		challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities)
+	if !controlauth.Verify(expectedServerMAC, challenge.ServerMAC) {
+		t.Fatal("server did not authenticate")
+	}
+	mustControl(t, cli, proto.Control{
+		Op: "authenticate", NodeID: testNodeID, ClientNonce: clientNonce,
+		ServerNonce: challenge.ServerNonce,
+		ClientMAC: controlauth.MAC(testSecret, "client", testNodeID, clientNonce,
+			challenge.ServerNonce, challenge.DaemonVersion, challenge.Capabilities),
+	})
+	ok := readControlOp(t, cli, "helloOk", 2*time.Second)
+	if ok.ConnectionRole != "operation" {
+		t.Fatalf("operation role changed: %+v", ok)
+	}
+	return ok
+}
+
+func TestExecRequiresDedicatedAuthenticatedOperationConnection(t *testing.T) {
+	dial, _, srv := testServerFixture(t, nil)
+	control := dial()
+	authenticate(t, control)
+	mustControl(t, control, proto.Control{Op: "exec", ID: "wrong", Command: []string{"true"}})
+	if got := readControlOp(t, control, "error", 2*time.Second); !strings.Contains(got.Message, "operation") {
+		t.Fatalf("control connection exec was not rejected: %+v", got)
+	}
+
+	operation := dial()
+	authenticateOperation(t, operation)
+	mustControl(t, operation, proto.Control{
+		Op: "exec", ID: "exec-1", Command: []string{"sh", "-c", "cat; printf problem >&2; exit 9"},
+		Input: "hello", TimeoutMS: 2_000,
+	})
+	result := readControlOp(t, operation, "execResult", 3*time.Second)
+	if result.ID != "exec-1" || result.Code != 9 || result.Stdout != "hello" || result.Stderr != "problem" {
+		t.Fatalf("unexpected exec result: %+v", result)
+	}
+
+	truncated := dial()
+	authenticateOperation(t, truncated)
+	mustControl(t, truncated, proto.Control{
+		Op: "exec", ID: "exec-truncated", Command: []string{"printf", "abcdef"}, StdoutLimit: 3,
+	})
+	truncatedResult := readControlOp(t, truncated, "execResult", 3*time.Second)
+	if truncatedResult.Stdout != "abc" || !truncatedResult.StdoutTruncated {
+		t.Fatalf("exec truncation not reported: %+v", truncatedResult)
+	}
+
+	timedOut := dial()
+	authenticateOperation(t, timedOut)
+	mustControl(t, timedOut, proto.Control{
+		Op: "exec", ID: "exec-timeout", Command: []string{"sh", "-c", "sleep 30"}, TimeoutMS: 20,
+	})
+	timeoutResult := readControlOp(t, timedOut, "execResult", 3*time.Second)
+	if !timeoutResult.TimedOut {
+		t.Fatalf("exec timeout not reported: %+v", timeoutResult)
+	}
+
+	invalid := dial()
+	authenticateOperation(t, invalid)
+	mustControl(t, invalid, proto.Control{Op: "exec", ID: "exec-invalid"})
+	readControlOp(t, invalid, "error", 3*time.Second)
+
+	diagnostics := srv.diagnostics()
+	if diagnostics.ExecRequests != 4 || diagnostics.ExecFailures != 1 ||
+		diagnostics.ExecTimeouts != 1 || diagnostics.ExecTruncations != 1 {
+		t.Fatalf("unexpected exec diagnostics: %+v", diagnostics)
+	}
+}
+
+func TestTCPTunnelRelaysLoopbackBytesAndRejectsOtherTargets(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		buffer := make([]byte, 32)
+		count, readErr := conn.Read(buffer)
+		if readErr == nil {
+			_, _ = conn.Write(append([]byte("echo:"), buffer[:count]...))
+		}
+	}()
+
+	operation, _ := dialServer(t)
+	authenticateOperation(t, operation)
+	port := listener.Addr().(*net.TCPAddr).Port
+	mustControl(t, operation, proto.Control{
+		Op: "dialTcp", ID: "tunnel-1", TargetHost: "127.0.0.1", TargetPort: port,
+	})
+	readControlOp(t, operation, "tcpConnected", 3*time.Second)
+	if err := proto.WriteFrame(operation, proto.TypeTCPInput, []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	_ = operation.SetReadDeadline(time.Now().Add(3 * time.Second))
+	for {
+		typeID, payload, readErr := proto.ReadFrame(operation)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if typeID == proto.TypeTCPOutput {
+			if string(payload) != "echo:hello" {
+				t.Fatalf("unexpected tunnel payload: %q", payload)
+			}
+			break
+		}
+	}
+
+	rejected, _ := dialServer(t)
+	authenticateOperation(t, rejected)
+	mustControl(t, rejected, proto.Control{
+		Op: "dialTcp", ID: "tunnel-bad", TargetHost: "169.254.169.254", TargetPort: 80,
+	})
+	if got := readControlOp(t, rejected, "error", 2*time.Second); !strings.Contains(got.Message, "loopback") {
+		t.Fatalf("non-loopback target was not rejected: %+v", got)
+	}
+}
+
+func TestTCPTunnelHasAbsoluteLifetime(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			defer conn.Close()
+			_, _ = conn.Read(make([]byte, 1))
+		}
+	}()
+
+	dial, _, srv := testServerFixture(t, nil)
+	srv.tunnelLifetime = 75 * time.Millisecond
+	operation := dial()
+	authenticateOperation(t, operation)
+	mustControl(t, operation, proto.Control{
+		Op: "dialTcp", ID: "tunnel-lifetime", TargetHost: "127.0.0.1",
+		TargetPort: listener.Addr().(*net.TCPAddr).Port,
+	})
+	readControlOp(t, operation, "tcpConnected", time.Second)
+	closed := readControlOp(t, operation, "tcpClosed", time.Second)
+	if closed.ID != "tunnel-lifetime" {
+		t.Fatalf("unexpected close: %+v", closed)
+	}
+}
+
 func TestOpenSubscribeOutput(t *testing.T) {
 	cli, _ := dialServer(t)
 	authenticate(t, cli)

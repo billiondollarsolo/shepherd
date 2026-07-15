@@ -93,6 +93,31 @@ describe('orchestrator readiness route (T15)', () => {
   });
 });
 
+describe('node info availability errors', () => {
+  it('distinguishes a stopped bundled runtime from an unreachable remote node', async () => {
+    const local = buildServer({
+      nodeInfo: async () => null,
+      nodeInfoUnavailableScope: async () => 'local-runtime',
+    });
+    const remote = buildServer({
+      nodeInfo: async () => null,
+      nodeInfoUnavailableScope: async () => 'remote-node',
+    });
+    try {
+      const localResponse = await local.inject('/api/nodes/local/info');
+      expect(localResponse.statusCode).toBe(503);
+      expect(localResponse.json().error.code).toBe('local_runtime_unavailable');
+      expect(localResponse.json().error.message).toContain('node-runtime');
+
+      const remoteResponse = await remote.inject('/api/nodes/remote/info');
+      expect(remoteResponse.statusCode).toBe(503);
+      expect(remoteResponse.json().error.code).toBe('node_unreachable');
+    } finally {
+      await Promise.all([local.close(), remote.close()]);
+    }
+  });
+});
+
 describe('authenticated diagnostics bundle', () => {
   const user = {
     id: '11111111-1111-4111-8111-111111111111',

@@ -9,9 +9,9 @@
  * Create resolves the project → its node + working_dir, mints a per-session hook
  * token (returned ONCE; only its hash is stored, NFR-SEC3), and inserts the ONE
  * authoritative record via the shared session mappers. It then launches the agent
- * on the node's flock-agentd daemon best-effort: a launch failure marks the
- * session 'error' (the connection dot shows disconnected) but the record is still
- * persisted (the paddock must always see the session) — never a silent shell.
+ * on the node's flock-agentd daemon best-effort: an ordinary runtime failure marks
+ * the session 'error' and keeps the record visible. A known compatibility-policy
+ * refusal returns a structured conflict without leaving a dead row.
  *
  * Postgres here is the registry/identity write path, NOT the live status path
  * (spec §6.6). The hook token hash is produced by the injected hasher so this
@@ -58,8 +58,29 @@ export class SessionPolicyViolationError extends Error {
 /** Hashes a plaintext hook token; only the hash is persisted (NFR-SEC3). */
 export type HookTokenHasher = (plaintext: string) => Promise<string>;
 
+/** A compatibility-policy refusal. Ordinary runtime failures remain best-effort. */
+export interface AgentdLaunchBlock {
+  status: 'blocked';
+  code: 'agentd_upgrade_required';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 /** Outcome of an {@link SessionRestServiceDeps.agentdLaunch} attempt. */
-export type AgentdLaunchOutcome = 'launched' | 'failed';
+export type AgentdLaunchOutcome = 'launched' | 'failed' | AgentdLaunchBlock;
+
+/** Raised before returning a dead session when the node daemon cannot accept new work. */
+export class SessionLaunchBlockedError extends Error {
+  readonly code: AgentdLaunchBlock['code'];
+  readonly details?: Record<string, unknown>;
+
+  constructor(block: AgentdLaunchBlock) {
+    super(block.message);
+    this.name = 'SessionLaunchBlockedError';
+    this.code = block.code;
+    this.details = block.details;
+  }
+}
 
 export interface SessionRestServiceDeps {
   db: Database;
@@ -81,6 +102,15 @@ export interface SessionRestServiceDeps {
     scopes: readonly AgentCapabilityScope[],
   ) => Promise<string | undefined>;
   /**
+   * Resolves/negotiates the target daemon before durable creation. A mandatory-old
+   * daemon returns a structured refusal; supported older daemons return null.
+   */
+  agentdLaunchPreflight?: (args: {
+    nodeId: string;
+    nodeName: string;
+    nodeKind: string;
+  }) => Promise<AgentdLaunchBlock | null>;
+  /**
    * Called synchronously after the authoritative record is persisted, BEFORE the
    * tmux launch, so live channels (status map + hook binding + PTY) can track the
    * session immediately (the sidebar shows "starting" and the terminal can
@@ -88,14 +118,16 @@ export interface SessionRestServiceDeps {
    * is needed nowhere else; only its hash is stored).
    */
   onSessionCreated?: (session: SessionRecord, hookToken: string) => void;
+  /** Compensates the brief live-channel registration if a launch race is blocked. */
+  onSessionCreateAborted?: (sessionId: string) => void;
   /**
    * Launch the agent on the node's flock-agentd daemon (the only transport).
-   * Returns 'launched' on success or 'failed' on a hard failure — in which case
-   * it has already marked the session 'error' (the connection dot shows
-   * disconnected), so the failure is visible, never a silent shell.
+   * Returns 'launched', an ordinary best-effort 'failed', or a compatibility block
+   * that is compensated and returned to the caller as a structured conflict.
    */
   agentdLaunch?: (args: {
     session: SessionRecord;
+    nodeName: string;
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
@@ -121,9 +153,12 @@ export class SessionRestService {
     orchestrationToken?: string,
   ) => Promise<Record<string, string>>;
   private readonly issueOrchestrationCapability?: SessionRestServiceDeps['issueOrchestrationCapability'];
+  private readonly agentdLaunchPreflight?: SessionRestServiceDeps['agentdLaunchPreflight'];
   private readonly onSessionCreated?: (session: SessionRecord, hookToken: string) => void;
+  private readonly onSessionCreateAborted?: (sessionId: string) => void;
   private readonly agentdLaunch?: (args: {
     session: SessionRecord;
+    nodeName: string;
     nodeKind: string;
     command?: string[];
     env?: Record<string, string>;
@@ -138,7 +173,9 @@ export class SessionRestService {
     this.audit = deps.audit;
     this.sessionEnv = deps.sessionEnv;
     this.issueOrchestrationCapability = deps.issueOrchestrationCapability;
+    this.agentdLaunchPreflight = deps.agentdLaunchPreflight;
     this.onSessionCreated = deps.onSessionCreated;
+    this.onSessionCreateAborted = deps.onSessionCreateAborted;
     this.agentdLaunch = deps.agentdLaunch;
     this.logger = deps.logger ?? {
       warn(msg, err) {
@@ -194,6 +231,16 @@ export class SessionRestService {
     if (!authorityAllows(policy.maxAuthority, orchestrationAuthority)) {
       throw new SessionPolicyViolationError();
     }
+
+    // Resolve compatibility before minting credentials or inserting the system-of-record
+    // row. Supported older daemons are allowed; only a mandatory compatibility state
+    // refuses new work. The daemon enforces the same rule again at open time below.
+    const launchBlock = await this.agentdLaunchPreflight?.({
+      nodeId: node.id,
+      nodeName: node.name,
+      nodeKind: node.kind,
+    });
+    if (launchBlock) throw new SessionLaunchBlockedError(launchBlock);
 
     // Mint the per-session hook token: returned ONCE, only its hash is stored.
     const hookToken = randomBytes(32).toString('base64url');
@@ -286,8 +333,28 @@ export class SessionRestService {
     // record persists with no live process; there is no tmux fallback.
     if (this.agentdLaunch) {
       try {
-        await this.agentdLaunch({ session: persisted, nodeKind: node.kind, command, env, mode });
+        const outcome = await this.agentdLaunch({
+          session: persisted,
+          nodeName: node.name,
+          nodeKind: node.kind,
+          command,
+          env,
+          mode,
+        });
+        if (typeof outcome !== 'string' && outcome.status === 'blocked') {
+          // The compatibility state can change after preflight. Remove the record
+          // (capabilities/events cascade) and live binding so the API never returns
+          // a blank session for a known policy refusal.
+          await this.db.delete(agentSessions).where(eq(agentSessions.id, persisted.id));
+          try {
+            this.onSessionCreateAborted?.(persisted.id);
+          } catch {
+            /* durable deletion succeeded; in-memory cleanup is best-effort */
+          }
+          throw new SessionLaunchBlockedError(outcome);
+        }
       } catch (err) {
+        if (err instanceof SessionLaunchBlockedError) throw err;
         this.logger.warn(`agentd launch failed for session ${persisted.id}`, err);
       }
     }

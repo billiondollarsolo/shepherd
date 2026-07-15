@@ -129,7 +129,7 @@ function ControlPlaneCard({
 }): JSX.Element {
   if (!control) {
     return (
-      <Card title="Control plane">
+      <Card title="Daemon & runtime">
         {failure ? (
           <div className="space-y-2">
             <Badge variant="danger">{failure.code}</Badge>
@@ -155,7 +155,7 @@ function ControlPlaneCard({
         ? 'warning'
         : 'danger';
   return (
-    <Card title="Control plane">
+    <Card title="Daemon & runtime">
       <div className="mb-2 flex items-center gap-2">
         {secure ? (
           <ShieldCheck className="size-4 text-status-running" aria-hidden="true" />
@@ -173,6 +173,13 @@ function ControlPlaneCard({
       </div>
       <Field label="Daemon" value={control.daemonVersion} />
       <Field label="Protocol" value={`v${control.protocol}`} />
+      <Field label="Runtime" value={lifecycle?.runtimeKind ?? 'node daemon'} />
+      <Field label="Reachable" value={lifecycle?.reachable === false ? 'No' : 'Yes'} />
+      <Field
+        label="Last handshake"
+        value={fmtWhen(lifecycle?.lastSuccessfulHandshake ?? undefined)}
+      />
+      <Field label="Active sessions" value={String(lifecycle?.activeSessions ?? 0)} />
       {compatibility ? (
         <div className="my-2 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 p-2">
           <Badge variant={compatibilityVariant}>
@@ -198,6 +205,12 @@ function ControlPlaneCard({
       <Field label="Sessions closed" value={String(control.sessionsClosed)} />
       <Field label="Credential rotations" value={String(control.credentialRotations)} />
       <Field label="Dropped output" value={`${control.droppedOutputBytes} bytes`} />
+      <Field label="Bounded commands" value={String(control.execRequests ?? 0)} />
+      <Field label="Command failures" value={String(control.execFailures ?? 0)} />
+      <Field label="Command timeouts" value={String(control.execTimeouts ?? 0)} />
+      <Field label="Command truncations" value={String(control.execTruncations ?? 0)} />
+      <Field label="Preview tunnels" value={String(control.tcpTunnels ?? 0)} />
+      <Field label="Tunnel rejects" value={String(control.tunnelRejects ?? 0)} />
       {lifecycle?.upgrade ? (
         <div className="mt-2 rounded-md border border-status-awaiting/40 bg-status-awaiting/10 p-2">
           <Badge variant="warning">{lifecycle.upgrade.status.replace('_', ' ')}</Badge>
@@ -205,6 +218,16 @@ function ControlPlaneCard({
           <p className="mt-1 font-mono text-2xs text-flock-ink-muted">
             {lifecycle.upgrade.installedVersion} → {lifecycle.upgrade.expectedVersion}
           </p>
+        </div>
+      ) : null}
+      {lifecycle?.operatorUpgradeCommand ? (
+        <div className="mt-2 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 p-2">
+          <p className="text-xs text-flock-ink-primary">
+            Runtime changes are operator maintenance so Shepherd never needs Docker access.
+          </p>
+          <code className="mt-1 block break-all text-2xs text-flock-ink-muted">
+            {lifecycle.operatorUpgradeCommand}
+          </code>
         </div>
       ) : null}
       {anomalies > 0 ? (

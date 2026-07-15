@@ -4,15 +4,10 @@
  *
  * This module exports `runTransportContract(name, factory)` which registers a
  * full `describe` block of behavioural assertions every `NodeTransport` MUST
- * satisfy. LocalTransport (US-7) and SshTransport (US-8) each call it with their
- * own factory; the SAME assertions run against both — that is the whole point of
- * the seam.
+ * satisfy. Composite transports call it with their own factory.
  *
  * It is deliberately NOT named `*.test.ts`: it is imported BY tests so the same
- * battery executes under both unit (Local, in-process) and integration (SSH,
- * dockerized sshd) configs. Tests pulling it in:
- *   - local-transport.test.ts       (unit, in `pnpm test:unit`)
- *   - ssh-transport.int.test.ts     (integration, US-8)
+ * battery executes under integration (SSH, dockerized sshd) config.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -68,7 +63,7 @@ function waitForExit(
 /**
  * Registers the shared contract `describe` block.
  *
- * @param name    label for the implementation under test (e.g. "LocalTransport").
+ * @param name    label for the implementation under test.
  * @param factory builds a fresh transport per test.
  */
 export function runTransportContract(

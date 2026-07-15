@@ -17,7 +17,7 @@ COPY --from=pg-client /usr/lib/postgresql/16 /usr/lib/postgresql/16
 # ca-certificates   : TLS for registries, web-push, etc.
 # curl              : healthchecks / debugging
 # chromium          : per-session browser driving + Playwright e2e
-# build-essential, python3, pkg-config : native module builds (node-pty, argon2, ssh2 crypto)
+# build-essential, python3, pkg-config : native module builds (argon2, ssh2 crypto)
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     tmux \

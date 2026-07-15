@@ -147,7 +147,7 @@ async function decryptSecret(store: SecretStore, row: Record<string, unknown>): 
 }
 
 describe('NodeService.createNode', () => {
-  it('persists a local node as connected with no ssh fields and audits node_add', async () => {
+  it('persists a local node as disconnected until agentd authenticates', async () => {
     const writes: unknown[] = [];
     const { service, db } = makeService({
       async write(e) {
@@ -161,7 +161,7 @@ describe('NodeService.createNode', () => {
     );
 
     expect(node.kind).toBe('local');
-    expect(node.connectionStatus).toBe('connected');
+    expect(node.connectionStatus).toBe('disconnected');
     expect(node.host).toBeNull();
     expect(node.sshKeyRef).toBeNull();
     expect(db.secrets).toHaveLength(0);
@@ -351,7 +351,7 @@ describe('NodeService.ensureLocalNode (boot seeding idempotency)', () => {
     const { service, db } = makeService();
     const node = await service.ensureLocalNode();
     expect(node.kind).toBe('local');
-    expect(node.connectionStatus).toBe('connected');
+    expect(node.connectionStatus).toBe('disconnected');
     expect(db.nodes).toHaveLength(1);
   });
 

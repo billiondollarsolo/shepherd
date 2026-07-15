@@ -22,6 +22,8 @@ const (
 	TypeControl   byte = 0x01 // payload = JSON Control
 	TypePtyOutput byte = 0x02 // payload = [u16 sidLen][sid][bytes]  (daemon→client)
 	TypePtyInput  byte = 0x03 // payload = [u16 sidLen][sid][bytes]  (client→daemon)
+	TypeTCPOutput byte = 0x04 // payload = raw tunnel bytes (daemon→client, operation link)
+	TypeTCPInput  byte = 0x05 // payload = raw tunnel bytes (client→daemon, operation link)
 )
 
 const maxFrame = 16 << 20 // 16 MiB hard cap per frame
@@ -42,6 +44,7 @@ type Control struct {
 	Capabilities    []string `json:"capabilities,omitempty"`
 	CredentialID    string   `json:"credentialId,omitempty"`
 	NewCredential   string   `json:"newCredential,omitempty"`
+	ConnectionRole  string   `json:"connectionRole,omitempty"`
 
 	// session open / close / subscribe / resize / exit
 	ID      string   `json:"id,omitempty"`
@@ -50,10 +53,26 @@ type Control struct {
 	Env     []string `json:"env,omitempty"`
 	Command []string `json:"command,omitempty"`
 	// Mode selects the session transport: "" / "pty" (default) or "acp" (F6).
-	Mode string `json:"mode,omitempty"`
-	Cols uint16 `json:"cols,omitempty"`
-	Rows uint16 `json:"rows,omitempty"`
-	Code int    `json:"code,omitempty"`
+	Mode   string `json:"mode,omitempty"`
+	Cols   uint16 `json:"cols,omitempty"`
+	Rows   uint16 `json:"rows,omitempty"`
+	Code   int    `json:"code,omitempty"`
+	Signal string `json:"signal,omitempty"`
+
+	// exec_v1: bounded non-interactive command execution.
+	Input           string `json:"input,omitempty"`
+	TimeoutMS       int    `json:"timeoutMs,omitempty"`
+	StdoutLimit     int    `json:"stdoutLimit,omitempty"`
+	StderrLimit     int    `json:"stderrLimit,omitempty"`
+	Stdout          string `json:"stdout,omitempty"`
+	Stderr          string `json:"stderr,omitempty"`
+	TimedOut        bool   `json:"timedOut,omitempty"`
+	StdoutTruncated bool   `json:"stdoutTruncated,omitempty"`
+	StderrTruncated bool   `json:"stderrTruncated,omitempty"`
+
+	// tcp_tunnel_v1: dedicated authenticated loopback tunnel connection.
+	TargetHost string `json:"targetHost,omitempty"`
+	TargetPort int    `json:"targetPort,omitempty"`
 
 	// Native hook-config injection (US-19), seeded on the node by Open.
 	ConfigFiles      map[string]string `json:"configFiles,omitempty"`

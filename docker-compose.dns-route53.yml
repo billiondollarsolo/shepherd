@@ -1,0 +1,22 @@
+# Optional Amazon Route53 DNS-01 certificate issuance with static credentials.
+#
+# Prefer an instance/task role where the runtime supports one; in that case a
+# small operator override can select FLOCK_DNS_PROVIDER=route53 without mounting
+# these files. This checked-in profile deliberately keeps static keys in Docker
+# secret files instead of environment values or the Compose model.
+services:
+  caddy:
+    environment:
+      FLOCK_DNS_PROVIDER: route53
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/route53_access_key_id
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/route53_secret_access_key
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    secrets:
+      - route53_access_key_id
+      - route53_secret_access_key
+
+secrets:
+  route53_access_key_id:
+    file: ${ROUTE53_ACCESS_KEY_ID_FILE:-./secrets/route53_access_key_id}
+  route53_secret_access_key:
+    file: ${ROUTE53_SECRET_ACCESS_KEY_FILE:-./secrets/route53_secret_access_key}

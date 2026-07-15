@@ -103,6 +103,40 @@ orchestrator, web, PostgreSQL, agentd, and Docker API off the public interface. 
 DNS for `*.preview.shepherd.example.com` is optional: without it, Shepherd works normally
 and Remote Preview stays disabled.
 
+#### Optional DNS-01 with Cloudflare or Route53
+
+The bundled edge image includes pinned Cloudflare and Amazon Route53 Caddy modules.
+Use one of these profiles when neither inbound HTTP-01 nor TLS-ALPN-01 validation is
+viable, or when DNS-based ACME validation is otherwise preferred. DNS-01 manages only
+temporary ACME TXT records—it does **not** create the control-plane or wildcard Preview
+A/AAAA records shown above.
+
+For Cloudflare, create a zone-scoped API token with `Zone:Read` and `DNS:Edit`, store it
+in a file, then add the override:
+
+```bash
+install -d -m 0700 secrets
+install -m 0600 /dev/null secrets/cloudflare_api_token
+$EDITOR secrets/cloudflare_api_token
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dns-cloudflare.yml \
+  pull
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dns-cloudflare.yml \
+  up -d --wait
+```
+
+For Route53, use an IAM principal restricted to the hosted zone and ACME TXT-record
+changes. Store its two values in `secrets/route53_access_key_id` and
+`secrets/route53_secret_access_key`, set `AWS_REGION`, then use
+`docker-compose.dns-route53.yml` in the same commands. On AWS, an instance/task role is
+preferred: set `FLOCK_DNS_PROVIDER=route53` in an operator override and omit static-key
+mounts so the standard AWS credential chain is used. Never put provider keys directly
+in `.env`.
+
 #### Existing reverse proxy or ingress
 
 Set the public HTTPS origin and optional Preview suffix in `.env`:
@@ -156,7 +190,9 @@ Open `http://100.64.0.10:11010`. Shepherd keeps authentication, exact Origin che
 request limits, CSP, and host-only HttpOnly cookies enabled, but HTTP cannot protect the
 login or session from someone who can observe or modify that network path. The UI keeps
 an explicit warning visible. Some browser features, including Web Push and parts of PWA
-installation, may be unavailable because the page is not a secure context.
+installation, may be unavailable because the page is not a secure context. Shepherd
+deliberately omits COOP on non-loopback HTTP because browsers cannot honor it there;
+HTTPS and localhost deployments retain opener isolation.
 
 IP-only Preview uses the explicitly published `12000-12031` pool. Each project service
 receives one expiring port and the listener serves Preview traffic only—never login,
@@ -310,8 +346,9 @@ Shepherd is designed to be operated, not merely started:
 - Encrypted `.flockvault` backups contain the PostgreSQL system of record and a strict,
   checksummed manifest. Creation and verification are atomic; restore creates a rollback
   vault before cutover.
-- `scripts/flock-upgrade.sh` verifies compatibility, creates and verifies a pre-upgrade
-  vault, pulls the requested release images, runs migrations, and checks readiness.
+- `scripts/flock-upgrade.sh` verifies the signed/checksummed deployment bundle, creates
+  and verifies a pre-upgrade vault, and replaces only the services that need changing.
+  Compatible local runtimes remain pinned so active agents survive control-plane updates.
 - Daemon upgrades distinguish compatible, recommended, and required versions and avoid
   pretending an unsafe or session-destructive transition succeeded.
 
@@ -333,8 +370,8 @@ Browser / installed PWA
            │ authenticated agentd protocol
      ┌─────┴──────────────┐
      ▼                    ▼
-local node            remote nodes
-flock-agentd          flock-agentd
+isolated local runtime remote nodes
+flock-agentd           flock-agentd
 PTYs · status         PTYs · status
 metrics · transcripts metrics · transcripts
 ```
@@ -344,6 +381,9 @@ metrics · transcripts metrics · transcripts
 - **The orchestrator** is the Fastify/Postgres control plane. It owns authentication,
   durable configuration, node connections, status, Git views, and secure preview
   capabilities.
+- **`node-runtime`** is the separately pinned bundled local node. It owns local agent
+  tools, workspaces, PTYs, bounded commands, and loopback Preview tunnels; replacing the
+  orchestrator does not replace it.
 - **The web app** is the React PWA. It provides the Paddock, node/project hierarchy,
   Pens, terminals, diffs, activity, settings, and mobile experience.
 
@@ -355,12 +395,14 @@ stop an agent.
 Each release publishes provenance-attested, SBOM-enabled multi-platform images:
 
 - `ghcr.io/billiondollarsolo/shepherd-orchestrator`
+- `ghcr.io/billiondollarsolo/shepherd-node-runtime`
 - `ghcr.io/billiondollarsolo/shepherd-web`
 - `ghcr.io/billiondollarsolo/shepherd-caddy`
 - `ghcr.io/billiondollarsolo/shepherd-postgres`
 
-Production Compose pins `FLOCK_VERSION`; avoid mutable `latest` tags. Public image names
-use the canonical `shepherd-*` product namespace.
+Production Compose pins control-plane `FLOCK_VERSION` separately from
+`FLOCK_NODE_RUNTIME_VERSION`; avoid mutable `latest` tags. Public image names use the
+canonical `shepherd-*` product namespace.
 
 ## Local development
 
@@ -417,7 +459,7 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.4.1.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.5.0.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, edge proxy, database
 base, web app, and preferred node daemon are released together; the UI reports when a node daemon
 is compatible, recommended to upgrade, or required to upgrade.

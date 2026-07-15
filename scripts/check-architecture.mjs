@@ -84,6 +84,36 @@ function visit(file) {
 }
 for (const file of files) if (!state.has(file)) visit(file);
 
+const orchestratorManifest = JSON.parse(
+  readFileSync(path.join(root, 'apps/orchestrator/package.json'), 'utf8'),
+);
+if (orchestratorManifest.dependencies?.['node-pty']) {
+  failures.push('The orchestrator must not depend on node-pty; local PTYs belong to node-runtime.');
+}
+if (existsSync(path.join(root, 'apps/orchestrator/src/nodes/transport/local-transport.ts'))) {
+  failures.push('Legacy LocalTransport returned; local node operations must cross agentd.');
+}
+const orchestratorDockerfile = readFileSync(
+  path.join(root, 'docker/Dockerfile.orchestrator'),
+  'utf8',
+);
+for (const forbidden of [
+  'npm install -g @openai/codex',
+  'opencode.ai/install',
+  'flock-agentd /usr/local/bin',
+]) {
+  if (orchestratorDockerfile.includes(forbidden)) {
+    failures.push(`Orchestrator image regained local-runtime responsibility: ${forbidden}`);
+  }
+}
+const composeSource = readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+const orchestratorBlock = composeSource.split(/^  orchestrator:/m)[1]?.split(/^  [a-z]/m)[0] ?? '';
+for (const forbidden of ['flock_agent_home', 'flock_agentd_state']) {
+  if (orchestratorBlock.includes(forbidden)) {
+    failures.push(`Orchestrator Compose service must not mount ${forbidden}.`);
+  }
+}
+
 if (failures.length > 0) {
   console.error([...new Set(failures)].join('\n'));
   process.exit(1);

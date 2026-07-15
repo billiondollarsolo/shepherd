@@ -39,22 +39,23 @@ authentication, authorization, CSP, framing protection, and request limits remai
 
 ## Published services and images
 
-| Service        | Image                                                       | Role                                                                                                             |
-| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `caddy`        | `ghcr.io/billiondollarsolo/shepherd-caddy:<version>`        | TLS, security headers, main routing, and guarded on-demand preview certificates.                                 |
-| `web`          | `ghcr.io/billiondollarsolo/shepherd-web:<version>`          | Static React PWA.                                                                                                |
-| `orchestrator` | `ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>` | Auth, nodes, sessions, PTY/WebSocket fan-out, Git, Remote Preview, audit, diagnostics, and bundled local agentd. |
-| `postgres`     | `ghcr.io/billiondollarsolo/shepherd-postgres:<version>`     | Durable system of record; never on the PTY/status hot path.                                                      |
+| Service        | Image                                                       | Role                                                                                                                          |
+| -------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`        | `ghcr.io/billiondollarsolo/shepherd-caddy:<version>`        | TLS, security headers, main routing, and guarded on-demand preview certificates.                                              |
+| `web`          | `ghcr.io/billiondollarsolo/shepherd-web:<version>`          | Static React PWA.                                                                                                             |
+| `orchestrator` | `ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>` | Replaceable auth/API control plane, PTY fan-out, Git orchestration, Preview gateway, audit, and diagnostics.                  |
+| `node-runtime` | `ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>` | Bundled local daemon, agent CLIs, workspaces, PTYs, bounded commands, and loopback tunnels. No host port or database network. |
+| `postgres`     | `ghcr.io/billiondollarsolo/shepherd-postgres:<version>`     | Durable system of record; never on the PTY/status hot path.                                                                   |
 
-Every release builds all four for Linux amd64 and arm64, creates SBOM/provenance
+Every release builds all five for Linux amd64 and arm64, creates SBOM/provenance
 attestations, rejects every new High or Critical finding before promotion, and
 forces time-bounded review of upstream-unfixed Debian findings through the expiring
 `.trivyignore.yaml` risk register.
 
-The orchestrator image includes the latest Codex and OpenCode available at build time.
-At start, it asks Anthropic's official installer for the latest Claude Code in the
-persistent local-agent home. Set `FLOCK_INSTALL_CLAUDE_CODE=0` when a custom image or
-mounted home owns that version.
+The runtime image includes the latest Codex and OpenCode available at build time. At
+runtime start, it asks Anthropic's official installer for the latest Claude Code using a
+bounded best-effort update that preserves an existing binary on failure. Set
+`FLOCK_INSTALL_CLAUDE_CODE=0` when a custom image or mounted home owns that version.
 
 ## Quick start
 
@@ -115,6 +116,58 @@ At the firewall, expose only `80/tcp` and `443/tcp`. Restrict host SSH to admini
 addresses or a Tailnet. Never publish `8080`, `8081`, `5432`, an agentd port/socket, or
 the Docker API. Keep the host and Docker Engine patched; Shepherd's container controls
 do not compensate for an untrusted host kernel.
+
+### Optional DNS-01 certificate validation
+
+The release edge image includes version-pinned Cloudflare and Route53 DNS modules.
+The default remains Caddy's core HTTP-01/TLS-ALPN-01 flow; no DNS credential is needed
+when the certificate authority can reach the public edge. Select exactly one DNS
+override only when DNS-01 is useful. These profiles create temporary ACME TXT records,
+not the A/AAAA records that route the control plane and wildcard Preview suffix.
+
+Cloudflare:
+
+```bash
+install -d -m 0700 secrets
+install -m 0600 /dev/null secrets/cloudflare_api_token
+$EDITOR secrets/cloudflare_api_token
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dns-cloudflare.yml \
+  up -d --wait
+```
+
+Use a single zone-scoped API token with `Zone:Read` and `DNS:Edit`. The override mounts
+that file as a Docker secret and the non-root edge process reads it at startup. The
+token is not stored in `.env`, rendered into `docker compose config`, or passed as a
+command-line argument.
+
+Route53 with static credentials:
+
+```bash
+install -d -m 0700 secrets
+install -m 0600 /dev/null secrets/route53_access_key_id
+install -m 0600 /dev/null secrets/route53_secret_access_key
+$EDITOR secrets/route53_access_key_id
+$EDITOR secrets/route53_secret_access_key
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dns-route53.yml \
+  up -d --wait
+```
+
+Set `AWS_REGION` in `.env`. Restrict the IAM policy to hosted-zone listing plus TXT
+record inspection/change for the intended zone and `_acme-challenge` names. On AWS,
+prefer an instance/task role: use a small operator override that sets
+`FLOCK_DNS_PROVIDER=route53` and `AWS_REGION` without mounting static credentials. The
+provider then uses the standard AWS credential chain.
+
+After startup, confirm the selected module and issuance path without printing secrets:
+
+```bash
+docker compose exec caddy caddy list-modules | grep '^dns.providers.'
+docker compose logs --tail=100 caddy
+```
 
 ## Private IP, LAN hostname, or Tailnet HTTP
 
@@ -262,7 +315,9 @@ Security properties:
   connect/upstream time are bounded. Active HTTP/WebSocket tunnels close on revoke,
   expiry, session termination, shutdown, or orchestrator restart.
 - Cross-Origin-Opener-Policy severs the untrusted preview tab from the Shepherd control
-  window, including during capability bootstrap.
+  window, including during capability bootstrap, on HTTPS and trustworthy loopback
+  origins. Shepherd omits it on non-loopback HTTP because browsers cannot honor it in
+  that context.
 
 Treat preview content as untrusted application code. Its separate origin is the
 browser security boundary; never point `FLOCK_PREVIEW_DOMAIN` at the main hostname.
@@ -285,6 +340,7 @@ Persistent data lives in named volumes:
 - `pgdata` — database
 - `flock_agent_home` — bundled local-node tool credentials/workspaces
 - `flock_agentd_state` — local daemon identity/control state
+- `flock_agentd_control` — stable node ID, control credential, and live Unix socket
 - `caddy_data`, `caddy_config` — ACME account, certificates, proxy state
 
 Backups are written to `${FLOCK_BACKUP_DIR:-./backups}`. Follow
@@ -325,9 +381,13 @@ FLOCK_VAULT_PASSWORD_FILE=/tmp/shepherd-vault-password \
   ./scripts/flock-upgrade.sh <target-version>
 ```
 
-The helper verifies the target compatibility policy, creates and verifies an encrypted
-pre-upgrade vault, pulls exact versioned images, applies migrations, and checks
-readiness. A stricter daemon floor requires explicit acknowledgement. Shepherd does not
+The helper verifies the signed/checksummed deployment bundle before replacing Compose
+definitions, preserves `.env`, secrets, volumes, and custom overrides, creates and
+verifies an encrypted pre-upgrade vault, and checks readiness. A normal upgrade keeps a
+compatible local runtime and every active session unchanged. Use `--upgrade-runtime`
+for deferred idle maintenance. Required or first-topology runtime work refuses active
+sessions unless their printed IDs are accepted with `--force-stop-local-sessions`. A
+stricter remote daemon floor requires explicit acknowledgement. Shepherd does not
 pretend a contracted database schema can be rolled back by merely starting an older
 image; restore the verified vault according to the recovery guide.
 
