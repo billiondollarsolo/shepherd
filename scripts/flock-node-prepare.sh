@@ -75,6 +75,10 @@ validate() {
   [[ -x "$ADMIN_HELPER" ]] || { echo "FAIL $ADMIN_HELPER is missing"; failed=1; }
   [[ -f "$SUDOERS_FILE" ]] || { echo "FAIL $SUDOERS_FILE is missing"; failed=1; }
   [[ -d "$WORKSPACE" ]] || { echo "FAIL workspace $WORKSPACE is missing"; failed=1; }
+  if [[ -f /etc/systemd/system/flock-agentd.service && ! -d /var/lib/flock-agentd ]]; then
+    echo "FAIL enrolled daemon state directory /var/lib/flock-agentd is missing"
+    failed=1
+  fi
   if [[ -d "$WORKSPACE" ]]; then
     runuser -u "$RUNTIME_USER" -- test -r "$WORKSPACE" -a -w "$WORKSPACE" -a -x "$WORKSPACE" || {
       echo "FAIL runtime user cannot read/write $WORKSPACE"
@@ -251,6 +255,11 @@ UMask=0002
 ExecStart=$SYSTEM_BIN serve --socket '' --addr 127.0.0.1:$port --state-dir $STATE_DIR/state --secret-file $CREDENTIAL_FILE --node-id $node_id --runtime-user $RUNTIME_USER
 Restart=always
 RestartSec=2
+# Recreate the durable state root before mount namespacing is applied. Without
+# this, a missing directory makes ReadWritePaths fail at NAMESPACE before the
+# daemon can start or repair its own state layout.
+StateDirectory=flock-agentd
+StateDirectoryMode=0750
 NoNewPrivileges=true
 PrivateDevices=false
 PrivateTmp=false

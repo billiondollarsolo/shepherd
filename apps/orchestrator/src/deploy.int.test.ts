@@ -430,6 +430,8 @@ describe('production node and stack lifecycle', () => {
     expect(script).toMatch(/runtime-exec/);
     expect(script).toMatch(/runuser -u "\$RUNTIME_USER" -- env -i/);
     expect(script).toMatch(/UMask=0002/);
+    expect(script).toMatch(/StateDirectory=flock-agentd/);
+    expect(script).toMatch(/StateDirectoryMode=0750/);
     expect(script).toMatch(/mv -f "\$SYSTEM_BIN\.candidate" "\$SYSTEM_BIN"/);
   });
 
