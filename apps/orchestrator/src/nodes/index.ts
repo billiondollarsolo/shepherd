@@ -7,3 +7,5 @@ export * from './node-routes.js';
 export * from './node-fs-service.js';
 export * from './node-fs-route.js';
 export * from './node-preflight.js';
+export * from './node-capabilities.js';
+export * from './node-capabilities-route.js';

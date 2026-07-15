@@ -9,6 +9,7 @@ WORKSPACE="${FLOCK_WORKSPACE_ROOT:-/srv/flock/workspaces}"
 PUBLIC_KEY="${FLOCK_SSH_PUBLIC_KEY:-}"
 PUBLIC_KEY_FILE=""
 INSTALL_AGENTS="${FLOCK_INSTALL_NODE_AGENTS:-0}"
+INSTALL_AGENT_LIST=()
 
 usage() {
   cat <<'EOF'
@@ -20,7 +21,8 @@ Options:
   --workspace PATH        Runtime-owned workspace root (default /srv/flock/workspaces).
   --control-user NAME     SSH/control identity (default flock-control).
   --runtime-user NAME     Coding-agent identity (default flock-agent).
-  --install-agents        Install latest Claude Code, Codex, and OpenCode for the runtime user.
+  --install-agent NAME    Install or upgrade one supported coding-agent CLI (repeatable).
+  --install-agents        Install or upgrade every supported coding-agent CLI.
   --check                 Validate an existing preparation without changing it.
   -h, --help              Show this help.
 
@@ -37,6 +39,7 @@ while (($#)); do
     --workspace) WORKSPACE="${2:?missing path}"; shift 2 ;;
     --control-user) CONTROL_USER="${2:?missing name}"; shift 2 ;;
     --runtime-user) RUNTIME_USER="${2:?missing name}"; shift 2 ;;
+    --install-agent) INSTALL_AGENT_LIST+=("${2:?missing agent name}"); shift 2 ;;
     --install-agents) INSTALL_AGENTS=1; shift ;;
     --check) CHECK_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -51,7 +54,7 @@ done
 [[ "$WORKSPACE" == /* ]] || { echo "Workspace must be an absolute path." >&2; exit 2; }
 [[ ! "$WORKSPACE" =~ [[:space:]] ]] || { echo "Workspace paths containing whitespace are unsupported." >&2; exit 2; }
 
-for command in systemctl useradd groupadd install runuser sha256sum base64 stat visudo getent passwd awk sync mv cp timeout; do
+for command in systemctl useradd groupadd install runuser sha256sum base64 stat visudo getent passwd awk sync mv cp timeout setpriv; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 [[ -d /run/systemd/system ]] || { echo "A systemd-based host is required." >&2; exit 1; }
@@ -161,6 +164,96 @@ runtime_path() {
   home="$(runtime_home)"
   printf '%s' "$home/.local/bin:$home/.local/share/npm/bin:$home/.npm-global/bin:$home/.opencode/bin:/usr/local/bin:/usr/bin:/bin"
 }
+runtime_exec() {
+  local home
+  home="$(runtime_home)"
+  # Provisioners commonly invoke this helper from a private control-user home.
+  # Enter the runtime home before dropping privileges so vendor installers never
+  # inherit an unreadable cwd (and never write into the control identity's home).
+  (
+    cd "$home"
+    exec runuser -u "$RUNTIME_USER" -- env -i \
+      HOME="$home" USER="$RUNTIME_USER" LOGNAME="$RUNTIME_USER" SHELL=/bin/bash \
+      PATH="$(runtime_path)" \
+      "$@"
+  )
+}
+agent_version() {
+  local agent="$1" bin version status
+  case "$agent" in claude|codex|opencode|gemini|grok|aider|cursor-agent|amp) ;;
+    *) die "unsupported agent name" ;;
+  esac
+  bin="$(runtime_exec sh -c 'command -v "$1"' sh "$agent")"
+  [[ -n "$bin" ]] || die "$agent is not installed"
+  set +e
+  version="$(runtime_exec timeout 10s "$bin" --version 2>&1 | head -n 1)"
+  status=$?
+  set -e
+  ((status == 0)) || die "$agent exists at $bin but is not launchable: ${version:-version check failed}"
+  [[ -n "$version" ]] || version="version unavailable"
+  printf '%s\t%s\n' "$bin" "$version"
+}
+run_installer() {
+  local url="$1"
+  shift
+  command -v curl >/dev/null || die "curl is required to install this agent"
+  runtime_exec /bin/sh -c '
+    set -eu
+    url="$1"; shift
+    script="$(mktemp)"
+    trap '\''rm -f "$script"'\'' EXIT HUP INT TERM
+    curl --fail --silent --show-error --location \
+      --retry 3 --retry-all-errors --connect-timeout 15 --max-time 180 \
+      --output "$script" "$url"
+    timeout --kill-after=15s 540s /bin/bash "$script" "$@"
+  ' shepherd-installer "$url" "$@"
+}
+install_agent() {
+  local agent="$1" home group
+  home="$(runtime_home)"
+  group="$(id -gn "$RUNTIME_USER")"
+  install -d -o "$RUNTIME_USER" -g "$group" -m 0755 \
+    "$home/.local" "$home/.local/bin" "$home/.local/share" "$home/.local/share/npm"
+  case "$agent" in
+    claude) run_installer https://claude.ai/install.sh latest ;;
+    codex) run_installer https://chatgpt.com/codex/install.sh ;;
+    opencode) run_installer https://opencode.ai/install --no-modify-path ;;
+    gemini)
+      command -v npm >/dev/null || die "Gemini CLI installation requires Node.js and npm"
+      runtime_exec timeout --kill-after=15s 540s \
+        npm install -g --prefix "$home/.local/share/npm" @google/gemini-cli@latest
+      ;;
+    grok) run_installer https://x.ai/cli/install.sh ;;
+    aider) run_installer https://aider.chat/install.sh ;;
+    cursor-agent) run_installer https://cursor.com/install ;;
+    amp) run_installer https://ampcode.com/install.sh ;;
+    *) die "unsupported agent name" ;;
+  esac
+  agent_version "$agent"
+}
+docker_agent_access() {
+  command -v docker >/dev/null || return 1
+  [[ -S /run/docker.sock ]] || return 1
+  local home uid gid
+  home="$(runtime_home)"; uid="$(id -u "$RUNTIME_USER")"; gid="$(id -g "$RUNTIME_USER")"
+  timeout 10s setpriv --reuid="$uid" --regid="$gid" --clear-groups \
+    env -i HOME="$home" USER="$RUNTIME_USER" LOGNAME="$RUNTIME_USER" \
+    PATH="$(runtime_path)" docker info >/dev/null 2>&1
+}
+docker_status() {
+  local installed=0 version='' daemon=0 access=0 mode=none
+  if command -v docker >/dev/null; then
+    installed=1
+    version="$(docker --version 2>/dev/null | head -n 1)"
+  fi
+  systemctl is-active --quiet docker.service 2>/dev/null && daemon=1
+  if docker_agent_access; then
+    access=1
+    mode=system_acl
+  fi
+  printf 'installed\t%s\nversion\t%s\ndaemon\t%s\naccess\t%s\nmode\t%s\n' \
+    "$installed" "$version" "$daemon" "$access" "$mode"
+}
 activate_previous() {
   [[ -x "$PREVIOUS_BIN" ]] || return 1
   install -o root -g root -m 0755 "$PREVIOUS_BIN" "$SYSTEM_BIN.candidate"
@@ -169,6 +262,29 @@ activate_previous() {
 }
 
 case "${1:-}" in
+  capabilities)
+    echo "node-admin-v2 agents docker inventory"
+    ;;
+  inventory)
+    for agent in claude codex opencode gemini grok aider cursor-agent amp; do
+      if output="$(agent_version "$agent" 2>/dev/null)"; then
+        IFS=$'\t' read -r path version <<<"$output"
+        printf 'tool\t%s\t%s\t%s\n' "$agent" "$path" "$version"
+      else
+        printf 'tool\t%s\t\t\n' "$agent"
+      fi
+    done
+    while IFS=$'\t' read -r key value; do
+      printf 'docker\t%s\t%s\n' "$key" "$value"
+    done < <(docker_status)
+    install_supported=0
+    if [[ -f /etc/os-release ]]; then
+      # shellcheck disable=SC1091
+      . /etc/os-release
+      case "${ID:-}" in debian|ubuntu) install_supported=1 ;; esac
+    fi
+    printf 'docker\tinstall_supported\t%s\n' "$install_supported"
+    ;;
   runtime-exec-supported)
     # Capability probe used by the SSH transport. Keeping this separate from
     # runtime-exec means a legacy/direct-user node can fall back safely without
@@ -325,18 +441,61 @@ EOF
     echo "writable"
     ;;
   agent-version)
-    agent="${2:-}"
-    case "$agent" in claude|codex|opencode|gemini|grok) ;; *) die "unsupported agent name" ;; esac
-    home="$(runtime_home)"
-    bin="$(runuser -u "$RUNTIME_USER" -- env HOME="$home" PATH="$(runtime_path)" sh -c 'command -v "$1"' sh "$agent")"
-    [[ -n "$bin" ]] || die "$agent is not installed"
-    set +e
-    version="$(timeout 5s runuser -u "$RUNTIME_USER" -- env HOME="$home" PATH="$(runtime_path)" "$bin" --version 2>&1 | head -n 1)"
-    status=$?
-    set -e
-    ((status == 0)) || die "$agent exists at $bin but is not launchable: ${version:-version check failed}"
-    [[ -n "$version" ]] || version="version unavailable"
-    printf '%s\t%s\n' "$bin" "$version"
+    agent_version "${2:-}"
+    ;;
+  install-agent)
+    install_agent "${2:-}"
+    ;;
+  docker-status)
+    docker_status
+    ;;
+  docker-install)
+    [[ -f /etc/os-release ]] || die "Docker installation requires a supported Linux distribution"
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    case "${ID:-}" in debian|ubuntu) ;; *) die "automatic Docker installation currently supports Debian and Ubuntu" ;; esac
+    command -v apt-get >/dev/null || die "automatic Docker installation requires apt-get"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends docker.io acl
+    systemctl enable --now docker.service
+    docker_status
+    ;;
+  docker-access)
+    action="${2:-}"
+    case "$action" in
+      enable)
+        command -v docker >/dev/null || die "Docker Engine is not installed"
+        systemctl is-active --quiet docker.service || die "Docker daemon is not running"
+        if ! command -v setfacl >/dev/null; then
+          command -v apt-get >/dev/null || die "setfacl is required to grant bounded runtime access"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends acl
+        fi
+        setfacl_bin="$(command -v setfacl)"
+        install -d -o root -g root -m 0755 /etc/systemd/system/docker.service.d
+        cat > /etc/systemd/system/docker.service.d/shepherd-agent-access.conf <<EOF
+[Service]
+ExecStartPost=$setfacl_bin -m u:$RUNTIME_USER:rw /run/docker.sock
+EOF
+        chown root:root /etc/systemd/system/docker.service.d/shepherd-agent-access.conf
+        chmod 0644 /etc/systemd/system/docker.service.d/shepherd-agent-access.conf
+        systemctl daemon-reload
+        "$setfacl_bin" -m "u:$RUNTIME_USER:rw" /run/docker.sock
+        docker_agent_access || die "Docker access verification failed for $RUNTIME_USER"
+        docker_status
+        ;;
+      disable)
+        rm -f /etc/systemd/system/docker.service.d/shepherd-agent-access.conf
+        systemctl daemon-reload
+        if command -v setfacl >/dev/null && [[ -S /run/docker.sock ]]; then
+          setfacl -x "u:$RUNTIME_USER" /run/docker.sock 2>/dev/null || true
+        fi
+        docker_status
+        ;;
+      *) die "docker-access expects enable or disable" ;;
+    esac
     ;;
   *) die "unsupported operation" ;;
 esac
@@ -351,17 +510,12 @@ chmod 0440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE" >/dev/null
 
 if [[ "$INSTALL_AGENTS" == 1 ]]; then
-  command -v curl >/dev/null || { echo "--install-agents requires curl" >&2; exit 1; }
-  echo "Installing latest coding agents as $RUNTIME_USER..."
-  runuser -u "$RUNTIME_USER" -- env HOME="$RUNTIME_HOME" sh -lc \
-    'curl -fsSL https://claude.ai/install.sh | bash -s -- latest'
-  command -v npm >/dev/null || { echo "Codex installation requires Node.js/npm." >&2; exit 1; }
-  install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0755 "$RUNTIME_HOME/.local/share/npm"
-  runuser -u "$RUNTIME_USER" -- env HOME="$RUNTIME_HOME" \
-    npm install -g --prefix "$RUNTIME_HOME/.local/share/npm" @openai/codex@latest
-  runuser -u "$RUNTIME_USER" -- env HOME="$RUNTIME_HOME" sh -lc \
-    'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path'
+  INSTALL_AGENT_LIST=(claude codex opencode gemini grok aider cursor-agent amp)
 fi
+for agent in "${INSTALL_AGENT_LIST[@]}"; do
+  echo "Installing latest $agent as $RUNTIME_USER..."
+  "$ADMIN_HELPER" install-agent "$agent"
+done
 
 validate
 echo "Register this node with SSH user '$CONTROL_USER'. Authenticate provider CLIs separately as '$RUNTIME_USER'."

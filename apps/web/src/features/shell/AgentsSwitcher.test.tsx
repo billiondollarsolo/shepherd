@@ -214,7 +214,7 @@ describe('AgentsSwitcher controls', () => {
     expect(screen.getByTestId('agent-row-waiting')).toBeInTheDocument();
     expect(screen.getByTestId('agent-row-idle')).toBeInTheDocument();
     expect(screen.queryByTestId('agent-row-other-project')).toBeNull();
-    expect(screen.getByTestId('agent-list-context')).toHaveTextContent('Project:Flock');
+    expect(screen.getByTestId('agent-list-context')).toHaveTextContent('Host:LocalProject:Flock');
   });
 
   it('opens project Source Control from the sidebar', () => {

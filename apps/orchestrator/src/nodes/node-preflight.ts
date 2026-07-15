@@ -1,14 +1,19 @@
-import type { AgentdCompatibility, NodePreflightCheck, NodePreflightResponse } from '@flock/shared';
+import {
+  NODE_TOOL_CATALOG,
+  type AgentdCompatibility,
+  type NodePreflightCheck,
+  type NodePreflightResponse,
+} from '@flock/shared';
 
 import type { AgentdHost } from './agentd/ssh-agentd-host.js';
 import {
   evaluateAgentdCompatibility,
   type ResolvedAgentdCompatibilityPolicy,
 } from './agentd/agentd-compatibility.js';
+import { inspectRemoteNodeInventory } from './node-capabilities.js';
 
 const ADMIN_HELPER = '/usr/local/sbin/flock-node-admin';
 const SYSTEM_BIN = '/usr/local/lib/flock-agentd/flock-agentd';
-const SUPPORTED_AGENTS = ['claude', 'codex', 'opencode', 'gemini', 'grok'] as const;
 
 export interface RemoteNodePreflightInput {
   nodeId: string;
@@ -39,19 +44,20 @@ export async function preflightRemoteNode(
   input: RemoteNodePreflightInput,
 ): Promise<NodePreflightResponse> {
   const checks: NodePreflightCheck[] = [];
-  const [platform, prepared, installed, disk, forwarding] = await Promise.all([
-    input.host.exec('uname -s; uname -m'),
-    input.host.exec(`sudo -n ${ADMIN_HELPER} preflight`),
-    input.host.exec(`${SYSTEM_BIN} version 2>/dev/null`),
-    input.host.exec("df -Pk /var/lib 2>/dev/null | awk 'NR==2 {print $4}'"),
-    input.host
-      .forwardOut('127.0.0.1', 22)
-      .then((channel) => {
-        channel.destroy();
-        return true;
-      })
-      .catch(() => false),
-  ]);
+  // SSH servers commonly cap multiplexed sessions at ten. Keep this diagnostic
+  // read path sequential so opening Node details alongside Git and stack probes
+  // cannot exhaust the shared control connection.
+  const platform = await input.host.exec('uname -s; uname -m');
+  const prepared = await input.host.exec(`sudo -n ${ADMIN_HELPER} preflight`);
+  const installed = await input.host.exec(`${SYSTEM_BIN} version 2>/dev/null`);
+  const disk = await input.host.exec("df -Pk /var/lib 2>/dev/null | awk 'NR==2 {print $4}'");
+  const forwarding = await input.host
+    .forwardOut('127.0.0.1', 22)
+    .then((channel) => {
+      channel.destroy();
+      return true;
+    })
+    .catch(() => false);
   const [os = '', arch = ''] = platform.stdout.trim().split('\n');
   const supportedArch = ['x86_64', 'amd64', 'aarch64', 'arm64'].includes(arch.trim());
   checks.push(
@@ -119,15 +125,10 @@ export async function preflightRemoteNode(
     ),
   );
 
-  const workspaceResults = await Promise.all(
-    [...new Set(input.workspaces)].sort().map(async (workspace) => ({
-      workspace,
-      result: await input.host.exec(
-        `sudo -n ${ADMIN_HELPER} check-workspace ${shellQuote(workspace)}`,
-      ),
-    })),
-  );
-  for (const { workspace, result } of workspaceResults) {
+  for (const workspace of [...new Set(input.workspaces)].sort()) {
+    const result = await input.host.exec(
+      `sudo -n ${ADMIN_HELPER} check-workspace ${shellQuote(workspace)}`,
+    );
     checks.push(
       check(
         `workspace:${workspace}`,
@@ -140,26 +141,19 @@ export async function preflightRemoteNode(
     );
   }
 
-  const agentResults = await Promise.all(
-    SUPPORTED_AGENTS.map(async (agent) => ({
-      agent,
-      result: await input.host.exec(`sudo -n ${ADMIN_HELPER} agent-version ${agent}`),
-    })),
-  );
+  const inventory = await inspectRemoteNodeInventory(input.host).catch(() => null);
   let availableAgents = 0;
-  for (const { agent, result } of agentResults) {
-    if (result.code === 0) availableAgents += 1;
+  for (const tool of NODE_TOOL_CATALOG) {
+    const detected = inventory?.tools.get(tool.binary);
+    if (detected) availableAgents += 1;
     checks.push(
       check(
-        `agent:${agent}`,
-        `${agent} CLI`,
-        result.code === 0 ? 'pass' : 'warning',
-        result.code === 0
-          ? compact(result.stdout, `${agent} is installed.`)
-          : compact(
-              result.stderr || result.stdout,
-              `${agent} is missing or not launchable for flock-agent.`,
-            ),
+        `agent:${tool.binary}`,
+        `${tool.binary} CLI`,
+        detected ? 'pass' : 'warning',
+        detected
+          ? compact(`${detected.path}\t${detected.version}`, `${tool.binary} is installed.`)
+          : `${tool.binary} is missing or not launchable for flock-agent.`,
       ),
     );
   }

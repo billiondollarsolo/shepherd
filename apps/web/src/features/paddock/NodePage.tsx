@@ -44,6 +44,7 @@ import { formatGB } from '../../lib/utils';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
 import { ProjectPolicyEditor } from './ProjectPolicyEditor';
+import { NodeCapabilitiesPanel } from './NodeCapabilitiesPanel';
 
 function fmtUptime(sec: number): string {
   const d = Math.floor(sec / 86400);
@@ -525,6 +526,8 @@ export function NodePage(): JSX.Element {
             )}
           </section>
 
+          {nodeId ? <NodeCapabilitiesPanel nodeId={nodeId} /> : null}
+
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card title="Connection">
               <Field
@@ -562,30 +565,6 @@ export function NodePage(): JSX.Element {
               canUpgrade={node?.kind === 'ssh'}
               onUpgrade={() => setUpgradeOpen(true)}
             />
-
-            <Card title="Detected agent CLIs">
-              {!info || info.agents.length === 0 ? (
-                <p className="text-sm text-flock-ink-muted">No agent CLIs found.</p>
-              ) : (
-                <ul className="flex flex-col gap-1.5">
-                  {info.agents.map((agent) => (
-                    <li
-                      key={agent.name}
-                      className="flex items-center gap-2 rounded-md bg-flock-surface-2 px-2.5 py-1.5 text-sm"
-                    >
-                      <span className="size-1.5 shrink-0 rounded-full bg-status-running" />
-                      <span className="font-medium">{agent.name}</span>
-                      <span
-                        className="ml-auto truncate font-mono text-2xs text-flock-ink-muted"
-                        title={agent.path}
-                      >
-                        {agent.version || agent.path}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
           </section>
         </div>
       </ScrollArea>

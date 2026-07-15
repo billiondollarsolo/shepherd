@@ -19,3 +19,4 @@ export * from './user-preferences.js';
 export * from './backup.js';
 export * from './diagnostics.js';
 export * from './agentd-compatibility.js';
+export * from './node-tools.js';

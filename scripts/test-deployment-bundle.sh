@@ -25,6 +25,10 @@ checksum_target="$(awk '{print $2}' "$TMP/output/$archive_name.sha256")"
 tar -C "$TMP/extracted" -xzf "$TMP/output/$archive_name"
 bundle_root="$TMP/extracted/shepherd-0.0.0-test"
 (cd "$bundle_root" && sha256sum -c SHA256SUMS)
+[[ -x "$bundle_root/scripts/flock-node-prepare.sh" ]] || {
+  echo "deployment bundle is missing the executable node preparation script" >&2
+  exit 1
+}
 jq -e \
   '.controlPlaneVersion == "0.0.0-test" and
    .runtime.preferredVersion == "0.0.0-test" and

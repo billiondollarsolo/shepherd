@@ -33,6 +33,9 @@ import type {
   UpdatePreviewRuntimeSettingsRequest,
   ListProjectPortsResponse,
   DeploymentPreviewSettingsResponse,
+  ConfigureNodeDockerRequest,
+  NodeCapabilitiesResponse,
+  NodeToolId,
 } from '@flock/shared';
 import {
   commitGit,
@@ -68,6 +71,9 @@ import {
   relaunchProjectForward,
   stopProjectForward,
   getDeploymentPreviewSettings,
+  getNodeCapabilities,
+  installNodeTool,
+  configureNodeDocker,
   updateDeploymentPreviewSettings,
   testDeploymentPreviewRouting,
 } from './treeApi';
@@ -93,6 +99,7 @@ export const qk = {
   fsFile: (nodeId: string, path: string) => ['fs-file', nodeId, path] as const,
   agentdStatus: ['agentd-status'] as const,
   stack: (nodeId: string, path: string) => ['stack', nodeId, path] as const,
+  nodeCapabilities: (nodeId: string) => ['node-capabilities', nodeId] as const,
   fleetActivity: ['fleet-activity'] as const,
   projectPorts: (projectId: string) => ['project-ports', projectId] as const,
   deploymentPreview: ['deployment-preview'] as const,
@@ -411,6 +418,59 @@ export function useNodePreflight(nodeId: string | null): UseQueryResult<NodePref
     queryFn: () => getNodePreflight(nodeId as string),
     staleTime: 30_000,
     retry: false,
+  });
+}
+
+export function useNodeCapabilities(
+  nodeId: string | null,
+): UseQueryResult<NodeCapabilitiesResponse> {
+  return useQuery({
+    queryKey: qk.nodeCapabilities(nodeId ?? ''),
+    enabled: nodeId != null,
+    queryFn: () => getNodeCapabilities(nodeId as string),
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
+export function useInstallNodeTool() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ nodeId, tool }: { nodeId: string; tool: NodeToolId }) =>
+      installNodeTool(nodeId, tool),
+    onSuccess: async ({ nodeId, capability }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.nodeCapabilities(nodeId) }),
+        queryClient.invalidateQueries({ queryKey: ['node-info', nodeId] }),
+        queryClient.invalidateQueries({ queryKey: ['node-preflight', nodeId] }),
+      ]);
+      toast.success(`${capability.label} ${capability.installed ? 'is ready' : 'was updated'}.`);
+    },
+    onError: (error) => toast.error(errMessage(error, 'Coding-tool installation failed.')),
+  });
+}
+
+export function useConfigureNodeDocker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      nodeId,
+      action,
+    }: {
+      nodeId: string;
+      action: ConfigureNodeDockerRequest['action'];
+    }) => configureNodeDocker(nodeId, action),
+    onSuccess: async ({ nodeId, action }) => {
+      await queryClient.invalidateQueries({ queryKey: qk.nodeCapabilities(nodeId) });
+      toast.success(
+        action === 'install'
+          ? 'Docker Engine is installed.'
+          : action === 'enable_agent_access'
+            ? 'Docker access is enabled for Shepherd agents.'
+            : 'Docker access is disabled for Shepherd agents.',
+      );
+    },
+    onError: (error) => toast.error(errMessage(error, 'Docker configuration failed.')),
   });
 }
 

@@ -6,6 +6,41 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-15
+
+### Added
+
+- Added automatic, read-only inventory and explicit latest-channel install/upgrade
+  actions for Claude Code, Codex, OpenCode, Gemini, Grok, Aider, Cursor Agent, and Amp.
+- Added Node-details Docker detection with separate installation, root-equivalent agent
+  access, and access-removal actions instead of silently changing the node.
+- Added the node-preparation script to versioned deployment bundles and documented the
+  supported-tool tiers, authentication ownership, migration path, and Docker boundary.
+- Added the node host name above project context on agent views.
+
+### Changed
+
+- Remote-node preparation installs no tools by default, accepts repeatable
+  `--install-agent` selections, and reserves `--install-agents` for an explicit all-eight
+  installation. Provider credentials remain owned by each CLI on its node.
+- Aider, Cursor Agent, and Amp are now identified as supported terminal integrations;
+  Shepherd does not overstate structured chat or telemetry support for them.
+- The internal Vagrant validation path now exercises the same allowlisted installers as
+  production node preparation. Vagrant remains a developer test fixture, not a customer
+  deployment requirement.
+
+### Security
+
+- Managed node mutations are schema-allowlisted, confirmation-gated, time/output bounded,
+  serialized per node, blocked around conflicting active sessions, and audited with
+  redacted success/failure outcomes.
+- Docker agent access uses a persistent ACL for only the isolated runtime identity,
+  preserves existing human Docker-group access, and explicitly warns that system Docker
+  control is root-equivalent.
+- Existing node helpers retain read-only capability detection; managed writes remain
+  disabled until the current idempotent preparation script is run. The daemon protocol
+  and minimum supported daemon version are unchanged.
+
 ## [0.5.0] - 2026-07-15
 
 ### Added
@@ -151,7 +186,8 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.1
 [0.5.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.0
 [0.4.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.1
 [0.4.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.0

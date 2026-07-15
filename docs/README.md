@@ -16,15 +16,17 @@ New here? Read in this order:
 1. **[Architecture](architecture.md)** — the three components and how a session flows
    end to end. Start here.
 2. **[Agent integration matrix](agent-integration-matrix.md)** — exactly what Shepherd
-   captures from each agent (Claude / Codex / OpenCode / Gemini / Grok) and the
+   captures from each first-class and terminal agent integration and the
    mechanism behind each signal. The authoritative "how well do we work with agent X."
-3. **[flock-agentd design](flock-agentd-design.md)** — the node daemon: why it exists
+3. **[Node tooling and Docker](node-tooling.md)** — detection, opt-in managed installs,
+   authentication ownership, Docker's privilege boundary, and node migration.
+4. **[flock-agentd design](flock-agentd-design.md)** — the node daemon: why it exists
    (the tmux replacement) and how the raw-PTY + status + metrics model works.
-4. **[Deployment](deployment.md)** — bundled TLS, external proxies, private HTTP,
+5. **[Deployment](deployment.md)** — bundled TLS, external proxies, private HTTP,
    custom routing, secrets, Remote Preview, and deployment verification.
-5. **[Releasing](releasing.md)** — public-repository setup, versioning, GHCR
+6. **[Releasing](releasing.md)** — public-repository setup, versioning, GHCR
    publication, verification, and operational follow-through.
-6. **[Backup and recovery](backup-and-recovery.md)** and
+7. **[Backup and recovery](backup-and-recovery.md)** and
    **[Operations and diagnostics](operations-and-diagnostics.md)** — verified vaults,
    health semantics, support bundles, and runtime bounds.
 
@@ -34,6 +36,7 @@ New here? Read in this order:
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | [architecture.md](architecture.md)                                     | System overview — orchestrator ⇄ agentd ⇄ web, the status pipeline, data path                                                            |
 | [agent-integration-matrix.md](agent-integration-matrix.md)             | Per-agent capability matrix + the hook/transcript mechanism for each                                                                     |
+| [node-tooling.md](node-tooling.md)                                     | Supported-tool detection/installation, provider auth ownership, Docker privilege, and remote-node migration                              |
 | [flock-agentd-design.md](flock-agentd-design.md)                       | Node daemon design + protocol rationale                                                                                                  |
 | [deployment.md](deployment.md)                                         | Docker Compose deployment modes, TLS/private HTTP, custom proxies, secrets, Preview, and operations                                      |
 | [releasing.md](releasing.md)                                           | Release gates, GitHub/GHCR publication, verification, and public-repository checklist                                                    |

@@ -149,6 +149,8 @@ export const AuditActionEnum = z.enum([
   'node_update',
   'node_remove',
   'node_credential_rotate',
+  'node_tool_install',
+  'node_docker_config',
   'node_control_event',
   'agent_policy_event',
   'session_create',

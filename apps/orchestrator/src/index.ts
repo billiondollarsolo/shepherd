@@ -15,7 +15,18 @@ import { AuditQueryService, DrizzleAuditReadStore } from './audit/index.js';
 import { AuditLogger } from './audit/index.js';
 import { getDb, closeDb } from './db/index.js';
 import { SecretStore } from './secrets/index.js';
-import { NodeService, NodeFsService, preflightRemoteNode } from './nodes/index.js';
+import {
+  NodeService,
+  NodeFsService,
+  NodeCapabilityOperationCoordinator,
+  NodeCapabilityOperationError,
+  configureRemoteNodeDocker,
+  inspectLocalNodeCapabilities,
+  inspectRemoteNodeCapabilities,
+  installRemoteNodeTool,
+  preflightRemoteNode,
+  registerNodeCapabilitiesRoutes,
+} from './nodes/index.js';
 import { NodeWorkspaceService } from './nodes/node-workspace-service.js';
 import { AgentdActiveSessionsError, AgentdConnections } from './nodes/agentd/agentd-connections.js';
 import { AgentdPtyTransport } from './nodes/agentd/agentd-pty-transport.js';
@@ -31,8 +42,15 @@ import {
   evaluateAgentdCompatibility,
   loadAgentdCompatibilityPolicy,
 } from './nodes/agentd/agentd-compatibility.js';
-import type { ConnectionStatus, PlanItem, Status } from '@flock/shared';
-import { CreateSessionRequest } from '@flock/shared';
+import type {
+  ConnectionStatus,
+  NodeCapabilitiesResponse,
+  NodeInfo,
+  NodeToolId,
+  PlanItem,
+  Status,
+} from '@flock/shared';
+import { CreateSessionRequest, nodeToolDefinition } from '@flock/shared';
 import { forgetPlan, planEventFields } from './hooks/plan.js';
 import {
   NodeConnectionManager,
@@ -1253,6 +1271,133 @@ export async function main(): Promise<void> {
   // US-33.1: git source-control actions (stage/commit/push) share the diff seams
   // — same session registry + per-node transport. Writes git plumbing on the node.
   const git = new GitService(gitSeams);
+  const nodeCapabilityOperations = new NodeCapabilityOperationCoordinator();
+  const recordNodeCapabilityAudit = async (
+    action: 'node_tool_install' | 'node_docker_config',
+    nodeId: string,
+    context: { userId: string; ip: string | null },
+    detail: Record<string, unknown>,
+  ): Promise<void> => {
+    try {
+      await auditLogger.record({
+        action,
+        userId: context.userId,
+        targetType: 'node',
+        targetId: nodeId,
+        ip: context.ip,
+        detail,
+      });
+    } catch (error) {
+      recordFailure('audit', 'node-capability-operation', error, { nodeId });
+    }
+  };
+
+  const remoteCapabilityHost = async (nodeId: string) => {
+    const connected = await connections.waitForConnected(nodeId, 8_000);
+    if (!connected) {
+      throw new NodeCapabilityOperationError('node_unavailable', 'The remote node is unavailable.');
+    }
+    return connections.agentdHostFor(nodeId);
+  };
+
+  const inspectNodeCapabilities = async (
+    nodeId: string,
+  ): Promise<NodeCapabilitiesResponse | null> => {
+    const node = await nodes.getNode(nodeId);
+    if (!node) return null;
+    if (node.kind === 'local') {
+      const info = (await nodeInfo(nodeId)) as NodeInfo | null;
+      return info ? inspectLocalNodeCapabilities(nodeId, info) : null;
+    }
+    return inspectRemoteNodeCapabilities(nodeId, await remoteCapabilityHost(nodeId));
+  };
+
+  const installNodeTool = async (
+    nodeId: string,
+    tool: NodeToolId,
+    context: { userId: string; ip: string | null },
+  ) => {
+    const node = await nodes.getNode(nodeId);
+    if (!node) return null;
+    if (node.kind !== 'ssh') {
+      throw new NodeCapabilityOperationError(
+        'operation_failed',
+        'The bundled local runtime is immutable; update Shepherd to change its bundled tools.',
+      );
+    }
+    try {
+      const result = await nodeCapabilityOperations.run(nodeId, async () => {
+        const definition = nodeToolDefinition(tool);
+        const active = (await sessionRegistry.listOpenSessions()).filter(
+          (session) => session.nodeId === nodeId && session.agentType === definition.agentType,
+        );
+        if (active.length > 0) {
+          throw new NodeCapabilityOperationError(
+            'operation_failed',
+            `Finish ${active.length} active ${definition.label} session(s) before installing or upgrading it.`,
+          );
+        }
+        return installRemoteNodeTool(nodeId, await remoteCapabilityHost(nodeId), tool);
+      });
+      await recordNodeCapabilityAudit('node_tool_install', nodeId, context, {
+        tool,
+        outcome: 'succeeded',
+        version: result.capability.version,
+      });
+      return { nodeId, tool, ...result };
+    } catch (error) {
+      await recordNodeCapabilityAudit('node_tool_install', nodeId, context, {
+        tool,
+        outcome: 'failed',
+        reason: error instanceof NodeCapabilityOperationError ? error.code : 'unexpected',
+      });
+      throw error;
+    }
+  };
+
+  const configureNodeDocker = async (
+    nodeId: string,
+    action: 'install' | 'enable_agent_access' | 'disable_agent_access',
+    context: { userId: string; ip: string | null },
+  ) => {
+    const node = await nodes.getNode(nodeId);
+    if (!node) return null;
+    if (node.kind !== 'ssh') {
+      throw new NodeCapabilityOperationError(
+        'operation_failed',
+        'Docker management is available only for prepared remote nodes.',
+      );
+    }
+    try {
+      const result = await nodeCapabilityOperations.run(nodeId, async () => {
+        if (action === 'disable_agent_access') {
+          const active = (await sessionRegistry.listOpenSessions()).filter(
+            (session) => session.nodeId === nodeId,
+          );
+          if (active.length > 0) {
+            throw new NodeCapabilityOperationError(
+              'operation_failed',
+              `Finish the node's ${active.length} active session(s) before disabling Docker access.`,
+            );
+          }
+        }
+        return configureRemoteNodeDocker(nodeId, await remoteCapabilityHost(nodeId), action);
+      });
+      await recordNodeCapabilityAudit('node_docker_config', nodeId, context, {
+        action,
+        outcome: 'succeeded',
+        agentAccess: result.docker.agentAccess,
+      });
+      return { nodeId, action, ...result };
+    } catch (error) {
+      await recordNodeCapabilityAudit('node_docker_config', nodeId, context, {
+        action,
+        outcome: 'failed',
+        reason: error instanceof NodeCapabilityOperationError ? error.code : 'unexpected',
+      });
+      throw error;
+    }
+  };
 
   // US-39: install the global default-DENY surface guard so ALL UI/API/WS
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
@@ -1337,6 +1482,13 @@ export async function main(): Promise<void> {
           liveChannels.untrackSession(ptyId); // drop the shared PtySession (fresh on re-split)
         }
       : undefined,
+  });
+
+  registerNodeCapabilitiesRoutes(app, {
+    auth,
+    inspect: inspectNodeCapabilities,
+    installTool: installNodeTool,
+    configureDocker: configureNodeDocker,
   });
 
   registerNodeCredentialRotationRoute(app, {

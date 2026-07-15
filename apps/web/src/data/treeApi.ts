@@ -23,6 +23,9 @@ import {
   NodeFsTreeResponse as NodeFsTreeResponseSchema,
   NodeInfoSchema,
   NodePreflightResponseSchema,
+  NodeCapabilitiesResponseSchema,
+  InstallNodeToolResponseSchema,
+  ConfigureNodeDockerResponseSchema,
   NodeMakeDirResponse as NodeMakeDirResponseSchema,
   NodeResponse as NodeResponseSchema,
   ProjectResponse as ProjectResponseSchema,
@@ -51,6 +54,11 @@ import {
   type Node as FlockNode,
   type NodeInfo,
   type NodePreflightResponse,
+  type NodeCapabilitiesResponse,
+  type InstallNodeToolResponse,
+  type ConfigureNodeDockerResponse,
+  type NodeToolId,
+  type ConfigureNodeDockerRequest,
   type NodeFileReadResponse,
   type NodeFileWriteResponse,
   type NodeMakeDirResponse,
@@ -157,6 +165,37 @@ export function getNodeInfo(nodeId: string): Promise<NodeInfo> {
 /** GET /api/nodes/:id/preflight — read-only node preparation/readiness checks. */
 export function getNodePreflight(nodeId: string): Promise<NodePreflightResponse> {
   return apiRequest(`/api/nodes/${nodeId}/preflight`, { schema: NodePreflightResponseSchema });
+}
+
+export function getNodeCapabilities(nodeId: string): Promise<NodeCapabilitiesResponse> {
+  return apiRequest(`/api/nodes/${encodeURIComponent(nodeId)}/capabilities`, {
+    schema: NodeCapabilitiesResponseSchema,
+  });
+}
+
+export function installNodeTool(
+  nodeId: string,
+  tool: NodeToolId,
+): Promise<InstallNodeToolResponse> {
+  return apiRequest(`/api/nodes/${encodeURIComponent(nodeId)}/tools/install`, {
+    method: 'POST',
+    body: JSON.stringify({ tool, confirm: 'INSTALL' }),
+    schema: InstallNodeToolResponseSchema,
+  });
+}
+
+export function configureNodeDocker(
+  nodeId: string,
+  action: ConfigureNodeDockerRequest['action'],
+): Promise<ConfigureNodeDockerResponse> {
+  return apiRequest(`/api/nodes/${encodeURIComponent(nodeId)}/docker`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      confirm: action === 'install' ? 'INSTALL DOCKER' : 'DOCKER IS ROOT EQUIVALENT',
+    }),
+    schema: ConfigureNodeDockerResponseSchema,
+  });
 }
 
 const UpgradeNodeAgentdResponseSchema = z.object({

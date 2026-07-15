@@ -60,6 +60,26 @@ vi.mock('../../data/queries', () => ({
     },
   }),
   useUpgradeNodeAgentd: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useNodeCapabilities: () => ({
+    data: {
+      nodeId: 'node-1',
+      generatedAt: '2026-07-12T00:00:00.000Z',
+      tools: [],
+      docker: {
+        installed: false,
+        version: null,
+        daemonRunning: false,
+        agentAccess: false,
+        accessMode: 'none',
+        installSupported: false,
+        accessManagementSupported: false,
+        reason: 'Local runtime is immutable.',
+      },
+    },
+    isLoading: false,
+  }),
+  useInstallNodeTool: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useConfigureNodeDocker: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useNodeInfo: () => ({
     data: withInfo
       ? {

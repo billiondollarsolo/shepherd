@@ -3,15 +3,33 @@
 How Shepherd derives live supervision signals for each supported coding-agent CLI —
 what we capture, the mechanism, and the known gaps. This is the authoritative
 reference for "how well do we work with agent X." Verified against real on-disk
-transcripts/hooks (last reviewed 2026-06-05; **transport/Chat/trust + live
-validation updated 2026-06-08; integration audit + hook-dispatch fixes 2026-07-09
-— see the section immediately below**).
+transcripts/hooks. Transport/Chat/trust live validation was updated 2026-06-08,
+hook dispatch on 2026-07-09, and the supported terminal-tool inventory on 2026-07-15.
 
 Shepherd's model: **leverage what the agent already produces on the node** — its
 transcript files (tailed by `flock-agentd`) and/or its lifecycle hooks (forwarded
 to `POST /api/hooks/:id`). The orchestrator normalizes everything into the shared
 `Status` enum + telemetry (rides the status WS → bottom bar + grid + sidebar) +
 the `plan` event artifact (`/plan`).
+
+## Integration tiers
+
+Shepherd supports eight named coding tools. Claude Code, Codex, OpenCode, Gemini, and
+Grok are **first-class** integrations described in the detailed matrix below. Aider,
+Cursor Agent, and Amp are **terminal integrations**: Shepherd detects, installs, launches,
+supervises, reconnects, and preserves scrollback for their real PTY sessions, but does
+not claim structured chat, token/model/context, plan, or attention events that those
+integrations do not currently emit.
+
+| Tool         | Detection |    Launch     | Process/activity | Structured status/telemetry |
+| ------------ | :-------: | :-----------: | :--------------: | :-------------------------: |
+| Aider        |    ✅     | ✅ native PTY |        ✅        |              —              |
+| Cursor Agent |    ✅     | ✅ native PTY |        ✅        |              —              |
+| Amp          |    ✅     | ✅ native PTY |        ✅        |              —              |
+
+All eight can be detected without mutation and installed explicitly on prepared remote
+nodes. See [Node tooling and Docker](node-tooling.md) for provisioning and security
+semantics.
 
 ## Transport, Chat & Trust (updated 2026-06-08)
 

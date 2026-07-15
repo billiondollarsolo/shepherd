@@ -12,7 +12,10 @@
 [Codex](https://openai.com/codex/) ·
 [OpenCode](https://opencode.ai/) ·
 [Gemini](https://geminicli.com/) ·
-[Grok](https://x.ai/cli)
+[Grok](https://x.ai/cli) ·
+[Aider](https://aider.chat/) ·
+[Cursor Agent](https://docs.cursor.com/en/cli) ·
+[Amp](https://ampcode.com/)
 
 [![CI](https://github.com/billiondollarsolo/shepherd/actions/workflows/ci.yml/badge.svg)](https://github.com/billiondollarsolo/shepherd/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/billiondollarsolo/shepherd/actions/workflows/codeql.yml/badge.svg)](https://github.com/billiondollarsolo/shepherd/actions/workflows/codeql.yml)
@@ -304,21 +307,28 @@ Shepherd uses the lifecycle data each tool already produces and normalizes it in
 single status and telemetry model. Unknown CLI tools still work as terminal sessions;
 first-class integrations add richer status and metadata.
 
-| Agent           | Status source      | Attention | Tokens / model / context | Plan |
-| --------------- | ------------------ | :-------: | :----------------------: | :--: |
-| **Claude Code** | Hooks + transcript |    ✅     |            ✅            |  ✅  |
-| **Codex**       | Transcript         |    ⚠️     |            ✅            |  ✅  |
-| **OpenCode**    | Plugin             |    ✅     |            ✅            |  ✅  |
-| **Gemini**      | ACP                |    ✅     |            ⚠️            |  ⚠️  |
-| **Grok**        | Hooks              |     —     |            —             |  —   |
+| Agent            | Status source      | Attention | Tokens / model / context | Plan |
+| ---------------- | ------------------ | :-------: | :----------------------: | :--: |
+| **Claude Code**  | Hooks + transcript |    ✅     |            ✅            |  ✅  |
+| **Codex**        | Transcript         |    ⚠️     |            ✅            |  ✅  |
+| **OpenCode**     | Plugin             |    ✅     |            ✅            |  ✅  |
+| **Gemini**       | ACP                |    ✅     |            ⚠️            |  ⚠️  |
+| **Grok**         | Hooks              |     —     |            —             |  —   |
+| **Aider**        | PTY / process      |     —     |            —             |  —   |
+| **Cursor Agent** | PTY / process      |     —     |            —             |  —   |
+| **Amp**          | PTY / process      |     —     |            —             |  —   |
 
 Integration details and limitations are documented in the
 [agent integration matrix](docs/agent-integration-matrix.md).
 
-The release image bundles current Codex and OpenCode versions from build time and checks
-for the latest Claude Code during startup. Remote-node preparation can install the
-supported agents, or you can install and pin whichever CLI versions you prefer on each
-node.
+The first five are first-class integrations with structured lifecycle signals where the
+tool exposes them. Aider, Cursor Agent, and Amp are supported terminal integrations:
+Shepherd launches and supervises the real CLI, but does not claim structured chat,
+token, plan, or attention telemetry that the tool does not provide.
+
+The bundled local runtime owns its image-provided tools. Remote nodes detect all eight
+without installing anything; Node details offers an explicit **Install latest** or
+**Upgrade** action for each tool. You may instead install and pin versions yourself.
 
 ## Connect a remote node
 
@@ -327,14 +337,16 @@ Prepare a Linux node with the public half of the SSH key Shepherd will use:
 ```bash
 sudo ./scripts/flock-node-prepare.sh \
   --public-key-file /path/to/flock-control.pub \
-  --workspace /srv/flock/workspaces \
-  --install-agents
+  --workspace /srv/flock/workspaces
 ```
 
 Then add the node in Shepherd. The node page validates SSH access, runtime identities,
-workspace permissions, daemon compatibility, metrics, and available agent CLIs before
-you launch work. The daemon upgrade policy distinguishes **compatible**, **upgrade
-recommended**, and **upgrade required** without silently killing active sessions.
+workspace permissions, daemon compatibility, metrics, all eight supported agent CLIs,
+and Docker. Install only the tools you want from Node details; provider authentication
+still happens inside that tool. Docker installation and root-equivalent agent access are
+separate, explicitly confirmed actions. The daemon upgrade policy distinguishes
+**compatible**, **upgrade recommended**, and **upgrade required** without silently
+killing active sessions. See [Node tooling and Docker](docs/node-tooling.md).
 
 ## Backups, upgrades, and diagnostics
 
@@ -459,7 +471,7 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.5.0.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.5.1.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, edge proxy, database
 base, web app, and preferred node daemon are released together; the UI reports when a node daemon
 is compatible, recommended to upgrade, or required to upgrade.

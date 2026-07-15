@@ -37,8 +37,9 @@ describe('remote node preflight', () => {
       if (command.includes(' preflight')) return { stdout: 'prepared-v1 runtime=flock-agent\n' };
       if (command.includes('flock-agentd version')) return { stdout: '0.3.0\n' };
       if (command.includes('check-workspace')) return { stdout: 'writable\n' };
-      if (command.endsWith('agent-version codex')) return { stdout: '/usr/bin/codex\tcodex 1\n' };
-      if (command.includes('agent-version')) return { code: 1 };
+      if (command.endsWith(' capabilities')) return { stdout: 'node-admin-v2 inventory\n' };
+      if (command.endsWith(' inventory'))
+        return { stdout: 'tool\tcodex\t/usr/bin/codex\tcodex 1\n' };
       return {};
     });
     const result = await preflightRemoteNode({ ...input, host });
@@ -73,8 +74,8 @@ describe('remote node preflight', () => {
       if (command.includes(' preflight')) return { stdout: 'prepared-v1\n' };
       if (command.includes('flock-agentd version')) return { stdout: '0.2.9\n' };
       if (command.includes('check-workspace')) return { stdout: 'writable\n' };
-      if (command.endsWith('agent-version claude')) return { stdout: '/bin/claude\t1.0\n' };
-      if (command.includes('agent-version')) return { code: 1 };
+      if (command.endsWith(' capabilities')) return { stdout: 'node-admin-v2 inventory\n' };
+      if (command.endsWith(' inventory')) return { stdout: 'tool\tclaude\t/bin/claude\t1.0\n' };
       return {};
     });
     const result = await preflightRemoteNode({ ...input, host });

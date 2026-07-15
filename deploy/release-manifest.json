@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "topologyGeneration": 2,
-  "controlPlaneVersion": "0.5.0",
+  "controlPlaneVersion": "0.5.1",
   "runtime": {
-    "preferredVersion": "0.5.0",
+    "preferredVersion": "0.5.1",
     "minimumVersion": "0.5.0",
     "requiredCapabilities": ["exec_v1", "tcp_tunnel_v1"]
   },

@@ -1,18 +1,20 @@
 # Releasing Shepherd
 
-Shepherd releases are GitHub Releases backed by four multi-platform images in the
+Shepherd releases are GitHub Releases backed by five multi-platform images in the
 GitHub Container Registry (GHCR):
 
 - `ghcr.io/billiondollarsolo/shepherd-orchestrator`
+- `ghcr.io/billiondollarsolo/shepherd-node-runtime`
 - `ghcr.io/billiondollarsolo/shepherd-web`
 - `ghcr.io/billiondollarsolo/shepherd-caddy`
 - `ghcr.io/billiondollarsolo/shepherd-postgres`
 
 The release workflow builds Linux amd64 and arm64 images, publishes semantic
 version tags, generates SBOM/provenance attestations, and updates `latest` only for
-non-prereleases. Every GitHub Release also publishes `agentd-compatibility.json` and
-includes the same policy in its notes, so operators can inspect mandatory node
-requirements before pulling the stack.
+non-prereleases. Every GitHub Release also publishes `agentd-compatibility.json`, and
+the deployment bundle includes the matching idempotent node-preparation script. Release
+notes include the same daemon policy so operators can inspect mandatory node requirements
+before pulling the stack.
 
 ## One-time public-repository setup
 

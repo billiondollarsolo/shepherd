@@ -370,6 +370,25 @@ docker compose port postgres 5432 && exit 1 || true
 docker compose port orchestrator 8080 && exit 1 || true
 ```
 
+## Connect and provision remote nodes
+
+Vagrant and the checked-in simulated-node Compose file are developer test fixtures, not
+customer deployment requirements. A real remote node needs Linux, systemd, SSH access,
+and the one-time idempotent preparation script from the matching release:
+
+```bash
+sudo ./scripts/flock-node-prepare.sh \
+  --public-key-file /path/to/flock-control.pub \
+  --workspace /srv/flock/workspaces
+```
+
+The default installs no coding tools and does not change Docker. After the node is added,
+its details page detects Claude Code, Codex, OpenCode, Gemini, Grok, Aider, Cursor Agent,
+and Amp. Each tool has an explicit latest-channel install/upgrade action; provider login
+remains inside the tool on that node. Docker installation and root-equivalent agent
+socket access require separate confirmations. See [Node tooling and Docker](node-tooling.md)
+for the full support matrix, manual flags, migration behavior, and security boundary.
+
 ## Upgrade
 
 Use the backup-gated helper from the deployment checkout:

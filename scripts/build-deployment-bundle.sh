@@ -20,7 +20,7 @@ mkdir -p "$root/docker" "$root/scripts" "$OUTPUT_DIR"
 cp .env.example LICENSE "$root/"
 cp docker-compose*.yml "$root/"
 cp docker/Caddyfile* docker/caddy-entrypoint.sh docker/stage-secret.sh "$root/docker/"
-cp scripts/flock-upgrade.sh "$root/scripts/"
+cp scripts/flock-node-prepare.sh scripts/flock-upgrade.sh "$root/scripts/"
 cp agentd/COMPATIBILITY.json "$root/agentd-compatibility.json"
 
 images='{}'

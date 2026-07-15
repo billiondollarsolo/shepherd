@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  AgentTypeEnum,
   ConnectionStatusEnum,
   IsoTimestamp,
   NodeKindEnum,
@@ -127,6 +128,114 @@ export const NodePreflightResponseSchema = z.object({
   checks: z.array(NodePreflightCheckSchema),
 });
 export type NodePreflightResponse = z.infer<typeof NodePreflightResponseSchema>;
+
+// --- node coding-tool and Docker capabilities -----------------------------
+
+/** Installable coding tools Shepherd can launch as first-class or basic agents. */
+export const NodeToolIdEnum = z.enum([
+  'claude',
+  'codex',
+  'opencode',
+  'gemini',
+  'grok',
+  'aider',
+  'cursor-agent',
+  'amp',
+]);
+export type NodeToolId = z.infer<typeof NodeToolIdEnum>;
+
+export const NodeToolIntegrationEnum = z.enum(['first_class', 'basic']);
+export type NodeToolIntegration = z.infer<typeof NodeToolIntegrationEnum>;
+
+export const NodeToolCapabilitySchema = z
+  .object({
+    id: NodeToolIdEnum,
+    agentType: AgentTypeEnum,
+    label: z.string().min(1),
+    binary: z.string().min(1),
+    integration: NodeToolIntegrationEnum,
+    installed: z.boolean(),
+    path: z.string().min(1).nullable(),
+    version: z.string().min(1).nullable(),
+    installSupported: z.boolean(),
+    installReason: z.string().min(1).nullable(),
+  })
+  .strict();
+export type NodeToolCapability = z.infer<typeof NodeToolCapabilitySchema>;
+
+export const NodeDockerCapabilitySchema = z
+  .object({
+    installed: z.boolean(),
+    version: z.string().min(1).nullable(),
+    daemonRunning: z.boolean(),
+    agentAccess: z.boolean(),
+    accessMode: z.enum(['none', 'system_acl', 'rootless', 'unmanaged']),
+    installSupported: z.boolean(),
+    accessManagementSupported: z.boolean(),
+    reason: z.string().min(1).nullable(),
+  })
+  .strict();
+export type NodeDockerCapability = z.infer<typeof NodeDockerCapabilitySchema>;
+
+/** Read-only inventory used by Node details and session-launch guidance. */
+export const NodeCapabilitiesResponseSchema = z
+  .object({
+    nodeId: Uuid,
+    generatedAt: IsoTimestamp,
+    tools: z.array(NodeToolCapabilitySchema),
+    docker: NodeDockerCapabilitySchema,
+  })
+  .strict();
+export type NodeCapabilitiesResponse = z.infer<typeof NodeCapabilitiesResponseSchema>;
+
+export const InstallNodeToolRequestSchema = z
+  .object({ tool: NodeToolIdEnum, confirm: z.literal('INSTALL') })
+  .strict();
+export type InstallNodeToolRequest = z.infer<typeof InstallNodeToolRequestSchema>;
+
+export const InstallNodeToolResponseSchema = z
+  .object({
+    nodeId: Uuid,
+    tool: NodeToolIdEnum,
+    capability: NodeToolCapabilitySchema,
+    summary: z.string().min(1).max(2_000),
+  })
+  .strict();
+export type InstallNodeToolResponse = z.infer<typeof InstallNodeToolResponseSchema>;
+
+export const NodeDockerActionEnum = z.enum([
+  'install',
+  'enable_agent_access',
+  'disable_agent_access',
+]);
+export type NodeDockerAction = z.infer<typeof NodeDockerActionEnum>;
+
+export const ConfigureNodeDockerRequestSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('install'), confirm: z.literal('INSTALL DOCKER') }).strict(),
+  z
+    .object({
+      action: z.literal('enable_agent_access'),
+      confirm: z.literal('DOCKER IS ROOT EQUIVALENT'),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('disable_agent_access'),
+      confirm: z.literal('DOCKER IS ROOT EQUIVALENT'),
+    })
+    .strict(),
+]);
+export type ConfigureNodeDockerRequest = z.infer<typeof ConfigureNodeDockerRequestSchema>;
+
+export const ConfigureNodeDockerResponseSchema = z
+  .object({
+    nodeId: Uuid,
+    action: NodeDockerActionEnum,
+    docker: NodeDockerCapabilitySchema,
+    summary: z.string().min(1).max(2_000),
+  })
+  .strict();
+export type ConfigureNodeDockerResponse = z.infer<typeof ConfigureNodeDockerResponseSchema>;
 
 // --- node filesystem browse (pick a working dir without typing it) ----------
 
