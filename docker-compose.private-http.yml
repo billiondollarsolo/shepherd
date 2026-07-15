@@ -5,16 +5,16 @@
 #
 # The explicit file selection plus FLOCK_ALLOW_INSECURE_HTTP=1 are both required.
 services:
-  caddy:
+  traefik:
     environment:
       FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-preview.invalid}
+      FLOCK_PREVIEW_EDGE_ENABLED: ${FLOCK_PREVIEW_EDGE_ENABLED:-0}
       FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-'none'}
     ports: !override
       - '${HTTP_HOST_PORT:-11010}:80'
     volumes: !override
-      - ./docker/Caddyfile.private-http:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./docker/traefik/dynamic-http.yml:/etc/traefik/dynamic/routes.yml:ro
+      - traefik_acme:/letsencrypt
 
   orchestrator:
     environment:

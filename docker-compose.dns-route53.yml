@@ -1,22 +1,28 @@
-# Optional Amazon Route53 DNS-01 certificate issuance with static credentials.
+# Optional Amazon Route53 DNS-01 certificate issuance.
 #
 # Prefer an instance/task role where the runtime supports one; in that case a
-# small operator override can select FLOCK_DNS_PROVIDER=route53 without mounting
-# these files. This checked-in profile deliberately keeps static keys in Docker
-# secret files instead of environment values or the Compose model.
+# small operator override can enable this resolver without mounting credentials.
+# lego's AWS SDK does not support _FILE on the individual access-key variables,
+# so the checked-in static-key profile mounts the standard AWS credentials file.
 services:
-  caddy:
+  traefik:
     environment:
-      FLOCK_DNS_PROVIDER: route53
-      AWS_ACCESS_KEY_ID_FILE: /run/secrets/route53_access_key_id
-      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/route53_secret_access_key
+      FLOCK_PREVIEW_EDGE_ENABLED: '1'
+      FLOCK_TLS_CERT_RESOLVER: dns
+      AWS_SHARED_CREDENTIALS_FILE: /run/secrets/route53_credentials
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for certificate expiry notices}
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_STORAGE: /letsencrypt/dns-acme.json
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE: 'true'
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE_PROVIDER: route53
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE_RESOLVERS: ${FLOCK_DNS_RESOLVERS:-1.1.1.1:53,1.0.0.1:53}
     secrets:
-      - route53_access_key_id
-      - route53_secret_access_key
+      - route53_credentials
+
+  orchestrator:
+    environment:
+      FLOCK_PREVIEW_BACKEND: hostname
 
 secrets:
-  route53_access_key_id:
-    file: ${ROUTE53_ACCESS_KEY_ID_FILE:-./secrets/route53_access_key_id}
-  route53_secret_access_key:
-    file: ${ROUTE53_SECRET_ACCESS_KEY_FILE:-./secrets/route53_secret_access_key}
+  route53_credentials:
+    file: ${ROUTE53_SHARED_CREDENTIALS_FILE:-./secrets/route53_credentials}

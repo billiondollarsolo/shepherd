@@ -76,8 +76,8 @@ const retainedContracts = {
   'docker-compose.yml': [
     'shepherd-orchestrator:',
     'shepherd-web:',
-    'shepherd-caddy:',
-    'shepherd-postgres:',
+    'traefik:v3.7@sha256:',
+    'postgres:16-bookworm@sha256:',
   ],
   'apps/web/src/theme/themeContext.ts': ["THEME_STORAGE_KEY = 'flock.theme'"],
   'apps/web/public/sw.js': [

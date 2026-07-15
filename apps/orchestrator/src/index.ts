@@ -1402,7 +1402,7 @@ export async function main(): Promise<void> {
   // US-39: install the global default-DENY surface guard so ALL UI/API/WS
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
   // exception (spec §8.1). The AuthService satisfies the `getUserBySession`
-  // seam directly. TLS is terminated by the upstream Caddy proxy (NFR-SEC1).
+  // seam directly. TLS is terminated by the upstream Traefik proxy (NFR-SEC1).
   const app = buildServer({
     auth,
     loginThrottle,

@@ -132,10 +132,6 @@ jobs:
             dockerfile: docker/Dockerfile.node-runtime
           - image: shepherd-web
             dockerfile: docker/Dockerfile.web
-          - image: shepherd-caddy
-            dockerfile: docker/Dockerfile.caddy
-          - image: shepherd-postgres
-            dockerfile: docker/Dockerfile.postgres
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       CANDIDATE_TAG: candidate-${{ github.sha }}
@@ -195,7 +191,7 @@ jobs:
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
               -v "$GITHUB_WORKSPACE/trivy-reports:/reports" \
-              aquasec/trivy:0.66.0 image \
+              aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
               --platform "$platform" --scanners vuln --format json \
               --output "/reports/${{ matrix.image }}-${platform_slug}-full.json" \
               --severity HIGH,CRITICAL \
@@ -207,7 +203,7 @@ jobs:
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
               -v "$GITHUB_WORKSPACE:/workspace:ro" \
-              aquasec/trivy:0.66.0 image \
+              aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
               --platform "$platform" \
               --exit-code 1 --quiet --scanners vuln \
               --ignorefile /workspace/.trivyignore.yaml \
@@ -232,9 +228,66 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+  upstream:
+    name: Scan upstream ${{ matrix.name }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: PostgreSQL
+            image: postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55
+            report: postgres
+          - name: Traefik
+            image: traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8
+            report: traefik
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Pull and scan the exact upstream manifest
+        env:
+          IMAGE: ${{ matrix.image }}
+          REPORT: ${{ matrix.report }}
+        run: |
+          set -euo pipefail
+          mkdir -p .trivy-cache trivy-reports
+          for platform in linux/amd64 linux/arm64; do
+            platform_slug="${platform//\//-}"
+            docker pull --platform "$platform" "$IMAGE"
+            docker run --rm --user 0 \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
+              -v "$GITHUB_WORKSPACE/trivy-reports:/reports" \
+              aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
+              --platform "$platform" --scanners vuln --format json \
+              --output "/reports/${REPORT}-${platform_slug}-full.json" \
+              --severity HIGH,CRITICAL "$IMAGE"
+            docker run --rm --user 0 \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$GITHUB_WORKSPACE/.trivy-cache:/root/.cache/trivy" \
+              -v "$GITHUB_WORKSPACE:/workspace:ro" \
+              aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e image \
+              --platform "$platform" --exit-code 1 --quiet --scanners vuln \
+              --ignorefile /workspace/.trivyignore.yaml \
+              --severity HIGH,CRITICAL "$IMAGE"
+          done
+
+      - name: Upload upstream scan evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: upstream-${{ matrix.report }}-scan
+          path: trivy-reports/
+          if-no-files-found: warn
+          retention-days: 30
+
   smoke:
     name: Smoke exact candidate images
-    needs: candidate
+    needs: [candidate, upstream]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -251,6 +304,13 @@ jobs:
       HTTPS_HOST_PORT: '18443'
       FLOCK_DOMAIN: localhost
       FLOCK_PREVIEW_DOMAIN: preview.localhost
+      FLOCK_PREVIEW_BACKEND: hostname
+      FLOCK_PREVIEW_EDGE_ENABLED: '1'
+      FLOCK_PREVIEW_FRAME_SOURCES: https://*.preview.localhost:18443
+      # CI uses Traefik's ephemeral generated certificate and curl --insecure;
+      # production uses the configured HTTP-01 or DNS-01 resolver.
+      FLOCK_TLS_CERT_RESOLVER: ''
+      ACME_EMAIL: release@example.invalid
       PUBLIC_BASE_URL: https://localhost:18443
       FLOCK_ALLOWED_ORIGINS: https://localhost:18443
       FLOCK_INSTALL_CLAUDE_CODE: '0'
@@ -274,20 +334,29 @@ jobs:
 
       - name: Pull exact candidates
         run: |
-          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
             docker pull "$FLOCK_IMAGE_REGISTRY/$image:$CANDIDATE_TAG"
           done
+          docker compose pull postgres traefik
 
       - name: Verify previous-topology runtime migration
         run: scripts/test-node-runtime-migration.sh "$FLOCK_IMAGE_REGISTRY/shepherd-node-runtime:$CANDIDATE_TAG"
 
       - name: Start clean candidate stack
-        run: docker compose up -d --no-build --wait postgres node-runtime orchestrator web caddy
+        run: docker compose up -d --no-build --wait postgres node-runtime orchestrator web traefik
 
       - name: Verify migrations, readiness, setup, login, and API
         run: |
           set -euo pipefail
           origin='https://localhost:18443'
+          test "$(curl --silent --show-error -o /dev/null -w '%{redirect_url}' \
+            http://localhost:18080/)" = "$origin/"
+          curl --silent --show-error --insecure --head "$origin/" \
+            | tr -d '\r' > release-edge-headers.txt
+          grep -qi '^strict-transport-security:' release-edge-headers.txt
+          grep -qi '^cross-origin-opener-policy: same-origin$' release-edge-headers.txt
+          grep -qi '^content-security-policy:.*frame-src https://\*\.preview\.localhost:18443' \
+            release-edge-headers.txt
           curl --fail --silent --show-error --insecure "$origin/health" | tee release-smoke.log
           docker compose exec -T orchestrator node -e \
             "fetch('http://127.0.0.1:8080/ready').then(async r => { console.log(await r.text()); process.exit(r.ok ? 0 : 1) })" \
@@ -368,7 +437,12 @@ jobs:
           test -n "$preview_host"
           test -n "$preview_token"
 
-          for internal_path in '/_shepherd/caddy-ask' '/_shepherd/health'; do
+          preview_redirect="$(curl --silent --show-error \
+            --resolve "$preview_host:18080:127.0.0.1" \
+            -o /dev/null -w '%{redirect_url}' "http://$preview_host:18080/")"
+          test "$preview_redirect" = "$preview_origin/"
+
+          for internal_path in '/_shepherd/health' '/_shepherd/not-a-public-route'; do
             internal_status="$(curl --silent --show-error --insecure \
               --resolve "$preview_host:18443:127.0.0.1" \
               -o /dev/null -w '%{http_code}' "$preview_origin$internal_path")"
@@ -439,6 +513,7 @@ jobs:
             release-smoke.log
             release-containers.log
             release-diagnostics.json
+            release-edge-headers.txt
             agent-versions.txt
           if-no-files-found: warn
           retention-days: 90
@@ -492,7 +567,7 @@ jobs:
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
           major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
-          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
             digest="$(cat "release-candidates/digests/$image.digest")"
             source="$REGISTRY/$image@$digest"
             tags="--tag $REGISTRY/$image:$version"
@@ -521,7 +596,7 @@ jobs:
           docker logout ghcr.io
           # shellcheck disable=SC2153 # VERSION is supplied by the step env above.
           version="${VERSION#v}"
-          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+          for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
             if ! manifest="$(docker buildx imagetools inspect "$REGISTRY/$image:$version")"; then
               printf '::error::%s must be public before this release can be published. Set Package settings → Change visibility → Public, then rerun failed jobs.\n' "$REGISTRY/$image"
               exit 1

@@ -23,7 +23,7 @@ export default defineConfig({
     strictPort: true,
     // Native dev: proxy the API + WebSocket channels to the orchestrator so the
     // browser talks to a SINGLE origin (cookies + same-origin fetch just work,
-    // exactly like the Caddy prod setup).
+    // exactly like the Traefik production setup).
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/health': { target: apiTarget, changeOrigin: true },

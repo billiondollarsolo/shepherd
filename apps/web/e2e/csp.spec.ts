@@ -8,7 +8,7 @@ declare global {
 }
 
 test.describe('production content security policy', () => {
-  test.skip(!process.env.E2E_CSP_BASE_URL, 'requires a Caddy-served CSP fixture');
+  test.skip(!process.env.E2E_CSP_BASE_URL, 'requires an edge-served CSP fixture');
 
   test('blocks injected inline script while allowing same-origin modules', async ({ page }) => {
     const response = await page.goto(process.env.E2E_CSP_BASE_URL!);

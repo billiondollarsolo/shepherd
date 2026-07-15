@@ -4,7 +4,7 @@
 # restart idempotency against the exact image supplied by release smoke.
 set -euo pipefail
 
-IMAGE="${1:-ghcr.io/billiondollarsolo/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.1}}"
+IMAGE="${1:-ghcr.io/billiondollarsolo/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.2}}"
 suffix="${GITHUB_RUN_ID:-local}-$$"
 name="shepherd-runtime-migration-$suffix"
 state="shepherd-runtime-migration-state-$suffix"

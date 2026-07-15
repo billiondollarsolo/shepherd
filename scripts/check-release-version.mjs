@@ -124,10 +124,19 @@ const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
 if (!compose.includes(`FLOCK_VERSION:-${canonical}`)) {
   throw new Error(`docker-compose.yml does not default to Shepherd ${canonical}`);
 }
-for (const image of ['orchestrator', 'web', 'caddy', 'postgres']) {
+for (const image of ['orchestrator', 'web']) {
   if (!compose.includes(`shepherd-${image}:\${FLOCK_VERSION:-${canonical}}`)) {
     throw new Error(`docker-compose.yml does not couple shepherd-${image} to ${canonical}`);
   }
+}
+if (!compose.includes('traefik:v3.7@sha256:')) {
+  throw new Error('docker-compose.yml does not pin the official Traefik v3.7 manifest');
+}
+if (!compose.includes('postgres:16-bookworm@sha256:')) {
+  throw new Error('docker-compose.yml does not pin the official PostgreSQL 16 manifest');
+}
+if (compose.includes('shepherd-caddy:') || compose.includes('shepherd-postgres:')) {
+  throw new Error('docker-compose.yml still references retired Shepherd wrapper images');
 }
 if (!compose.includes(`shepherd-node-runtime:\${FLOCK_NODE_RUNTIME_VERSION:-${canonical}}`)) {
   throw new Error(`docker-compose.yml does not pin shepherd-node-runtime independently`);
@@ -155,6 +164,29 @@ if (
   throw new Error('deploy/release-manifest.json is not synchronized with the runtime topology');
 }
 
+const upstreamImages = deploymentManifest.upstreamImages ?? {};
+for (const [name, image] of Object.entries(upstreamImages)) {
+  if (typeof image !== 'string' || !image.includes('@sha256:')) {
+    throw new Error(`deploy/release-manifest.json does not pin upstream ${name} by digest`);
+  }
+}
+for (const [file, imageNames] of [
+  ['docker-compose.yml', ['traefik', 'postgres']],
+  ['docker-compose.local.yml', ['traefik', 'postgres']],
+  ['docker-compose.dev.yml', ['postgres']],
+  ['docker/Dockerfile.dev', ['postgres']],
+  ['docker/Dockerfile.orchestrator', ['postgres']],
+  ['.env.example', ['traefik', 'postgres']],
+]) {
+  const contents = readFileSync(resolve(root, file), 'utf8');
+  for (const imageName of imageNames) {
+    const image = upstreamImages[imageName];
+    if (!contents.includes(image)) {
+      throw new Error(`${file} is not synchronized with the pinned upstream ${imageName} image`);
+    }
+  }
+}
+
 const releaseWorkflow = readFileSync(resolve(root, '.github/workflows/release-images.yml'), 'utf8');
 const ciWorkflow = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8');
 for (const [name, workflow] of [
@@ -173,6 +205,12 @@ if (releaseWorkflow.includes('shepherd-session-chrome')) {
 }
 if (releaseWorkflow.includes('/api/sessions/$session_id/preview')) {
   throw new Error('release workflow still calls the retired session-owned Preview API');
+}
+if (
+  releaseWorkflow.includes('aquasec/trivy:0.66.0 image') ||
+  !releaseWorkflow.includes('aquasec/trivy:0.66.0@sha256:')
+) {
+  throw new Error('release workflow does not pin the Trivy scanner image by digest');
 }
 if (!releaseWorkflow.includes('/api/projects/$project_id/ports/$service_id/forward')) {
   throw new Error('release workflow does not smoke the project-owned Ports API');

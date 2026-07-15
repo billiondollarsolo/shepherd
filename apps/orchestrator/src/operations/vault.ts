@@ -170,7 +170,7 @@ export async function createVault(options: CreateVaultOptions): Promise<FlockVau
         'master keys (must be backed up separately)',
         'live PTY processes and in-memory terminal buffers',
         'node filesystems and worktrees',
-        'Caddy ACME state and TLS private keys',
+        'Traefik ACME state and TLS private keys',
       ],
       liveSessionSemantics: 'metadata-only-processes-reconciled',
       deployment: {
@@ -181,8 +181,7 @@ export async function createVault(options: CreateVaultOptions): Promise<FlockVau
           { name: 'pgdata', disposition: 'captured' },
           { name: 'flock_agent_home', disposition: 'external-backup-required' },
           { name: 'flock_agentd_state', disposition: 'reconciled' },
-          { name: 'caddy_data', disposition: 'external-backup-required' },
-          { name: 'caddy_config', disposition: 'external-backup-required' },
+          { name: 'traefik_acme', disposition: 'external-backup-required' },
           { name: 'backups', disposition: 'external-backup-required' },
         ],
       },

@@ -1,9 +1,77 @@
-# Release-image risk register. Every entry is currently reported against a
-# Debian package for which the configured stable repository has no fixed
-# version. The release workflow still prints suppressed findings, rejects every
-# new High/Critical finding, and forces this list to be reviewed by the expiry.
-# Remove an entry as soon as the rebuilt image no longer reports it.
+# Release-image risk register. Entries cover either a stable-distribution package
+# with no available fix or a narrowly path-scoped, reviewed upstream helper whose
+# affected standard-library path is unreachable in Shepherd's use. The release
+# workflow retains the unsuppressed inventory, rejects every new High/Critical
+# finding, and forces this list to be reviewed by the expiry. Remove an entry as
+# soon as a rebuilt image no longer reports it.
 vulnerabilities:
+  # The official PostgreSQL image's gosu 1.19 helper was compiled with Go
+  # 1.24.6. Trivy consequently flags standard-library CVEs by build version,
+  # even though gosu is a local setuid/setgid entrypoint helper that receives
+  # only Shepherd's fixed postgres UID/GID arguments and exposes no network or
+  # untrusted parsing surface. Keep every exception scoped to the exact binary
+  # path, retain the unsuppressed report as release evidence, and require a
+  # near-term review so the exceptions disappear after upstream rebuilds gosu.
+  - id: CVE-2025-61726
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: Not reachable in the fixed-argument upstream gosu entrypoint helper; awaiting an upstream rebuild.
+  - id: CVE-2025-61729
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: Not reachable in the fixed-argument upstream gosu entrypoint helper; awaiting an upstream rebuild.
+  - id: CVE-2025-68121
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no TLS operations; awaiting an upstream rebuild.
+  - id: CVE-2026-25679
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no URL parsing; awaiting an upstream rebuild.
+  - id: CVE-2026-27145
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no certificate parsing; awaiting an upstream rebuild.
+  - id: CVE-2026-32280
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no TLS or certificate operations; awaiting an upstream rebuild.
+  - id: CVE-2026-32281
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no TLS or certificate operations; awaiting an upstream rebuild.
+  - id: CVE-2026-32283
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no TLS operations; awaiting an upstream rebuild.
+  - id: CVE-2026-33811
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no DNS resolution; awaiting an upstream rebuild.
+  - id: CVE-2026-33814
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu exposes no HTTP server or client; awaiting an upstream rebuild.
+  - id: CVE-2026-39820
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no mail parsing; awaiting an upstream rebuild.
+  - id: CVE-2026-39822
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu does not use os.Root or process untrusted paths; awaiting an upstream rebuild.
+  - id: CVE-2026-39836
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: Not reachable in the fixed-argument upstream gosu entrypoint helper; awaiting an upstream rebuild.
+  - id: CVE-2026-42499
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no mail parsing; awaiting an upstream rebuild.
+  - id: CVE-2026-42504
+    paths: [usr/local/bin/gosu]
+    expired_at: 2026-08-15
+    statement: gosu performs no MIME parsing; awaiting an upstream rebuild.
   - id: CVE-2023-2953
     expired_at: 2026-10-14
     statement: No patched Debian package is available as of 2026-07-14; review at every release.

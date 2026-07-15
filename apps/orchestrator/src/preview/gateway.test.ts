@@ -254,11 +254,10 @@ describe('Remote Preview gateway', () => {
     });
     expect(worker.status).toBe(403);
 
-    const ask = await request(
-      gatewayPort,
-      `/_shepherd/caddy-ask?domain=${encodeURIComponent(host)}`,
-    );
-    expect(ask.status).toBe(200);
+    for (const internalPath of ['/_shepherd/health', '/_shepherd/not-a-public-route']) {
+      const internal = await request(gatewayPort, internalPath, { host, headers: { cookie } });
+      expect(internal.status).toBe(404);
+    }
 
     const message = await new Promise<string>((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${gatewayPort}/hmr`, {
@@ -283,11 +282,8 @@ describe('Remote Preview gateway', () => {
     const closed = new Promise<void>((resolve) => persistent.once('close', () => resolve()));
     await service.revoke(SERVICE_ID, { userId: OWNER_ID });
     await closed;
-    const revokedAsk = await request(
-      gatewayPort,
-      `/_shepherd/caddy-ask?domain=${encodeURIComponent(host)}`,
-    );
-    expect(revokedAsk.status).toBe(404);
+    const revoked = await request(gatewayPort, '/', { host, headers: { cookie } });
+    expect(revoked.status).toBe(404);
   });
 
   it('keeps every private pool listener Preview-only and ignores spoofed routing headers', async () => {
@@ -317,7 +313,6 @@ describe('Remote Preview gateway', () => {
       }),
       recordForPublicPort: () => null,
       recordForHostname: () => null,
-      isActiveHostname: () => false,
     };
     gateway = createPreviewGateway(fakeService as unknown as PreviewService, {
       host: '127.0.0.1',
@@ -387,7 +382,6 @@ describe('Remote Preview gateway', () => {
       }),
       recordForPublicPort: () => record,
       recordForHostname: () => null,
-      isActiveHostname: () => false,
       authorize: () => true,
       authenticate: () => true,
       cookieName: () => record.cookieName,

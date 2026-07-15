@@ -72,6 +72,33 @@ else
 fi
 docker compose config --quiet
 
+# Capture the previous edge container before the target definition removes the
+# service name. Compose otherwise leaves it as an orphan holding ports 80/443,
+# which would prevent Traefik (or an external proxy) from taking ownership.
+RETIRED_EDGE_CONTAINER="$(docker compose ps --all -q caddy 2>/dev/null | head -n1 || true)"
+
+# v0.5.2 replaces Caddy's local CA with upstream Traefik. A bundled-TLS
+# localhost/IP installation must deliberately select private HTTP or configure a
+# real certificate-bearing DNS name; silently starting an unusable edge is worse.
+current_compose_json="$(docker compose config --format json)"
+current_mode="$(jq -r '.services.orchestrator.environment.FLOCK_DEPLOYMENT_MODE // ""' <<<"$current_compose_json")"
+current_domain="$(jq -r '.services.caddy.environment.FLOCK_DOMAIN // .services.traefik.environment.FLOCK_DOMAIN // ""' <<<"$current_compose_json")"
+if [[ "$current_mode" == builtin-tls ]] && {
+  [[ "$current_domain" == localhost ]] ||
+    [[ "$current_domain" =~ ^[0-9]+(\.[0-9]+){3}$ ]] ||
+    [[ "$current_domain" == *:* ]]
+}; then
+  cat >&2 <<'EOF'
+This installation uses bundled TLS with localhost or a raw IP. Shepherd 0.5.2 moves to
+upstream Traefik, which intentionally does not mint a host-local CA certificate.
+Before upgrading, choose one supported edge:
+  - a real DNS name with bundled/external TLS, or
+  - docker-compose.private-http.yml on a restricted Tailnet/LAN/loopback origin.
+Update .env/COMPOSE_FILE and confirm `docker compose config --quiet`, then retry.
+EOF
+  exit 1
+fi
+
 OLD_VERSION="$(sed -n 's/^FLOCK_VERSION=//p' .env | tail -n1)"
 [[ -n "$OLD_VERSION" ]] || { echo ".env has no FLOCK_VERSION." >&2; exit 1; }
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -102,7 +129,13 @@ on_exit() {
         if docker compose config --services | grep -qx node-runtime; then
           docker compose up -d --no-build node-runtime || true
         fi
-        docker compose up -d --no-build postgres orchestrator web caddy || true
+        rollback_services=(postgres orchestrator web)
+        if docker compose config --services | grep -qx traefik; then
+          rollback_services+=(traefik)
+        elif docker compose config --services | grep -qx caddy; then
+          rollback_services+=(caddy)
+        fi
+        docker compose up -d --no-build "${rollback_services[@]}" || true
       fi
     else
       echo "Upgrade failed after database migration may have started. Data and rollback metadata were preserved; verify schema compatibility before starting older images." >&2
@@ -287,6 +320,8 @@ echo "NOTICE: flock_agent_home is not part of the database vault; verify its ope
 MUTATED=1
 cp -a "$DEPLOY"/docker-compose*.yml .
 mkdir -p docker scripts
+rm -f docker/Caddyfile docker/Caddyfile.local docker/Caddyfile.private-http \
+  docker/caddy-entrypoint.sh docker/Dockerfile.caddy docker/Dockerfile.postgres
 cp -a "$DEPLOY/docker/." docker/
 for source in "$DEPLOY"/scripts/*; do
   [[ "$(basename "$source")" == flock-upgrade.sh ]] && continue
@@ -312,16 +347,23 @@ awk -v control="$TARGET" -v runtime="${CURRENT_RUNTIME_VERSION:-$TARGET}" \
 chmod --reference=.env "$tmp"; mv -f "$tmp" .env
 docker compose config --quiet
 
-pull=(postgres orchestrator web caddy)
+pull=(postgres orchestrator web)
+if docker compose config --services | grep -qx traefik; then
+  pull+=(traefik)
+fi
 ((RUNTIME_CHANGE == 0)) || pull+=(node-runtime)
 docker compose pull "${pull[@]}"
+if [[ -n "$RETIRED_EDGE_CONTAINER" ]]; then
+  docker rm -f "$RETIRED_EDGE_CONTAINER" >/dev/null
+  echo "Retired the previous deployment-owned Caddy edge container." >&2
+fi
 if ((LEGACY == 1)); then docker compose stop orchestrator; fi
 if ((RUNTIME_CHANGE == 1)); then
   docker compose up -d --no-build --wait node-runtime
   docker compose exec -T node-runtime flock-agentd probe --socket /run/flock-agentd/control.sock
 fi
 DB_MIGRATION_STARTED=1
-docker compose up -d --no-build --wait postgres orchestrator web caddy
+docker compose up -d --no-build --wait "${pull[@]}"
 docker compose exec -T orchestrator node -e \
   "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 if POST_RUNTIME_FACTS="$(docker compose exec -T node-runtime flock-agentd inspect --socket /run/flock-agentd/control.sock 2>/dev/null)"; then

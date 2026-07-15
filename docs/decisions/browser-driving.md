@@ -23,8 +23,9 @@ Shepherd provides **Remote Preview**, not browser driving:
   existing local/SSH transport.
 - It issues a random hostname and expiring 256-bit capability on a dedicated preview
   DNS suffix.
-- Caddy obtains on-demand TLS only after an internal ask endpoint confirms that exact
-  hostname is active.
+- The bundled Traefik edge routes only the configured wildcard Preview suffix and uses
+  one DNS-01 wildcard certificate. The in-memory gateway still authorizes every random
+  hostname and returns 404 unless that exact capability is active.
 - The gateway proxies HTTP upgrades and WebSockets while stripping Shepherd cookies,
   authorization, forwarded identity, referrer, and upstream cookie mutation.
 - Preview state and token digests live only in bounded process memory; termination,

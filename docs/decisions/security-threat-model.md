@@ -74,7 +74,7 @@ supported security boundary.
 
 ### Supported network modes
 
-1. Production HTTPS/WSS through the bundled Caddy deployment.
+1. Production HTTPS/WSS through the bundled upstream Traefik deployment.
 2. Production HTTPS/WSS through an explicitly trusted external reverse proxy.
 3. Deliberate private HTTP/WS on a restricted LAN or encrypted overlay, selected by a
    named deployment mode plus an explicit insecure-transport acknowledgement.

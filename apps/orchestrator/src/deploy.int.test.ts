@@ -34,12 +34,10 @@ const runtimeDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.node-runtime')
 const runtimeEntrypoint = resolve(repoRoot, 'docker', 'node-runtime-entrypoint.sh');
 const secretStager = resolve(repoRoot, 'docker', 'stage-secret.sh');
 const webDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.web');
-const caddyDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.caddy');
-const caddyEntrypoint = resolve(repoRoot, 'docker', 'caddy-entrypoint.sh');
-const postgresDockerfile = resolve(repoRoot, 'docker', 'Dockerfile.postgres');
+const nginxSpaConfig = resolve(repoRoot, 'docker', 'nginx-spa.conf');
 const envExample = resolve(repoRoot, '.env.example');
-const caddyfile = resolve(repoRoot, 'docker', 'Caddyfile');
-const privateHttpCaddyfile = resolve(repoRoot, 'docker', 'Caddyfile.private-http');
+const tlsEdgeConfig = resolve(repoRoot, 'docker', 'traefik', 'dynamic-tls.yml');
+const privateHttpEdgeConfig = resolve(repoRoot, 'docker', 'traefik', 'dynamic-http.yml');
 const nodePrepare = resolve(repoRoot, 'scripts', 'flock-node-prepare.sh');
 const upgradeScript = resolve(repoRoot, 'scripts', 'flock-upgrade.sh');
 const vagrantProvision = resolve(repoRoot, 'vagrant', 'provision.sh');
@@ -93,14 +91,18 @@ describe('US-38: production deploy artifacts exist', () => {
   it('ships a web Dockerfile that serves static assets', () => {
     expect(existsSync(webDockerfile)).toBe(true);
   });
-  it('ships security-patched edge and database Dockerfiles', () => {
-    expect(existsSync(caddyDockerfile)).toBe(true);
-    expect(existsSync(postgresDockerfile)).toBe(true);
+  it('uses pinned official upstream edge and database images without wrapper Dockerfiles', () => {
+    const compose = read(composePath);
+    expect(compose).toMatch(/traefik:v3\.7@sha256:[0-9a-f]{64}/);
+    expect(compose).toMatch(/postgres:16-bookworm@sha256:[0-9a-f]{64}/);
+    expect(existsSync(resolve(repoRoot, 'docker', 'Dockerfile.caddy'))).toBe(false);
+    expect(existsSync(resolve(repoRoot, 'docker', 'Dockerfile.postgres'))).toBe(false);
   });
   it('ships optional Cloudflare and Route53 DNS-01 profiles', () => {
     expect(existsSync(cloudflareDnsComposePath)).toBe(true);
     expect(existsSync(route53DnsComposePath)).toBe(true);
-    expect(existsSync(caddyEntrypoint)).toBe(true);
+    expect(existsSync(tlsEdgeConfig)).toBe(true);
+    expect(existsSync(privateHttpEdgeConfig)).toBe(true);
   });
   it('ships a .env.example template', () => {
     expect(existsSync(envExample)).toBe(true);
@@ -123,7 +125,7 @@ describe('US-38: docker compose up brings up orchestrator + Postgres', () => {
   });
 
   it('declares the TLS edge service', () => {
-    expect(compose).toMatch(/^\s{2}caddy:/m);
+    expect(compose).toMatch(/^\s{2}traefik:/m);
   });
 
   it('declares an authenticated isolated node runtime dependency', () => {
@@ -160,10 +162,10 @@ describe('NFR-DEP1: Docker access is absent and Preview is isolated', () => {
       (m) => m[1],
     );
     expect(serviceNames.sort()).toEqual([
-      'caddy',
       'node-runtime',
       'orchestrator',
       'postgres',
+      'traefik',
       'web',
     ]);
   });
@@ -173,17 +175,18 @@ describe('NFR-DEP1: Docker access is absent and Preview is isolated', () => {
   });
 
   it('uses a dedicated preview suffix and private gateway port', () => {
-    const edgeConfig = read(caddyfile);
+    const edgeConfig = read(tlsEdgeConfig);
     expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/FLOCK_PREVIEW_DOMAIN/);
     expect(extractServiceBlock(compose, 'orchestrator')).toMatch(/FLOCK_PREVIEW_PORT:\s*8081/);
     expect(extractServiceBlock(compose, 'orchestrator')).not.toMatch(/^\s+ports:/m);
-    expect(edgeConfig).toMatch(/on_demand_tls[\s\S]*_shepherd\/caddy-ask/);
-    expect(edgeConfig).toMatch(/\*\.\{\$FLOCK_PREVIEW_DOMAIN:preview\.localhost\}/);
-    expect(edgeConfig).not.toMatch(/^\*\.preview\.localhost\s*\{/m);
+    expect(edgeConfig).toMatch(/FLOCK_PREVIEW_DOMAIN/);
+    expect(edgeConfig).toMatch(/HostRegexp[\s\S]*\$previewDomain/);
+    expect(edgeConfig).toMatch(/domains:[\s\S]*sans: \["\*\./);
+    expect(edgeConfig).not.toMatch(/docker\.sock|providers\.docker/i);
   });
 
   it('hardens every long-running container', () => {
-    for (const service of ['caddy', 'node-runtime', 'postgres', 'orchestrator', 'web']) {
+    for (const service of ['traefik', 'node-runtime', 'postgres', 'orchestrator', 'web']) {
       const block = extractServiceBlock(compose, service);
       expect(block).toMatch(/read_only:\s*true/);
       expect(block).toMatch(/no-new-privileges:true/);
@@ -235,30 +238,30 @@ describe('NFR-DEP2: secrets via env/secret files, not baked images', () => {
 });
 
 describe('NFR-SEC1: production browser security headers', () => {
-  const caddy = read(caddyfile);
+  const edge = read(tlsEdgeConfig);
 
   it('ships a restrictive CSP without general unsafe-eval', () => {
-    expect(caddy).toMatch(/Content-Security-Policy/);
-    expect(caddy).toMatch(/default-src 'self'/);
-    expect(caddy).toMatch(/object-src 'none'/);
-    expect(caddy).toMatch(/frame-ancestors 'none'/);
-    expect(caddy).toMatch(/script-src 'self' 'wasm-unsafe-eval'/);
-    expect(caddy).not.toMatch(/(?:^|[\s;])'unsafe-eval'(?:[\s;]|$)/m);
-    expect(caddy).toMatch(/connect-src 'self' data:/);
-    expect(caddy).toMatch(/upgrade-insecure-requests/);
+    expect(edge).toMatch(/contentSecurityPolicy/);
+    expect(edge).toMatch(/default-src 'self'/);
+    expect(edge).toMatch(/object-src 'none'/);
+    expect(edge).toMatch(/frame-ancestors 'none'/);
+    expect(edge).toMatch(/script-src 'self' 'wasm-unsafe-eval'/);
+    expect(edge).not.toMatch(/(?:^|[\s;])'unsafe-eval'(?:[\s;]|$)/m);
+    expect(edge).toMatch(/connect-src 'self' data:/);
+    expect(edge).toMatch(/upgrade-insecure-requests/);
   });
 
   it('documents every necessary CSP exception next to the policy', () => {
-    expect(caddy).toMatch(/Ghostty needs WebAssembly/);
-    expect(caddy).toMatch(/React components use[\s\S]*runtime style attributes/);
+    expect(edge).toMatch(/Ghostty needs WebAssembly/);
+    expect(edge).toMatch(/React components use runtime style attributes/);
   });
 
   it('sets permissions and cross-origin policies', () => {
-    expect(caddy).toMatch(/Permissions-Policy/);
-    expect(caddy).toMatch(/camera=\(\)/);
-    expect(caddy).toMatch(/microphone=\(\)/);
-    expect(caddy).toMatch(/Cross-Origin-Opener-Policy "same-origin"/);
-    expect(caddy).toMatch(/Cross-Origin-Resource-Policy "same-origin"/);
+    expect(edge).toMatch(/permissionsPolicy/);
+    expect(edge).toMatch(/camera=\(\)/);
+    expect(edge).toMatch(/microphone=\(\)/);
+    expect(edge).toMatch(/Cross-Origin-Opener-Policy: same-origin/);
+    expect(edge).toMatch(/Cross-Origin-Resource-Policy: same-origin/);
   });
 });
 
@@ -266,7 +269,7 @@ describe('explicit deployment modes', () => {
   const compose = read(composePath);
   const privateCompose = read(privateHttpComposePath);
   const externalCompose = read(externalProxyComposePath);
-  const privateCaddy = read(privateHttpCaddyfile);
+  const privateEdge = read(privateHttpEdgeConfig);
   const cloudflareDnsCompose = read(cloudflareDnsComposePath);
   const route53DnsCompose = read(route53DnsComposePath);
 
@@ -274,19 +277,18 @@ describe('explicit deployment modes', () => {
     expect(extractServiceBlock(compose, 'orchestrator')).toMatch(
       /FLOCK_DEPLOYMENT_MODE:\s*builtin-tls/,
     );
-    expect(extractServiceBlock(compose, 'caddy')).toMatch(/'\$\{HTTPS_HOST_PORT:-443\}:443'/);
+    expect(extractServiceBlock(compose, 'traefik')).toMatch(/'\$\{HTTPS_HOST_PORT:-443\}:443'/);
   });
 
   it('requires an explicit acknowledgement for private HTTP', () => {
     expect(privateCompose).toMatch(/FLOCK_DEPLOYMENT_MODE:\s*private-http/);
     expect(privateCompose).toMatch(/FLOCK_ALLOW_INSECURE_HTTP:\s*\$\{[^}]+:\?/);
-    expect(privateCompose).toMatch(/Caddyfile\.private-http/);
-    expect(privateCaddy).not.toMatch(/^\s*Strict-Transport-Security\s/m);
-    expect(privateCaddy).not.toMatch(/Content-Security-Policy[^\n]*upgrade-insecure-requests/);
-    expect(privateCaddy).not.toMatch(/Cross-Origin-Opener-Policy/);
-    expect(privateCaddy).toMatch(/Content-Security-Policy/);
-    expect(privateCaddy).toMatch(/connect-src 'self' data:/);
-    expect(privateCaddy).toMatch(/preview\.invalid/);
+    expect(privateCompose).toMatch(/traefik\/dynamic-http\.yml/);
+    expect(privateEdge).not.toMatch(/stsSeconds|upgrade-insecure-requests/);
+    expect(privateEdge).not.toMatch(/Cross-Origin-Opener-Policy/);
+    expect(privateEdge).toMatch(/contentSecurityPolicy/);
+    expect(privateEdge).toMatch(/connect-src 'self' data:/);
+    expect(privateCompose).toMatch(/preview\.invalid/);
   });
 
   it('publishes a bounded Preview-only port pool for no-DNS private deployments', () => {
@@ -299,12 +301,12 @@ describe('explicit deployment modes', () => {
     expect(orchestrator).toMatch(
       /\$\{FLOCK_PREVIEW_BIND_ADDRESS:-0\.0\.0\.0\}:\$\{FLOCK_PREVIEW_PORT_RANGE:-12000-12031\}:\$\{FLOCK_PREVIEW_PORT_RANGE:-12000-12031\}/,
     );
-    expect(extractServiceBlock(privateCompose, 'caddy')).not.toMatch(/12000-12031/);
+    expect(extractServiceBlock(privateCompose, 'traefik')).not.toMatch(/12000-12031/);
   });
 
   it('fails embedded private Preview closed unless finite frame origins are configured', () => {
-    expect(privateCaddy).toMatch(/frame-src \{\$FLOCK_PREVIEW_FRAME_SOURCES:'none'\}/);
-    expect(privateCaddy).not.toMatch(/frame-src\s+(?:\*|https?:)(?:[;"\s]|$)/);
+    expect(privateEdge).toMatch(/frame-src \{\{ if \$frameSources \}\}/);
+    expect(privateEdge).not.toMatch(/frame-src\s+(?:\*|https?:)(?:[;"\s]|$)/);
     expect(extractServiceBlock(privateCompose, 'orchestrator')).toMatch(
       /FLOCK_PREVIEW_FRAME_SOURCES/,
     );
@@ -318,21 +320,15 @@ describe('explicit deployment modes', () => {
     expect(externalCompose).toMatch(/18082}:8081/);
   });
 
-  it('builds pinned DNS providers and loads their credentials from secret files', () => {
-    const edgeImage = read(caddyDockerfile);
-    const entrypoint = read(caddyEntrypoint);
-    expect(edgeImage).toMatch(/xcaddy\/cmd\/xcaddy@v0\.4\.6/);
-    expect(edgeImage).toMatch(/caddy-dns\/cloudflare@v0\.2\.4/);
-    expect(edgeImage).toMatch(/caddy-dns\/route53@v1\.6\.2/);
-    expect(edgeImage).toMatch(/\/out\/licenses \/usr\/share\/licenses\/shepherd\/edge\//);
-    expect(read(caddyfile)).toMatch(/import \/tmp\/shepherd-dns-provider\.caddy/);
-    expect(cloudflareDnsCompose).toMatch(/CF_API_TOKEN_FILE:\s*\/run\/secrets\//);
-    expect(route53DnsCompose).toMatch(/AWS_ACCESS_KEY_ID_FILE:\s*\/run\/secrets\//);
-    expect(route53DnsCompose).toMatch(/AWS_SECRET_ACCESS_KEY_FILE:\s*\/run\/secrets\//);
-    expect(entrypoint).toMatch(/acme_dns cloudflare \{env\.CF_API_TOKEN\}/);
-    expect(entrypoint).toMatch(/acme_dns route53/);
-    expect(cloudflareDnsCompose).not.toMatch(/^\s+CF_API_TOKEN:\s/m);
+  it('uses upstream Traefik DNS providers and secret-file credentials', () => {
+    expect(cloudflareDnsCompose).toMatch(/DNSCHALLENGE_PROVIDER:\s*cloudflare/);
+    expect(route53DnsCompose).toMatch(/DNSCHALLENGE_PROVIDER:\s*route53/);
+    expect(cloudflareDnsCompose).toMatch(/CF_DNS_API_TOKEN_FILE:\s*\/run\/secrets\//);
+    expect(route53DnsCompose).toMatch(/AWS_SHARED_CREDENTIALS_FILE:\s*\/run\/secrets\//);
+    expect(route53DnsCompose).not.toMatch(/AWS_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY):/);
+    expect(cloudflareDnsCompose).not.toMatch(/^\s+CF_DNS_API_TOKEN:\s/m);
     expect(route53DnsCompose).not.toMatch(/^\s+AWS_SECRET_ACCESS_KEY:\s/m);
+    expect(read(composePath)).not.toMatch(/\/var\/run\/docker\.sock|providers\.docker/i);
   });
 });
 
@@ -464,6 +460,11 @@ describe('production node and stack lifecycle', () => {
     expect(script).not.toMatch(/cp -a "\$DEPLOY\/scripts\/\." scripts\//);
     expect(script).toMatch(/--acknowledge-node-policy-change/);
     expect(script).toMatch(/docker compose pull "\$\{pull\[@\]\}"/);
+    expect(script).toMatch(/docker compose config --services \| grep -qx traefik/);
+    expect(script).toMatch(/docker compose up -d --no-build --wait "\$\{pull\[@\]\}"/);
+    expect(script).toMatch(/docker compose ps --all -q caddy/);
+    expect(script).toMatch(/docker rm -f "\$RETIRED_EDGE_CONTAINER"/);
+    expect(script).not.toMatch(/up -d --no-build --wait postgres orchestrator web traefik/);
     expect(script).not.toMatch(/docker compose down -v/);
   });
 });
@@ -481,7 +482,8 @@ describe('US-38: web image builds the bundle then serves it statically', () => {
   });
 
   it('falls back to index.html for SPA routes', () => {
-    expect(web).toMatch(/try_files[\s\S]*index\.html/);
+    expect(web).toMatch(/COPY docker\/nginx-spa\.conf/);
+    expect(read(nginxSpaConfig)).toMatch(/try_files[\s\S]*index\.html/);
   });
 });
 
@@ -501,7 +503,13 @@ describe('US-38: docker compose config is valid (smoke, when Docker is present)'
       execFileSync('docker', ['compose', '-f', composePath, 'config'], {
         cwd: repoRoot,
         stdio: 'pipe',
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          FLOCK_DOMAIN: 'shepherd.example.com',
+          ACME_EMAIL: 'admin@example.com',
+          PUBLIC_BASE_URL: 'https://shepherd.example.com',
+          FLOCK_ALLOWED_ORIGINS: 'https://shepherd.example.com',
+        },
       }),
     ).not.toThrow();
   });
@@ -520,6 +528,8 @@ describe('US-38: docker compose config is valid (smoke, when Docker is present)'
       stdio: 'pipe' as const,
       env: {
         ...process.env,
+        FLOCK_DOMAIN: 'unused.invalid',
+        ACME_EMAIL: 'admin@example.com',
         PUBLIC_BASE_URL: 'http://100.64.0.1:11010',
         FLOCK_ALLOWED_ORIGINS: 'http://100.64.0.1:11010',
         FLOCK_ALLOW_INSECURE_HTTP: '1',
@@ -559,9 +569,13 @@ describe('US-38: docker compose config is valid (smoke, when Docker is present)'
 
     const env = {
       ...process.env,
+      FLOCK_DOMAIN: 'shepherd.example.com',
+      FLOCK_PREVIEW_DOMAIN: 'preview.shepherd.example.com',
+      ACME_EMAIL: 'admin@example.com',
+      PUBLIC_BASE_URL: 'https://shepherd.example.com',
+      FLOCK_ALLOWED_ORIGINS: 'https://shepherd.example.com',
       CLOUDFLARE_API_TOKEN_FILE: '/dev/null',
-      ROUTE53_ACCESS_KEY_ID_FILE: '/dev/null',
-      ROUTE53_SECRET_ACCESS_KEY_FILE: '/dev/null',
+      ROUTE53_SHARED_CREDENTIALS_FILE: '/dev/null',
     };
     for (const override of [cloudflareDnsComposePath, route53DnsComposePath]) {
       expect(() =>

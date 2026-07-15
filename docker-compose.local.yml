@@ -5,15 +5,14 @@
 #   open http://localhost:48080
 #
 # Reuses the already-built dev image (flock-dev:latest) instead of building the
-# prod images, and serves the web bundle + proxies the API/WS through Caddy on
-# :48080 over plain HTTP (no TLS cert warning). For real deployment use the
-# production docker-compose.yml (Caddy TLS) instead.
+# production application images. Upstream nginx serves the existing web bundle
+# and upstream Traefik proxies API/WS on :48080 over plain loopback HTTP.
 # =============================================================================
 name: flock-local
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55
     environment:
       POSTGRES_USER: flock
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flock}
@@ -110,18 +109,44 @@ services:
       retries: 20
     networks: [runtime]
 
-  caddy:
-    image: caddy:2-alpine
+  web:
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
     restart: unless-stopped
-    command: ['caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile']
-    ports:
-      - '48080:48080'
-      - '48081:48081'
+    read_only: true
+    security_opt: [no-new-privileges:true]
     volumes:
-      - ./docker/Caddyfile.local:/etc/caddy/Caddyfile:ro
-      - ./apps/web/dist:/srv/web:ro
+      - ./apps/web/dist:/usr/share/html:ro
+      - ./docker/nginx-spa.conf:/etc/nginx/http.d/default.conf:ro
+    tmpfs:
+      - /var/lib/nginx/tmp:size=32m,uid=101,gid=101,mode=0750
+      - /var/run:size=4m,uid=101,gid=101,mode=0750
+      - /var/log/nginx:size=8m,uid=101,gid=101,mode=0750
+    networks: [flock-local]
+
+  traefik:
+    image: traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --api.dashboard=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.preview.address=:81
+      - --entrypoints.ping.address=:8082
+      - --ping=true
+      - --ping.entrypoint=ping
+      - --providers.file.filename=/etc/traefik/dynamic/routes.yml
+      - --providers.file.watch=true
+    ports:
+      - '48080:80'
+      - '48081:81'
+    volumes:
+      - ./docker/traefik/dynamic-local.yml:/etc/traefik/dynamic/routes.yml:ro
     depends_on:
       - orchestrator
+      - web
     networks:
       - flock-local
 

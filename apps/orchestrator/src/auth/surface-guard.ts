@@ -27,7 +27,7 @@
  *     gate signature `(req, sessionId) => Promise<boolean>` (US-11), so the live
  *     PTY socket reuses the same cookie auth without duplicating it.
  *
- * TLS itself is terminated by the upstream reverse proxy (the Caddy service in
+ * TLS itself is terminated by the upstream reverse proxy (the Traefik service in
  * the production compose, NFR-SEC1) — the orchestrator speaks plain HTTP/WS on
  * the internal network and relies on the proxy for the wire encryption.
  */

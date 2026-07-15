@@ -384,10 +384,6 @@ export class PreviewService {
     return this.isActive(record) && equalSecret(cookieToken, record.tokenHash) ? record : null;
   }
 
-  isActiveHostname(hostname: string): boolean {
-    return this.recordForHostname(hostname) !== null;
-  }
-
   async dial(record: PreviewRecord): Promise<Duplex> {
     if (!this.isActive(record)) {
       throw new PreviewUnavailableError('The Preview is no longer active.');

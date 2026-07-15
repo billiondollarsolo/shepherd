@@ -1,63 +1,60 @@
-# Deployment (Docker Compose)
+# Deployment
 
-Shepherd ships as a four-service Compose stack for an always-on Linux host. The host
-needs Docker Engine with the Compose plugin and persistent storage; Node, Go,
-PostgreSQL, Caddy, and the agent tools live in versioned containers. HTTPS is the
-default, but the checked-in deployment overrides also support an external TLS proxy or
-deliberate private-network HTTP without weakening the default stack.
+Shepherd supports four explicit edge topologies. The standard public deployment uses
+the official Traefik image, the database uses the official PostgreSQL image, and
+Shepherd publishes only its three application images. Neither Traefik nor any Shepherd
+service receives the Docker socket.
 
 ```text
-internet / Tailnet
-       │ 80,443 only
-       ▼
- shepherd-caddy ───────────────┐
-       │                       │ isolated preview hosts
-       ├── /api,/ws ──▶ orchestrator ── SSH/socket ──▶ flock-agentd on nodes
-       └── / ─────────▶ web          │
-                                       └──▶ postgres (internal-only network)
+browser ──▶ traefik ───────▶ shepherd-web
+                 ├────────▶ shepherd-orchestrator ──▶ postgres (internal network)
+                 └────────▶ Preview gateway :8081
+                                      │
+                                      └── authenticated SSH/agentd tunnel ──▶ node loopback
+
+shepherd-orchestrator ── authenticated Unix socket ──▶ shepherd-node-runtime
 ```
 
-No Shepherd service mounts the Docker socket. The orchestrator and web services have no
-published host port; PostgreSQL is on a Docker `internal` network. Compose applies
-read-only root filesystems, no-new-privileges, PID limits, and bounded tmpfs mounts.
-Caddy runs as its dedicated non-root user; web and Caddy health checks verify their
-actual listeners/configuration rather than treating a merely running container as ready.
+Only Traefik publishes `80` and `443` in bundled TLS mode. PostgreSQL is attached to an
+internal Docker network. The node runtime has no database or edge-network access.
 
-## Choose an edge mode
+## Supported modes
 
-| Mode                      | Use it for                                                                                                                                | Start command                                                                            | Browser transport |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------- |
-| **Bundled TLS** (default) | Public DNS, a VPS, localhost, or any installation where Shepherd should manage certificates                                               | `docker compose up -d --wait`                                                            | HTTPS/WSS         |
-| **External TLS**          | An existing Caddy, nginx, Traefik, HAProxy, Cloudflare Tunnel, or ingress controller                                                      | `docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml up -d --wait` | HTTPS/WSS         |
-| **Private HTTP**          | A trusted LAN or encrypted overlay such as Tailscale when the operator deliberately wants direct IP/hostname access without a certificate | `docker compose -f docker-compose.yml -f docker-compose.private-http.yml up -d --wait`   | HTTP/WS           |
+| Mode                     | Use it for                                                     | Command                                     | Browser transport |
+| ------------------------ | -------------------------------------------------------------- | ------------------------------------------- | ----------------- |
+| **Bundled TLS**          | Public DNS/VPS; HTTP-01 for the control plane                  | `docker compose up -d --wait`               | HTTPS/WSS         |
+| **Bundled TLS + DNS-01** | Public DNS with wildcard Preview through Cloudflare or Route53 | Add one `docker-compose.dns-*.yml` override | HTTPS/WSS         |
+| **External TLS**         | Existing Caddy, nginx, Traefik, HAProxy, tunnel, or ingress    | Add `docker-compose.external-proxy.yml`     | HTTPS/WSS         |
+| **Private HTTP**         | Restricted LAN or encrypted overlay such as Tailscale          | Add `docker-compose.private-http.yml`       | HTTP/WS           |
 
-Bundled or external TLS is required for public-Internet exposure. Private HTTP is an
-explicitly accepted confidentiality tradeoff, not a shortcut for a public VPS: startup
-requires `FLOCK_ALLOW_INSECURE_HTTP=1`, the sign-in and application chrome display a
-warning, and the diagnostics bundle records the mode. Exact WebSocket Origin checks,
-authentication, authorization, CSP, framing protection, and request limits remain on.
+Public Internet exposure requires bundled or external TLS. Private HTTP is a deliberate
+confidentiality tradeoff and requires `FLOCK_ALLOW_INSECURE_HTTP=1`; authentication,
+authorization, exact Origin checks, CSP, request limits, and framing protection remain
+enabled.
 
-## Published services and images
+## Images
 
-| Service        | Image                                                       | Role                                                                                                                          |
-| -------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `caddy`        | `ghcr.io/billiondollarsolo/shepherd-caddy:<version>`        | TLS, security headers, main routing, and guarded on-demand preview certificates.                                              |
-| `web`          | `ghcr.io/billiondollarsolo/shepherd-web:<version>`          | Static React PWA.                                                                                                             |
-| `orchestrator` | `ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>` | Replaceable auth/API control plane, PTY fan-out, Git orchestration, Preview gateway, audit, and diagnostics.                  |
-| `node-runtime` | `ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>` | Bundled local daemon, agent CLIs, workspaces, PTYs, bounded commands, and loopback tunnels. No host port or database network. |
-| `postgres`     | `ghcr.io/billiondollarsolo/shepherd-postgres:<version>`     | Durable system of record; never on the PTY/status hot path.                                                                   |
+Shepherd releases and publishes:
 
-Every release builds all five for Linux amd64 and arm64, creates SBOM/provenance
-attestations, rejects every new High or Critical finding before promotion, and
-forces time-bounded review of upstream-unfixed Debian findings through the expiring
-`.trivyignore.yaml` risk register.
+| Service        | Image                                                       | Role                                                                               |
+| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `orchestrator` | `ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>` | Authentication, API, node transport, PTY fan-out, Git, Preview, audit, diagnostics |
+| `node-runtime` | `ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>` | Bundled local daemon, agent CLIs, PTYs, workspaces, loopback tunnels               |
+| `web`          | `ghcr.io/billiondollarsolo/shepherd-web:<version>`          | Static React PWA                                                                   |
 
-The runtime image includes the latest Codex and OpenCode available at build time. At
-runtime start, it asks Anthropic's official installer for the latest Claude Code using a
-bounded best-effort update that preserves an existing binary on failure. Set
-`FLOCK_INSTALL_CLAUDE_CODE=0` when a custom image or mounted home owns that version.
+Compose consumes these upstream images directly:
 
-## Quick start
+| Service    | Pinning policy                                    | Role                                                       |
+| ---------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| `traefik`  | Official `traefik:v3.7` multi-arch digest         | TLS, routing, WebSockets, security headers, DNS-01         |
+| `postgres` | Official `postgres:16-bookworm` multi-arch digest | Durable system of record; never on the PTY/status hot path |
+
+Release CI scans the exact amd64 and arm64 upstream manifests. It does not rebuild,
+wrap, or republish them. Patch/digest changes are reviewed normally. A PostgreSQL major
+upgrade is a separate backup-gated migration and must never arrive through a floating
+`postgres:latest` tag.
+
+## Prepare an installation
 
 ```bash
 git clone https://github.com/billiondollarsolo/shepherd.git
@@ -69,176 +66,154 @@ openssl rand -base64 32 > secrets/flock_master_key
 openssl rand -base64 32 > secrets/postgres_password
 openssl rand -base64 48 > secrets/setup_token
 chmod 600 secrets/*
-
-docker compose pull
-docker compose up -d --wait
-docker compose ps
 ```
 
-Open `https://localhost` for a private/local installation. Caddy uses its internal CA
-for localhost, so the browser may require you to trust that CA.
-
 A fresh database has no default credentials. The setup screen requires the exact
-out-of-band value in `secrets/setup_token`, then creates the only administrator. The
-token cannot log in and becomes inert once an owner exists. Keep the file mounted so
-production startup can validate its configuration; rotate it if exposed.
+out-of-band `setup_token`, then creates the sole administrator. The token is not a login
+credential and becomes inert once the owner exists.
 
-Migrations run idempotently before the orchestrator starts. Do not use
-`docker compose down --volumes` unless you intend to destroy the installation.
+Never run `docker compose down --volumes` unless the database and runtime state should
+be erased.
 
-## Public domain and DNS
+## Public control plane without Preview
 
-Set the exact public control-plane origin and a dedicated preview suffix:
+Point a real hostname at the host and set:
+
+```dotenv
+FLOCK_DOMAIN=shepherd.example.com
+PUBLIC_BASE_URL=https://shepherd.example.com
+FLOCK_ALLOWED_ORIGINS=https://shepherd.example.com
+FLOCK_PREVIEW_DOMAIN=
+FLOCK_PREVIEW_BACKEND=disabled
+ACME_EMAIL=admin@example.com
+```
+
+```bash
+docker compose pull
+docker compose up -d --wait
+```
+
+Traefik uses HTTP-01 and redirects HTTP to HTTPS. Expose only `80/tcp` and `443/tcp`.
+Do not publish `8080`, `8081`, `5432`, the agentd socket, or the Docker API.
+
+## Public control plane with wildcard Preview
+
+Preview needs an isolated wildcard DNS suffix and a wildcard certificate. Create:
+
+```text
+shepherd.example.com             A/AAAA  <server address>
+*.preview.shepherd.example.com   A/AAAA  <server address>
+```
+
+Set:
 
 ```dotenv
 FLOCK_DOMAIN=shepherd.example.com
 PUBLIC_BASE_URL=https://shepherd.example.com
 FLOCK_ALLOWED_ORIGINS=https://shepherd.example.com
 FLOCK_PREVIEW_DOMAIN=preview.shepherd.example.com
+ACME_EMAIL=admin@example.com
 ```
 
-Create DNS records pointing both names at the VPS:
+The DNS override enables hostname Preview and asks Traefik for one DNS-01 wildcard
+certificate. It creates only temporary ACME TXT records; it does not create the A/AAAA
+records above.
 
-```text
-shepherd.example.com             A/AAAA  <VPS address>
-*.preview.shepherd.example.com   A/AAAA  <VPS address>
-```
+### Cloudflare
 
-Caddy obtains a normal certificate for the control plane. A dynamic-DNS hostname or an
-IP-to-hostname DNS service works too when the chosen name resolves to the host and the
-certificate authority can validate it. Preview uses on-demand TLS,
-but Caddy's `ask` endpoint permits issuance only for a currently active random preview
-hostname. The approval and gateway-health paths remain internal and return 404 through
-public preview virtual hosts. Preview is disabled when its suffix is absent. In normal
-TLS modes, plaintext Preview is rejected.
-
-At the firewall, expose only `80/tcp` and `443/tcp`. Restrict host SSH to administrative
-addresses or a Tailnet. Never publish `8080`, `8081`, `5432`, an agentd port/socket, or
-the Docker API. Keep the host and Docker Engine patched; Shepherd's container controls
-do not compensate for an untrusted host kernel.
-
-### Optional DNS-01 certificate validation
-
-The release edge image includes version-pinned Cloudflare and Route53 DNS modules.
-The default remains Caddy's core HTTP-01/TLS-ALPN-01 flow; no DNS credential is needed
-when the certificate authority can reach the public edge. Select exactly one DNS
-override only when DNS-01 is useful. These profiles create temporary ACME TXT records,
-not the A/AAAA records that route the control plane and wildcard Preview suffix.
-
-Cloudflare:
+Create a zone-scoped token with `Zone:Read` and `DNS:Edit`:
 
 ```bash
 install -d -m 0700 secrets
 install -m 0600 /dev/null secrets/cloudflare_api_token
 $EDITOR secrets/cloudflare_api_token
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dns-cloudflare.yml \
+  pull
 docker compose \
   -f docker-compose.yml \
   -f docker-compose.dns-cloudflare.yml \
   up -d --wait
 ```
 
-Use a single zone-scoped API token with `Zone:Read` and `DNS:Edit`. The override mounts
-that file as a Docker secret and the non-root edge process reads it at startup. The
-token is not stored in `.env`, rendered into `docker compose config`, or passed as a
-command-line argument.
+Traefik/lego reads `CF_DNS_API_TOKEN_FILE`; the token value is absent from `.env`, the
+rendered Compose model, process arguments, and logs.
 
-Route53 with static credentials:
+### Route53
 
-```bash
-install -d -m 0700 secrets
-install -m 0600 /dev/null secrets/route53_access_key_id
-install -m 0600 /dev/null secrets/route53_secret_access_key
-$EDITOR secrets/route53_access_key_id
-$EDITOR secrets/route53_secret_access_key
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dns-route53.yml \
-  up -d --wait
+Restrict an IAM principal to hosted-zone discovery plus `_acme-challenge` TXT record
+inspection/change. Store it in the AWS shared-credentials format:
+
+```ini
+# secrets/route53_credentials
+[default]
+aws_access_key_id = AKIA...
+aws_secret_access_key = ...
 ```
 
-Set `AWS_REGION` in `.env`. Restrict the IAM policy to hosted-zone listing plus TXT
-record inspection/change for the intended zone and `_acme-challenge` names. On AWS,
-prefer an instance/task role: use a small operator override that sets
-`FLOCK_DNS_PROVIDER=route53` and `AWS_REGION` without mounting static credentials. The
-provider then uses the standard AWS credential chain.
+Set `AWS_REGION`, then start with `docker-compose.dns-route53.yml` in place of the
+Cloudflare override. Traefik/lego reads the mounted file through
+`AWS_SHARED_CREDENTIALS_FILE`; its AWS SDK explicitly does not support `_FILE` on the
+individual access-key variables. On AWS, prefer an instance/task role and a small
+operator override that enables the Route53 DNS resolver without mounting credentials.
 
-After startup, confirm the selected module and issuance path without printing secrets:
+Verify without printing secrets:
 
 ```bash
-docker compose exec caddy caddy list-modules | grep '^dns.providers.'
-docker compose logs --tail=100 caddy
+docker compose ps
+docker compose logs --tail=100 traefik
+curl --fail https://shepherd.example.com/health
 ```
+
+ACME account and certificate state persists in `traefik_acme`. The dashboard and
+anonymous telemetry are disabled.
 
 ## Private IP, LAN hostname, or Tailnet HTTP
 
-Use the private HTTP override only when network access is already restricted. For a
-direct Tailnet IP on port `11010`, set:
+For a direct Tailnet IP on `11010`:
 
 ```dotenv
+FLOCK_DOMAIN=unused.invalid
 PUBLIC_BASE_URL=http://100.64.0.10:11010
 FLOCK_ALLOWED_ORIGINS=http://100.64.0.10:11010
 HTTP_HOST_PORT=11010
 FLOCK_ALLOW_INSECURE_HTTP=1
-FLOCK_PREVIEW_DOMAIN=
 FLOCK_PREVIEW_BACKEND=port-pool
 FLOCK_PREVIEW_PORT_RANGE=12000-12031
 FLOCK_PREVIEW_FRAME_SOURCES=
 ```
 
-Then start the explicit topology:
-
 ```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.private-http.yml \
+  pull
 docker compose \
   -f docker-compose.yml \
   -f docker-compose.private-http.yml \
   up -d --wait
 ```
 
-The override publishes the selected HTTP control port plus exactly the bounded Preview
-range. Every pool port is owned by the Preview gateway and cannot serve the control
-plane. Postgres and the remaining application services stay behind Caddy. Session
-cookies remain HttpOnly, SameSite=Strict,
-host-only opaque identifiers, but they cannot use `Secure` or the browser-enforced
-`__Host-` prefix over HTTP. Anyone able to observe or modify that network path can attack
-the session; use firewall rules, Tailscale ACLs/grants, or an equivalently trusted LAN.
-Browsers also reserve some capabilities for secure contexts, so Web Push, some PWA
-installation behavior, and similar HTTPS-only APIs may be unavailable when the page is
-opened through a plain IP address.
+The override publishes the selected control port plus exactly the bounded Preview port
+range. Restrict both through host firewall rules and Tailnet ACLs/grants. Settings →
+Deployment & Preview generates the exact finite `FLOCK_PREVIEW_FRAME_SOURCES` value
+required for embedded Preview; **Open in browser** remains available when it is absent.
 
-Direct IP access uses no-DNS port-pool Preview. Shepherd allocates an expiring public
-port for each project service, routes it to the exact node loopback target, and rotates
-a unique capability-cookie name whenever the slot is reused. Restrict the full range
-with host firewall rules and Tailscale ACLs/grants. Apps on different ports share a
-browser cookie host, so do not use this mode for mutually untrusted applications.
+Private HTTP intentionally omits HSTS, secure-only upgrade directives, and COOP on
+non-loopback origins because browsers cannot honor them there. Session cookies remain
+HttpOnly, SameSite=Strict, opaque, and host-only, but cannot use `Secure` or the
+`__Host-` prefix. Anyone able to observe or modify the network can attack the session.
 
-The main-page CSP must list the exact finite origins before **Open here** is enabled.
-Settings → Deployment & Preview generates the `FLOCK_PREVIEW_FRAME_SOURCES` line. Copy it
-to `.env` and redeploy. **Open in browser** remains available when the CSP is absent.
-
-For stronger isolation on a private network, provide internal wildcard DNS instead:
-
-```dotenv
-PUBLIC_BASE_URL=http://shepherd.home.arpa:11010
-FLOCK_ALLOWED_ORIGINS=http://shepherd.home.arpa:11010
-FLOCK_PREVIEW_DOMAIN=preview.shepherd.home.arpa
-FLOCK_PREVIEW_BACKEND=hostname
-FLOCK_PREVIEW_FRAME_SOURCES=http://*.preview.shepherd.home.arpa:11010
-```
-
-Both `shepherd.home.arpa` and `*.preview.shepherd.home.arpa` must resolve to the Shepherd
-host. Preview then uses isolated HTTP origins on port `11010`; it must stay inside the
-same trusted network boundary.
+Private wildcard DNS provides stronger browser-origin isolation than a shared IP port
+pool. Set `FLOCK_PREVIEW_BACKEND=hostname`, `FLOCK_PREVIEW_EDGE_ENABLED=1`, a real
+`FLOCK_PREVIEW_DOMAIN`, and its exact HTTP frame source. Both the main and wildcard
+names must resolve to the Shepherd host.
 
 ## External TLS proxy
 
-Set the exact public HTTPS origin, then start the external-proxy override:
-
-```dotenv
-PUBLIC_BASE_URL=https://shepherd.example.com
-FLOCK_ALLOWED_ORIGINS=https://shepherd.example.com
-FLOCK_PREVIEW_DOMAIN=preview.shepherd.example.com
-FLOCK_TRUST_PROXY=1
-```
+Set the exact HTTPS origin, then start:
 
 ```bash
 docker compose \
@@ -247,180 +222,73 @@ docker compose \
   up -d --wait
 ```
 
-The bundled Caddy service is disabled and these upstreams bind to loopback by default:
+The bundled Traefik service is disabled. Loopback upstreams are:
 
-| Public route                             | Default upstream         |
-| ---------------------------------------- | ------------------------ |
-| Main origin `/api/*`, `/ws*`, `/health*` | `http://127.0.0.1:18080` |
-| Main origin, everything else             | `http://127.0.0.1:18081` |
-| Dedicated wildcard Preview suffix        | `http://127.0.0.1:18082` |
+| Public route                      | Upstream                 |
+| --------------------------------- | ------------------------ |
+| Main `/api/*`, `/ws*`, `/health*` | `http://127.0.0.1:18080` |
+| Main origin, everything else      | `http://127.0.0.1:18081` |
+| Wildcard Preview suffix           | `http://127.0.0.1:18082` |
 
-The proxy must terminate TLS, preserve the original `Host`, support WebSocket upgrades,
-and forward the real client address. Reproduce the security headers in
-`docker/Caddyfile`; do not add CORS wildcards. Set `FLOCK_PREVIEW_PUBLIC_PORT` only when
-the public Preview URL uses a non-default HTTPS port. If the proxy is itself a container,
-it may join the external `shepherd_edge` network and route to `orchestrator:8080`,
-`web:80`, and `orchestrator:8081`; otherwise keep the default loopback bindings. Never
-bind those upstream ports broadly unless a host firewall limits them to the proxy.
+The proxy must preserve `Host`, support WebSocket upgrades, forward the real client
+address, terminate TLS, and reproduce the policies in
+`docker/traefik/dynamic-tls.yml`. `FLOCK_TRUST_PROXY=1` means exactly one forwarding
+hop; configure a precise hop count or trusted address/CIDR for a different topology.
 
-`FLOCK_TRUST_PROXY=1` means exactly one forwarding hop. Set a precise hop count or
-trusted proxy address/CIDR for a different topology; a blanket `true` trusts caller-
-supplied forwarding headers when the orchestrator is directly reachable.
+## Security boundary
 
-## TLS and authentication boundary
+- TLS modes require exact `https://` public/allowed origins. Private HTTP requires exact
+  `http://` origins and its explicit acknowledgement.
+- Bundled TLS emits HSTS, CSP, framing, referrer, permissions, opener, and resource
+  policies. Private HTTP retains applicable controls and omits misleading TLS-only ones.
+- TLS cookies are HttpOnly, SameSite=Strict, Secure, host-only
+  `__Host-shepherd_session` identifiers.
+- All UI/API/WebSocket surfaces are default-deny. Session hooks require separate
+  high-entropy bearer capabilities.
+- The Traefik file provider contains only static Shepherd topology. The Docker provider,
+  dashboard, admin API, and Docker socket are absent.
+- Preview content is untrusted and must use a separate hostname or explicit private
+  port-pool origin.
 
-- Production startup rejects a missing, wildcard, credential-bearing, or mode-mismatched
-  `PUBLIC_BASE_URL`/allowed origin. TLS modes require HTTPS; private HTTP requires HTTP
-  plus the explicit acknowledgement.
-- Bundled Caddy redirects HTTP to HTTPS and emits HSTS, CSP, framing, referrer,
-  permissions, opener, and resource-policy headers. The private edge intentionally
-  omits HSTS and upgrade directives while retaining the applicable browser controls.
-- TLS-mode login cookies are HttpOnly, SameSite=Strict, Secure, host-only, and named
-  `__Host-shepherd_session`. Private HTTP uses an explicitly non-Secure host-only cookie
-  and therefore must remain on its trusted network.
-- All UI/API/WebSocket surfaces are default-deny. The only public data endpoint is the
-  per-session hook callback, which requires its own high-entropy bearer capability.
-- First-owner setup requires a server-side setup token. Login failures are durably
-  throttled in PostgreSQL, so a restart does not clear a lockout.
-- Changing the owner password revokes every other web login session.
+## Persistent state
 
-The unencrypted container-network hops are an implementation boundary, not public
-listeners. Public VPS traffic must terminate TLS before it crosses an untrusted path.
-
-## Remote Preview
-
-Remote Preview replaces the old server-side Chrome/screencast runtime. It does not
-render a remote browser. It tunnels one explicit loopback TCP port from a session's
-node into the user's native browser tab, preserving HTTP, WebSocket, and HMR behavior.
-
-Security properties:
-
-- The user must own an open session and enter a port from 1024–65535.
-- Shepherd first proves something is listening on `127.0.0.1:<port>` on that exact node.
-- Each preview gets a random hostname, a 256-bit capability, an HttpOnly host-only
-  preview cookie, an expiry, and explicit revoke/replace lifecycle.
-- The capability begins in a URL fragment (not an HTTP request or referrer), is
-  exchanged on the preview origin, and is never stored in PostgreSQL or logs; only its
-  SHA-256 digest exists in memory.
-- Shepherd login and preview-capability cookies, Authorization, forwarded IP/host
-  headers, and Referer are never forwarded across the tunnel. Development applications
-  may use their own host-only cookies; reserved Shepherd cookie names are filtered in
-  both directions.
-- HTTPS targets must present a certificate trusted by the orchestrator for `localhost`;
-  Shepherd never disables upstream certificate verification. For a self-signed local
-  development server, trust its CA in the deployment or forward its loopback HTTP port—the
-  node hop remains inside the authenticated SSH/agentd transport and the public Preview
-  origin still follows the selected deployment TLS policy.
-- Service workers are denied; request/response bytes, connection count, headers, and
-  connect/upstream time are bounded. Active HTTP/WebSocket tunnels close on revoke,
-  expiry, session termination, shutdown, or orchestrator restart.
-- Cross-Origin-Opener-Policy severs the untrusted preview tab from the Shepherd control
-  window, including during capability bootstrap, on HTTPS and trustworthy loopback
-  origins. Shepherd omits it on non-loopback HTTP because browsers cannot honor it in
-  that context.
-
-Treat preview content as untrusted application code. Its separate origin is the
-browser security boundary; never point `FLOCK_PREVIEW_DOMAIN` at the main hostname.
-
-## Secrets and storage
-
-Docker secret files under `./secrets/` are mounted at runtime and never copied into an
-image:
-
-- `flock_master_key` encrypts stored SSH/node credentials.
-- `postgres_password` authenticates the private database connection.
-- `setup_token` authorizes only fresh-install owner creation.
-
-`.env`, `secrets/`, and backup output are gitignored. Use generated values, keep file
-mode `0600`, restrict deployment-directory ownership, and back them up separately from
-the database. Losing the master key makes encrypted node credentials unrecoverable.
-
-Persistent data lives in named volumes:
-
-- `pgdata` — database
-- `flock_agent_home` — bundled local-node tool credentials/workspaces
-- `flock_agentd_state` — local daemon identity/control state
-- `flock_agentd_control` — stable node ID, control credential, and live Unix socket
-- `caddy_data`, `caddy_config` — ACME account, certificates, proxy state
+- `pgdata` — PostgreSQL data
+- `flock_agent_home` — bundled runtime credentials and workspaces
+- `flock_agentd_state` — daemon state
+- `flock_agentd_control` — node ID, control credential, and live Unix socket
+- `traefik_acme` — ACME account and certificate state
 
 Backups are written to `${FLOCK_BACKUP_DIR:-./backups}`. Follow
-[backup-and-recovery.md](backup-and-recovery.md); a database dump without the matching
-master key is not a complete recovery artifact.
+[Backup and recovery](backup-and-recovery.md); a database dump without the matching
+master key is incomplete.
 
-## Operations and verification
+## Verification
 
 ```bash
 docker compose config --quiet
 docker compose up -d --wait
 docker compose ps
-docker compose logs --tail=200 orchestrator caddy
-curl --fail https://shepherd.example.com/health
-```
-
-After first setup, verify sign-in, create a local session, reconnect its terminal,
-inspect Git, create a small loopback dev server, open/revoke Remote Preview, and connect
-one SSH node. Settings → Operations exposes readiness, daemon compatibility, exact
-agent versions, and redacted diagnostics.
-
-To validate the isolation model:
-
-```bash
+docker compose logs --tail=200 orchestrator traefik
 docker compose config | grep -F /var/run/docker.sock && exit 1 || true
 docker compose port postgres 5432 && exit 1 || true
 docker compose port orchestrator 8080 && exit 1 || true
 ```
 
-## Connect and provision remote nodes
-
-Vagrant and the checked-in simulated-node Compose file are developer test fixtures, not
-customer deployment requirements. A real remote node needs Linux, systemd, SSH access,
-and the one-time idempotent preparation script from the matching release:
-
-```bash
-sudo ./scripts/flock-node-prepare.sh \
-  --public-key-file /path/to/flock-control.pub \
-  --workspace /srv/flock/workspaces
-```
-
-The default installs no coding tools and does not change Docker. After the node is added,
-its details page detects Claude Code, Codex, OpenCode, Gemini, Grok, Aider, Cursor Agent,
-and Amp. Each tool has an explicit latest-channel install/upgrade action; provider login
-remains inside the tool on that node. Docker installation and root-equivalent agent
-socket access require separate confirmations. See [Node tooling and Docker](node-tooling.md)
-for the full support matrix, manual flags, migration behavior, and security boundary.
+After setup, verify sign-in, a local session/reconnect, Git status, a loopback project
+server through Preview, and one SSH node. Settings → Operations exposes readiness,
+daemon compatibility, exact agent versions, and redacted diagnostics.
 
 ## Upgrade
 
-Use the backup-gated helper from the deployment checkout:
+Use the backup-gated helper:
 
 ```bash
-install -m 0600 /dev/null /tmp/shepherd-vault-password
-$EDITOR /tmp/shepherd-vault-password
-FLOCK_VAULT_PASSWORD_FILE=/tmp/shepherd-vault-password \
+FLOCK_VAULT_PASSWORD_FILE=/path/to/0600-password-file \
   ./scripts/flock-upgrade.sh <target-version>
 ```
 
-The helper verifies the signed/checksummed deployment bundle before replacing Compose
-definitions, preserves `.env`, secrets, volumes, and custom overrides, creates and
-verifies an encrypted pre-upgrade vault, and checks readiness. A normal upgrade keeps a
-compatible local runtime and every active session unchanged. Use `--upgrade-runtime`
-for deferred idle maintenance. Required or first-topology runtime work refuses active
-sessions unless their printed IDs are accepted with `--force-stop-local-sessions`. A
-stricter remote daemon floor requires explicit acknowledgement. Shepherd does not
-pretend a contracted database schema can be rolled back by merely starting an older
-image; restore the verified vault according to the recovery guide.
-
-Node daemon activation is conservative: compatible daemons continue, recommended
-upgrades may wait, and mandatory upgrades fail closed if Shepherd cannot safely prove
-that active sessions are drained. See
-[agentd-compatibility-and-upgrade-plan.md](agentd-compatibility-and-upgrade-plan.md).
-
-## Local development variants
-
-- `./run-dev.sh` — native source/hot-reload path.
-- `docker-compose.dev.yml` — source-mounted builder and test dependencies.
-- `docker-compose.local.yml` — prebuilt local UI on `48080` plus preview on `48081`.
-- `docker-compose.nodes.yml` and `vagrant/` — remote-node simulations.
-
-These are development topologies. Public exposure must use bundled TLS or the external
-TLS mode above; private HTTP is only for an intentionally restricted network.
+The helper verifies the deployment bundle, preserves `.env`, secrets, volumes, and
+custom overrides, verifies an encrypted pre-upgrade vault, and checks readiness. A
+routine control-plane update keeps compatible runtime sessions alive. PostgreSQL major
+upgrades require a separately documented restore/migration path; changing the upstream
+tag is not an upgrade plan.

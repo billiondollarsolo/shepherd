@@ -1,0 +1,109 @@
+{{- $domain := env "FLOCK_DOMAIN" -}}
+{{- $previewDomain := env "FLOCK_PREVIEW_DOMAIN" -}}
+{{- $previewEnabled := eq (env "FLOCK_PREVIEW_EDGE_ENABLED") "1" -}}
+{{- $frameSources := env "FLOCK_PREVIEW_FRAME_SOURCES" -}}
+{{- $resolver := env "FLOCK_TLS_CERT_RESOLVER" -}}
+# Shepherd public HTTPS routes. This file is rendered by Traefik's file-provider
+# template engine; no Docker provider or Docker socket is used.
+http:
+  routers:
+    shepherd-https-redirect:
+      rule: "Host(`{{ $domain }}`)"
+      entryPoints: [web]
+      service: noop@internal
+      middlewares: [shepherd-https-redirect]
+      priority: 1
+    shepherd-control-api:
+      rule: "Host(`{{ $domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || PathPrefix(`/health`))"
+      entryPoints: [websecure]
+      service: shepherd-orchestrator
+      middlewares: [shepherd-control-security]
+      priority: 100
+      {{- if $resolver }}
+      tls:
+        certResolver: {{ $resolver }}
+      {{- else }}
+      tls: {}
+      {{- end }}
+    shepherd-control-web:
+      rule: "Host(`{{ $domain }}`)"
+      entryPoints: [websecure]
+      service: shepherd-web
+      middlewares: [shepherd-control-security]
+      priority: 1
+      {{- if $resolver }}
+      tls:
+        certResolver: {{ $resolver }}
+      {{- else }}
+      tls: {}
+      {{- end }}
+    {{- if $previewEnabled }}
+    shepherd-preview-https-redirect:
+      rule: "HostRegexp(`[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.]{{ replace "." "[.]" $previewDomain }}`)"
+      entryPoints: [web]
+      service: noop@internal
+      middlewares: [shepherd-https-redirect]
+      priority: 200
+    shepherd-preview:
+      rule: "HostRegexp(`[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.]{{ replace "." "[.]" $previewDomain }}`)"
+      entryPoints: [websecure]
+      service: shepherd-preview
+      middlewares: [shepherd-preview-security]
+      priority: 200
+      {{- if $resolver }}
+      tls:
+        certResolver: {{ $resolver }}
+        domains:
+          - main: "{{ $previewDomain }}"
+            sans: ["*.{{ $previewDomain }}"]
+      {{- else }}
+      tls: {}
+      {{- end }}
+    {{- end }}
+
+  services:
+    shepherd-orchestrator:
+      loadBalancer:
+        servers:
+          - url: http://orchestrator:8080
+    shepherd-web:
+      loadBalancer:
+        servers:
+          - url: http://web:80
+    {{- if $previewEnabled }}
+    shepherd-preview:
+      loadBalancer:
+        servers:
+          - url: http://orchestrator:8081
+    {{- end }}
+
+  middlewares:
+    shepherd-https-redirect:
+      redirectScheme:
+        scheme: https
+        port: "{{ env "FLOCK_HTTPS_REDIRECT_PORT" }}"
+        permanent: true
+    shepherd-control-security:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
+        # Ghostty needs WebAssembly compilation and its bundled data payload;
+        # React components use runtime style attributes.
+        contentSecurityPolicy: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: wss://{{ $domain }}; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src {{ if $frameSources }}{{ $frameSources }}{{ else if $previewEnabled }}https://*.{{ $previewDomain }}{{ else }}'none'{{ end }}; upgrade-insecure-requests"
+        customResponseHeaders:
+          Cross-Origin-Opener-Policy: same-origin
+          Cross-Origin-Resource-Policy: same-origin
+          X-Permitted-Cross-Domain-Policies: none
+          Server: ""
+    shepherd-preview-security:
+      headers:
+        stsSeconds: 31536000
+        contentTypeNosniff: true
+        referrerPolicy: no-referrer
+        customResponseHeaders:
+          Cross-Origin-Opener-Policy: same-origin
+          Server: ""

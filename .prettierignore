@@ -6,3 +6,6 @@ playwright-report
 test-results
 pnpm-lock.yaml
 .pnpm-store
+# Go-template directives are rendered by Traefik before YAML parsing.
+docker/traefik/dynamic-http.yml
+docker/traefik/dynamic-tls.yml

@@ -11,7 +11,7 @@ name: flock-dev
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55
     environment:
       POSTGRES_USER: flock
       POSTGRES_PASSWORD: flock

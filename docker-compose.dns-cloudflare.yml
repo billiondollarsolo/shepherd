@@ -3,12 +3,22 @@
 # This changes only ACME validation. Operators must still point the control-plane
 # and wildcard Preview DNS records at the Shepherd edge themselves.
 services:
-  caddy:
+  traefik:
     environment:
-      FLOCK_DNS_PROVIDER: cloudflare
-      CF_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
+      FLOCK_PREVIEW_EDGE_ENABLED: '1'
+      FLOCK_TLS_CERT_RESOLVER: dns
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for certificate expiry notices}
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_STORAGE: /letsencrypt/dns-acme.json
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE: 'true'
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE_PROVIDER: cloudflare
+      TRAEFIK_CERTIFICATESRESOLVERS_DNS_ACME_DNSCHALLENGE_RESOLVERS: ${FLOCK_DNS_RESOLVERS:-1.1.1.1:53,1.0.0.1:53}
     secrets:
       - cloudflare_api_token
+
+  orchestrator:
+    environment:
+      FLOCK_PREVIEW_BACKEND: hostname
 
 secrets:
   cloudflare_api_token:

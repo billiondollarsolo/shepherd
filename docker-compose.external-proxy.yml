@@ -4,12 +4,13 @@
 # documented in docs/deployment.md. Change FLOCK_PROXY_BIND_ADDRESS only when a
 # separately isolated proxy host/container genuinely needs network access.
 services:
-  caddy:
+  traefik:
     profiles: [bundled-edge-disabled]
 
   orchestrator:
     environment:
       FLOCK_DEPLOYMENT_MODE: external-tls
+      FLOCK_PREVIEW_BACKEND: ${FLOCK_PREVIEW_BACKEND:-hostname}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set the exact public https:// URL}
       FLOCK_ALLOWED_ORIGINS: ${FLOCK_ALLOWED_ORIGINS:?Set the exact public https:// origin}
       FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}

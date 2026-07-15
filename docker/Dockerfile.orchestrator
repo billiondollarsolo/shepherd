@@ -22,7 +22,7 @@ RUN mkdir -p /out/dist \
 
 # PostgreSQL 16 client tools. Debian Bookworm defaults to v15, which refuses to
 # dump a newer v16 server. The manifest digest keeps release builds reproducible.
-FROM postgres:16-bookworm@sha256:da788743d2060767375896de4d646f7576f5911461444b372616f19ea61db2ec AS pg-client
+FROM postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55 AS pg-client
 ARG RELEASE_REFRESH=manual
 RUN echo "$RELEASE_REFRESH" >/dev/null \
     && apt-get update \

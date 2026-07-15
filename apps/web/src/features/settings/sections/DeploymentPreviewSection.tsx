@@ -64,6 +64,9 @@ export function DeploymentPreviewSection(): JSX.Element {
       `FLOCK_PREVIEW_DOMAIN=${data.deployment.previewDomain ?? 'preview.example.com'}`,
       `# Main-page CSP frame-src: ${data.deployment.frameSources.join(' ') || "'none'"}`,
       '# Point the dedicated Preview DNS suffix at the Shepherd edge.',
+      '# Wildcard Preview TLS requires one DNS-01 override:',
+      '# docker compose -f docker-compose.yml -f docker-compose.dns-cloudflare.yml up -d --wait',
+      '# docker compose -f docker-compose.yml -f docker-compose.dns-route53.yml up -d --wait',
       '# Firewall: allow 80/tcp and 443/tcp; do not publish orchestrator or database ports.',
     ].join('\n');
   }, [data]);

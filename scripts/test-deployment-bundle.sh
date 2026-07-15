@@ -7,7 +7,7 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/shepherd-bundle-test.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/digests" "$TMP/output" "$TMP/extracted"
-for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
   printf 'sha256:%064d\n' 0 > "$TMP/digests/$image.digest"
 done
 
@@ -32,6 +32,6 @@ bundle_root="$TMP/extracted/shepherd-0.0.0-test"
 jq -e \
   '.controlPlaneVersion == "0.0.0-test" and
    .runtime.preferredVersion == "0.0.0-test" and
-   (.images | length) == 5 and
+   (.images | length) == 3 and
    ([.images[] | startswith("ghcr.io/billiondollarsolo/shepherd-")] | all)' \
   "$bundle_root/release-manifest.json" >/dev/null

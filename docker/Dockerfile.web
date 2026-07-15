@@ -59,38 +59,8 @@ RUN echo "$RELEASE_REFRESH" >/dev/null \
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/licenses/flock/
 COPY apps/web/src/styles/fonts/OFL.txt /usr/share/licenses/flock/OFL-1.1.txt
 
-# SPA + service-worker friendly nginx config. The PWA service worker
-# (sw.js / manifest) must be served from root and never long-cached.
-RUN <<'NGINXCONF' cat > /etc/nginx/http.d/default.conf
-server {
-    listen       80;
-    server_name  _;
-    root         /usr/share/html;
-    index        index.html;
-
-    # Hashed Vite assets are immutable — cache hard.
-    location /assets/ {
-        add_header Cache-Control "public, max-age=31536000, immutable";
-        try_files $uri =404;
-    }
-
-    # Never cache the service worker or the web app manifest (PWA, US-36).
-    location = /sw.js {
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri =404;
-    }
-    location = /manifest.webmanifest {
-        add_header Cache-Control "no-cache";
-        try_files $uri =404;
-    }
-
-    # SPA fallback: serve index.html for any unmatched route.
-    location / {
-        add_header Cache-Control "no-cache";
-        try_files $uri $uri/ /index.html;
-    }
-}
-NGINXCONF
+# SPA + service-worker friendly nginx config is also reused by the local stack.
+COPY docker/nginx-spa.conf /etc/nginx/http.d/default.conf
 
 # Vite's default outDir is `dist`. Copy the built static bundle.
 COPY --from=build /app/apps/web/dist /usr/share/html

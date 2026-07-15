@@ -6,6 +6,35 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-07-15
+
+### Changed
+
+- Replaced Shepherd-built Caddy and PostgreSQL wrapper images with digest-pinned
+  official Traefik 3.7 and PostgreSQL 16 images.
+- Reduced the release surface to the three Shepherd-owned application images. Release
+  CI now scans the exact upstream Traefik and PostgreSQL manifests on amd64 and arm64
+  without republishing them.
+- Moved bundled routing, WebSocket forwarding, HTTPS redirects, security headers, and
+  private-HTTP policy to reusable Traefik file-provider templates. The edge uses no
+  Docker provider, Docker socket, dashboard, or anonymous telemetry.
+- Public Remote Preview now uses one DNS-01 wildcard certificate through the official
+  Cloudflare or Route53 provider. Control-plane-only deployments retain HTTP-01, and
+  private Tailnet/LAN port-pool and external-proxy modes remain supported.
+- Extracted the nginx SPA configuration for reuse by the production web image and local
+  high-port development stack.
+
+### Security
+
+- Removed the public on-demand certificate authorization endpoint and reserved the
+  Preview gateway's entire `/_shepherd/` namespace except its capability bootstrap.
+- Added an upgrade guard that prevents a former localhost/raw-IP Caddy TLS installation
+  from silently moving to an unusable edge; operators must select real DNS/TLS or the
+  explicit private-HTTP topology.
+- Kept PostgreSQL on major 16 for a no-data-migration patch release while consuming the
+  latest reviewed upstream patch manifest. Floating database and edge `latest` tags are
+  not used.
+
 ## [0.5.1] - 2026-07-15
 
 ### Added
@@ -186,7 +215,8 @@ minor releases before 1.0.
   pinning, encrypted secret storage, login throttling, and dependency audit
   gates during the pre-release hardening cycle.
 
-[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/billiondollarsolo/shepherd/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.2
 [0.5.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.1
 [0.5.0]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.5.0
 [0.4.1]: https://github.com/billiondollarsolo/shepherd/releases/tag/v0.4.1

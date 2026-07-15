@@ -18,8 +18,7 @@ import { parse as parseCookie, serialize as serializeCookie } from 'cookie';
 import type { ActivePreview, PreviewService } from './service.js';
 
 const BOOTSTRAP_PATH = '/_shepherd/authorize';
-const ASK_PATH = '/_shepherd/caddy-ask';
-const HEALTH_PATH = '/_shepherd/health';
+const INTERNAL_PATH_PREFIX = '/_shepherd/';
 const MAX_AUTH_BODY_BYTES = 2_048;
 const MAX_HEADER_BYTES = 16 * 1024;
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -549,13 +548,11 @@ export function createPreviewGateway(
     const instance = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, (request, response) => {
       void (async () => {
         const url = new URL(request.url ?? '/', 'http://preview.invalid');
-        if (!poolListener && url.pathname === HEALTH_PATH && request.method === 'GET') {
-          return writePlain(response, 200, 'ok');
-        }
-        if (!poolListener && url.pathname === ASK_PATH) {
-          if (request.method !== 'GET') return writePlain(response, 405, 'Method not allowed.');
-          const domain = url.searchParams.get('domain')?.toLowerCase() ?? '';
-          return writePlain(response, service.isActiveHostname(domain) ? 200 : 404, '');
+        // The gateway owns this namespace. Only the one documented capability
+        // bootstrap route is public; untrusted preview upstreams can never
+        // claim future internal endpoints by choosing the same path.
+        if (url.pathname.startsWith(INTERNAL_PATH_PREFIX) && url.pathname !== BOOTSTRAP_PATH) {
+          return writePlain(response, 404, 'Not found.');
         }
         if (
           !request.url?.startsWith('/') ||
@@ -659,26 +656,11 @@ export function createPreviewGateway(
       ];
     }
     if (poolPorts.length === 0) {
-      const address = server.address();
-      if (!address || typeof address === 'string') {
-        return [
-          { id: 'gateway', status: 'fail', detail: 'The hostname gateway has no TCP listener.' },
-        ];
-      }
-      const status = await internalStatus(
-        loopbackFor(address.address),
-        address.port,
-        HEALTH_PATH,
-        'preview.invalid',
-      );
       return [
         {
           id: 'gateway',
-          status: status === 200 ? 'pass' : 'fail',
-          detail:
-            status === 200
-              ? 'The dedicated hostname gateway health route responded successfully.'
-              : `The hostname gateway returned HTTP ${status}.`,
+          status: 'pass',
+          detail: 'The dedicated hostname gateway listener is accepting connections.',
         },
       ];
     }

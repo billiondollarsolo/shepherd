@@ -7,7 +7,7 @@ keys, or in-memory terminal scrollback.
 
 The manifest inventories declared durable volumes and their disposition. `pgdata` is
 captured by the vault. `flock_agent_home`, `flock_agentd_state`,
-`flock_agentd_control`, Caddy state, and the vault destination require separate
+`flock_agentd_control`, Traefik ACME state, and the vault destination require separate
 filesystem/storage backup when those categories matter. Never restore the Unix socket
 inode. Live processes and PTYs are not backup data.
 
@@ -44,7 +44,7 @@ Stop normal writes first. Restore refuses active database connections unless the
 operator explicitly supplies `--allow-active`:
 
 ```bash
-docker compose stop caddy web orchestrator
+docker compose stop traefik web orchestrator
 docker compose run --rm -T orchestrator sh -lc \
   'FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js restore /backups/flock.flockvault \
     --rollback-output /backups/pre-restore.flockvault 3<&0' \

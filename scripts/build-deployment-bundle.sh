@@ -19,12 +19,13 @@ mkdir -p "$root/docker" "$root/scripts" "$OUTPUT_DIR"
 
 cp .env.example LICENSE "$root/"
 cp docker-compose*.yml "$root/"
-cp docker/Caddyfile* docker/caddy-entrypoint.sh docker/stage-secret.sh "$root/docker/"
+cp docker/nginx-spa.conf docker/stage-secret.sh "$root/docker/"
+cp -R docker/traefik "$root/docker/"
 cp scripts/flock-node-prepare.sh scripts/flock-upgrade.sh "$root/scripts/"
 cp agentd/COMPATIBILITY.json "$root/agentd-compatibility.json"
 
 images='{}'
-for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
   digest_file="$DIGEST_DIR/$image.digest"
   [ -s "$digest_file" ] || { echo "missing candidate digest: $digest_file" >&2; exit 1; }
   digest="$(tr -d '\r\n' < "$digest_file")"

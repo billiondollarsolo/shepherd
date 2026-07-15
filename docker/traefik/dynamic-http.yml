@@ -1,0 +1,62 @@
+{{- $previewDomain := env "FLOCK_PREVIEW_DOMAIN" -}}
+{{- $previewEnabled := eq (env "FLOCK_PREVIEW_EDGE_ENABLED") "1" -}}
+{{- $frameSources := env "FLOCK_PREVIEW_FRAME_SOURCES" -}}
+# Deliberate plain-HTTP edge for a trusted LAN or encrypted overlay network.
+# TLS-only headers, especially HSTS and COOP, are intentionally absent.
+http:
+  routers:
+    shepherd-control-api:
+      rule: "PathPrefix(`/api`) || PathPrefix(`/ws`) || PathPrefix(`/health`)"
+      entryPoints: [web]
+      service: shepherd-orchestrator
+      middlewares: [shepherd-control-security]
+      priority: 100
+    shepherd-control-web:
+      rule: "PathPrefix(`/`)"
+      entryPoints: [web]
+      service: shepherd-web
+      middlewares: [shepherd-control-security]
+      priority: 1
+    {{- if $previewEnabled }}
+    shepherd-preview:
+      rule: "HostRegexp(`[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.]{{ replace "." "[.]" $previewDomain }}`)"
+      entryPoints: [web]
+      service: shepherd-preview
+      middlewares: [shepherd-preview-security]
+      priority: 200
+    {{- end }}
+
+  services:
+    shepherd-orchestrator:
+      loadBalancer:
+        servers:
+          - url: http://orchestrator:8080
+    shepherd-web:
+      loadBalancer:
+        servers:
+          - url: http://web:80
+    {{- if $previewEnabled }}
+    shepherd-preview:
+      loadBalancer:
+        servers:
+          - url: http://orchestrator:8081
+    {{- end }}
+
+  middlewares:
+    shepherd-control-security:
+      headers:
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), serial=(), usb=(), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), fullscreen=(self)"
+        contentSecurityPolicy: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data:; worker-src 'self'; manifest-src 'self'; media-src 'none'; frame-src {{ if $frameSources }}{{ $frameSources }}{{ else }}'none'{{ end }}"
+        customResponseHeaders:
+          Cross-Origin-Resource-Policy: same-origin
+          X-Permitted-Cross-Domain-Policies: none
+          Server: ""
+    shepherd-preview-security:
+      headers:
+        contentTypeNosniff: true
+        referrerPolicy: no-referrer
+        customResponseHeaders:
+          Server: ""

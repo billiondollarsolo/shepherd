@@ -213,7 +213,7 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   // logs method/path/status/latency/reqId as JSON for aggregation. Silenced under
   // test (vitest/NODE_ENV=test) to keep suite output clean; level is env-tunable.
   const underTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-  // Behind a reverse proxy (Caddy, single-box deploy) Fastify must trust the
+  // Behind a reverse proxy (Traefik, single-box deploy) Fastify must trust the
   // forwarding hop so `request.ip` is the REAL client, not the proxy — otherwise
   // the login throttle keys on one IP for everyone and audit rows log the wrong
   // actor. FLOCK_TRUST_PROXY: "1" (hop count), a CIDR/IP, or "true"; unset = off

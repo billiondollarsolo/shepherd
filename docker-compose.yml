@@ -2,9 +2,9 @@
 # Shepherd — PRODUCTION Docker Compose deploy (US-38/US-39, NFR-DEP1/DEP2/SEC1)
 #
 #   docker compose pull         # pull the selected Shepherd release from GHCR
-#   docker compose up -d        # caddy(TLS) + orchestrator + postgres + web
+#   docker compose up -d        # traefik(TLS) + orchestrator + postgres + web
 #
-# US-39: Caddy terminates TLS in front (NFR-SEC1) and is the ONLY service that
+# US-39: Traefik terminates TLS in front (NFR-SEC1) and is the ONLY service that
 # publishes host ports (80/443). The orchestrator and web speak plain HTTP/WS on
 # the internal network and are never exposed directly. ALL UI/API/WS require
 # auth, enforced by the orchestrator's default-deny surface guard (NFR-SEC6);
@@ -21,21 +21,21 @@ name: flock
 
 services:
   # ---------------------------------------------------------------------------
-  # Caddy — reverse proxy + TLS termination (US-39, NFR-SEC1). The ONLY service
-  # published to the public interface. Terminates HTTPS and proxies /api + /ws +
-  # /health to the orchestrator and everything else to the web bundle. Auth is
+  # Traefik — upstream reverse proxy + TLS termination (US-39, NFR-SEC1). The
+  # ONLY service published to the public interface. Static file discovery keeps
+  # the Docker socket completely outside the edge trust boundary.
+  # It terminates HTTPS and proxies /api + /ws + /health to the orchestrator and
+  # everything else to the web bundle. Auth is
   # enforced inside the orchestrator (default-deny surface guard, NFR-SEC6); the
   # hook endpoint stays the per-session-token exception (spec §8.1).
   #
-  # With a real FLOCK_DOMAIN, Caddy auto-provisions a Let's Encrypt certificate;
-  # for `localhost`/IP-only deploys it mints a locally-trusted internal cert.
-  # Certs/ACME keys persist in caddy_data — never baked into the image (NFR-DEP2).
+  # A real FLOCK_DOMAIN is required here. Traefik obtains the control-plane
+  # certificate through HTTP-01 by default; DNS overlays select Cloudflare or
+  # Route53 and add the wildcard Preview certificate. ACME state persists in
+  # traefik_acme and is never baked into an image (NFR-DEP2).
   # ---------------------------------------------------------------------------
-  caddy:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.caddy
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-caddy:${FLOCK_VERSION:-0.5.1}
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -49,24 +49,46 @@ services:
       - orchestrator
       - web
     environment:
-      FLOCK_DOMAIN: ${FLOCK_DOMAIN:-localhost}
-      # Preview hostnames use on-demand certificates guarded by the orchestrator's
-      # active-capability allow endpoint. Local quick start uses preview.localhost.
-      FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-preview.localhost}
+      FLOCK_DOMAIN: ${FLOCK_DOMAIN:?Set the public Shepherd hostname}
+      # Hostname Preview is enabled only when this is a real dedicated suffix.
+      # The DNS overlays switch the orchestrator to hostname mode and configure
+      # DNS-01 for the required wildcard certificate.
+      FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-preview.invalid}
+      FLOCK_PREVIEW_EDGE_ENABLED: ${FLOCK_PREVIEW_EDGE_ENABLED:-0}
       FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-}
+      FLOCK_HTTPS_REDIRECT_PORT: ${HTTPS_HOST_PORT:-443}
+      # An explicitly empty value is reserved for offline/CI TLS smoke tests,
+      # where Traefik's generated certificate exercises routing without ACME.
+      FLOCK_TLS_CERT_RESOLVER: ${FLOCK_TLS_CERT_RESOLVER-http}
+      TRAEFIK_GLOBAL_CHECKNEWVERSION: 'false'
+      TRAEFIK_GLOBAL_SENDANONYMOUSUSAGE: 'false'
+      TRAEFIK_API_DASHBOARD: 'false'
+      TRAEFIK_ACCESSLOG: 'true'
+      TRAEFIK_ACCESSLOG_FIELDS_HEADERS_DEFAULTMODE: drop
+      TRAEFIK_LOG_LEVEL: ${TRAEFIK_LOG_LEVEL:-INFO}
+      TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ':80'
+      TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS: ':443'
+      TRAEFIK_ENTRYPOINTS_PING_ADDRESS: ':8082'
+      TRAEFIK_PING: 'true'
+      TRAEFIK_PING_ENTRYPOINT: ping
+      TRAEFIK_PROVIDERS_FILE_FILENAME: /etc/traefik/dynamic/routes.yml
+      TRAEFIK_PROVIDERS_FILE_WATCH: 'true'
+      TRAEFIK_CERTIFICATESRESOLVERS_HTTP_ACME_EMAIL: ${ACME_EMAIL:-admin@example.invalid}
+      TRAEFIK_CERTIFICATESRESOLVERS_HTTP_ACME_STORAGE: /letsencrypt/http-acme.json
+      TRAEFIK_CERTIFICATESRESOLVERS_HTTP_ACME_HTTPCHALLENGE: 'true'
+      TRAEFIK_CERTIFICATESRESOLVERS_HTTP_ACME_HTTPCHALLENGE_ENTRYPOINT: web
     ports:
       - '${HTTP_HOST_PORT:-80}:80'
       - '${HTTPS_HOST_PORT:-443}:443'
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./docker/traefik/dynamic-tls.yml:/etc/traefik/dynamic/routes.yml:ro
+      - traefik_acme:/letsencrypt
     tmpfs:
       - /tmp:size=16m,mode=1777
     networks:
       - edge
     healthcheck:
-      test: ['CMD', 'wget', '-q', '--spider', '-T', '2', 'http://127.0.0.1:2019/config/']
+      test: ['CMD', 'wget', '-q', '--spider', '-T', '2', 'http://127.0.0.1:8082/ping']
       interval: 10s
       timeout: 3s
       retries: 6
@@ -76,10 +98,10 @@ services:
   # Postgres — durable system of record. NOT on the live status path (PRD §6.6).
   # ---------------------------------------------------------------------------
   postgres:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.postgres
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-postgres:${FLOCK_VERSION:-0.5.1}
+    # Latest upstream security/patch release within the supported PostgreSQL 16
+    # major. Digest pinning makes upgrades reviewable and prevents an accidental
+    # major-version/data-layout migration from a floating `latest` tag.
+    image: ${POSTGRES_IMAGE:-postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -111,16 +133,16 @@ services:
   # Bundled local node runtime — owns flock-agentd, agent CLIs, PTYs, workspaces,
   # and node-local development servers. It is deliberately versioned and
   # restarted independently from the control plane so active local sessions
-  # survive orchestrator/web/Caddy upgrades.
+  # survive orchestrator/web/Traefik upgrades.
   # ---------------------------------------------------------------------------
   node-runtime:
     build:
       context: .
       dockerfile: docker/Dockerfile.node-runtime
       args:
-        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.1}
+        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.2}
         VCS_REF: ${FLOCK_VCS_REF:-unknown}
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.2}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -178,7 +200,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.2}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -193,11 +215,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: ${PORT:-8080}
-      # Bind all interfaces INSIDE the container so Caddy/web can reach it as
+      # Bind all interfaces INSIDE the container so Traefik/web can reach it as
       # orchestrator:8080 (the app default is loopback-only). The published port is
       # still gated by the compose `ports:`/reverse proxy, not this bind.
       HOST: ${HOST:-0.0.0.0}
-      # The base stack is the secure default: bundled Caddy terminates TLS.
+      # The base stack is the secure default: bundled Traefik terminates TLS.
       # Alternate topologies use the checked-in Compose overrides rather than
       # weakening this file in place.
       FLOCK_DEPLOYMENT_MODE: builtin-tls
@@ -209,7 +231,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      # Public URL users open in the browser (Caddy HTTPS), NOT the internal
+      # Public URL users open in the browser (Traefik HTTPS), NOT the internal
       # orchestrator:8080 address. Used for hook callbacks, cookies, and push.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
       # Exact browser origins allowed to open authenticated WebSockets. Keep this
@@ -221,7 +243,9 @@ services:
       # Empty derives preview.localhost only when PUBLIC_BASE_URL is localhost;
       # public deployments must opt into their dedicated wildcard DNS suffix.
       FLOCK_PREVIEW_DOMAIN: ${FLOCK_PREVIEW_DOMAIN:-}
-      FLOCK_PREVIEW_BACKEND: ${FLOCK_PREVIEW_BACKEND:-hostname}
+      # The base HTTP-01 profile cannot issue wildcard Preview certificates.
+      # DNS-01 and external-proxy profiles explicitly enable hostname Preview.
+      FLOCK_PREVIEW_BACKEND: ${FLOCK_PREVIEW_BACKEND:-disabled}
       FLOCK_PREVIEW_PORT_RANGE: ${FLOCK_PREVIEW_PORT_RANGE:-}
       FLOCK_PREVIEW_FRAME_SOURCES: ${FLOCK_PREVIEW_FRAME_SOURCES:-}
       FLOCK_PREVIEW_HOST: 0.0.0.0
@@ -255,7 +279,7 @@ services:
       # runtime network; this avoids treating localhost inside the runtime as the
       # orchestrator in IP-only and localhost deployments.
       FLOCK_LOCAL_HOOK_BASE_URL: http://orchestrator:8080
-      # Orchestrator sits behind Caddy (one hop) → trust it so request.ip is the
+      # Orchestrator sits behind Traefik (one hop) → trust it so request.ip is the
       # real client (correct login-throttle keying + audit actor IP).
       FLOCK_TRUST_PROXY: ${FLOCK_TRUST_PROXY:-1}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
@@ -276,7 +300,7 @@ services:
       - /run:size=32m,mode=0755
       - /home/flock-control/.cache:size=32m,uid=700,gid=700,mode=0700
     # NO public port mapping (US-39, NFR-SEC1): the orchestrator speaks plain
-    # HTTP/WS and is reachable ONLY via the Caddy TLS proxy on the internal
+    # HTTP/WS and is reachable ONLY via the Traefik TLS proxy on the internal
     # network. `expose` documents the internal port without publishing it.
     expose:
       - '8080'
@@ -295,15 +319,15 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # Web — static React/Vite PWA bundle served by nginx. Fronted by the Caddy TLS
-  # proxy (US-39); Caddy routes /api + /ws to the orchestrator and everything
-  # else here. NO public port mapping — reachable only via Caddy (NFR-SEC1).
+  # Web — static React/Vite PWA bundle served by nginx. Fronted by the Traefik
+  # TLS proxy (US-39); Traefik routes /api + /ws to the orchestrator and
+  # everything else here. NO public port mapping (NFR-SEC1).
   # ---------------------------------------------------------------------------
   web:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.1}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.2}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -335,10 +359,9 @@ volumes:
   flock_agent_home:
   flock_agentd_state:
   flock_agentd_control:
-  # Caddy TLS certificates + ACME account keys (US-39, NFR-SEC1/DEP2). Persisted
-  # so certs survive restarts and are never baked into an image.
-  caddy_data:
-  caddy_config:
+  # Traefik ACME account and certificates (US-39, NFR-SEC1/DEP2). Persisted so
+  # certs survive restarts and are never baked into an image.
+  traefik_acme:
 
 # -----------------------------------------------------------------------------
 # Networks

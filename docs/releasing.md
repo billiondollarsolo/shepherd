@@ -1,13 +1,15 @@
 # Releasing Shepherd
 
-Shepherd releases are GitHub Releases backed by five multi-platform images in the
+Shepherd releases are GitHub Releases backed by three multi-platform images in the
 GitHub Container Registry (GHCR):
 
 - `ghcr.io/billiondollarsolo/shepherd-orchestrator`
 - `ghcr.io/billiondollarsolo/shepherd-node-runtime`
 - `ghcr.io/billiondollarsolo/shepherd-web`
-- `ghcr.io/billiondollarsolo/shepherd-caddy`
-- `ghcr.io/billiondollarsolo/shepherd-postgres`
+
+The deployment consumes digest-pinned official Traefik and PostgreSQL images directly.
+Release CI scans both upstream manifests on amd64 and arm64 but does not rebuild or
+republish them.
 
 The release workflow builds Linux amd64 and arm64 images, publishes semantic
 version tags, generates SBOM/provenance attestations, and updates `latest` only for
@@ -68,39 +70,53 @@ go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.4.0 scan source \
   --lockfile=pnpm-lock.yaml --format=json --output-file=osv-report.json
 docker compose -f docker-compose.yml config --quiet
 
-(cd agentd && go vet ./... && go test ./... && \
-  go run golang.org/x/vuln/cmd/govulncheck@latest ./... && make dist)
+(cd agentd && go vet ./... && go test -race ./... && \
+  go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./... && make dist)
 
 docker run --rm -v "$PWD:/repo:ro" \
   zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
   git /repo --no-banner --redact
 ```
 
-Build all five images locally at least once when their Dockerfiles change:
+Build all three Shepherd images locally at least once when their Dockerfiles change:
 
 ```bash
 docker build -f docker/Dockerfile.orchestrator -t shepherd-orchestrator:test .
 docker build -f docker/Dockerfile.node-runtime -t shepherd-node-runtime:test .
 docker build -f docker/Dockerfile.web -t shepherd-web:test .
-docker build -f docker/Dockerfile.caddy -t shepherd-caddy:test .
-docker build -f docker/Dockerfile.postgres -t shepherd-postgres:test .
 
-for image in shepherd-orchestrator shepherd-node-runtime shepherd-web shepherd-caddy shepherd-postgres; do
+TRIVY_IMAGE='aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e'
+for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
   docker run --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$PWD:/workspace:ro" \
-    aquasec/trivy:0.66.0 image --exit-code 1 \
+    "$TRIVY_IMAGE" image --exit-code 1 \
     --ignorefile /workspace/.trivyignore.yaml \
     --severity HIGH,CRITICAL "$image:test"
 done
+
+for image in \
+  'traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8' \
+  'postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55'; do
+  docker pull "$image"
+  docker run --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "$PWD:/workspace:ro" \
+    "$TRIVY_IMAGE" image --exit-code 1 \
+    --ignorefile /workspace/.trivyignore.yaml \
+    --severity HIGH,CRITICAL "$image"
+done
 ```
 
-The release gate rejects every unregistered High/Critical finding, including
-findings without an upstream fix. `.trivyignore.yaml` is a visible, expiring risk
-register for Debian findings that cannot yet be patched: suppressed findings stay in
-the repository, the workflow uploads an unfiltered report for every image/platform,
-and an overdue review automatically fails the build. Never add an entry for a finding
-with an available fixed version.
+The release gate rejects every unregistered High/Critical finding, including findings
+without an upstream fix. `.trivyignore.yaml` is a visible, expiring risk register:
+suppressed findings stay in the repository, the workflow uploads an unfiltered report
+for every image/platform, and an overdue review automatically fails the build. Never
+add a broad exception for a finding with an available fixed version. A path-scoped,
+short-lived exception is permitted only when reachability review shows the affected
+code is absent from the component's fixed purpose—as with the official PostgreSQL
+image's non-networked `gosu` entrypoint helper—and the statement documents why waiting
+for the upstream rebuild is safer than maintaining a wrapper image.
 
 Before a destructive migration or upgrade, create and verify a vault using
 [backup-and-recovery.md](backup-and-recovery.md). A release candidate is not ready if
@@ -115,8 +131,9 @@ set, or required capabilities become stricter.
 2. Push an annotated `v<version>` tag at that exact commit. Do not create the GitHub
    Release by hand.
 3. `.github/workflows/release-images.yml` verifies that the tag matches the repository
-   version and belongs to `main`, reruns the release gates, then builds and pushes all
-   images. After every candidate passes, the workflow also creates the immutable nested
+   version and belongs to `main`, reruns the release gates, scans the two upstream
+   infrastructure pins, then builds and pushes all three Shepherd images. After every
+   candidate passes, the workflow also creates the immutable nested
    Go module tag `agentd/v<version>` at the same commit.
    Go consumers import `github.com/billiondollarsolo/flock/agentd`; never move or
    recreate that tag.
@@ -131,14 +148,14 @@ version. A failed workflow may be rerun before consumers rely on its tags.
 
 ```bash
 docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
+docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>
 docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-web:<version>
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-caddy:<version>
-docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-postgres:<version>
 
 docker pull ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
+docker pull ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>
 docker pull ghcr.io/billiondollarsolo/shepherd-web:<version>
-docker pull ghcr.io/billiondollarsolo/shepherd-caddy:<version>
-docker pull ghcr.io/billiondollarsolo/shepherd-postgres:<version>
+docker pull 'traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8'
+docker pull 'postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55'
 ```
 
 Confirm that anonymous pulls work, both amd64 and arm64 manifests exist, provenance
@@ -169,6 +186,7 @@ notes.
 
 Database migrations follow expand/migrate/contract sequencing across the supported
 rollback window. Do not ship destructive contraction while the oldest supported
-application version may still be restored. Application, web, proxy, database base,
-and daemon artifacts remain immutable and version-coupled; external coding-agent CLIs are
-reported integrations and require their own matrix tests.
+application version may still be restored. Shepherd application and daemon artifacts
+remain immutable; exact upstream edge/database digests are version-coupled in the
+deployment bundle. External coding-agent CLIs are reported integrations and require
+their own matrix tests.

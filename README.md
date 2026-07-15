@@ -82,7 +82,7 @@ Do not run `docker compose down --volumes` unless you intend to erase the instal
 | Public VPS or normal DNS name                  | **Bundled TLS**     | Automatic HTTPS                      | Yes, with wildcard DNS                           |
 | Existing Caddy/nginx/Traefik/HAProxy/ingress   | **External TLS**    | Your proxy owns HTTPS                | Yes, with wildcard DNS                           |
 | Tailscale IP, Tailnet hostname, or trusted LAN | **Private HTTP**    | Network-dependent; browser sees HTTP | No-DNS bounded port pool or private wildcard DNS |
-| Local evaluation on the Docker host            | **Bundled TLS**     | Local Caddy certificate              | Yes on `preview.localhost`                       |
+| Local evaluation on the Docker host            | **Private HTTP**    | Loopback-only HTTP                   | Bounded local port pool                          |
 | Anything else                                  | **Custom topology** | Your decision and responsibility     | Only with isolated preview hostnames             |
 
 #### Recommended: public domain with automatic TLS
@@ -94,25 +94,26 @@ FLOCK_DOMAIN=shepherd.example.com
 PUBLIC_BASE_URL=https://shepherd.example.com
 FLOCK_ALLOWED_ORIGINS=https://shepherd.example.com
 FLOCK_PREVIEW_DOMAIN=preview.shepherd.example.com
+ACME_EMAIL=admin@example.com
 ```
 
 ```bash
-docker compose pull
-docker compose up -d --wait
+docker compose -f docker-compose.yml -f docker-compose.dns-cloudflare.yml pull
+docker compose -f docker-compose.yml -f docker-compose.dns-cloudflare.yml up -d --wait
 ```
 
-Caddy obtains and renews certificates. Expose `80/tcp` and `443/tcp`; keep the
+The official Traefik image obtains and renews the control-plane and wildcard Preview
+certificates. Expose `80/tcp` and `443/tcp`; keep the
 orchestrator, web, PostgreSQL, agentd, and Docker API off the public interface. Wildcard
-DNS for `*.preview.shepherd.example.com` is optional: without it, Shepherd works normally
-and Remote Preview stays disabled.
+DNS for `*.preview.shepherd.example.com` is optional: without it, omit the DNS override
+and Preview domain, run base Compose, and Remote Preview stays disabled.
 
 #### Optional DNS-01 with Cloudflare or Route53
 
-The bundled edge image includes pinned Cloudflare and Amazon Route53 Caddy modules.
-Use one of these profiles when neither inbound HTTP-01 nor TLS-ALPN-01 validation is
-viable, or when DNS-based ACME validation is otherwise preferred. DNS-01 manages only
-temporary ACME TXT records—it does **not** create the control-plane or wildcard Preview
-A/AAAA records shown above.
+The official Traefik image includes ACME DNS support through lego. A DNS profile is
+required for wildcard Remote Preview certificates and is also useful when inbound
+HTTP-01 validation is unavailable. DNS-01 manages only temporary ACME TXT records—it
+does **not** create the control-plane or wildcard Preview A/AAAA records shown above.
 
 For Cloudflare, create a zone-scoped API token with `Zone:Read` and `DNS:Edit`, store it
 in a file, then add the override:
@@ -133,12 +134,11 @@ docker compose \
 ```
 
 For Route53, use an IAM principal restricted to the hosted zone and ACME TXT-record
-changes. Store its two values in `secrets/route53_access_key_id` and
-`secrets/route53_secret_access_key`, set `AWS_REGION`, then use
+changes. Put it in the standard AWS shared-credentials format at
+`secrets/route53_credentials`, set `AWS_REGION`, then use
 `docker-compose.dns-route53.yml` in the same commands. On AWS, an instance/task role is
-preferred: set `FLOCK_DNS_PROVIDER=route53` in an operator override and omit static-key
-mounts so the standard AWS credential chain is used. Never put provider keys directly
-in `.env`.
+preferred: provide the normal AWS credential chain in an operator override and omit the
+static-key mount. Never put provider keys directly in `.env`.
 
 #### Existing reverse proxy or ingress
 
@@ -158,14 +158,15 @@ docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml pull
 docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml up -d --wait
 ```
 
-The bundled Caddy service is disabled. Your proxy routes:
+The bundled Traefik service is disabled. Your proxy routes:
 
 - `/api/*`, `/ws*`, and `/health*` to `http://127.0.0.1:18080`;
 - everything else on the main hostname to `http://127.0.0.1:18081`;
 - the optional wildcard Preview hostname to `http://127.0.0.1:18082`.
 
 Preserve the original `Host`, support WebSocket upgrades, and reproduce the security
-headers from `docker/Caddyfile`. The upstream ports bind to loopback by default.
+headers from `docker/traefik/dynamic-tls.yml`. The upstream ports bind to loopback by
+default.
 
 #### Direct Tailscale/LAN IP or hostname over HTTP
 
@@ -227,15 +228,24 @@ then use the same `docker-compose.private-http.yml` commands above.
 
 #### Local evaluation
 
-The untouched `.env.example` defaults to the bundled `https://localhost` topology:
+For a loopback-only evaluation, set the exact local origin in `.env`:
 
-```bash
-docker compose pull
-docker compose up -d --wait
+```dotenv
+FLOCK_DOMAIN=unused.invalid
+PUBLIC_BASE_URL=http://localhost:11010
+FLOCK_ALLOWED_ORIGINS=http://localhost:11010
+HTTP_HOST_PORT=11010
+FLOCK_ALLOW_INSECURE_HTTP=1
+FLOCK_PREVIEW_BACKEND=port-pool
 ```
 
-Open `https://localhost`. Caddy uses a local certificate, so your browser may ask you to
-trust its local CA.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.private-http.yml pull
+docker compose -f docker-compose.yml -f docker-compose.private-http.yml up -d --wait
+```
+
+Open `http://localhost:11010`. Loopback is a browser-trustworthy development origin and
+does not require a locally generated certificate.
 
 ### You own the deployment
 
@@ -409,12 +419,12 @@ Each release publishes provenance-attested, SBOM-enabled multi-platform images:
 - `ghcr.io/billiondollarsolo/shepherd-orchestrator`
 - `ghcr.io/billiondollarsolo/shepherd-node-runtime`
 - `ghcr.io/billiondollarsolo/shepherd-web`
-- `ghcr.io/billiondollarsolo/shepherd-caddy`
-- `ghcr.io/billiondollarsolo/shepherd-postgres`
 
 Production Compose pins control-plane `FLOCK_VERSION` separately from
 `FLOCK_NODE_RUNTIME_VERSION`; avoid mutable `latest` tags. Public image names use the
-canonical `shepherd-*` product namespace.
+canonical `shepherd-*` product namespace. The database and edge use digest-pinned
+official PostgreSQL and Traefik images directly; release CI scans those exact upstream
+manifests rather than republishing wrappers.
 
 ## Local development
 
@@ -471,10 +481,10 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.5.1.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.5.2.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, edge proxy, database
-base, web app, and preferred node daemon are released together; the UI reports when a node daemon
-is compatible, recommended to upgrade, or required to upgrade.
+pins, web app, and preferred node daemon are validated together; the UI reports when a
+node daemon is compatible, recommended to upgrade, or required to upgrade.
 
 Shepherd was previously named Flock. The repository and public container images now use
 the `shepherd` name, while compatibility-sensitive services, commands, environment
