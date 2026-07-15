@@ -444,8 +444,10 @@ describe('production node and stack lifecycle', () => {
 
   it('ships a bundle-validated, backup-gated, runtime-aware upgrade command', () => {
     const script = read(upgradeScript);
-    expect(script).toMatch(/vault create/);
-    expect(script).toMatch(/vault verify/);
+    expect(script).toMatch(/vault-cli\.js create/);
+    expect(script).toMatch(/vault-cli\.js verify/);
+    expect(script).toMatch(/orchestrator sh -c/);
+    expect(script).not.toMatch(/orchestrator sh -lc[\s\S]*vault-cli/);
     expect(script).toMatch(/FLOCK_VERSION/);
     expect(script).not.toMatch(/BROWSER_IMAGE=/);
     expect(script).toMatch(/\/ready/);
@@ -453,7 +455,11 @@ describe('production node and stack lifecycle', () => {
     expect(script).toMatch(/gh attestation verify/);
     expect(script).toMatch(/FLOCK_NODE_RUNTIME_VERSION/);
     expect(script).toMatch(/--force-stop-local-sessions/);
-    expect(script).toMatch(/flock-agentd inspect/);
+    expect(script).toMatch(/flock-agentd inspect --socket \/run\/flock-agentd\/control\.sock/);
+    expect(script).toMatch(/docker compose ps --all --services/);
+    expect(script).toMatch(/com\.docker\.compose\.project\.config_files/);
+    expect(script).toMatch(/\.sessions\[\]\?\.id/);
+    expect(script).not.toMatch(/cp -a "\$DEPLOY\/scripts\/\." scripts\//);
     expect(script).toMatch(/--acknowledge-node-policy-change/);
     expect(script).toMatch(/docker compose pull "\$\{pull\[@\]\}"/);
     expect(script).not.toMatch(/docker compose down -v/);

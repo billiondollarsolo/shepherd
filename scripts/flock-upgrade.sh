@@ -43,6 +43,33 @@ done
 [[ -f .env ]] || { echo "Run from the Shepherd deployment directory containing .env." >&2; exit 1; }
 for command in docker curl jq sha256sum tar; do command -v "$command" >/dev/null || { echo "$command is required." >&2; exit 1; }; done
 docker compose version >/dev/null
+
+# Compose does not remember `-f` flags across commands. Recover the exact active
+# file set from a running container so an upgrade cannot silently drop a TLS or
+# private-HTTP override. An explicit shell/.env COMPOSE_FILE always wins.
+INFERRED_COMPOSE_FILE=''
+configured_compose_file="${COMPOSE_FILE:-$(sed -n 's/^COMPOSE_FILE=//p' .env | tail -n1)}"
+if [[ -n "$configured_compose_file" ]]; then
+  export COMPOSE_FILE="$configured_compose_file"
+else
+  compose_container="$(docker compose ps --all -q orchestrator 2>/dev/null | head -n1)"
+  if [[ -n "$compose_container" ]]; then
+    compose_labels="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$compose_container")"
+    if [[ -n "$compose_labels" && "$compose_labels" != '<no value>' ]]; then
+      candidate="${compose_labels//,/:}"
+      valid=1
+      IFS=: read -r -a candidate_files <<<"$candidate"
+      for compose_file in "${candidate_files[@]}"; do
+        [[ -f "$compose_file" ]] || valid=0
+      done
+      if ((valid == 1)); then
+        INFERRED_COMPOSE_FILE="$candidate"
+        export COMPOSE_FILE="$candidate"
+        echo "Using active Compose files recovered from the running deployment." >&2
+      fi
+    fi
+  fi
+fi
 docker compose config --quiet
 
 OLD_VERSION="$(sed -n 's/^FLOCK_VERSION=//p' .env | tail -n1)"
@@ -54,6 +81,7 @@ DB_MIGRATION_STARTED=0
 COMPLETED=0
 ENV_ROLLBACK=''
 DEPLOY_ROLLBACK=''
+TARGET_UPGRADE_SCRIPT=''
 on_exit() {
   code=$?
   trap - EXIT
@@ -80,6 +108,11 @@ on_exit() {
       echo "Upgrade failed after database migration may have started. Data and rollback metadata were preserved; verify schema compatibility before starting older images." >&2
     fi
   fi
+  # Never replace the script while Bash is still reading it. Install the next
+  # release's helper from this already-parsed EXIT trap only after success.
+  if ((code == 0 && COMPLETED == 1)) && [[ -f "$TARGET_UPGRADE_SCRIPT" ]]; then
+    cp -p "$TARGET_UPGRADE_SCRIPT" scripts/flock-upgrade.sh
+  fi
   rm -rf "$WORK"
   exit "$code"
 }
@@ -104,6 +137,7 @@ fi
 tar -xzf "$archive" -C "$WORK"
 DEPLOY="$WORK/shepherd-$TARGET"
 [[ -d "$DEPLOY" ]] || { echo "deployment bundle has an unexpected root." >&2; exit 1; }
+TARGET_UPGRADE_SCRIPT="$DEPLOY/scripts/flock-upgrade.sh"
 (cd "$DEPLOY" && sha256sum -c SHA256SUMS)
 jq -e --arg version "$TARGET" '
   .schemaVersion == 1 and .topologyGeneration == 2 and
@@ -113,9 +147,8 @@ jq -e --arg version "$TARGET" '
 docker compose --env-file .env -f "$DEPLOY/docker-compose.yml" config --quiet
 
 HAS_RUNTIME=0
-# Inspect created project containers, not only the current Compose definition.
-# An operator commonly pulls newer deployment files before running this helper;
-# a newly defined service is still a legacy topology until its container exists.
+# A service newly introduced by target files is not an installed runtime until
+# its project container actually exists.
 if docker compose ps --all --services | grep -qx node-runtime; then HAS_RUNTIME=1; fi
 LEGACY=$((1 - HAS_RUNTIME))
 CURRENT_RUNTIME_VERSION="$(sed -n 's/^FLOCK_NODE_RUNTIME_VERSION=//p' .env | tail -n1)"
@@ -127,15 +160,37 @@ RUNTIME_FACTS=''
 EXPECTED_NODE_ID=''
 EXPECTED_CONTROL_DIGEST=''
 if ((HAS_RUNTIME == 1)); then
-  if RUNTIME_FACTS="$(docker compose exec -T node-runtime flock-agentd inspect 2>/dev/null)"; then
+  if RUNTIME_FACTS="$(docker compose exec -T node-runtime flock-agentd inspect --socket /run/flock-agentd/control.sock 2>/dev/null)"; then
+    RUNTIME_FACTS="$(jq '.sessions //= []' <<<"$RUNTIME_FACTS")"
     jq -e '.nodeId and .daemonVersion and (.protocolVersion | type == "number") and (.capabilities | type == "array") and (.sessions | type == "array")' <<<"$RUNTIME_FACTS" >/dev/null
+  else
+    # v0.5.0 inspect could consume a replayed status event before its list
+    # response. Preserve a safe upgrade path: authenticate the daemon, read its
+    # identity/version from the protected runtime container, and use the current
+    # trusted control-plane policy plus the conservative DB session inventory.
+    docker compose exec -T node-runtime flock-agentd probe --socket /run/flock-agentd/control.sock
+    runtime_version="$(docker compose exec -T node-runtime flock-agentd version | tr -d '\r\n')"
+    runtime_node="$(docker compose exec -T node-runtime cat /run/flock-agentd/node-id | tr -d '\r\n')"
+    current_policy="$(docker compose exec -T orchestrator cat /app/agentd/COMPATIBILITY.json)"
+    runtime_protocol="$(jq -r '.supportedProtocolVersions | max' <<<"$current_policy")"
+    runtime_capabilities="$(jq -c '.requiredCapabilities' <<<"$current_policy")"
+    db_sessions="$(docker compose exec -T postgres sh -lc \
+      'psql -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select id from agent_sessions where closed_at is null order by id"' | \
+      jq -Rsc 'split("\n") | map(select(length > 0) | {id: ., kind: "unknown", cwd: "unknown"})')"
+    RUNTIME_FACTS="$(jq -n --arg node "$runtime_node" --arg version "$runtime_version" \
+      --argjson protocol "$runtime_protocol" --argjson capabilities "$runtime_capabilities" \
+      --argjson sessions "$db_sessions" \
+      '{nodeId:$node, daemonVersion:$version, protocolVersion:$protocol, capabilities:$capabilities, sessions:$sessions}')"
+    echo "Authenticated runtime inspection used the v0.5.0 compatibility fallback." >&2
+  fi
+  if [[ -n "$RUNTIME_FACTS" ]]; then
     CURRENT_RUNTIME_VERSION="$(jq -r '.daemonVersion' <<<"$RUNTIME_FACTS")"
     [[ "$CURRENT_RUNTIME_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]] || {
       echo "The authenticated runtime reported an invalid version." >&2; exit 1;
     }
     EXPECTED_NODE_ID="$(jq -r '.nodeId' <<<"$RUNTIME_FACTS")"
     EXPECTED_CONTROL_DIGEST="$(docker compose exec -T node-runtime cat /run/flock-agentd/control.key | sha256sum | awk '{print $1}')"
-    mapfile -t ACTIVE_IDS < <(jq -r '.sessions[].id' <<<"$RUNTIME_FACTS")
+    mapfile -t ACTIVE_IDS < <(jq -r '.sessions[]?.id' <<<"$RUNTIME_FACTS")
   else
     echo "Cannot authenticate the local runtime; refusing a blind upgrade." >&2; exit 1
   fi
@@ -216,9 +271,11 @@ if ((SKIP_BACKUP == 0)); then
   [[ -f "$PASSWORD_FILE" ]] || { echo "Set FLOCK_VAULT_PASSWORD_FILE or explicitly use --skip-backup." >&2; exit 1; }
   mode="$(stat -c %a "$PASSWORD_FILE")"; [[ "$mode" == 600 || "$mode" == 400 ]] || { echo "Vault password file must be 0600 or 0400." >&2; exit 1; }
   BACKUP="/backups/pre-upgrade-$OLD_VERSION-to-$TARGET-$STAMP.flockvault"
-  docker compose exec -T orchestrator sh -lc \
+  # A login shell rewrites PATH in Debian and hides the image's pinned
+  # PostgreSQL 16 client directory. Preserve the image environment with `sh -c`.
+  docker compose exec -T orchestrator sh -c \
     "FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js create '$BACKUP' 3<&0" < "$PASSWORD_FILE"
-  docker compose exec -T orchestrator sh -lc \
+  docker compose exec -T orchestrator sh -c \
     "FLOCK_VAULT_PASSWORD_FD=3 node /app/apps/orchestrator/dist/operations/vault-cli.js verify '$BACKUP' 3<&0" < "$PASSWORD_FILE"
 else
   BACKUP='skipped by operator'; echo "WARNING: proceeding without a verified database vault." >&2
@@ -231,19 +288,25 @@ MUTATED=1
 cp -a "$DEPLOY"/docker-compose*.yml .
 mkdir -p docker scripts
 cp -a "$DEPLOY/docker/." docker/
-cp -a "$DEPLOY/scripts/." scripts/
+for source in "$DEPLOY"/scripts/*; do
+  [[ "$(basename "$source")" == flock-upgrade.sh ]] && continue
+  cp -a "$source" scripts/
+done
 cp -a "$DEPLOY/release-manifest.json" .
 
 tmp="$(mktemp .env.upgrade.XXXXXX)"
-awk -v control="$TARGET" -v runtime="${CURRENT_RUNTIME_VERSION:-$TARGET}" -v runtime_change="$RUNTIME_CHANGE" '
+awk -v control="$TARGET" -v runtime="${CURRENT_RUNTIME_VERSION:-$TARGET}" \
+  -v runtime_change="$RUNTIME_CHANGE" -v compose_file="$INFERRED_COMPOSE_FILE" '
   /^FLOCK_VERSION=/ { print "FLOCK_VERSION=" control; control_seen=1; next }
   /^FLOCK_NODE_RUNTIME_VERSION=/ {
     print "FLOCK_NODE_RUNTIME_VERSION=" (runtime_change ? control : runtime); runtime_seen=1; next
   }
+  /^COMPOSE_FILE=/ { compose_seen=1 }
   { print }
   END {
     if (!control_seen) print "FLOCK_VERSION=" control
     if (!runtime_seen) print "FLOCK_NODE_RUNTIME_VERSION=" (runtime_change ? control : runtime)
+    if (compose_file != "" && !compose_seen) print "COMPOSE_FILE=" compose_file
   }
 ' .env > "$tmp"
 chmod --reference=.env "$tmp"; mv -f "$tmp" .env
@@ -255,14 +318,26 @@ docker compose pull "${pull[@]}"
 if ((LEGACY == 1)); then docker compose stop orchestrator; fi
 if ((RUNTIME_CHANGE == 1)); then
   docker compose up -d --no-build --wait node-runtime
-  docker compose exec -T node-runtime flock-agentd probe
+  docker compose exec -T node-runtime flock-agentd probe --socket /run/flock-agentd/control.sock
 fi
 DB_MIGRATION_STARTED=1
 docker compose up -d --no-build --wait postgres orchestrator web caddy
 docker compose exec -T orchestrator node -e \
   "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-POST_RUNTIME_FACTS="$(docker compose exec -T node-runtime flock-agentd inspect)"
-jq -e --arg node "$EXPECTED_NODE_ID" '.nodeId == $node and .daemonVersion and .protocolVersion and .capabilities' <<<"$POST_RUNTIME_FACTS" >/dev/null
+if POST_RUNTIME_FACTS="$(docker compose exec -T node-runtime flock-agentd inspect --socket /run/flock-agentd/control.sock 2>/dev/null)"; then
+  POST_RUNTIME_FACTS="$(jq '.sessions //= []' <<<"$POST_RUNTIME_FACTS")"
+  jq -e --arg node "$EXPECTED_NODE_ID" \
+    '.nodeId == $node and .daemonVersion and .protocolVersion and .capabilities' \
+    <<<"$POST_RUNTIME_FACTS" >/dev/null
+else
+  # The authenticated probe plus protected identity check covers v0.5.0's
+  # status-replay/inspect race without weakening the post-upgrade gate.
+  docker compose exec -T node-runtime flock-agentd probe --socket /run/flock-agentd/control.sock
+  POST_NODE_ID="$(docker compose exec -T node-runtime cat /run/flock-agentd/node-id | tr -d '\r\n')"
+  [[ "$POST_NODE_ID" == "$EXPECTED_NODE_ID" ]] || {
+    echo "Local runtime identity changed unexpectedly." >&2; exit 1;
+  }
+fi
 POST_CONTROL_DIGEST="$(docker compose exec -T node-runtime cat /run/flock-agentd/control.key | sha256sum | awk '{print $1}')"
 [[ "$POST_CONTROL_DIGEST" == "$EXPECTED_CONTROL_DIGEST" ]] || {
   echo "Local runtime control credential changed unexpectedly." >&2; exit 1;

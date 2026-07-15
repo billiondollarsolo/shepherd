@@ -41,7 +41,10 @@ func probe(args []string) {
 // inspect emits the authenticated daemon/session facts needed by upgrade
 // preflight without exposing the shared credential or requiring application login.
 func inspect(args []string) {
-	connection, challenge, nodeID := authenticatedProbe(parseProbeConfig("inspect", args), "control")
+	// Inspect is a one-shot request, so use an operation connection. A control
+	// connection immediately receives replayed status events; those can race the
+	// list response and made `inspect` fail whenever a live session had status.
+	connection, challenge, nodeID := authenticatedProbe(parseProbeConfig("inspect", args), "operation")
 	defer connection.Close()
 	if err := proto.WriteControl(connection, proto.Control{Op: "list"}); err != nil {
 		fatal("inspect list", err)
@@ -50,13 +53,17 @@ func inspect(args []string) {
 	if err != nil || sessions.Op != "sessions" {
 		fatal("inspect list", fmt.Errorf("daemon did not return its session inventory"))
 	}
+	inventory := sessions.Sessions
+	if inventory == nil {
+		inventory = []proto.SessionInfo{}
+	}
 	result := struct {
 		NodeID          string              `json:"nodeId"`
 		DaemonVersion   string              `json:"daemonVersion"`
 		ProtocolVersion int                 `json:"protocolVersion"`
 		Capabilities    []string            `json:"capabilities"`
 		Sessions        []proto.SessionInfo `json:"sessions"`
-	}{nodeID, challenge.DaemonVersion, proto.ProtocolVersion, challenge.Capabilities, sessions.Sessions}
+	}{nodeID, challenge.DaemonVersion, proto.ProtocolVersion, challenge.Capabilities, inventory}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		fatal("inspect output", err)
 	}
