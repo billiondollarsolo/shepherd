@@ -213,11 +213,13 @@ export function AddSessionDialog(): JSX.Element {
   // first offered agent it DOES have (terminal needs none, so there's always one).
   useEffect(() => {
     if (!detectionKnown) return;
-    const ok = (a: AgentType): boolean =>
-      REQUIRED_BIN[a] === null || detected.has(REQUIRED_BIN[a] as string);
-    if (ok(agentType)) return;
-    const next = OFFERED_AGENTS.find(ok);
+    // Reuse agentAvailable so the same exemptions (e.g. Antigravity pre-detection)
+    // apply — otherwise a manual pick of an as-yet-undetected agent gets bounced
+    // straight back to the first detected one.
+    if (agentAvailable(agentType)) return;
+    const next = OFFERED_AGENTS.find(agentAvailable);
     if (next && next !== agentType) setAgentType(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detectionKnown, detected, agentType]);
 
   async function onSubmit(e: FormEvent): Promise<void> {
