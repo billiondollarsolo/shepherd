@@ -7,12 +7,29 @@ import { TooltipProvider } from '../../components/ui';
 const install = vi.fn();
 const configureDocker = vi.fn();
 let response: NodeCapabilitiesResponse;
+let latestVersion: { latest: string | null; checkedAt: string } | undefined;
 
 vi.mock('../../data/queries', () => ({
   useNodeCapabilities: () => ({ data: response, isLoading: false }),
   useInstallNodeTool: () => ({ isPending: false, mutateAsync: install }),
   useConfigureNodeDocker: () => ({ isPending: false, mutateAsync: configureDocker }),
+  useLatestVersion: () => ({ data: latestVersion }),
 }));
+
+const BUNDLED_REASON = 'The bundled local runtime is immutable; update Shepherd to change its bundled tools.';
+
+/** Rewrite the fixture so every tool reports the immutable bundled-runtime reason. */
+function bundledRuntime(): NodeCapabilitiesResponse {
+  const base = capabilities();
+  return {
+    ...base,
+    tools: base.tools.map((tool) => ({
+      ...tool,
+      installSupported: false,
+      installReason: BUNDLED_REASON,
+    })),
+  };
+}
 
 import { NodeCapabilitiesPanel } from './NodeCapabilitiesPanel';
 
@@ -56,6 +73,7 @@ function renderPanel(): void {
 describe('NodeCapabilitiesPanel', () => {
   beforeEach(() => {
     response = capabilities();
+    latestVersion = { latest: null, checkedAt: '' };
     install.mockReset();
     configureDocker.mockReset();
   });
@@ -86,6 +104,31 @@ describe('NodeCapabilitiesPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable for agents' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Docker daemon access is root-equivalent');
     expect(configureDocker).not.toHaveBeenCalled();
+  });
+
+  it('shows the bundled-runtime version + update command instead of a dead-end warning', () => {
+    response = bundledRuntime();
+    latestVersion = { latest: null, checkedAt: '' };
+    renderPanel();
+
+    const card = screen.getByTestId('bundled-runtime-card');
+    expect(card).toHaveTextContent('Bundled runtime');
+    expect(card).toHaveTextContent('docker compose pull && docker compose up -d');
+    // No live "update available" claim when the latest version is unknown.
+    expect(card).not.toHaveTextContent('Update available');
+    expect(card).not.toHaveTextContent('Up to date');
+    // The old cryptic banner is gone.
+    expect(screen.queryByText(/Managed installs are unavailable/)).toBeNull();
+  });
+
+  it('flags an available update when a newer release exists', () => {
+    response = bundledRuntime();
+    latestVersion = { latest: '999.0.0', checkedAt: '' };
+    renderPanel();
+
+    expect(screen.getByTestId('bundled-runtime-card')).toHaveTextContent(
+      'Update available · v999.0.0',
+    );
   });
 
   it('disables managed actions when node preparation is too old', () => {

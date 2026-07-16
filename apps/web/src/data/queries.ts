@@ -83,6 +83,7 @@ import { getNodeFsTree, makeNodeDir, readNodeFile, writeNodeFile } from './treeA
 import { getAgentdStatus, type AgentdHealth } from './treeApi';
 import { getNodeStack, type NodeStack } from './treeApi';
 import { getNodeInfo, getNodePreflight } from './treeApi';
+import { getLatestVersion, type LatestVersion } from './treeApi';
 import type { NodeInfo, NodePreflightResponse } from '@flock/shared';
 import { ApiError } from '../routes/api';
 import { toast } from '../components/ui/sonner';
@@ -429,6 +430,21 @@ export function useNodeCapabilities(
     enabled: nodeId != null,
     queryFn: () => getNodeCapabilities(nodeId as string),
     staleTime: 10_000,
+    retry: false,
+  });
+}
+
+/**
+ * Best-effort latest-release lookup (server-proxied) for the bundled-runtime
+ * update panel. Cached an hour, never retries, and resolves to `latest: null`
+ * when the check can't run — callers just omit the "update available" badge.
+ */
+export function useLatestVersion(): UseQueryResult<LatestVersion> {
+  return useQuery({
+    queryKey: ['latest-version'],
+    queryFn: getLatestVersion,
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: false,
   });
 }

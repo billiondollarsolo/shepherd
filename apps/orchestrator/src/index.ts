@@ -1399,12 +1399,48 @@ export async function main(): Promise<void> {
     }
   };
 
+  // Best-effort "latest released version" check for the bundled-runtime update
+  // panel. Cached 1h; 4s network budget; any failure (offline / air-gapped /
+  // rate-limited) degrades to `{ latest: null }` so the UI just omits the badge.
+  let latestVersionCache: { latest: string | null; checkedAt: string; expiresAt: number } | null =
+    null;
+  const latestVersion = async (): Promise<{ latest: string | null; checkedAt: string }> => {
+    const now = Date.now();
+    if (latestVersionCache && latestVersionCache.expiresAt > now) {
+      return { latest: latestVersionCache.latest, checkedAt: latestVersionCache.checkedAt };
+    }
+    let latest: string | null = null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(
+        'https://api.github.com/repos/billiondollarsolo/shepherd/releases/latest',
+        {
+          headers: { accept: 'application/vnd.github+json', 'user-agent': 'shepherd-orchestrator' },
+          signal: controller.signal,
+        },
+      );
+      clearTimeout(timer);
+      if (res.ok) {
+        const body = (await res.json()) as { tag_name?: unknown };
+        const tag = typeof body.tag_name === 'string' ? body.tag_name.replace(/^v/, '') : '';
+        latest = /^\d+\.\d+\.\d+/.test(tag) ? tag : null;
+      }
+    } catch {
+      latest = null;
+    }
+    const checkedAt = new Date().toISOString();
+    latestVersionCache = { latest, checkedAt, expiresAt: now + 60 * 60 * 1000 };
+    return { latest, checkedAt };
+  };
+
   // US-39: install the global default-DENY surface guard so ALL UI/API/WS
   // require auth (NFR-SEC6); the hook endpoint stays the per-session-token
   // exception (spec §8.1). The AuthService satisfies the `getUserBySession`
   // seam directly. TLS is terminated by the upstream Traefik proxy (NFR-SEC1).
   const app = buildServer({
     auth,
+    latestVersion,
     loginThrottle,
     authDeployment: originPolicy.deployment,
     browserOrigins: originPolicy.allowedOrigins,

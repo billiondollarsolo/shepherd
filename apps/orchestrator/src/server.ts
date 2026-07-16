@@ -125,6 +125,13 @@ export interface BuildServerDeps {
   /** Read-only preparation/workspace/tool readiness for one execution node. */
   nodePreflight?: (nodeId: string) => Promise<unknown | null>;
   /**
+   * Best-effort "latest released Shepherd version" (from the public GitHub
+   * releases), used by the bundled-runtime panel to show whether an update is
+   * available. Same-origin because the app CSP forbids the browser calling
+   * GitHub directly. Degrades to `{ latest: null }` when offline/air-gapped.
+   */
+  latestVersion?: () => Promise<{ latest: string | null; checkedAt: string }>;
+  /**
    * Terminate a single split-pane PTY by its id (`<sessionId>:shell[-N]`). When
    * provided, `DELETE /api/pty/:id` kills that throwaway shell on the daemon so
    * closing a split pane actually ENDS its terminal (instead of detaching and
@@ -427,6 +434,14 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
   if (deps.agentdHealth) {
     const health = deps.agentdHealth;
     app.get('/api/agentd/status', async () => health());
+  }
+
+  // Best-effort latest-release lookup for the bundled-runtime update panel
+  // (cookie-authed via the surface guard). Never throws: the dep swallows
+  // network errors and returns `{ latest: null }`.
+  if (deps.latestVersion) {
+    const latestVersion = deps.latestVersion;
+    app.get('/api/system/latest-version', async () => latestVersion());
   }
 
   // Per-node host metrics + detected agents (cookie-authed; node-info dialog).

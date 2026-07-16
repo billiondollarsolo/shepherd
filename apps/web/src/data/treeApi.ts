@@ -173,6 +173,17 @@ export function getNodeCapabilities(nodeId: string): Promise<NodeCapabilitiesRes
   });
 }
 
+/** Best-effort latest released version (server-proxied; `latest` is null when unknown). */
+export const LatestVersionSchema = z.object({
+  latest: z.string().nullable(),
+  checkedAt: z.string(),
+});
+export type LatestVersion = z.infer<typeof LatestVersionSchema>;
+
+export function getLatestVersion(): Promise<LatestVersion> {
+  return apiRequest('/api/system/latest-version', { schema: LatestVersionSchema });
+}
+
 export function installNodeTool(
   nodeId: string,
   tool: NodeToolId,

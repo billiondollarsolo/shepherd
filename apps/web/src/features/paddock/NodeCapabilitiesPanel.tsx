@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { ExternalLink, Loader2, Package, ShieldAlert, ShieldCheck, Wrench } from 'lucide-react';
+import {
+  Box,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Package,
+  ShieldAlert,
+  ShieldCheck,
+  Wrench,
+} from 'lucide-react';
 import { NODE_TOOL_CATALOG, type NodeDockerAction, type NodeToolCapability } from '@flock/shared';
 
 import {
@@ -15,8 +25,10 @@ import {
 import {
   useConfigureNodeDocker,
   useInstallNodeTool,
+  useLatestVersion,
   useNodeCapabilities,
 } from '../../data/queries';
+import { FLOCK_VERSION } from '../../version';
 
 type PendingAction =
   | { kind: 'tool'; tool: NodeToolCapability }
@@ -24,6 +36,81 @@ type PendingAction =
 
 function toolDocumentation(id: NodeToolCapability['id']): string {
   return NODE_TOOL_CATALOG.find((tool) => tool.id === id)?.documentationUrl ?? '#';
+}
+
+/** True when `latest` is a strictly higher major.minor.patch than `current`. */
+function isNewerVersion(latest: string, current: string): boolean {
+  const parts = (v: string): number[] =>
+    (v.split('-')[0] ?? '').split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const [a, b] = [parts(latest), parts(current)];
+  for (let i = 0; i < 3; i += 1) {
+    const [x, y] = [a[i] ?? 0, b[i] ?? 0];
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+const UPDATE_COMMAND = 'docker compose pull && docker compose up -d';
+
+/**
+ * The bundled/local runtime can't do per-tool managed installs — its toolset is
+ * baked into the Shepherd image and moves with the app. Instead of a dead-end
+ * warning, show what version is running, whether a newer release exists, and the
+ * one command that updates it.
+ */
+function BundledRuntimeCard(): JSX.Element {
+  const latest = useLatestVersion();
+  const [copied, setCopied] = useState(false);
+  const latestVersion = latest.data?.latest ?? null;
+  const updateAvailable = latestVersion != null && isNewerVersion(latestVersion, FLOCK_VERSION);
+
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(UPDATE_COMMAND);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — the command stays visible to copy by hand */
+    }
+  };
+
+  return (
+    <div
+      data-testid="bundled-runtime-card"
+      className="rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-flock-surface-2">
+          <Box className="size-4 text-flock-ink-muted" />
+        </span>
+        <h3 className="text-sm font-semibold text-flock-ink-primary">Bundled runtime</h3>
+        <Badge variant="neutral">v{FLOCK_VERSION}</Badge>
+        {updateAvailable ? (
+          <Badge variant="warning">Update available · v{latestVersion}</Badge>
+        ) : latestVersion != null ? (
+          <Badge variant="success">Up to date</Badge>
+        ) : null}
+      </div>
+      <p className="mt-2 max-w-2xl text-xs text-flock-ink-muted">
+        This node&rsquo;s coding tools ship inside Shepherd and update together, so per-tool installs
+        aren&rsquo;t available here. Update Shepherd to change its bundled tools.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <code className="rounded-md border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1 font-mono text-2xs text-flock-ink-primary">
+          {UPDATE_COMMAND}
+        </code>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void copy()}
+          aria-label="Copy update command"
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function dockerActionTitle(action: NodeDockerAction): string {
@@ -44,6 +131,10 @@ export function NodeCapabilitiesPanel({ nodeId }: { nodeId: string }): JSX.Eleme
   const sharedPreparationReason = data?.tools.find(
     (tool) => !tool.installSupported && tool.installReason,
   )?.installReason;
+  // The bundled/local runtime is immutable (baked into the image); other
+  // install-unsupported reasons (e.g. an outdated node preparation) keep the
+  // plain banner. Only the bundled case gets the version + update-command card.
+  const isBundledRuntime = sharedPreparationReason?.includes('bundled local runtime is immutable');
 
   const runPending = async (): Promise<void> => {
     if (!pending) return;
@@ -78,7 +169,9 @@ export function NodeCapabilitiesPanel({ nodeId }: { nodeId: string }): JSX.Eleme
         </div>
       ) : (
         <div className="space-y-4">
-          {sharedPreparationReason ? (
+          {isBundledRuntime ? (
+            <BundledRuntimeCard />
+          ) : sharedPreparationReason ? (
             <div className="rounded-lg border border-status-awaiting/30 bg-status-awaiting/5 px-3 py-2 text-xs text-status-awaiting">
               Managed installs are unavailable. {sharedPreparationReason}
             </div>
