@@ -180,7 +180,7 @@ runtime_exec() {
 }
 agent_version() {
   local agent="$1" bin version status
-  case "$agent" in claude|codex|opencode|gemini|grok|aider|cursor-agent|amp) ;;
+  case "$agent" in claude|codex|opencode|agy|gemini|grok|aider|cursor-agent|amp) ;;
     *) die "unsupported agent name" ;;
   esac
   bin="$(runtime_exec sh -c 'command -v "$1"' sh "$agent")"
@@ -218,6 +218,8 @@ install_agent() {
     claude) run_installer https://claude.ai/install.sh latest ;;
     codex) run_installer https://chatgpt.com/codex/install.sh ;;
     opencode) run_installer https://opencode.ai/install --no-modify-path ;;
+    # Antigravity CLI (binary `agy`) — installs to the runtime user's ~/.local/bin.
+    agy) run_installer https://antigravity.google/cli/install.sh ;;
     gemini)
       command -v npm >/dev/null || die "Gemini CLI installation requires Node.js and npm"
       runtime_exec timeout --kill-after=15s 540s \
@@ -266,7 +268,7 @@ case "${1:-}" in
     echo "node-admin-v2 agents docker inventory"
     ;;
   inventory)
-    for agent in claude codex opencode gemini grok aider cursor-agent amp; do
+    for agent in claude codex opencode agy grok aider cursor-agent amp; do
       if output="$(agent_version "$agent" 2>/dev/null)"; then
         IFS=$'\t' read -r path version <<<"$output"
         printf 'tool\t%s\t%s\t%s\n' "$agent" "$path" "$version"
@@ -510,7 +512,7 @@ chmod 0440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE" >/dev/null
 
 if [[ "$INSTALL_AGENTS" == 1 ]]; then
-  INSTALL_AGENT_LIST=(claude codex opencode gemini grok aider cursor-agent amp)
+  INSTALL_AGENT_LIST=(claude codex opencode agy grok aider cursor-agent amp)
 fi
 for agent in "${INSTALL_AGENT_LIST[@]}"; do
   echo "Installing latest $agent as $RUNTIME_USER..."
