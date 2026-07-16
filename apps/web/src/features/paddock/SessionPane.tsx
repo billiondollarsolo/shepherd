@@ -10,6 +10,7 @@ import {
   Command,
   GitBranch,
   LayoutGrid,
+  MessageSquare,
   PanelBottom,
   PanelRight,
   SquareTerminal,
@@ -20,6 +21,8 @@ import { statusLabel, type AgentAuthority, type AgentType, type Session } from '
 import { RightPanel } from './RightPanel';
 import { RespondBar } from './RespondBar';
 import { StageLayout } from '../shell/StageLayout';
+import { ChatPanel } from '../chat/ChatPanel';
+import { isChatCapable } from '../chat/chatCapable';
 import { handoffSession } from '../../data/treeApi';
 import {
   Badge,
@@ -93,6 +96,44 @@ function BranchChip({ sessionId }: { sessionId: string }): JSX.Element | null {
   );
 }
 
+/** Segmented Terminal ⇄ Chat switch for the session stage (chat-capable agents). */
+function StageViewToggle(): JSX.Element {
+  const stageView = usePaddock((s) => s.stageView);
+  const setStageView = usePaddock((s) => s.setStageView);
+  const options = [
+    { v: 'terminal' as const, label: 'Terminal', Icon: SquareTerminal },
+    { v: 'chat' as const, label: 'Chat', Icon: MessageSquare },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Session view"
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-2 p-0.5"
+    >
+      {options.map(({ v, label, Icon }) => {
+        const active = stageView === v;
+        return (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => setStageView(v)}
+            className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
+              active
+                ? 'bg-flock-surface-0 text-flock-ink-primary shadow-flock-sm'
+                : 'text-flock-ink-muted hover:text-flock-ink-primary'
+            }`}
+          >
+            <Icon className="size-3.5" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Header({ session }: { session: Session }): JSX.Element {
   // Terminate is destructive → go through the confirm dialog (same as the grid),
   // never a direct mutate.
@@ -151,6 +192,8 @@ function Header({ session }: { session: Session }): JSX.Element {
           {session.id.slice(0, 8)}
         </code>
       </div>
+
+      {isChatCapable(session.agentType) ? <StageViewToggle /> : null}
 
       <Badge variant={STATUS_VARIANT[liveStatus] ?? 'neutral'} className="ml-1">
         <StatusDot status={liveStatus} />
@@ -291,6 +334,7 @@ export function SessionPane(): JSX.Element {
 
   const rightOpen = usePaddock((s) => s.rightOpen);
   const chrome = usePaddock((s) => s.chrome);
+  const stageView = usePaddock((s) => s.stageView);
   const assistivePanels = usePaddock((s) => s.assistivePanels);
   const closeTools = usePaddock((s) => s.closeTools);
   // If the selected agent vanishes, leave tools chrome so we don't strand UI.
@@ -359,6 +403,10 @@ export function SessionPane(): JSX.Element {
   if (open.length === 0) return <EmptyState />;
   const panelSession = stageSession;
   const toolsOpen = chrome === 'tools' && rightOpen && panelSession != null;
+  // Chat is a first-class alternative to the terminal for agents that produce a
+  // transcript; the terminal stays the floor (always mounted, kept alive).
+  const stageChatCapable = isChatCapable(stageSession?.agentType);
+  const chatActive = stageChatCapable && stageView === 'chat';
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-chrome={chrome}>
@@ -372,8 +420,21 @@ export function SessionPane(): JSX.Element {
         {/* Inset the always-on terminal as a subtly elevated card: a surface-0
             stage floating in the surface-1 frame, ruled by the one shell hairline. */}
         <div className="min-w-0 flex-1 p-2">
-          <div className="h-full overflow-hidden rounded-lg border border-[var(--flock-border)] bg-flock-surface-0">
-            <StageLayout />
+          <div className="relative h-full overflow-hidden rounded-lg border border-[var(--flock-border)] bg-flock-surface-0">
+            {/* The terminal is ALWAYS mounted (keep-alive PTY). Chat overlays it
+                via `invisible` (which preserves layout size) so switching views
+                never resizes or tears down the terminal. */}
+            <div className={`absolute inset-0 ${chatActive ? 'invisible' : ''}`}>
+              <StageLayout />
+            </div>
+            {stageChatCapable && stageSession ? (
+              <div
+                className={`absolute inset-0 ${chatActive ? '' : 'invisible pointer-events-none'}`}
+                aria-hidden={!chatActive}
+              >
+                <ChatPanel session={stageSession} />
+              </div>
+            ) : null}
           </div>
         </div>
         {/* Terminal-first: no right icon-rail until tools are explicitly opened. */}

@@ -214,6 +214,26 @@ function saveSidebarWidth(px: number): void {
   }
 }
 
+// The session stage's main view: the raw terminal (the floor, always available)
+// or the structured chat interface (only shown/effective for chat-capable agents).
+// Persisted as a global "mode" so a preference for chat follows you across agents.
+export type StageView = 'terminal' | 'chat';
+const STAGE_VIEW_KEY = 'flock.stageView';
+function loadStageView(): StageView {
+  try {
+    return localStorage.getItem(STAGE_VIEW_KEY) === 'chat' ? 'chat' : 'terminal';
+  } catch {
+    return 'terminal';
+  }
+}
+function saveStageView(v: StageView): void {
+  try {
+    localStorage.setItem(STAGE_VIEW_KEY, v);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const GRID_LAYOUT_KEY = 'flock.gridLayout';
 function loadGridLayout(): GridLayout {
   try {
@@ -309,6 +329,8 @@ export interface PaddockUiState {
   sidebarCollapsed: boolean;
   /** Persisted, user-draggable width of the left tree in px. */
   sidebarWidth: number;
+  /** Session stage main view: raw terminal or structured chat (chat-capable agents). */
+  stageView: StageView;
   /** Persisted per-id sidebar tree expand/collapse overrides (task 7.3). */
   treeExpanded: Record<string, boolean>;
   gridLayout: GridLayout;
@@ -365,6 +387,8 @@ export interface PaddockUiState {
   toggleSidebar: () => void;
   /** Set the left tree width in px (clamped + persisted). */
   setSidebarWidth: (px: number) => void;
+  /** Set the session stage view (persisted). */
+  setStageView: (v: StageView) => void;
   /** Set a sidebar tree branch's expand/collapse override (persisted). */
   setTreeExpanded: (id: string, expanded: boolean) => void;
   toggleGridLayout: () => void;
@@ -404,6 +428,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
 
   sidebarCollapsed: loadSidebarCollapsed(),
   sidebarWidth: loadSidebarWidth(),
+  stageView: loadStageView(),
   treeExpanded: loadTreeExpanded(),
   gridLayout: loadGridLayout(),
   layoutPresets: [],
@@ -579,6 +604,10 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     const width = clampSidebarWidth(px);
     saveSidebarWidth(width);
     set({ sidebarWidth: width });
+  },
+  setStageView: (v) => {
+    saveStageView(v);
+    set({ stageView: v });
   },
   setTreeExpanded: (id, expanded) =>
     set((s) => {
