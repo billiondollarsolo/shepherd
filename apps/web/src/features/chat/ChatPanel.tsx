@@ -11,13 +11,15 @@
  * conversation lives in the Terminal tab. As more agents stream structured
  * messages, they light up here automatically.
  */
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, Bot, ChevronRight, Copy, Send, User, Wrench } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Session } from '@flock/shared';
-import { useSessionEvents } from '../../data/queries';
+import { qk, useSessionEvents } from '../../data/queries';
 import { EmptyState } from '../../components/ui';
 import { Sheep } from '../../components/SheepIcon';
 import { usePaddock } from '../../store/paddock';
+import { LiveStatusTransitionContext } from '../paddock/liveData';
 import { RespondBar } from '../paddock/RespondBar';
 
 interface ChatMessage {
@@ -273,6 +275,18 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
   const { data: events = [] } = useSessionEvents(session.id);
   const messages = chatMessages(events);
   const now = Date.now();
+
+  // Phase 0 live chat: a live status frame for this session (turn boundaries —
+  // running → awaiting_input/done, exactly when new messages land) invalidates
+  // the events (+plan) query for a near-instant update, over the status channel
+  // that's already open. Reuses the existing transport; no new one needed yet.
+  const queryClient = useQueryClient();
+  const lastTransition = useContext(LiveStatusTransitionContext).get(session.id);
+  useEffect(() => {
+    if (lastTransition == null) return;
+    void queryClient.invalidateQueries({ queryKey: qk.events(session.id) });
+    void queryClient.invalidateQueries({ queryKey: qk.plan(session.id) });
+  }, [lastTransition, session.id, queryClient]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);

@@ -1,14 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Session } from '@flock/shared';
 
 let EVENTS: Array<{ id: string; agentEventRaw: unknown }> = [];
-vi.mock('../../data/queries', () => ({ useSessionEvents: () => ({ data: EVENTS }) }));
-vi.mock('../paddock/liveData', () => ({ useLiveStatuses: () => new Map() }));
+vi.mock('../../data/queries', () => ({
+  useSessionEvents: () => ({ data: EVENTS }),
+  qk: {
+    events: (id: string) => ['events', id],
+    plan: (id: string) => ['plan', id],
+  },
+}));
+vi.mock('../paddock/liveData', async () => {
+  const { createContext } = await import('react');
+  return {
+    useLiveStatuses: () => new Map(),
+    LiveStatusTransitionContext: createContext<ReadonlyMap<string, number>>(new Map()),
+  };
+});
 
 import { ChatPanel, parseMessage, chatTimeAgo } from './ChatPanel';
 
 const session = { id: 's1', status: 'idle' } as unknown as Session;
+
+/** ChatPanel now uses the query client (Phase 0 live invalidation), so render under one. */
+function renderPanel(): ReturnType<typeof render> {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ChatPanel session={session} />
+    </QueryClientProvider>,
+  );
+}
 
 describe('ChatPanel (redesign #99 — structured conversation)', () => {
   it('renders chat events as messages and ignores non-chat events', () => {
@@ -19,7 +41,7 @@ describe('ChatPanel (redesign #99 — structured conversation)', () => {
       { id: 'e4', agentEventRaw: { mappedStatus: 'running' } }, // not a chat → ignored
       { id: 'e5', agentEventRaw: null },
     ];
-    render(<ChatPanel session={session} />);
+    renderPanel();
     expect(screen.getByText('build JWT auth')).toBeTruthy();
     expect(screen.getByText('On it.')).toBeTruthy();
     expect(screen.getByText('edit auth.ts')).toBeTruthy();
@@ -27,13 +49,13 @@ describe('ChatPanel (redesign #99 — structured conversation)', () => {
 
   it('shows an empty state when there are no chat events', () => {
     EVENTS = [{ id: 'e1', agentEventRaw: { mappedStatus: 'idle' } }];
-    render(<ChatPanel session={session} />);
+    renderPanel();
     expect(screen.getByText(/Start the conversation/i)).toBeTruthy();
   });
 
   it('always renders a composer, even with no chat events', () => {
     EVENTS = [];
-    render(<ChatPanel session={session} />);
+    renderPanel();
     expect(screen.getByTestId('chat-composer')).toBeTruthy();
   });
 });

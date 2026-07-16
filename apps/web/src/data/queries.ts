@@ -292,13 +292,19 @@ export function useStack(nodeId: string, path: string, enabled = true): UseQuery
   });
 }
 
-/** The Activity timeline's events for one session (cold path; polled). */
+/**
+ * The Activity/Chat timeline's events for one session. Phase 0 "make chat feel
+ * live": a snappier 2s baseline poll plus refetch-on-focus, and — for near-instant
+ * updates at turn boundaries — ChatPanel invalidates this query the moment a live
+ * status frame lands for the session (no new transport needed).
+ */
 export function useSessionEvents(sessionId: string | null): UseQueryResult<FlockEvent[]> {
   return useQuery({
     queryKey: qk.events(sessionId ?? ''),
     enabled: sessionId != null,
     queryFn: async () => (sessionId ? (await listSessionEvents(sessionId)).events : []),
-    refetchInterval: 5_000,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: true,
   });
 }
 
