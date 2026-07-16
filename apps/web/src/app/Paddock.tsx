@@ -19,7 +19,7 @@ import { TopBar } from '../features/paddock/TopBar';
 import { ConnectivityBanner } from '../features/paddock/ConnectivityBanner';
 import { PaddockDialogs } from '../features/paddock/PaddockDialogs';
 import { useSessions } from '../data/queries';
-import { usePaddock } from '../store/paddock';
+import { usePaddock, SIDEBAR_WIDTH_DEFAULT } from '../store/paddock';
 
 const NodePage = lazy(() =>
   import('../features/paddock/NodePage').then(({ NodePage: Page }) => ({ default: Page })),
@@ -111,6 +111,8 @@ function DrawerContent(): JSX.Element {
 export function Paddock(): JSX.Element {
   const view = usePaddock((s) => s.view);
   const sidebarCollapsed = usePaddock((s) => s.sidebarCollapsed);
+  const sidebarWidth = usePaddock((s) => s.sidebarWidth);
+  const setSidebarWidth = usePaddock((s) => s.setSidebarWidth);
   const chrome = usePaddock((s) => s.chrome);
 
   return (
@@ -140,6 +142,9 @@ export function Paddock(): JSX.Element {
                 }
                 drawer={<DrawerContent />}
                 treeCollapsed={sidebarCollapsed}
+                sidebarWidth={sidebarWidth}
+                onSidebarResize={setSidebarWidth}
+                onSidebarResetWidth={() => setSidebarWidth(SIDEBAR_WIDTH_DEFAULT)}
               />
             </div>
             <CompareView />

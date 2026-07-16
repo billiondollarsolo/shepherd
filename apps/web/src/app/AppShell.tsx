@@ -21,8 +21,9 @@
  * Opening/closing the drawer and the command palette is owned by
  * KeyboardProvider; AppShell is presentational and controlled.
  */
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useShellOptional } from './KeyboardProvider';
+import { ResizeSeparator } from '../components/ui';
 
 export interface AppShellProps {
   /** Left region: node → project → session tree (US-32). */
@@ -37,6 +38,15 @@ export interface AppShellProps {
   readonly drawerOpen?: boolean;
   /** Collapse the left tree to an icon-only rail (`--flock-rail-w`). */
   readonly treeCollapsed?: boolean;
+  /** Current draggable tree width (px). When set (and not collapsed), the tree
+   * column uses it and a drag handle appears on the tree/session seam. */
+  readonly sidebarWidth?: number;
+  readonly sidebarMin?: number;
+  readonly sidebarMax?: number;
+  /** Apply a new tree width (px) — the store clamps + persists. */
+  readonly onSidebarResize?: (px: number) => void;
+  /** Double-click / Enter on the handle — reset to the default width. */
+  readonly onSidebarResetWidth?: () => void;
 }
 
 export function AppShell({
@@ -46,7 +56,13 @@ export function AppShell({
   drawer,
   drawerOpen: drawerOpenProp = false,
   treeCollapsed = false,
+  sidebarWidth,
+  sidebarMin = 240,
+  sidebarMax = 460,
+  onSidebarResize,
+  onSidebarResetWidth,
 }: AppShellProps): JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null);
   // Read the drawer state from the shell CONTEXT (set by ⌘J / the toolbar button).
   // The prop is a fallback for standalone rendering (tests). The old prop-injection
   // via cloneElement couldn't reach this nested AppShell → the toggle was a no-op.
@@ -58,9 +74,16 @@ export function AppShell({
   // Collapsed → a fixed icon rail; expanded → a fixed-width tree bound to the
   // authoritative --flock-sidebar-w token (Codex-like; the phone path is handled
   // elsewhere by ResponsivePaddock).
-  const treeCol = treeCollapsed ? 'var(--flock-rail-w)' : 'var(--flock-sidebar-w)';
+  // Expanded: the user's persisted width when resizable, else the token default.
+  const resizable = !treeCollapsed && sidebarWidth != null && onSidebarResize != null;
+  const treeCol = treeCollapsed
+    ? 'var(--flock-rail-w)'
+    : sidebarWidth != null
+      ? `${sidebarWidth}px`
+      : 'var(--flock-sidebar-w)';
   return (
     <div
+      ref={rootRef}
       data-testid="app-shell"
       // First-class surface-0 / ink-primary tokens (the bg-flock-bg / flock-fg
       // legacy aliases are deprecated in shell files).
@@ -103,9 +126,25 @@ export function AppShell({
         aria-label="Session"
         data-slot="session"
         data-testid="region-session"
-        className="flex min-h-0 min-w-0 flex-col overflow-hidden"
+        className="relative flex min-h-0 min-w-0 flex-col overflow-hidden"
         style={{ gridArea: 'session' }}
       >
+        {resizable ? (
+          <ResizeSeparator
+            label="Resize sidebar"
+            className="absolute left-0 top-0 z-20 h-full -translate-x-1/2"
+            value={sidebarWidth}
+            min={sidebarMin}
+            max={sidebarMax}
+            step={16}
+            onDrag={(event) => {
+              const left = rootRef.current?.getBoundingClientRect().left ?? 0;
+              onSidebarResize?.(event.clientX - left);
+            }}
+            onValueChange={(next) => onSidebarResize?.(next)}
+            onReset={onSidebarResetWidth}
+          />
+        ) : null}
         {session}
       </main>
 

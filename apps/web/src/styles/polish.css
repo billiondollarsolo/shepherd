@@ -61,13 +61,13 @@
   --flock-radius-full: 999px;
 
   /* --- layout sizing (Codex three-region proportions, FR-UI1; tightened) --- */
-  --flock-sidebar-w: 252px;
+  --flock-sidebar-w: 288px;
   --flock-rail-w: 56px;
   --flock-activity-w: 320px;
   --flock-topbar-h: 48px;
   --flock-subheader-h: 40px;
   --flock-drawer-h: 260px;
-  --flock-row-h: 32px;
+  --flock-row-h: 36px;
   --flock-indicator: 7px;
   --flock-tab-h: 34px;
   --flock-max-content: 1440px;

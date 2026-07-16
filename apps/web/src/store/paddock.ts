@@ -188,6 +188,32 @@ function saveSidebarCollapsed(v: boolean): void {
   }
 }
 
+// Persisted, user-draggable width of the left tree (px). A roomier default than
+// the old fixed 252 so the sidebar breathes; clamped to a sensible drag range.
+export const SIDEBAR_WIDTH_KEY = 'flock.sidebarWidth';
+export const SIDEBAR_WIDTH_DEFAULT = 288;
+export const SIDEBAR_WIDTH_MIN = 240;
+export const SIDEBAR_WIDTH_MAX = 460;
+export function clampSidebarWidth(px: number): number {
+  if (!Number.isFinite(px)) return SIDEBAR_WIDTH_DEFAULT;
+  return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(px)));
+}
+function loadSidebarWidth(): number {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    return raw == null ? SIDEBAR_WIDTH_DEFAULT : clampSidebarWidth(Number.parseInt(raw, 10));
+  } catch {
+    return SIDEBAR_WIDTH_DEFAULT;
+  }
+}
+function saveSidebarWidth(px: number): void {
+  try {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(px));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const GRID_LAYOUT_KEY = 'flock.gridLayout';
 function loadGridLayout(): GridLayout {
   try {
@@ -281,6 +307,8 @@ export interface PaddockUiState {
   dialogSessionId: string | null;
 
   sidebarCollapsed: boolean;
+  /** Persisted, user-draggable width of the left tree in px. */
+  sidebarWidth: number;
   /** Persisted per-id sidebar tree expand/collapse overrides (task 7.3). */
   treeExpanded: Record<string, boolean>;
   gridLayout: GridLayout;
@@ -335,6 +363,8 @@ export interface PaddockUiState {
   openNodeInfo: (nodeId: string) => void;
   closeNodeInfo: () => void;
   toggleSidebar: () => void;
+  /** Set the left tree width in px (clamped + persisted). */
+  setSidebarWidth: (px: number) => void;
   /** Set a sidebar tree branch's expand/collapse override (persisted). */
   setTreeExpanded: (id: string, expanded: boolean) => void;
   toggleGridLayout: () => void;
@@ -373,6 +403,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   dialogSessionId: null,
 
   sidebarCollapsed: loadSidebarCollapsed(),
+  sidebarWidth: loadSidebarWidth(),
   treeExpanded: loadTreeExpanded(),
   gridLayout: loadGridLayout(),
   layoutPresets: [],
@@ -544,6 +575,11 @@ export const usePaddock = create<PaddockUiState>((set) => ({
       saveSidebarCollapsed(v);
       return { sidebarCollapsed: v };
     }),
+  setSidebarWidth: (px) => {
+    const width = clampSidebarWidth(px);
+    saveSidebarWidth(width);
+    set({ sidebarWidth: width });
+  },
   setTreeExpanded: (id, expanded) =>
     set((s) => {
       const next = { ...s.treeExpanded, [id]: expanded };

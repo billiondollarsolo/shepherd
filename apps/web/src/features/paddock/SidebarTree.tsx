@@ -166,6 +166,7 @@ export function SidebarTreeRoot({
         role="tree"
         aria-label={label}
         onKeyDown={onKeyDown}
+        className="px-2 py-1.5"
         style={{ '--flock-tree-indent': '0.75rem' } as CSSProperties}
       >
         {children}
@@ -282,7 +283,7 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
       data-level={3}
       tabIndex={item.tabIndex}
       onFocus={item.onFocus}
-      className={`group/srow relative flex items-center gap-2 rounded-md py-1 pl-2 pr-1.5 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-flock-accent ${
+      className={`group/srow relative flex items-center gap-2 rounded-md py-1.5 pl-2.5 pr-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-flock-accent ${
         selected
           ? 'bg-flock-accent/12 text-flock-ink-primary'
           : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
@@ -313,14 +314,14 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
             {MODE_BADGE[session.permissionMode] ? (
               <span
                 title={MODE_BADGE[session.permissionMode]!.title}
-                className={`shrink-0 rounded bg-flock-surface-2 px-1 text-[10px] font-semibold leading-tight tracking-label ${MODE_BADGE[session.permissionMode]!.cls}`}
+                className={`shrink-0 rounded bg-flock-surface-2 px-1 text-[11px] font-semibold leading-tight tracking-label ${MODE_BADGE[session.permissionMode]!.cls}`}
               >
                 {MODE_BADGE[session.permissionMode]!.label}
               </span>
             ) : null}
           </span>
           <span
-            className={`truncate text-xs leading-tight ${foreground ? 'text-flock-ink-muted' : statusTextClass(status)}`}
+            className={`truncate text-sm leading-snug ${foreground ? 'text-flock-ink-muted' : statusTextClass(status)}`}
             data-testid={`session-status-${session.id}`}
             title={foreground ? `Running: ${foreground}` : undefined}
           >
@@ -375,7 +376,7 @@ function StackBadges({
       {stacks.slice(0, 3).map((s) => (
         <span
           key={s}
-          className="rounded bg-flock-surface-2 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-flock-ink-muted"
+          className="rounded bg-flock-surface-2 px-1 py-px text-[10px] font-medium uppercase tracking-wide text-flock-ink-muted"
           data-testid={`stack-${s}`}
         >
           {STACK_LABELS[s] ?? s}
@@ -436,7 +437,7 @@ function ProjectRow({
         data-level={2}
         tabIndex={item.tabIndex}
         onFocus={item.onFocus}
-        className={`group/prow relative flex items-center gap-1.5 rounded-md py-1 pl-1.5 pr-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-flock-accent ${
+        className={`group/prow relative flex items-center gap-1.5 rounded-md py-1.5 pl-2 pr-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-flock-accent ${
           scoped
             ? 'bg-flock-accent/12 text-flock-ink-primary'
             : 'text-flock-ink-primary hover:bg-flock-surface-2'
@@ -543,7 +544,7 @@ export function NodeRow({
   // Local machines are a CPU, remote hosts a drive (icon derived from node.kind).
   const NodeIcon = node.kind === 'local' ? Cpu : HardDrive;
   return (
-    <div className="py-1.5">
+    <div className="py-2">
       {/* Host header BAND — a faint surface band so a node reads as a section header,
           clearly a different level from the project/session items nested under it.
           Drag the grip handle to reorder; the band is the drop target. */}
@@ -555,7 +556,7 @@ export function NodeRow({
         data-level={1}
         tabIndex={item.tabIndex}
         onFocus={item.onFocus}
-        className={`group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 outline-none ring-1 focus-visible:ring-flock-accent ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-highlight'}`}
+        className={`group/nrow flex items-center gap-1.5 rounded-md px-2 py-2 outline-none ring-1 focus-visible:ring-flock-accent ${dragOver ? 'ring-2 ring-flock-accent' : 'ring-highlight'}`}
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -713,7 +714,7 @@ export function WorkspaceList({ node }: { node: FlockNode }): JSX.Element {
         data-level={1}
         tabIndex={item.tabIndex}
         onFocus={item.onFocus}
-        className="group/nrow flex items-center gap-1.5 rounded-md px-1.5 py-1.5 outline-none ring-1 ring-highlight focus-visible:ring-flock-accent"
+        className="group/nrow flex items-center gap-1.5 rounded-md px-2 py-2 outline-none ring-1 ring-highlight focus-visible:ring-flock-accent"
         style={{ backgroundColor: 'color-mix(in srgb, var(--flock-surface-2) 70%, transparent)' }}
       >
         <button
