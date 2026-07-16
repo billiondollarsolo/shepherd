@@ -24,7 +24,7 @@ export const BUILTIN_LAUNCHER_PRESETS: readonly LauncherPreset[] = [
   { id: 'builtin-claude', name: 'Claude Code', agentType: 'claude-code' },
   { id: 'builtin-codex', name: 'Codex', agentType: 'codex' },
   { id: 'builtin-opencode', name: 'OpenCode', agentType: 'opencode' },
-  { id: 'builtin-gemini', name: 'Gemini', agentType: 'gemini' },
+  { id: 'builtin-antigravity', name: 'Antigravity', agentType: 'antigravity' },
   { id: 'builtin-grok', name: 'Grok', agentType: 'grok' },
   { id: 'builtin-terminal', name: 'Shell', agentType: 'terminal' },
 ];

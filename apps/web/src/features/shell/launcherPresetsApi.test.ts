@@ -25,7 +25,7 @@ describe('launcherPresetsApi', () => {
       'builtin-claude',
       'builtin-codex',
       'builtin-opencode',
-      'builtin-gemini',
+      'builtin-antigravity',
       'builtin-grok',
       'builtin-terminal',
     ]);
