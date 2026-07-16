@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  ChevronRight,
   Cpu,
   FolderGit2,
   GitBranch,
@@ -14,7 +15,12 @@ import {
   ShieldCheck,
   SquareTerminal,
 } from 'lucide-react';
-import { displayStatus, type NodeInfo, type NodePreflightResponse } from '@flock/shared';
+import {
+  displayStatus,
+  type Node as FlockNode,
+  type NodeInfo,
+  type NodePreflightResponse,
+} from '@flock/shared';
 import type { LucideIcon } from 'lucide-react';
 import type { BadgeProps } from '../../components/ui';
 import {
@@ -108,7 +114,18 @@ function Field({ label, value }: { label: string; value: string }): JSX.Element 
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
+function Card({
+  title,
+  children,
+  flush = false,
+}: {
+  title?: string;
+  children: React.ReactNode;
+  flush?: boolean;
+}): JSX.Element {
+  // `flush` drops the card chrome (border + title) so the same content can sit
+  // inside a Disclosure, which already provides the frame and heading.
+  if (flush) return <div>{children}</div>;
   return (
     <section className="rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-4">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-label text-flock-ink-muted">
@@ -119,18 +136,69 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
+/** A compact, uniform-height status tile — the at-a-glance health read. */
+function StatTile({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+  return (
+    <div className="flex min-h-[4.75rem] flex-col gap-1.5 rounded-xl border border-[var(--flock-border)] bg-flock-surface-1 p-3">
+      <span className="text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** Progressive-disclosure section; `defaultOpen` surfaces problems automatically. */
+function Disclosure({
+  title,
+  meta,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}): JSX.Element {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-[var(--flock-border)] bg-flock-surface-1">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-left hover:bg-flock-surface-2"
+      >
+        <ChevronRight
+          className={`size-4 shrink-0 text-flock-ink-muted transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+          aria-hidden="true"
+        />
+        <span className="text-sm font-medium text-flock-ink-primary">{title}</span>
+        {meta ? <span className="ml-1 text-2xs text-flock-ink-muted">{meta}</span> : null}
+      </button>
+      {open ? (
+        <div className="border-t border-[var(--flock-border)] px-4 py-2">{children}</div>
+      ) : null}
+    </div>
+  );
+}
+
 function ControlPlaneCard({
   control,
   failure,
   lifecycle,
+  bare = false,
 }: {
   control: NodeInfo['control'];
   failure: AgentdHealth['nodes'][string]['failure'];
   lifecycle: NodeInfo['lifecycle'];
+  bare?: boolean;
 }): JSX.Element {
   if (!control) {
     return (
-      <Card title="Daemon & runtime">
+      <Card title="Daemon & runtime" flush={bare}>
         {failure ? (
           <div className="space-y-2">
             <Badge variant="danger">{failure.code}</Badge>
@@ -156,22 +224,26 @@ function ControlPlaneCard({
         ? 'warning'
         : 'danger';
   return (
-    <Card title="Daemon & runtime">
-      <div className="mb-2 flex items-center gap-2">
-        {secure ? (
-          <ShieldCheck className="size-4 text-status-running" aria-hidden="true" />
-        ) : (
-          <ShieldAlert className="size-4 text-status-error" aria-hidden="true" />
-        )}
-        <Badge variant={secure ? 'success' : 'danger'}>
-          {secure ? 'Secure' : 'Insecure development'}
-        </Badge>
-        {anomalies > 0 ? (
-          <Badge variant="danger" className="ml-auto">
-            {anomalies} anomalies
+    <Card title="Daemon & runtime" flush={bare}>
+      {/* The status tile already carries the secure/anomaly summary; only show
+          the badge row in the standalone (non-bare) card to avoid duplication. */}
+      {!bare ? (
+        <div className="mb-2 flex items-center gap-2">
+          {secure ? (
+            <ShieldCheck className="size-4 text-status-running" aria-hidden="true" />
+          ) : (
+            <ShieldAlert className="size-4 text-status-error" aria-hidden="true" />
+          )}
+          <Badge variant={secure ? 'success' : 'danger'}>
+            {secure ? 'Secure' : 'Insecure development'}
           </Badge>
-        ) : null}
-      </div>
+          {anomalies > 0 ? (
+            <Badge variant="danger" className="ml-auto">
+              {anomalies} anomalies
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
       <Field label="Daemon" value={control.daemonVersion} />
       <Field label="Protocol" value={`v${control.protocol}`} />
       <Field label="Runtime" value={lifecycle?.runtimeKind ?? 'node daemon'} />
@@ -246,16 +318,18 @@ function ReadinessCard({
   report,
   canUpgrade,
   onUpgrade,
+  bare = false,
 }: {
   report: NodePreflightResponse | undefined;
   canUpgrade: boolean;
   onUpgrade: () => void;
+  bare?: boolean;
 }): JSX.Element {
   const upgradeAvailable =
     report?.daemonCompatibility.state !== 'compatible' ||
     report?.checks.some((item) => item.id === 'preparation' && item.status === 'fail');
   return (
-    <Card title="Node readiness">
+    <Card title="Node readiness" flush={bare}>
       {!report ? (
         <p className="text-sm text-flock-ink-muted">Readiness checks are unavailable.</p>
       ) : (
@@ -308,6 +382,175 @@ function ReadinessCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * The node's connection/daemon/readiness/runtime health as a row of uniform
+ * status tiles (the glanceable read) plus progressive-disclosure detail. Deep
+ * telemetry and readiness checks stay collapsed when healthy and auto-open when
+ * there's something to act on (insecure link, anomalies, a pending upgrade, or a
+ * failing readiness check) so a problem is never hidden behind a closed panel.
+ */
+function NodeDiagnostics({
+  node,
+  info,
+  preflight,
+  failure,
+  canUpgrade,
+  onUpgrade,
+}: {
+  node: FlockNode | null;
+  info: NodeInfo | undefined;
+  preflight: NodePreflightResponse | undefined;
+  failure: AgentdHealth['nodes'][string]['failure'];
+  canUpgrade: boolean;
+  onUpgrade: () => void;
+}): JSX.Element {
+  const control = info?.control;
+  const lifecycle = info?.lifecycle;
+  const secure = control?.mode === 'secure';
+  const anomalies = control
+    ? control.authFailures + control.malformedFrames + control.writeTimeouts
+    : 0;
+  const compat = lifecycle?.daemonCompatibility ?? preflight?.daemonCompatibility;
+  const compatLabel =
+    compat?.state === 'compatible'
+      ? 'Compatible'
+      : compat?.state === 'recommended'
+        ? 'Update recommended'
+        : compat?.state === 'required'
+          ? 'Update required'
+          : null;
+  const passCount = preflight?.checks.filter((check) => check.status === 'pass').length ?? 0;
+  const totalChecks = preflight?.checks.length ?? 0;
+  const daemonNeedsAttention =
+    Boolean(failure) ||
+    (control != null && !secure) ||
+    anomalies > 0 ||
+    (compat != null && compat.state !== 'compatible') ||
+    Boolean(lifecycle?.upgrade);
+  const notReady = preflight != null && !preflight.ready;
+  const connectionVariant = STATUS_VARIANT[node?.connectionStatus ?? ''] ?? 'neutral';
+
+  return (
+    <section className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Connection">
+          <Badge variant={connectionVariant}>{node?.connectionStatus ?? 'unknown'}</Badge>
+          <span className="truncate text-2xs text-flock-ink-muted">
+            {node?.host || (node?.kind === 'local' ? 'local socket' : '—')}
+          </span>
+        </StatTile>
+
+        <StatTile label="Daemon">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            {control ? (
+              secure ? (
+                <ShieldCheck className="size-4 shrink-0 text-status-running" aria-hidden="true" />
+              ) : (
+                <ShieldAlert className="size-4 shrink-0 text-status-error" aria-hidden="true" />
+              )
+            ) : null}
+            <span
+              className={
+                control
+                  ? secure
+                    ? 'text-flock-ink-primary'
+                    : 'text-status-error'
+                  : failure
+                    ? 'text-status-error'
+                    : 'text-flock-ink-muted'
+              }
+            >
+              {control
+                ? secure
+                  ? 'Secure'
+                  : 'Insecure'
+                : failure
+                  ? 'Unreachable'
+                  : 'Unavailable'}
+            </span>
+          </span>
+          <span
+            className={`truncate text-2xs ${
+              anomalies > 0 ? 'text-status-error' : 'text-flock-ink-muted'
+            }`}
+          >
+            {anomalies > 0
+              ? `${anomalies} anomalies`
+              : (compatLabel ?? (control ? `v${control.daemonVersion}` : 'Daemon link down'))}
+          </span>
+        </StatTile>
+
+        <StatTile label="Readiness">
+          {preflight ? (
+            <Badge variant={preflight.ready ? 'success' : 'danger'}>
+              {preflight.ready ? 'Ready' : 'Action required'}
+            </Badge>
+          ) : (
+            <span className="text-sm text-flock-ink-muted">Unknown</span>
+          )}
+          <span className="truncate text-2xs text-flock-ink-muted">
+            {preflight ? `${passCount}/${totalChecks} checks pass` : 'Checks unavailable'}
+          </span>
+        </StatTile>
+
+        <StatTile label="Runtime">
+          <span className="truncate text-sm font-medium text-flock-ink-primary">
+            {control ? `v${control.daemonVersion}` : '—'}
+          </span>
+          <span className="truncate text-2xs text-flock-ink-muted">
+            {lifecycle?.runtimeKind ?? 'node daemon'}
+            {info ? ` · up ${fmtUptime(info.uptimeSec)}` : ''}
+          </span>
+        </StatTile>
+      </div>
+
+      <Disclosure title="Connection & host details">
+        <div className="grid gap-x-8 sm:grid-cols-2">
+          <div>
+            <Field
+              label="Host"
+              value={node?.host || (node?.kind === 'local' ? 'local socket' : '—')}
+            />
+            <Field label="Port" value={node?.port ? String(node.port) : '—'} />
+            <Field label="SSH user" value={node?.sshUser || '—'} />
+            <Field label="Last seen" value={fmtWhen(node?.lastSeenAt)} />
+            <Field label="Added" value={fmtWhen(node?.createdAt)} />
+          </div>
+          <div>
+            <Field label="Hostname" value={info?.hostname || '—'} />
+            <Field label="OS" value={info?.os || '—'} />
+            <Field label="Kernel" value={info?.kernel || '—'} />
+            <Field
+              label="Load 1/5/15"
+              value={
+                info
+                  ? `${info.load1.toFixed(2)} ${info.load5.toFixed(2)} ${info.load15.toFixed(2)}`
+                  : '—'
+              }
+            />
+          </div>
+        </div>
+      </Disclosure>
+
+      <Disclosure
+        title="Daemon telemetry"
+        meta={control ? (secure ? 'secure link' : 'insecure link') : 'link down'}
+        defaultOpen={daemonNeedsAttention}
+      >
+        <ControlPlaneCard control={control} failure={failure} lifecycle={lifecycle} bare />
+      </Disclosure>
+
+      <Disclosure
+        title="Readiness checks"
+        meta={preflight ? `${passCount}/${totalChecks} passing` : undefined}
+        defaultOpen={notReady}
+      >
+        <ReadinessCard report={preflight} canUpgrade={canUpgrade} onUpgrade={onUpgrade} bare />
+      </Disclosure>
+    </section>
   );
 }
 
@@ -528,44 +771,14 @@ export function NodePage(): JSX.Element {
 
           {nodeId ? <NodeCapabilitiesPanel nodeId={nodeId} /> : null}
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card title="Connection">
-              <Field
-                label="Host"
-                value={node?.host || (node?.kind === 'local' ? 'local socket' : '—')}
-              />
-              <Field label="Port" value={node?.port ? String(node.port) : '—'} />
-              <Field label="SSH user" value={node?.sshUser || '—'} />
-              <Field label="Last seen" value={fmtWhen(node?.lastSeenAt)} />
-              <Field label="Added" value={fmtWhen(node?.createdAt)} />
-            </Card>
-
-            <Card title="Host">
-              <Field label="Hostname" value={info?.hostname || '—'} />
-              <Field label="OS" value={info?.os || '—'} />
-              <Field label="Kernel" value={info?.kernel || '—'} />
-              <Field
-                label="Load 1/5/15"
-                value={
-                  info
-                    ? `${info.load1.toFixed(2)} ${info.load5.toFixed(2)} ${info.load15.toFixed(2)}`
-                    : '—'
-                }
-              />
-            </Card>
-
-            <ControlPlaneCard
-              control={info?.control}
-              failure={nodeId ? agentdHealth?.nodes[nodeId]?.failure : undefined}
-              lifecycle={info?.lifecycle}
-            />
-
-            <ReadinessCard
-              report={preflight}
-              canUpgrade={node?.kind === 'ssh'}
-              onUpgrade={() => setUpgradeOpen(true)}
-            />
-          </section>
+          <NodeDiagnostics
+            node={node}
+            info={info}
+            preflight={preflight}
+            failure={nodeId ? agentdHealth?.nodes[nodeId]?.failure : undefined}
+            canUpgrade={node?.kind === 'ssh'}
+            onUpgrade={() => setUpgradeOpen(true)}
+          />
         </div>
       </ScrollArea>
       <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
