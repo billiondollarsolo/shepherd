@@ -12,36 +12,30 @@
  * messages, they light up here automatically.
  */
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, Bot, ChevronRight, Copy, Send, User, Wrench } from 'lucide-react';
+import {
+  ArrowDown,
+  Bot,
+  Check,
+  ChevronRight,
+  Copy,
+  ListChecks,
+  Loader2,
+  Send,
+  ShieldAlert,
+  TriangleAlert,
+  User,
+  Wrench,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Session } from '@flock/shared';
 import { qk, useSessionEvents } from '../../data/queries';
 import { EmptyState } from '../../components/ui';
 import { Sheep } from '../../components/SheepIcon';
 import { usePaddock } from '../../store/paddock';
-import { LiveStatusTransitionContext } from '../paddock/liveData';
+import { LiveStatusTransitionContext, useLiveStatuses } from '../paddock/liveData';
 import { RespondBar } from '../paddock/RespondBar';
+import { chatTimeline, type PlanItem, type TimelineItem, type ToolStatus } from './chatTimeline';
 
-interface ChatMessage {
-  id: string;
-  role: string;
-  text: string;
-  ts?: string;
-}
-
-/** Pull chat messages out of the raw event log (events whose payload is a chat). */
-function chatMessages(
-  events: ReadonlyArray<{ id: string; ts?: string; agentEventRaw?: unknown }>,
-): ChatMessage[] {
-  const out: ChatMessage[] = [];
-  for (const e of events) {
-    const raw = e.agentEventRaw as { chat?: { role?: string; text?: string } } | null;
-    if (raw && raw.chat && typeof raw.chat.text === 'string' && raw.chat.text.length > 0) {
-      out.push({ id: e.id, role: raw.chat.role ?? 'assistant', text: raw.chat.text, ts: e.ts });
-    }
-  }
-  return out;
-}
 
 /** Compact relative time: "now", "3m", "2h", "4d". Pure. */
 export function chatTimeAgo(iso: string, now: number): string {
@@ -169,40 +163,157 @@ function MessageBody({ text }: { text: string }): JSX.Element {
   );
 }
 
-/** Expandable tool-call row — shows the first line, expands to the full payload. */
-function ToolRow({ msg }: { msg: ChatMessage }): JSX.Element {
+type MessageItem = Extract<TimelineItem, { kind: 'message' }>;
+type ToolItem = Extract<TimelineItem, { kind: 'tool' }>;
+
+/** Small status glyph for a tool card's lifecycle state. */
+function ToolStatusIcon({ status }: { status: ToolStatus }): JSX.Element {
+  if (status === 'running')
+    return <Loader2 className="size-3.5 shrink-0 animate-spin text-status-running" aria-label="running" />;
+  if (status === 'success')
+    return <Check className="size-3.5 shrink-0 text-status-idle" aria-label="done" />;
+  if (status === 'error')
+    return <TriangleAlert className="size-3.5 shrink-0 text-status-error" aria-label="error" />;
+  return <Wrench className="size-3.5 shrink-0 text-flock-ink-muted" aria-label="pending" />;
+}
+
+/** A tool call rendered as a card: icon · title · status, with collapsible detail. */
+function ToolCard({ item }: { item: ToolItem }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const firstLine = msg.text.split('\n', 1)[0] ?? msg.text;
-  const hasMore = msg.text.length > firstLine.length;
+  const hasDetail = item.detail != null && item.detail.length > 0;
   return (
-    <div className="px-1">
+    <div
+      data-testid="chat-tool-card"
+      className="rounded-lg border border-[var(--flock-border)] bg-flock-surface-1"
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        disabled={!hasMore}
-        className="flex w-full min-w-0 items-center gap-1.5 rounded py-0.5 text-left text-2xs text-flock-ink-muted hover:text-flock-ink-primary disabled:cursor-default"
+        disabled={!hasDetail}
+        className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-flock-surface-2 disabled:cursor-default disabled:hover:bg-transparent"
       >
-        <ChevronRight
-          className={`size-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''} ${
-            hasMore ? '' : 'opacity-0'
-          }`}
-        />
-        <Wrench className="size-3 shrink-0" />
-        <span className="truncate font-mono">{firstLine}</span>
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-flock-surface-2">
+          <Wrench className="size-3 text-flock-ink-muted" />
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-2xs text-flock-ink-primary">
+          {item.title}
+        </span>
+        <ToolStatusIcon status={item.status} />
+        {hasDetail ? (
+          <ChevronRight
+            className={`size-3.5 shrink-0 text-flock-ink-muted transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+        ) : null}
       </button>
-      {open && hasMore ? (
-        <pre className="ml-[1.375rem] mt-0.5 overflow-x-auto rounded-md border border-[var(--flock-border)] bg-flock-surface-2 px-3 py-2 font-mono text-2xs leading-relaxed text-flock-ink-primary">
-          <code>{msg.text}</code>
+      {open && hasDetail ? (
+        <pre className="overflow-x-auto border-t border-[var(--flock-border)] px-3 py-2 font-mono text-2xs leading-relaxed text-flock-ink-primary">
+          <code>{item.detail}</code>
         </pre>
       ) : null}
     </div>
   );
 }
 
-function Bubble({ msg, now }: { msg: ChatMessage; now: number }): JSX.Element {
-  if (msg.role === 'tool') return <ToolRow msg={msg} />;
+/** The agent's current plan/todo list as a compact checklist. */
+function PlanCard({ items }: { items: PlanItem[] }): JSX.Element {
+  return (
+    <div className="rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 px-3 py-2">
+      <div className="mb-1 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label text-flock-ink-muted">
+        <ListChecks className="size-3.5" /> Plan
+      </div>
+      <ul className="space-y-0.5">
+        {items.map((it, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-xs">
+            <span
+              className={`mt-1 size-1.5 shrink-0 rounded-full ${
+                it.status === 'completed'
+                  ? 'bg-status-idle'
+                  : it.status === 'in_progress'
+                    ? 'bg-status-running'
+                    : 'bg-flock-ink-muted/40'
+              }`}
+            />
+            <span
+              className={`min-w-0 ${it.status === 'completed' ? 'text-flock-ink-muted line-through' : 'text-flock-ink-primary'}`}
+            >
+              {it.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
+/**
+ * A permission/input request the agent is blocked on. Approve/Deny are
+ * best-effort today (typed into the agent's stdin); a real audited approval
+ * lands with the ACP request/response round-trip (plan §Phase 1).
+ */
+function RequestCard({ item }: { item: Extract<TimelineItem, { kind: 'request' }> }): JSX.Element {
+  const respond = (text: string): void => usePaddock.getState().terminalInput?.(`${text}\r`);
+  return (
+    <div
+      data-testid="chat-request-card"
+      className="rounded-lg border border-status-awaiting/40 bg-status-awaiting/5 px-3 py-2"
+    >
+      <div className="flex items-center gap-1.5 text-xs font-medium text-flock-ink-primary">
+        <ShieldAlert className="size-3.5 shrink-0 text-status-awaiting" />
+        {item.title ?? (item.requestKind === 'permission' ? 'Approval requested' : 'Input requested')}
+      </div>
+      {item.requestKind === 'permission' ? (
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => respond('y')}
+            className="rounded-md bg-flock-accent px-2.5 py-1 text-2xs font-medium text-[var(--flock-accent-foreground)] hover:bg-flock-accent-hover"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={() => respond('n')}
+            className="rounded-md border border-[var(--flock-border-strong)] px-2.5 py-1 text-2xs font-medium text-flock-ink-primary hover:bg-flock-surface-2"
+          >
+            Deny
+          </button>
+          <span className="text-2xs text-flock-ink-muted">sent to the agent&rsquo;s input</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** An agent error surfaced inline. */
+function ErrorRow({ text }: { text: string }): JSX.Element {
+  return (
+    <div className="flex items-start gap-1.5 rounded-lg border border-status-error/40 bg-status-error/5 px-3 py-2 text-xs text-flock-ink-primary">
+      <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-status-error" />
+      <span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
+    </div>
+  );
+}
+
+/** A subtle "agent is working" pulse shown while the session is running. */
+function WorkingRow(): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 px-1 text-2xs text-flock-ink-muted" data-testid="chat-working">
+      <Loader2 className="size-3.5 animate-spin" />
+      <span className="animate-pulse">Agent is working…</span>
+    </div>
+  );
+}
+
+function Bubble({ msg, now }: { msg: MessageItem; now: number }): JSX.Element {
+  // Reasoning ("thinking") is quieter than a real reply — a muted, italic aside.
+  if (msg.role === 'reasoning') {
+    return (
+      <div className="flex gap-2 px-1 text-2xs italic text-flock-ink-muted">
+        <span className="min-w-0 whitespace-pre-wrap break-words">{msg.text}</span>
+      </div>
+    );
+  }
   const isUser = msg.role === 'user';
   return (
     <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -231,6 +342,22 @@ function Bubble({ msg, now }: { msg: ChatMessage; now: number }): JSX.Element {
       </div>
     </div>
   );
+}
+
+/** Route a timeline item to its renderer. */
+function TimelineRow({ item, now }: { item: TimelineItem; now: number }): JSX.Element {
+  switch (item.kind) {
+    case 'message':
+      return <Bubble msg={item} now={now} />;
+    case 'tool':
+      return <ToolCard item={item} />;
+    case 'plan':
+      return <PlanCard items={item.items} />;
+    case 'request':
+      return <RequestCard item={item} />;
+    case 'error':
+      return <ErrorRow text={item.text} />;
+  }
 }
 
 /** The always-present composer — types a prompt into the agent's PTY (as stdin). */
@@ -273,8 +400,10 @@ function Composer(): JSX.Element {
 
 export function ChatPanel({ session }: { session: Session }): JSX.Element {
   const { data: events = [] } = useSessionEvents(session.id);
-  const messages = chatMessages(events);
+  const timeline = chatTimeline(events);
   const now = Date.now();
+  const liveStatus = useLiveStatuses().get(session.id) ?? session.status;
+  const working = liveStatus === 'running' || liveStatus === 'starting';
 
   // Phase 0 live chat: a live status frame for this session (turn boundaries —
   // running → awaiting_input/done, exactly when new messages land) invalidates
@@ -310,7 +439,7 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
   useLayoutEffect(() => {
     if (pinnedRef.current) scrollToBottom();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length]);
+  }, [timeline.length, working]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-flock-bg" data-testid="chat-panel">
@@ -320,7 +449,7 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
           onScroll={onScroll}
           className="h-full space-y-3 overflow-y-auto p-3"
         >
-          {messages.length === 0 ? (
+          {timeline.length === 0 && !working ? (
             <div className="flex h-full items-center justify-center">
               <EmptyState
                 icon={<Sheep className="text-flock-ink-muted" />}
@@ -329,11 +458,16 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
               />
             </div>
           ) : (
-            messages.map((m) => <Bubble key={m.id} msg={m} now={now} />)
+            <>
+              {timeline.map((item) => (
+                <TimelineRow key={item.id} item={item} now={now} />
+              ))}
+              {working ? <WorkingRow /> : null}
+            </>
           )}
         </div>
 
-        {!pinned && messages.length > 0 ? (
+        {!pinned && timeline.length > 0 ? (
           <button
             type="button"
             onClick={scrollToBottom}

@@ -44,7 +44,8 @@ describe('ChatPanel (redesign #99 — structured conversation)', () => {
     renderPanel();
     expect(screen.getByText('build JWT auth')).toBeTruthy();
     expect(screen.getByText('On it.')).toBeTruthy();
-    expect(screen.getByText('edit auth.ts')).toBeTruthy();
+    // Tool events now render as a structured tool card ("Verb · target").
+    expect(screen.getByTestId('chat-tool-card')).toHaveTextContent('Edit · auth.ts');
   });
 
   it('shows an empty state when there are no chat events', () => {
