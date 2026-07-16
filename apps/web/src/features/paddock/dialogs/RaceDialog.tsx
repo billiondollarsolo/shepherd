@@ -20,11 +20,12 @@ import { startRace } from '../../../data/treeApi';
 import { DialogField as Field } from './DialogField';
 import { PRODUCT_NAME } from '../../../brand';
 
-const RACE_AGENTS: AgentType[] = ['claude-code', 'codex', 'gemini', 'grok', 'opencode'];
+const RACE_AGENTS: AgentType[] = ['claude-code', 'codex', 'antigravity', 'grok', 'opencode'];
 const AGENT_LABELS: Record<AgentType, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
+  antigravity: 'Antigravity',
   gemini: 'Gemini',
   grok: 'Grok',
   aider: 'Aider',

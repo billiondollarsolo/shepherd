@@ -33,9 +33,15 @@ export const AgentTypeEnum = z.enum([
   'claude-code',
   'codex',
   'opencode',
-  // Google Gemini CLI — launched over ACP (`--experimental-acp`) for structured
-  // chat + status (permission/turn/usage). Permission flags map to --approval-mode /
-  // --yolo. Hooks exist as a PTY-path fallback but ACP is the live transport.
+  // Google Antigravity CLI (binary `agy`, https://antigravity.google) — the
+  // successor to the Gemini CLI (Gemini CLI is being retired 2026-06-18). Native
+  // PTY/TUI, no ACP: interactive terminal login (browser, or an SSH auth URL on
+  // remote nodes). Permission modes map to `--mode plan` / `--mode accept-edits`
+  // / `--dangerously-skip-permissions`; `-p` is headless print.
+  'antigravity',
+  // DEPRECATED (retiring 2026-06-18): Google Gemini CLI. Kept in the enum for
+  // back-compat with existing session records; removed from the new-session
+  // picker/catalog in favor of `antigravity`. Launches on the PTY path.
   'gemini',
   // xAI Grok Build CLI (https://x.ai/cli, binary `grok`). Native PTY + lifecycle
   // hooks (~/.grok/hooks/flock.json). Does NOT speak ACP. Status from hooks;

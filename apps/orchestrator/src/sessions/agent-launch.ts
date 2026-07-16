@@ -77,6 +77,24 @@ function geminiPermissionFlags(mode: SessionPermissionMode): string[] {
   }
 }
 
+// Antigravity CLI (`agy`) permission modes (from `agy --help`, v1.1.3):
+//   plan        → --mode plan           (read-only plan mode)
+//   acceptEdits → --mode accept-edits   (auto-accept edits, ask for the rest)
+//   autonomous  → --dangerously-skip-permissions  (auto-approve everything)
+function antigravityPermissionFlags(mode: SessionPermissionMode): string[] {
+  switch (mode) {
+    case 'plan':
+      return ['--mode', 'plan'];
+    case 'acceptEdits':
+      return ['--mode', 'accept-edits'];
+    case 'autonomous':
+      return ['--dangerously-skip-permissions'];
+    case 'default':
+    default:
+      return [];
+  }
+}
+
 /** The daemon session kind: a real agent, a bare shell, or a supervised dev process. */
 export type SessionKind = 'agent' | 'shell' | 'dev';
 
@@ -124,6 +142,16 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     kind: 'agent',
     initialStatus: 'starting',
     activityStatus: false,
+  },
+  // Antigravity CLI (`agy`): native PTY/TUI (no ACP). Interactive terminal login
+  // (browser / SSH auth URL) works on the PTY path like claude/codex. Status
+  // from PTY activity for now (its lifecycle-hook format isn't wired yet).
+  antigravity: {
+    command: ['agy'],
+    permissionFlags: antigravityPermissionFlags,
+    kind: 'agent',
+    initialStatus: 'starting',
+    activityStatus: true,
   },
   codex: {
     command: ['codex'],

@@ -33,6 +33,7 @@ const AGENT_LABELS: Record<AgentType, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
+  antigravity: 'Antigravity',
   gemini: 'Gemini',
   grok: 'Grok',
   aider: 'Aider',
@@ -41,6 +42,13 @@ const AGENT_LABELS: Record<AgentType, string> = {
   terminal: 'Terminal (plain shell)',
   dev: 'Dev server (auto-restart)',
 };
+
+// Deprecated agents kept as valid types (old records) but no longer offered for
+// new sessions — Gemini CLI is retiring 2026-06-18 in favour of Antigravity.
+const DEPRECATED_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>(['gemini']);
+const OFFERED_AGENTS = (Object.keys(AGENT_LABELS) as AgentType[]).filter(
+  (a) => !DEPRECATED_AGENTS.has(a),
+);
 
 const AUTHORITY_LABELS: Record<AgentAuthority, string> = {
   callback_only: 'Independent — callback only',
@@ -68,6 +76,7 @@ const REQUIRED_BIN: Record<AgentType, string | null> = {
   'claude-code': 'claude',
   codex: 'codex',
   opencode: 'opencode',
+  antigravity: 'agy',
   gemini: 'gemini',
   grok: 'grok',
   aider: 'aider',
@@ -114,6 +123,7 @@ export function daemonLaunchBlockMessage(info: NodeInfo | undefined): string | n
 const MODES_BY_AGENT: Partial<Record<AgentType, readonly SessionPermissionMode[]>> = {
   'claude-code': ['default', 'acceptEdits', 'plan', 'autonomous'],
   codex: ['default', 'acceptEdits', 'plan', 'autonomous'],
+  antigravity: ['default', 'plan', 'acceptEdits', 'autonomous'],
   gemini: ['default', 'acceptEdits', 'autonomous'], // no real read-only plan mode
 };
 
@@ -201,7 +211,7 @@ export function AddSessionDialog(): JSX.Element {
     const ok = (a: AgentType): boolean =>
       REQUIRED_BIN[a] === null || detected.has(REQUIRED_BIN[a] as string);
     if (ok(agentType)) return;
-    const next = (Object.keys(AGENT_LABELS) as AgentType[]).find(ok);
+    const next = OFFERED_AGENTS.find(ok);
     if (next && next !== agentType) setAgentType(next);
   }, [detectionKnown, detected, agentType]);
 
@@ -287,7 +297,7 @@ export function AddSessionDialog(): JSX.Element {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(AGENT_LABELS) as AgentType[]).map((a) => {
+            {OFFERED_AGENTS.map((a) => {
               const avail = agentAvailable(a);
               return (
                 <SelectItem key={a} value={a} disabled={!avail}>

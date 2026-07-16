@@ -13,7 +13,7 @@ describe('node tool catalog', () => {
       'claude',
       'codex',
       'opencode',
-      'gemini',
+      'antigravity',
       'grok',
       'aider',
       'cursor-agent',

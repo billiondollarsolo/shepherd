@@ -136,6 +136,7 @@ export const NodeToolIdEnum = z.enum([
   'claude',
   'codex',
   'opencode',
+  'antigravity',
   'gemini',
   'grok',
   'aider',

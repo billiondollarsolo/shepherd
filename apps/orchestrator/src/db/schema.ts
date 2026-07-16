@@ -61,6 +61,7 @@ const AGENT_TYPE_VALUES: EnumTuple = [
   'claude-code',
   'codex',
   'opencode',
+  'antigravity',
   'gemini',
   'grok',
   'aider',

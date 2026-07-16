@@ -4,6 +4,7 @@ export const AGENT_SHORT: Record<AgentType, string> = {
   'claude-code': 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
+  antigravity: 'Antigravity',
   gemini: 'Gemini',
   grok: 'Grok',
   aider: 'Aider',
