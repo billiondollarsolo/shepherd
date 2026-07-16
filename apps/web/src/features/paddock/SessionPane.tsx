@@ -57,7 +57,7 @@ const AUTHORITY_LABEL: Record<AgentAuthority, string> = {
 };
 import { useShell } from '../../app/KeyboardProvider';
 import { shortcutLabel } from '../../app/commands';
-import { usePaddock } from '../../store/paddock';
+import { usePaddock, stageViewFor } from '../../store/paddock';
 import { useSessions, useSessionEvents, useGitStatus } from '../../data/queries';
 import { useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
@@ -97,9 +97,10 @@ function BranchChip({ sessionId }: { sessionId: string }): JSX.Element | null {
 }
 
 /** Segmented Terminal ⇄ Chat switch for the session stage (chat-capable agents). */
-function StageViewToggle(): JSX.Element {
-  const stageView = usePaddock((s) => s.stageView);
+function StageViewToggle({ sessionId }: { sessionId: string }): JSX.Element {
+  const stageViews = usePaddock((s) => s.stageViews);
   const setStageView = usePaddock((s) => s.setStageView);
+  const current = stageViewFor(stageViews, sessionId);
   const options = [
     { v: 'terminal' as const, label: 'Terminal', Icon: SquareTerminal },
     { v: 'chat' as const, label: 'Chat', Icon: MessageSquare },
@@ -111,14 +112,14 @@ function StageViewToggle(): JSX.Element {
       className="flex shrink-0 items-center gap-0.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-2 p-0.5"
     >
       {options.map(({ v, label, Icon }) => {
-        const active = stageView === v;
+        const active = current === v;
         return (
           <button
             key={v}
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => setStageView(v)}
+            onClick={() => setStageView(sessionId, v)}
             className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
               active
                 ? 'bg-flock-surface-0 text-flock-ink-primary shadow-flock-sm'
@@ -193,7 +194,7 @@ function Header({ session }: { session: Session }): JSX.Element {
         </code>
       </div>
 
-      {isChatCapable(session.agentType) ? <StageViewToggle /> : null}
+      {isChatCapable(session.agentType) ? <StageViewToggle sessionId={session.id} /> : null}
 
       <Badge variant={STATUS_VARIANT[liveStatus] ?? 'neutral'} className="ml-1">
         <StatusDot status={liveStatus} />
@@ -334,7 +335,7 @@ export function SessionPane(): JSX.Element {
 
   const rightOpen = usePaddock((s) => s.rightOpen);
   const chrome = usePaddock((s) => s.chrome);
-  const stageView = usePaddock((s) => s.stageView);
+  const stageViews = usePaddock((s) => s.stageViews);
   const assistivePanels = usePaddock((s) => s.assistivePanels);
   const closeTools = usePaddock((s) => s.closeTools);
   // If the selected agent vanishes, leave tools chrome so we don't strand UI.
@@ -406,7 +407,8 @@ export function SessionPane(): JSX.Element {
   // Chat is a first-class alternative to the terminal for agents that produce a
   // transcript; the terminal stays the floor (always mounted, kept alive).
   const stageChatCapable = isChatCapable(stageSession?.agentType);
-  const chatActive = stageChatCapable && stageView === 'chat';
+  const chatActive =
+    stageChatCapable && stageSession != null && stageViewFor(stageViews, stageSession.id) === 'chat';
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-chrome={chrome}>

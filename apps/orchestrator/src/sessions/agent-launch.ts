@@ -241,14 +241,19 @@ export function agentSessionKind(agentType: AgentType): SessionKind {
  */
 export function acpLaunchCommand(
   agentType: AgentType,
-  permissionMode: SessionPermissionMode = 'default',
+  // Reserved for when ACP is re-enabled with an auth handshake (Gemini's autonomy
+  // flags carry into the ACP argv); unused while every agent takes the PTY path.
+  _permissionMode: SessionPermissionMode = 'default',
 ): string[] | null {
   switch (agentType) {
-    case 'gemini':
-      // Carry the autonomy flags into the ACP launch too — otherwise an
-      // `autonomous`/`plan` Gemini silently runs at the default permission level
-      // (e.g. an autonomous agent without `--yolo`).
-      return ['gemini', '--experimental-acp', ...geminiPermissionFlags(permissionMode)];
+    // Gemini CAN speak ACP (`--experimental-acp`), and agentd still supports it,
+    // but ACP is headless (no PTY) — which means the interactive Google sign-in
+    // has nowhere to appear, so an unauthenticated node dead-ends at
+    // "API key is missing". Until Shepherd drives the ACP auth handshake, launch
+    // Gemini on the PTY path instead: the terminal shows the real Gemini TUI, the
+    // sign-in prompt works exactly like before, and the Chat view still renders
+    // its transcript. Re-enable ACP here once the auth flow is wired (structured
+    // chat plan §Phase 1). Permission flags still apply on the PTY argv below.
     default:
       return null;
   }

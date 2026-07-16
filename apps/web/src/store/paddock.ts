@@ -214,24 +214,34 @@ function saveSidebarWidth(px: number): void {
   }
 }
 
-// The session stage's main view: the raw terminal (the floor, always available)
-// or the structured chat interface (only shown/effective for chat-capable agents).
-// Persisted as a global "mode" so a preference for chat follows you across agents.
+// The session stage's main view: the raw terminal (the floor + where agents log
+// in) or the structured chat interface. Remembered PER SESSION and persisted, so
+// each session reopens on the view you last used; new sessions default to the
+// terminal. `stageViewFor` is the pure default-aware selector.
 export type StageView = 'terminal' | 'chat';
-const STAGE_VIEW_KEY = 'flock.stageView';
-function loadStageView(): StageView {
+const STAGE_VIEW_KEY = 'flock.stageViews';
+function loadStageViews(): Record<string, StageView> {
   try {
-    return localStorage.getItem(STAGE_VIEW_KEY) === 'chat' ? 'chat' : 'terminal';
+    const raw = localStorage.getItem(STAGE_VIEW_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, StageView> = {};
+    for (const [id, v] of Object.entries(parsed)) if (v === 'chat' || v === 'terminal') out[id] = v;
+    return out;
   } catch {
-    return 'terminal';
+    return {};
   }
 }
-function saveStageView(v: StageView): void {
+function saveStageViews(views: Record<string, StageView>): void {
   try {
-    localStorage.setItem(STAGE_VIEW_KEY, v);
+    localStorage.setItem(STAGE_VIEW_KEY, JSON.stringify(views));
   } catch {
     /* storage unavailable */
   }
+}
+/** The remembered view for a session, defaulting to the terminal (login floor). */
+export function stageViewFor(views: Record<string, StageView>, sessionId: string): StageView {
+  return views[sessionId] ?? 'terminal';
 }
 
 const GRID_LAYOUT_KEY = 'flock.gridLayout';
@@ -329,8 +339,8 @@ export interface PaddockUiState {
   sidebarCollapsed: boolean;
   /** Persisted, user-draggable width of the left tree in px. */
   sidebarWidth: number;
-  /** Session stage main view: raw terminal or structured chat (chat-capable agents). */
-  stageView: StageView;
+  /** Per-session stage view (raw terminal | structured chat); default terminal. */
+  stageViews: Record<string, StageView>;
   /** Persisted per-id sidebar tree expand/collapse overrides (task 7.3). */
   treeExpanded: Record<string, boolean>;
   gridLayout: GridLayout;
@@ -387,8 +397,8 @@ export interface PaddockUiState {
   toggleSidebar: () => void;
   /** Set the left tree width in px (clamped + persisted). */
   setSidebarWidth: (px: number) => void;
-  /** Set the session stage view (persisted). */
-  setStageView: (v: StageView) => void;
+  /** Remember a session's stage view (persisted, per session). */
+  setStageView: (sessionId: string, v: StageView) => void;
   /** Set a sidebar tree branch's expand/collapse override (persisted). */
   setTreeExpanded: (id: string, expanded: boolean) => void;
   toggleGridLayout: () => void;
@@ -428,7 +438,7 @@ export const usePaddock = create<PaddockUiState>((set) => ({
 
   sidebarCollapsed: loadSidebarCollapsed(),
   sidebarWidth: loadSidebarWidth(),
-  stageView: loadStageView(),
+  stageViews: loadStageViews(),
   treeExpanded: loadTreeExpanded(),
   gridLayout: loadGridLayout(),
   layoutPresets: [],
@@ -605,10 +615,12 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     saveSidebarWidth(width);
     set({ sidebarWidth: width });
   },
-  setStageView: (v) => {
-    saveStageView(v);
-    set({ stageView: v });
-  },
+  setStageView: (sessionId, v) =>
+    set((s) => {
+      const stageViews = { ...s.stageViews, [sessionId]: v };
+      saveStageViews(stageViews);
+      return { stageViews };
+    }),
   setTreeExpanded: (id, expanded) =>
     set((s) => {
       const next = { ...s.treeExpanded, [id]: expanded };
