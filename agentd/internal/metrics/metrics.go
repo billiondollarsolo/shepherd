@@ -73,7 +73,7 @@ func SetAgentHome(home string) {
 // knownAgents are the coding-agent CLIs we probe for on the node. T20: dropped
 // "aider" (not launchable/integrated — advertising it implied breadth we don't
 // deliver). "gemini" stays: it's now a launchable agent type.
-var knownAgents = []string{"claude", "codex", "opencode", "gemini", "grok"}
+var knownAgents = []string{"claude", "codex", "opencode", "agy", "gemini", "grok"}
 
 // agentRescan is how often the background loop re-detects installed agents, so an
 // agent installed AFTER the daemon started shows up without a restart.

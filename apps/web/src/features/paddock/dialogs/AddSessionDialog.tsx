@@ -200,6 +200,11 @@ export function AddSessionDialog(): JSX.Element {
   const agentAvailable = (a: AgentType): boolean => {
     const bin = REQUIRED_BIN[a];
     if (bin === null) return true; // bare shell / dev — needs no agent CLI
+    // Antigravity is brand-new: older node daemons don't report `agy` in their
+    // detected-agents list yet (fixed in agentd, ships on the next daemon
+    // update). Don't block it in the meantime — the launch resolves `agy` from
+    // the node PATH regardless. Remove once all nodes report it.
+    if (a === 'antigravity') return true;
     if (!detectionKnown) return true; // unknown yet → don't block
     return detected.has(bin);
   };
