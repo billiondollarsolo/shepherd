@@ -1,6 +1,6 @@
 # Structured Chat View — Implementation Plan
 
-> **Status:** Phase 0 shipped · Phases 1–3 proposed · **Scope:** `agentd` + `apps/orchestrator` + `apps/web` + `packages/shared`
+> **Status:** Phase 0 shipped · view toggle (2.3) shipped early · Phases 1–3 proposed · **Scope:** `agentd` + `apps/orchestrator` + `apps/web` + `packages/shared`
 > **Authored:** 2026-07-16 · **Method:** multi-agent research (t3code, Claude Code/SDK/ACP, opencode, Shepherd codebase) → skeptic verification → synthesis. All feasibility claims verified SOLID; all file references verified against the tree.
 
 ---
