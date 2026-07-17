@@ -96,7 +96,7 @@ for image in shepherd-orchestrator shepherd-node-runtime shepherd-web; do
 done
 
 for image in \
-  'traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8' \
+  'traefik:v3.7@sha256:4299bbed850421258fc5448c2e0e6ad350981d4d335a68de11b92448aedbefe5' \
   'postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55'; do
   docker pull "$image"
   docker run --rm \
@@ -154,7 +154,7 @@ docker buildx imagetools inspect ghcr.io/billiondollarsolo/shepherd-web:<version
 docker pull ghcr.io/billiondollarsolo/shepherd-orchestrator:<version>
 docker pull ghcr.io/billiondollarsolo/shepherd-node-runtime:<version>
 docker pull ghcr.io/billiondollarsolo/shepherd-web:<version>
-docker pull 'traefik:v3.7@sha256:1cb3845d7a05e1473c9086351426597e911db49db382b6e4769f9b0744962ac8'
+docker pull 'traefik:v3.7@sha256:4299bbed850421258fc5448c2e0e6ad350981d4d335a68de11b92448aedbefe5'
 docker pull 'postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55'
 ```
 
