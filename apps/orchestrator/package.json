@@ -1,6 +1,6 @@
 {
   "name": "@flock/orchestrator",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "description": "Shepherd orchestrator: SSH/agentd orchestration, live status fan-out, event history, and secure remote development access.",
