@@ -144,28 +144,41 @@ export function StageLayout(): JSX.Element {
     if (!document || !ready) return;
     const key = JSON.stringify(document);
     if (key === lastPersisted.current) return;
-    const sequence = ++saveSequence.current;
-    const controller = new AbortController();
-    setSaveState((state) => (state === 'failed' ? 'retrying' : 'saving'));
-    setSaveError(null);
-    void putProjectPens(document, revision, fetch, controller.signal)
-      .then((saved) => {
-        if (sequence !== saveSequence.current) return;
-        lastPersisted.current = JSON.stringify(saved.pens);
-        setRevision(saved.revision);
-        setSaveState('saved');
-      })
-      .catch((error: unknown) => {
-        if (sequence !== saveSequence.current) return;
-        if (error instanceof ApiError && error.kind === 'aborted') return;
-        if (error instanceof ApiError && error.code === 'pens_conflict') {
-          const current = ProjectPensResponseSchema.safeParse(error.details);
-          if (current.success) conflictRevision.current = current.data.revision;
-        }
-        setSaveState('failed');
-        setSaveError(error instanceof Error ? error.message : 'Pens were not saved.');
-      });
-    return () => controller.abort();
+    // DEBOUNCE: coalesce rapid changes (a resize/drag fires many) into ONE save.
+    // Firing per-change and aborting the in-flight PUT races the server — an aborted
+    // request can still COMMIT and bump the revision, so the next save carries a stale
+    // baseRevision and self-conflicts ("Pens changed on another client"). Waiting for
+    // the drag to settle sidesteps that entirely; no per-change abort.
+    const handle = window.setTimeout(() => {
+      const sequence = ++saveSequence.current;
+      setSaveState((state) => (state === 'failed' ? 'retrying' : 'saving'));
+      setSaveError(null);
+      void putProjectPens(document, revision, fetch)
+        .then((saved) => {
+          if (sequence !== saveSequence.current) return;
+          lastPersisted.current = JSON.stringify(saved.pens);
+          setRevision(saved.revision);
+          setSaveState('saved');
+        })
+        .catch((error: unknown) => {
+          if (sequence !== saveSequence.current) return;
+          if (error instanceof ApiError && error.kind === 'aborted') return;
+          if (error instanceof ApiError && error.code === 'pens_conflict') {
+            const current = ProjectPensResponseSchema.safeParse(error.details);
+            if (current.success) {
+              // Almost always a SELF-conflict from this owner's own rapid saves.
+              // Adopt the server's revision and let the effect re-run to re-apply our
+              // layout on top (last-write-wins for one's own pen layout) — not a failure.
+              conflictRevision.current = current.data.revision;
+              setRevision(current.data.revision);
+              return;
+            }
+          }
+          setSaveState('failed');
+          setSaveError(error instanceof Error ? error.message : 'Pens were not saved.');
+        });
+    }, 350);
+    return () => window.clearTimeout(handle);
   }, [document, ready, revision, saveNonce]);
 
   const updatePenLayout = useCallback((penIdValue: string, layout: ProjectLayoutV1) => {
