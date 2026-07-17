@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './flock-test';
 
 const SURFACE0_LIGHT = '#ffffff';
-const SURFACE0_DARK = '#080808';
+const SURFACE0_DARK = '#0d0d0f';
 const THEME_STORAGE_KEY = 'flock.theme';
 
 async function surface0(page: Page): Promise<string> {
