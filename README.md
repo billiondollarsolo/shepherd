@@ -11,6 +11,7 @@
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) ·
 [Codex](https://openai.com/codex/) ·
 [OpenCode](https://opencode.ai/) ·
+[Antigravity](https://antigravity.google) ·
 [Gemini](https://geminicli.com/) ·
 [Grok](https://x.ai/cli) ·
 [Aider](https://aider.chat/) ·
@@ -35,19 +36,20 @@ without losing the session.
 
 ## What Shepherd gives you
 
-| Capability                         | What it gives you                                                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Durable agent sessions**         | Agents run on their node, not in the browser. Reload, close your laptop, or lose Wi-Fi without terminating their work.               |
-| **Nodes → Projects → Agents**      | See local and remote machines, the projects on each one, and every active agent through one clear hierarchy.                         |
-| **Multi-agent Pens**               | Arrange one to four agents in each Pen, drag agents between Pens, choose a layout, or focus one agent full-screen.                   |
-| **Live status and attention**      | See **Idle**, **Working**, **Needs you**, **Done**, **Error**, and connectivity state without opening every terminal.                |
-| **Real terminals everywhere**      | Drive the actual PTY from desktop or mobile, with reconnect, scrollback, touch controls, keyboard shortcuts, and responsive sizing.  |
-| **Full mobile Paddock**            | Select nodes and projects, create agents, inspect Git, open settings, and operate terminals without preparing everything on desktop. |
-| **Git visibility without churn**   | Inspect project status, diffs, and agent activity while leaving branch and worktree strategy to you and your agents.                 |
-| **Project Ports & Preview**        | Discover project web servers, remember labels, and open authenticated HTTP/WebSocket forwards in-app or in a native browser tab.     |
-| **Node health and compatibility**  | See CPU, memory, storage, agent availability, daemon health, and whether a node upgrade is optional or required.                     |
-| **Backup and operational insight** | Create verified encrypted vaults and inspect readiness, audit history, bounded failures, versions, and redacted diagnostics.         |
-| **Flexible self-hosting**          | Use bundled TLS, your existing reverse proxy, private HTTP on a trusted network, or a custom topology you own.                       |
+| Capability                         | What it gives you                                                                                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Durable agent sessions**         | Agents run on their node, not in the browser. Reload, close your laptop, or lose Wi-Fi without terminating their work.                                                                                                           |
+| **Nodes → Projects → Agents**      | See local and remote machines, the projects on each one, and every active agent through one clear hierarchy.                                                                                                                     |
+| **Multi-agent Pens**               | Arrange one to four agents in each Pen, drag agents between Pens, choose a layout, or focus one agent full-screen.                                                                                                               |
+| **Live status and attention**      | See **Idle**, **Working**, **Needs you**, **Done**, **Error**, and connectivity state without opening every terminal.                                                                                                            |
+| **Real terminals everywhere**      | Drive the actual PTY from desktop or mobile, with reconnect, scrollback, touch controls, keyboard shortcuts, and responsive sizing.                                                                                              |
+| **Terminal or structured Chat**    | Launch each agent in its native terminal, or a structured Chat view — instant messages, tool cards with diffs, real approve/deny, and the agent's live slash menu — for agents that speak a structured protocol (Claude, Codex). |
+| **Full mobile Paddock**            | Select nodes and projects, create agents, inspect Git, open settings, and operate terminals without preparing everything on desktop.                                                                                             |
+| **Git visibility without churn**   | Inspect project status, diffs, and agent activity while leaving branch and worktree strategy to you and your agents.                                                                                                             |
+| **Project Ports & Preview**        | Discover project web servers, remember labels, and open authenticated HTTP/WebSocket forwards in-app or in a native browser tab.                                                                                                 |
+| **Node health and compatibility**  | See CPU, memory, storage, agent availability, daemon health, and whether a node upgrade is optional or required.                                                                                                                 |
+| **Backup and operational insight** | Create verified encrypted vaults and inspect readiness, audit history, bounded failures, versions, and redacted diagnostics.                                                                                                     |
+| **Flexible self-hosting**          | Use bundled TLS, your existing reverse proxy, private HTTP on a trusted network, or a custom topology you own.                                                                                                                   |
 
 ## Quick start
 
@@ -322,21 +324,25 @@ first-class integrations add richer status and metadata.
 | **Claude Code**  | Hooks + transcript |    ✅     |            ✅            |  ✅  |
 | **Codex**        | Transcript         |    ⚠️     |            ✅            |  ✅  |
 | **OpenCode**     | Plugin             |    ✅     |            ✅            |  ✅  |
+| **Antigravity**  | Transcript         |    ✅     |            ⚠️            |  ⚠️  |
 | **Gemini**       | ACP                |    ✅     |            ⚠️            |  ⚠️  |
 | **Grok**         | Hooks              |     —     |            —             |  —   |
 | **Aider**        | PTY / process      |     —     |            —             |  —   |
 | **Cursor Agent** | PTY / process      |     —     |            —             |  —   |
 | **Amp**          | PTY / process      |     —     |            —             |  —   |
 
+> **Antigravity** (Google's `agy`) is the successor to the **Gemini** CLI, which Google
+> is retiring. Existing Gemini sessions still render; new work should prefer Antigravity.
+
 Integration details and limitations are documented in the
 [agent integration matrix](docs/agent-integration-matrix.md).
 
-The first five are first-class integrations with structured lifecycle signals where the
+The first six are first-class integrations with structured lifecycle signals where the
 tool exposes them. Aider, Cursor Agent, and Amp are supported terminal integrations:
 Shepherd launches and supervises the real CLI, but does not claim structured chat,
 token, plan, or attention telemetry that the tool does not provide.
 
-The bundled local runtime owns its image-provided tools. Remote nodes detect all eight
+The bundled local runtime owns its image-provided tools. Remote nodes detect all nine
 without installing anything; Node details offers an explicit **Install latest** or
 **Upgrade** action for each tool. You may instead install and pin versions yourself.
 
@@ -351,7 +357,7 @@ sudo ./scripts/flock-node-prepare.sh \
 ```
 
 Then add the node in Shepherd. The node page validates SSH access, runtime identities,
-workspace permissions, daemon compatibility, metrics, all eight supported agent CLIs,
+workspace permissions, daemon compatibility, metrics, all nine supported agent CLIs,
 and Docker. Install only the tools you want from Node details; provider authentication
 still happens inside that tool. Docker installation and root-equivalent agent access are
 separate, explicitly confirmed actions. The daemon upgrade policy distinguishes
@@ -407,7 +413,7 @@ metrics · transcripts metrics · transcripts
   tools, workspaces, PTYs, bounded commands, and loopback Preview tunnels; replacing the
   orchestrator does not replace it.
 - **The web app** is the React PWA. It provides the Paddock, node/project hierarchy,
-  Pens, terminals, diffs, activity, settings, and mobile experience.
+  Pens, terminals, structured chat, diffs, activity, settings, and mobile experience.
 
 The orchestrator is not in the PTY ownership path: disconnecting a browser does not
 stop an agent.
@@ -481,7 +487,7 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.5.3.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.6.1.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, edge proxy, database
 pins, web app, and preferred node daemon are validated together; the UI reports when a
 node daemon is compatible, recommended to upgrade, or required to upgrade.
