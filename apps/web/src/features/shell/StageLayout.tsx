@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   effectiveStageProjectId,
   layoutArrangeMode,
@@ -11,8 +11,11 @@ import type { Session } from '@flock/shared';
 import { usePaddock, type PenAction, type PenSummary } from '../../store/paddock';
 import { useSessions } from '../../data/queries';
 import { TerminalArea } from '../terminal/TerminalArea';
-import { ChatPanel } from '../chat/ChatPanel';
 import { isChatCapable } from '../chat/chatCapable';
+
+// Lazy: ChatPanel (+ its diff/highlight/markdown subtree) is on-demand — only for a
+// chat-mode session — so it loads in its own chunk instead of the paddock bundle.
+const ChatPanel = lazy(() => import('../chat/ChatPanel').then((m) => ({ default: m.ChatPanel })));
 
 /**
  * One agent tile in the stage/pen grid. Honors the agent's remembered Terminal/Chat
@@ -34,7 +37,9 @@ function StageLeaf({ session, focused }: { session: Session; focused: boolean })
       </div>
       {chatActive ? (
         <div className="absolute inset-0" data-testid={`stage-chat-${session.id}`}>
-          <ChatPanel session={session} />
+          <Suspense fallback={null}>
+            <ChatPanel session={session} />
+          </Suspense>
         </div>
       ) : null}
     </div>

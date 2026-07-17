@@ -20,13 +20,6 @@ export const PERMISSION_MODE_SHORT: Record<SessionPermissionMode, string> = {
   autonomous: 'Full access',
 };
 
-export const PERMISSION_MODE_HINTS: Record<SessionPermissionMode, string> = {
-  default: 'The agent asks before edits and commands.',
-  acceptEdits: 'Auto-accepts file edits; still asks for risky actions.',
-  plan: 'Read-only planning — no file writes.',
-  autonomous: '⚠ No prompts at all. Use only on an isolated / sandboxed node.',
-};
-
 /**
  * The permission modes each agent ACTUALLY supports. The four aren't interchangeable
  * across CLIs: Gemini has no read-only "plan" mode. Agents not listed (opencode =

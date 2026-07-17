@@ -3,7 +3,7 @@
  * header (breadcrumb · status · actions) above the focused agent terminal
  * group. Shows a calm empty state when nothing is selected.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -20,7 +20,6 @@ import { statusLabel, type AgentAuthority, type AgentType, type Session } from '
 import { RightPanel } from './RightPanel';
 import { RespondBar } from './RespondBar';
 import { StageLayout } from '../shell/StageLayout';
-import { ChatPanel } from '../chat/ChatPanel';
 import { isChatCapable } from '../chat/chatCapable';
 import { handoffSession } from '../../data/treeApi';
 import {
@@ -37,6 +36,10 @@ import {
 } from '../../components/ui';
 import { ResizeSeparator } from '../../components/ui/resize-separator';
 import { PRODUCT_NAME } from '../../brand';
+
+// Lazy: ChatPanel loads on-demand (chat-mode sessions) in its own chunk, keeping it
+// out of the critical-path paddock bundle.
+const ChatPanel = lazy(() => import('../chat/ChatPanel').then((m) => ({ default: m.ChatPanel })));
 
 /** Common authed handoff targets (the source's own type is filtered out at render). */
 const HANDOFF_TARGETS: ReadonlyArray<{ type: AgentType; label: string }> = [
@@ -391,7 +394,9 @@ export function SessionPane(): JSX.Element {
                 className={`absolute inset-0 ${chatActive ? '' : 'invisible pointer-events-none'}`}
                 aria-hidden={!chatActive}
               >
-                <ChatPanel session={stageSession} />
+                <Suspense fallback={null}>
+                  <ChatPanel session={stageSession} />
+                </Suspense>
               </div>
             ) : null}
           </div>

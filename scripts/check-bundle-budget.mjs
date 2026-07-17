@@ -61,8 +61,10 @@ const targets = [
     { raw: 25, gzip: 8, brotli: 7 },
   ],
   [
+    // Bumped in 0.6.1: the new-session dialog gained the Terminal/Chat launch mode
+    // toggle on top of the existing agent/model/effort/permission controls.
     entry('shared dialogs', (_key, value) => value.name === 'PaddockDialogs'),
-    { raw: 42, gzip: 14, brotli: 12 },
+    { raw: 48, gzip: 15, brotli: 14 },
   ],
   [
     entry('desktop terminal', (_key, value) => value.name === 'Terminal'),
@@ -90,7 +92,9 @@ for (const [target, limits] of targets) {
 }
 
 const shellCss = measurement(shellCssFile);
-assertBudget('application shell CSS', shellCss, { raw: 60, gzip: 13, brotli: 11 });
+// Bumped in 0.6.1: the t3code-style restyle (new utilities, rounder radii) + the
+// highlight.js token theme for chat code blocks grew the shared stylesheet.
+assertBudget('application shell CSS', shellCss, { raw: 72, gzip: 16, brotli: 14 });
 results.set('application shell CSS', shellCss);
 
 const nerdFont = shell.value.assets

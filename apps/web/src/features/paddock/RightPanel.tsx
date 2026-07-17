@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import type { Session } from '@flock/shared';
-import { ChatPanel } from '../chat/ChatPanel';
 import { ActivitySidebar } from '../activity';
 import { usePaddock, type RightTab } from '../../store/paddock';
 import { useSessionEvents, useSessionPlan, useUpdateSession } from '../../data/queries';
 
+const ChatPanel = lazy(() => import('../chat/ChatPanel').then((m) => ({ default: m.ChatPanel })));
 const SourceControlPanel = lazy(() => import('../center/SourceControlPanel'));
 const FilesPanel = lazy(() => import('../files/FilesPanel'));
 const SearchPanel = lazy(() => import('../search/SearchPanel'));

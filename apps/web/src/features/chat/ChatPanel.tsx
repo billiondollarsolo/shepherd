@@ -11,16 +11,8 @@
  * conversation lives in the Terminal tab. As more agents stream structured
  * messages, they light up here automatically.
  */
-import {
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
-import hljs from 'highlight.js/lib/common';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { highlightCode } from './chatHighlight';
 import {
   ArrowDown,
   Bot,
@@ -272,18 +264,23 @@ function CopyButton({
 /** A fenced code block: syntax-highlighted (highlight.js, themed to the terminal's
  *  Atom One ANSI palette so it flips with the theme) with a lang label + copy. */
 function CodeBlock({ lang, content }: { lang: string; content: string }): JSX.Element {
-  // Highlight to HTML: honor the fence language when known, else auto-detect. The
-  // result is trusted markup from highlight.js (escapes the source), rendered into
-  // a .hljs container whose token colours map to --flock-term-ansi-* in index.css.
-  const html = useMemo<string | null>(() => {
-    try {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(content, { language: lang, ignoreIllegals: true }).value;
-      }
-      return hljs.highlightAuto(content).value;
-    } catch {
-      return null;
-    }
+  // Highlight to HTML via the lazily-loaded highlighter (its own chunk — keeps the
+  // paddock bundle lean). Renders plain first, then upgrades once hljs resolves. The
+  // result is trusted markup (highlight.js escapes the source), rendered into a .hljs
+  // container whose token colours map to --flock-term-ansi-* in index.css.
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void highlightCode(content, lang)
+      .then((h) => {
+        if (!cancelled) setHtml(h);
+      })
+      .catch(() => {
+        if (!cancelled) setHtml(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [lang, content]);
   return (
     <div className="group/code relative my-1 overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-2">
