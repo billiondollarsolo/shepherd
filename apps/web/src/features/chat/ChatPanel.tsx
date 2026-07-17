@@ -34,6 +34,7 @@ import {
   Paperclip,
   Plus,
   Send,
+  Shield,
   ShieldAlert,
   Slash,
   TriangleAlert,
@@ -41,7 +42,12 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AgentType, Session } from '@flock/shared';
+import type { AgentType, Session, SessionPermissionMode } from '@flock/shared';
+import {
+  permissionModesForAgent,
+  PERMISSION_MODE_LABELS,
+  PERMISSION_MODE_SHORT,
+} from './permissionModes';
 import { qk, useAgentModels, useRelaunchSession, useSessionEvents } from '../../data/queries';
 import {
   DropdownMenu,
@@ -746,6 +752,68 @@ export function resolveSlashCommands(agentType: AgentType, liveCommands: string[
   return SLASH_COMMANDS[agentType] ?? [];
 }
 
+/** Permission/autonomy mode switch (plan · accept-edits · full-access) — relaunches
+ *  the agent in the chosen mode, mirroring the ModelSwitcher relaunch dance. Shown
+ *  only for agents that expose modes (claude/codex/antigravity/gemini). */
+function PermissionModeSwitcher({ session }: { session: Session }): JSX.Element | null {
+  const relaunch = useRelaunchSession();
+  const [open, setOpen] = useState(false);
+  const modes = permissionModesForAgent(session.agentType);
+  if (modes.length === 0) return null;
+  const current = session.permissionMode;
+  const pending = relaunch.isPending;
+
+  const apply = (mode: SessionPermissionMode): void => {
+    setOpen(false);
+    if (mode === current) return;
+    relaunch.mutate(
+      { id: session.id, patch: { permissionMode: mode } },
+      {
+        // Same reconnect nudge as the model switch: relaunch swaps the process under
+        // the same id, so force the terminal to reattach to the new one.
+        onSuccess: () => window.setTimeout(() => usePaddock.getState().terminalReconnect?.(), 600),
+      },
+    );
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Permission mode"
+          data-testid="chat-mode-switcher"
+          disabled={pending}
+          className="flex h-7 items-center gap-1 rounded-md border border-[var(--flock-border)] px-2 text-2xs text-flock-ink-primary transition-colors hover:bg-flock-surface-2 disabled:opacity-60"
+        >
+          {pending ? (
+            <Loader2 className="size-3 shrink-0 animate-spin text-flock-ink-muted" />
+          ) : (
+            <Shield className="size-3 shrink-0 text-flock-ink-muted" />
+          )}
+          <span className="truncate">{pending ? 'Switching…' : PERMISSION_MODE_SHORT[current]}</span>
+          <ChevronDown className="size-3 shrink-0 text-flock-ink-muted" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="top" className="w-56 p-1">
+        {modes.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => apply(m)}
+            className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-flock-surface-2 ${
+              m === current ? 'text-flock-ink-primary' : 'text-flock-ink-muted'
+            }`}
+          >
+            <span>{PERMISSION_MODE_LABELS[m]}</span>
+            {m === current ? <Check className="size-3.5 shrink-0 text-flock-accent" /> : null}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /**
  * Slash-command quick menu (Phase C) — sends the chosen command to the agent's
  * stdin. Prefers the session's LIVE slash commands so Claude shows its real ~40
@@ -867,6 +935,7 @@ function Composer({
         />
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
           <ModelSwitcher session={session} />
+          <PermissionModeSwitcher session={session} />
           <input
             ref={fileInputRef}
             type="file"

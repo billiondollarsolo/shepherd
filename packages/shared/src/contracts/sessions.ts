@@ -126,6 +126,8 @@ export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 export const RelaunchSessionRequest = z.object({
   model: z.string().min(1).max(200).nullable().optional(),
   reasoningEffort: SessionReasoningEffortEnum.optional(),
+  /** Switch the agent's permission/autonomy mode mid-session (relaunches in it). */
+  permissionMode: SessionPermissionModeEnum.optional(),
 });
 export type RelaunchSessionRequest = z.infer<typeof RelaunchSessionRequest>;
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, Bot } from 'lucide-react';
+import { AlertTriangle, Bot, MessageSquare, SquareTerminal } from 'lucide-react';
 import {
   AgentAuthorityEnum,
   authorityAllows,
@@ -161,7 +161,10 @@ export function AddSessionDialog(): JSX.Element {
   const [reasoningEffort, setReasoningEffort] = useState<SessionReasoningEffort>('default');
   // Opt into the structured chat transport (rich tool cards + approvals) instead of
   // the real TUI. Terminal-first: default off. Only offered for agents that have one.
-  const [structuredChat, setStructuredChat] = useState(false);
+  // Default to Chat (structured transport) for agents that support it — the
+  // t3code-style experience (instant messages, real approval cards, slash menu).
+  // Users can flip to Terminal (native TUI) per session at launch.
+  const [structuredChat, setStructuredChat] = useState(true);
   const [authority, setAuthority] = useState<'project_default' | AgentAuthority>('project_default');
   const [confirmedManage, setConfirmedManage] = useState(false);
   const [devCommand, setDevCommand] = useState('');
@@ -425,22 +428,42 @@ export function AddSessionDialog(): JSX.Element {
         </Field>
       ) : null}
       {showStructuredChat ? (
-        <label className="flex items-start gap-2 rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-3 text-xs text-flock-ink-primary">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={structuredChat}
-            onChange={(e) => setStructuredChat(e.target.checked)}
-            data-testid="sess-structured-chat"
-          />
-          <span>
-            <span className="block font-medium">Structured chat mode</span>
-            <span className="mt-0.5 block text-flock-ink-muted">
-              Rich tool cards with diffs, real approve/deny, and the agent&rsquo;s live slash
-              menu — over its structured protocol. Off keeps the real terminal (TUI).
-            </span>
+        <div className="rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-3 text-xs">
+          <span className="block font-medium text-flock-ink-primary">Session mode</span>
+          <div
+            role="tablist"
+            aria-label="Session mode"
+            className="mt-2 flex gap-1 rounded-md border border-[var(--flock-border)] bg-flock-surface-0 p-0.5"
+          >
+            {(
+              [
+                { chat: false, label: 'Terminal', Icon: SquareTerminal },
+                { chat: true, label: 'Chat', Icon: MessageSquare },
+              ] as const
+            ).map(({ chat, label, Icon }) => (
+              <button
+                key={label}
+                type="button"
+                role="tab"
+                aria-selected={structuredChat === chat}
+                onClick={() => setStructuredChat(chat)}
+                data-testid={`sess-mode-${label.toLowerCase()}`}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 font-medium transition-colors ${
+                  structuredChat === chat
+                    ? 'bg-flock-surface-2 text-flock-ink-primary shadow-flock-sm'
+                    : 'text-flock-ink-muted hover:text-flock-ink-primary'
+                }`}
+              >
+                <Icon className="size-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+          <span className="mt-2 block text-flock-ink-muted">
+            {structuredChat
+              ? 'Rich chat over the structured protocol — tool cards with diffs, real approve/deny, live slash menu. The Terminal tab shows a transcript.'
+              : 'The agent’s native terminal (real TUI). The Chat tab mirrors its transcript.'}
           </span>
-        </label>
+        </div>
       ) : null}
       <Field
         label={`${PRODUCT_NAME} authority`}

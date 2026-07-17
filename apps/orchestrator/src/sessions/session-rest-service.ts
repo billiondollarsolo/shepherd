@@ -535,6 +535,8 @@ export class SessionRestService {
     const model = patch.model === undefined ? record.model : patch.model;
     const reasoningEffort =
       patch.reasoningEffort === undefined ? record.reasoningEffort : patch.reasoningEffort;
+    const permissionMode =
+      patch.permissionMode === undefined ? record.permissionMode : patch.permissionMode;
 
     // Resolve the node for the launch (name/kind), like createSession does.
     const [node] = await this.db
@@ -567,6 +569,7 @@ export class SessionRestService {
         hookTokenHash,
         model: model ?? null,
         reasoningEffort: reasoningEffort ?? null,
+        permissionMode,
         // Back to `starting`: the fresh process re-reports via its hook stream.
         status: initialSessionStatus(record.agentType),
         statusDetail: null,
