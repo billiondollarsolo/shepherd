@@ -129,7 +129,7 @@ export function AgentsSwitcher(): JSX.Element {
     <div className="flex h-full min-h-0 flex-col" data-testid="agents-switcher">
       {contextProject || contextNode ? (
         <div className="border-b border-[var(--flock-border)] p-2" data-testid="agent-list-context">
-          <div className="grid gap-0.5 px-1 pb-1.5 text-2xs text-flock-ink-muted">
+          <div className="grid gap-0.5 px-1 pb-1.5 text-xs text-flock-ink-muted">
             {contextProject && contextProjectNode ? (
               <div className="flex min-w-0 items-center gap-1">
                 <span className="font-semibold text-flock-ink-primary">Host:</span>
