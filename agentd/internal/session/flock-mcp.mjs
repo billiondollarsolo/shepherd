@@ -179,7 +179,7 @@ rl.on('line', async (line) => {
       result: {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'flock', version: '0.5.3' },
+        serverInfo: { name: 'flock', version: '0.6.1' },
       },
     });
   }

@@ -6,6 +6,36 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-17
+
+### Added
+
+- Structured chat transports for Claude (persistent stream-json) and Codex
+  (app-server): rich tool cards with diffs, real approve/deny cards, the agent's
+  live slash menu, and per-turn status — all over the agent's own protocol. Chat-
+  capable agents (claude/codex) launch chat-first by default, with an explicit
+  Terminal/Chat mode choice at launch.
+- In-composer permission-mode switch (Ask / Accept edits / Plan / Full access) for
+  every agent that supports modes; changing it relaunches the agent in that mode.
+- Dynamic model discovery for Codex (`model/list` over the app-server).
+- Chat rendering: syntax highlighting (highlight.js, themed to the terminal's ANSI
+  palette), per-message copy, inline-code pills, and full-width assistant prose.
+
+### Changed
+
+- UI restyle: cool-graphite dark ramp, periwinkle-indigo accent, rounder radii,
+  solid sidebar selection, and a wider chat column.
+- Sidebar: the global New menu is limited to the Paddock lens; the Agents lens uses
+  a per-project New session button; the collapse control is grouped with the lens
+  toggle. Removed the in-pane Terminal/Chat toggle (the transport is fixed at launch).
+
+### Fixed
+
+- agentd structured transports resolve the agent binary against the runtime user's
+  bin dirs, so sessions launch on fresh nodes where the CLI lives in `~/.local/bin`.
+- Pen-layout resize no longer self-conflicts ("Pens changed on another client"):
+  layout saves are debounced and auto-recover from a stale revision.
+
 ## [0.5.3] - 2026-07-15
 
 ### Changed
