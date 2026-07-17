@@ -38,7 +38,6 @@ import {
   ShieldAlert,
   Slash,
   TriangleAlert,
-  User,
   Wrench,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -555,43 +554,41 @@ function Bubble({ msg, now }: { msg: MessageItem; now: number }): JSX.Element {
       </div>
     );
   }
-  const isUser = msg.role === 'user';
-  return (
-    <div className={`group flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div
-        className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${
-          isUser ? 'bg-flock-accent/15 text-flock-accent' : 'bg-flock-surface-2 text-flock-ink-muted'
-        }`}
-      >
-        {isUser ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
-      </div>
-      <div className={`flex min-w-0 max-w-[85%] flex-col gap-0.5 ${isUser ? 'items-end' : ''}`}>
-        <div
-          className={`min-w-0 rounded-lg px-3 py-1.5 text-xs leading-relaxed ${
-            isUser
-              ? 'whitespace-pre-wrap break-words bg-flock-accent/15 text-flock-ink-primary'
-              : 'bg-flock-surface-2 text-flock-ink-primary'
-          }`}
-        >
-          {isUser ? msg.text : <MessageBody text={msg.text} />}
+  // The user's own message: a compact right-aligned block so it reads as "mine"
+  // without eating the column — the assistant reply gets the full width.
+  if (msg.role === 'user') {
+    return (
+      <div className="group flex flex-col items-end gap-0.5">
+        <div className="min-w-0 max-w-[85%] whitespace-pre-wrap break-words rounded-2xl border border-[var(--flock-border)] bg-flock-surface-2 px-3.5 py-2 text-xs leading-relaxed text-flock-ink-primary">
+          {msg.text}
         </div>
-        {!isUser || msg.ts ? (
-          <div className={`flex items-center gap-1.5 px-1 ${isUser ? 'flex-row-reverse' : ''}`}>
-            {msg.ts ? (
-              <time className="text-2xs tabular-nums text-flock-ink-muted/70">
-                {chatTimeAgo(msg.ts, now)}
-              </time>
-            ) : null}
-            {!isUser ? (
-              <CopyButton
-                text={msg.text}
-                label="Copy message"
-                showLabel={false}
-                className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-              />
-            ) : null}
-          </div>
+        {msg.ts ? (
+          <time className="px-1 text-2xs tabular-nums text-flock-ink-muted/70">
+            {chatTimeAgo(msg.ts, now)}
+          </time>
         ) : null}
+      </div>
+    );
+  }
+  // The assistant reply: FULL-WIDTH prose (no bubble, no avatar), t3code-style — so
+  // it uses the whole chat column instead of a narrow left bubble.
+  return (
+    <div className="group min-w-0">
+      <div className="min-w-0 text-xs leading-relaxed text-flock-ink-primary">
+        <MessageBody text={msg.text} />
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5 px-0.5">
+        {msg.ts ? (
+          <time className="text-2xs tabular-nums text-flock-ink-muted/70">
+            {chatTimeAgo(msg.ts, now)}
+          </time>
+        ) : null}
+        <CopyButton
+          text={msg.text}
+          label="Copy message"
+          showLabel={false}
+          className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+        />
       </div>
     </div>
   );
