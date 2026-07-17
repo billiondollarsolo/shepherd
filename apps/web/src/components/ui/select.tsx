@@ -103,7 +103,9 @@ export const SelectContent = React.forwardRef<
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
-        className={cn('p-1', position === 'popper' && 'w-[var(--radix-select-trigger-width)]')}
+        // At LEAST the trigger width, but allowed to grow to fit long option labels
+        // (e.g. model names) instead of locking to the trigger and truncating.
+        className={cn('p-1', position === 'popper' && 'min-w-[var(--radix-select-trigger-width)]')}
       >
         {children}
       </SelectPrimitive.Viewport>

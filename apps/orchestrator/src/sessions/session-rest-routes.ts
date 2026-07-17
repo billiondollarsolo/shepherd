@@ -18,6 +18,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   CreateSessionRequest,
   ListSessionsQuery,
+  RelaunchSessionRequest,
   SessionIdParams,
   toPublicSession,
   UpdateSessionRequest,
@@ -30,6 +31,8 @@ import {
   SessionLaunchBlockedError,
   SessionPolicyViolationError,
   SessionProjectNotFoundError,
+  SessionRelaunchNotFoundError,
+  SessionRelaunchUnsupportedError,
   type SessionRestService,
 } from './session-rest-service.js';
 
@@ -82,6 +85,48 @@ export function registerSessionRestRoutes(
         }
         if (err instanceof SessionPolicyViolationError) {
           return reply.code(403).send({ error: { code: 'policy_denied', message: err.message } });
+        }
+        if (err instanceof SessionLaunchBlockedError) {
+          return reply.code(409).send({
+            error: { code: err.code, message: err.message, details: err.details },
+          });
+        }
+        throw err;
+      }
+    },
+  );
+
+  // --- relaunch session with a new model / effort (same id) --------------
+  // Closes the agentd PTY for the id and re-opens a fresh one under the SAME id
+  // with a new launch command (+ the agent's resume flag), preserving the
+  // conversation where the CLI can resume it. The record stays OPEN.
+  app.post(
+    '/api/sessions/:id/relaunch',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = SessionIdParams.safeParse(request.params);
+      if (!params.success) return badRequest(reply, 'a valid session id is required.');
+      const body = RelaunchSessionRequest.safeParse(request.body ?? {});
+      if (!body.success) {
+        return badRequest(reply, 'model must be a string/null and reasoningEffort a valid level.');
+      }
+      const actor = request.authUser!;
+      try {
+        const session = await deps.service.relaunchSession(params.data.id, body.data, {
+          userId: actor.id,
+          ip: request.ip ?? undefined,
+        });
+        return reply.code(200).send({ session: toPublicSession(session) });
+      } catch (err) {
+        if (err instanceof SessionRelaunchNotFoundError) {
+          return reply
+            .code(404)
+            .send({ error: { code: 'session_not_found', message: err.message } });
+        }
+        if (err instanceof SessionRelaunchUnsupportedError) {
+          return reply
+            .code(422)
+            .send({ error: { code: 'relaunch_unsupported', message: err.message } });
         }
         if (err instanceof SessionLaunchBlockedError) {
           return reply.code(409).send({

@@ -285,16 +285,10 @@ function SessionRow({ session }: { session: Session }): JSX.Element {
       onFocus={item.onFocus}
       className={`group/srow relative flex items-center gap-2 rounded-md py-1.5 pl-2.5 pr-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-flock-accent ${
         selected
-          ? 'bg-flock-accent/12 text-flock-ink-primary'
+          ? 'bg-flock-surface-3 text-flock-ink-primary'
           : 'text-flock-ink-muted hover:bg-flock-surface-2 hover:text-flock-ink-primary'
       }`}
     >
-      {selected ? (
-        <span
-          aria-hidden
-          className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-flock-accent"
-        />
-      ) : null}
       <button
         type="button"
         data-tree-primary
@@ -439,13 +433,10 @@ function ProjectRow({
         onFocus={item.onFocus}
         className={`group/prow relative flex items-center gap-1.5 rounded-md py-1.5 pl-2 pr-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-flock-accent ${
           scoped
-            ? 'bg-flock-accent/12 text-flock-ink-primary'
+            ? 'bg-flock-surface-3 text-flock-ink-primary'
             : 'text-flock-ink-primary hover:bg-flock-surface-2'
         }`}
       >
-        {scoped ? (
-          <span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-flock-accent" />
-        ) : null}
         {/* Clicking a project both expands it AND scopes the grid to it (its
             `/p/:id` URL) — the side-by-side view of just that project. */}
         <button

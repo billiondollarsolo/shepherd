@@ -69,6 +69,8 @@ func DetectAgent(command []string) string {
 		return "claude"
 	case "codex":
 		return "codex"
+	case "agy":
+		return "antigravity"
 	// T21: OpenCode is intentionally NOT tailed here. Its on-disk store is a sea of
 	// small JSON files (no JSONL), so the old heuristic was node-global mtime
 	// activity — which CLOBBERED per-session status and couldn't express
@@ -89,15 +91,21 @@ func DetectAgent(command []string) string {
 // configDir is the session's scoped agent-config dir (Shepherd hook injection), or
 // "" — the transcript tailers must follow it because claude/codex write their
 // transcripts under that scoped dir, not the default ~/.claude · ~/.codex.
+// home is the RUNTIME user's home (spec.Identity.Home), the base for the default
+// transcript locations when configDir is unset; "" falls back to the daemon's own
+// home (dev same-user mode). agentd runs as root, so without this the tailers look
+// under /root and never find a non-root agent's transcript.
 // chat receives whole conversation messages (role ∈ user|assistant|tool) parsed
 // from the transcript, so the structured Chat tab fills in for NATIVE sessions —
 // no ACP required. nil = caller doesn't want chat (status-only).
-func Watch(ctx context.Context, agent, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
+func Watch(ctx context.Context, agent, cwd, configDir, home string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
 	switch agent {
 	case "codex":
-		watchCodex(ctx, cwd, configDir, startedAt, claim, emit, chat)
+		watchCodex(ctx, cwd, configDir, home, startedAt, claim, emit, chat)
 	case "claude":
-		watchClaude(ctx, cwd, configDir, startedAt, claim, emit, chat)
+		watchClaude(ctx, cwd, configDir, home, startedAt, claim, emit, chat)
+	case "antigravity":
+		watchAntigravity(ctx, cwd, configDir, home, startedAt, claim, emit, chat)
 	// "opencode" is handled via its hook plugin (T1/T21), not transcript tailing.
 	}
 }
@@ -108,12 +116,26 @@ type ChatMsg struct {
 	Text string
 }
 
-// homeDir resolves the node user's home (where agents store their transcripts).
+// homeDir resolves the daemon process's home. Rarely the right base: agentd runs
+// as root (HOME=/root) but agents run as the runtime user and write transcripts
+// under THAT user's home — so callers pass the runtime home to homeOr and only
+// fall back here when it's unknown (dev same-user mode).
 func homeDir() string {
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
 		return h
 	}
 	return os.Getenv("HOME")
+}
+
+// homeOr returns the runtime user's home when known, else the daemon's own home.
+// The transcript watchers MUST resolve the RUNTIME user's home — with a non-root
+// runtime user, ~/.claude · ~/.codex · ~/.gemini live under /home/<user>, not
+// /root, so tailing the daemon's home would find nothing (no chat / no status).
+func homeOr(home string) string {
+	if home != "" {
+		return home
+	}
+	return homeDir()
 }
 
 // pollInterval is how often watchers poll for a new transcript file / new lines.

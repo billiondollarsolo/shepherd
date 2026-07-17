@@ -18,9 +18,11 @@ import {
   ChevronDown,
   Columns3,
   LayoutGrid,
+  MessageSquare,
   Plus,
   Rows3,
   SquareArrowOutUpRight,
+  SquareTerminal,
   X,
 } from 'lucide-react';
 import { StatusDot } from '../../components/StatusDot';
@@ -28,6 +30,8 @@ import { ringsSidebar, statusLabel, type Session, type Status } from '@flock/sha
 import { statusCssVar } from '../../theme/tokens';
 
 import { TerminalArea } from '../terminal/TerminalArea';
+import { ChatPanel } from '../chat/ChatPanel';
+import { isChatCapable } from '../chat/chatCapable';
 import {
   Button,
   DropdownMenu,
@@ -38,7 +42,7 @@ import {
   DropdownMenuTrigger,
   SimpleTooltip,
 } from '../../components/ui';
-import { usePaddock, type GridLayout } from '../../store/paddock';
+import { usePaddock, stageViewFor, type GridLayout } from '../../store/paddock';
 import { useProjects, useSessions } from '../../data/queries';
 import { useAgentdHealth, useLiveStatuses } from './liveData';
 import { ContextMeter } from './ContextMeter';
@@ -100,6 +104,12 @@ function GridCellInner({
   const openAgent = usePaddock((s) => s.openAgent);
   const selectSession = usePaddock((s) => s.selectSession);
   const openDialog = usePaddock((s) => s.openDialog);
+  const setStageView = usePaddock((s) => s.setStageView);
+  // Honor the agent's remembered Terminal/Chat choice per tile (select just this
+  // session's view → the cell re-renders only when ITS view flips, not on any).
+  const stageView = usePaddock((s) => stageViewFor(s.stageViews, session.id));
+  const chatCapable = isChatCapable(session.agentType);
+  const chatActive = chatCapable && stageView === 'chat';
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const r = requestAnimationFrame(() => setReady(true));
@@ -172,6 +182,34 @@ function GridCellInner({
             />
           ) : null}
           <span className="shrink-0 text-2xs text-flock-ink-muted">{statusLabel(status)}</span>
+          {chatCapable ? (
+            <div
+              role="tablist"
+              aria-label="Session view"
+              className="flex shrink-0 items-center gap-0.5 rounded border border-[var(--flock-border)] bg-flock-surface-2 p-0.5"
+            >
+              {([
+                ['terminal', SquareTerminal, 'Terminal view'],
+                ['chat', MessageSquare, 'Chat view'],
+              ] as const).map(([v, Icon, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={stageView === v}
+                  aria-label={label}
+                  onClick={() => setStageView(session.id, v)}
+                  className={`rounded p-0.5 transition-colors ${
+                    stageView === v
+                      ? 'bg-flock-surface-0 text-flock-ink-primary shadow-flock-sm'
+                      : 'text-flock-ink-muted hover:text-flock-ink-primary'
+                  }`}
+                >
+                  <Icon className="size-3" />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <SimpleTooltip label="Maximize session">
             <button
               type="button"
@@ -196,7 +234,18 @@ function GridCellInner({
       )}
       <div className="relative min-h-0 flex-1">
         {ready ? (
-          <TerminalArea session={session} register={focused} />
+          <>
+            {/* Terminal stays MOUNTED even under the chat view (kept `invisible`) so
+                its PTY + per-session input writer survive the toggle. */}
+            <div className={`absolute inset-0 ${chatActive ? 'invisible' : ''}`}>
+              <TerminalArea session={session} register={focused} />
+            </div>
+            {chatActive ? (
+              <div className="absolute inset-0" data-testid={`grid-chat-${session.id}`}>
+                <ChatPanel session={session} />
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="h-full w-full bg-flock-bg" />
         )}

@@ -330,7 +330,7 @@ export class WriteBehindEventQueue {
   private deriveHookType(raw: unknown): string {
     if (raw && typeof raw === 'object') {
       const obj = raw as Record<string, unknown>;
-      for (const key of ['hook_event_name', 'hook', 'type', 'event', 'name']) {
+      for (const key of ['hook_event_name', 'hook', 'type', 'event', 'name', 'kind']) {
         const v = obj[key];
         if (typeof v === 'string' && v.length > 0) return v;
       }

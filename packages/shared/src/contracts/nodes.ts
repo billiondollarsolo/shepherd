@@ -338,3 +338,20 @@ export type NodeMakeDirRequest = z.infer<typeof NodeMakeDirRequest>;
 
 export const NodeMakeDirResponse = z.object({ path: z.string() });
 export type NodeMakeDirResponse = z.infer<typeof NodeMakeDirResponse>;
+
+/**
+ * GET /api/nodes/:id/agent-models?agentType=... — the models an agent CLI offers
+ * on this node (drives the New-Session + chat-header model picker). For
+ * Antigravity the list is DISCOVERED live on the node (`agy models`); for other
+ * agents it's a curated static list. `models` are the exact `--model` values.
+ * Empty = the agent exposes no model picker (use its default).
+ */
+export const AgentModelsQuery = z.object({ agentType: AgentTypeEnum });
+export type AgentModelsQuery = z.infer<typeof AgentModelsQuery>;
+
+export const AgentModelsResponse = z.object({
+  models: z.array(z.string().min(1)),
+  /** Where the list came from: live node discovery vs a built-in catalog. */
+  source: z.enum(['node', 'static']),
+});
+export type AgentModelsResponse = z.infer<typeof AgentModelsResponse>;

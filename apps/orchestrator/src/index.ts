@@ -1031,6 +1031,38 @@ export async function main(): Promise<void> {
       });
     },
     onSessionCreateAborted: (sessionId) => liveChannels.untrackSession(sessionId),
+    // Relaunch (Phase B): force the authoritative live status of the (already
+    // tracked) session back to `starting`, since trackSession only seeds when absent.
+    resetLiveStatus: (sessionId) => {
+      liveChannels.statusMap.set(sessionId, 'starting', null, true);
+    },
+    // Relaunch (Phase B): close the agentd PTY (+ its :shell split) for the id
+    // WITHOUT touching the DB record, so relaunchSession can re-open a fresh PTY
+    // under the same id. Mirrors the terminate killer's close(id)+close(id:shell).
+    killAgentdSession: async (session, nodeKind) => {
+      // Use the CONNECTING resolver (not peek): a relaunch must guarantee the old
+      // PTY is closed BEFORE re-opening under the same id, or agentd's open-dedup
+      // re-attaches to the still-running old process and the switch silently no-ops.
+      const client = await agentdClientForNode(session.nodeId, nodeKind);
+      if (!client) return;
+      client.close(session.id);
+      client.close(`${session.id}:shell`); // shell drawer/split, if any
+      // `close` is fire-and-forget (no ack). Re-opening under the SAME id before the
+      // daemon has torn the old session down would hit agentd's open-dedup: it
+      // returns the still-closing session and never starts the new command, then the
+      // close lands and the process exits → the relaunched session dies ('done').
+      // So WAIT until the id disappears from the daemon's session list (bounded).
+      const deadline = Date.now() + 4000;
+      while (Date.now() < deadline) {
+        try {
+          const sessions = await client.list();
+          if (!sessions.some((s) => s.id === session.id)) return;
+        } catch {
+          return; // list failed → best-effort; proceed to re-open
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    },
     sessionEnv: async (session, hookToken, orchestrationToken) => {
       // Over an SSH node the agent must curl the node-local reverse-tunnel port
       // (US-9); the tunnel forwards it back to the orchestrator. Locally it hits

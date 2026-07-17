@@ -6,7 +6,7 @@
  * token mint, single authoritative record, best-effort agentd launch) is exercised
  * without real Postgres or a daemon.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_PROJECT_AGENT_POLICY,
@@ -327,5 +327,140 @@ describe('SessionRestService.listSessions', () => {
     const list = await service.listSessions();
     expect(list).toHaveLength(1);
     expect(list[0]!.agentType).toBe('claude-code');
+  });
+});
+
+/**
+ * Structured-transport selection. `CLAUDE_STREAM_ENABLED` is read ONCE at module
+ * load from FLOCK_CLAUDE_STREAM, so these cases stub the env and re-import the module
+ * (and schema) fresh, rebuilding the fake db against the freshly-imported tables so
+ * table-identity comparisons still match.
+ */
+describe('structured-transport selection', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  async function makeGatedService(flag: string | undefined): Promise<{
+    service: import('./session-rest-service.js').SessionRestService;
+    launches: Array<{ agentType: string; mode?: string; command?: string[] }>;
+  }> {
+    vi.resetModules();
+    if (flag === undefined) vi.stubEnv('FLOCK_CLAUDE_STREAM', '');
+    else vi.stubEnv('FLOCK_CLAUDE_STREAM', flag);
+    const schema = await import('../db/schema.js');
+    const { SessionRestService: SRS } = await import('./session-rest-service.js');
+
+    class Fake {
+      sessions: Record<string, unknown>[] = [];
+      constructor(
+        private readonly nodeRows: Record<string, unknown>[],
+        private readonly projectRows: Record<string, unknown>[],
+      ) {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      insert(): any {
+        return {
+          values: (vals: Record<string, unknown>) => ({
+            returning: async () => {
+              const row = Object.assign({}, vals);
+              this.sessions.push(row);
+              return [row];
+            },
+          }),
+        };
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete(): any {
+        return {
+          where: async () => {
+            this.sessions = [];
+          },
+        };
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      select(): any {
+        return {
+          from: (table: unknown) => {
+            const store =
+              table === schema.nodes
+                ? this.nodeRows
+                : table === schema.projects
+                  ? this.projectRows
+                  : this.sessions;
+            const whereThenable = Promise.resolve(store);
+            return Object.assign(Promise.resolve(store), {
+              where: () => Object.assign(whereThenable, { limit: async () => store.slice(0, 1) }),
+            });
+          },
+        };
+      }
+    }
+
+    const db = new Fake(
+      [{ id: NODE_ID, kind: 'local', name: 'local', connectionStatus: 'connected' }],
+      [
+        {
+          id: PROJECT_ID,
+          nodeId: NODE_ID,
+          name: 'flock',
+          workingDir: '/work',
+          agentPolicy: DEFAULT_PROJECT_AGENT_POLICY,
+        },
+      ],
+    );
+    const launches: Array<{ agentType: string; mode?: string; command?: string[] }> = [];
+    const service = new SRS({
+      db: db as never,
+      hashToken: async (t: string) => `hash:${t.slice(0, 6)}`,
+      audit: new AuditLogger({ async write() {} }),
+      agentdLaunch: async (args) => {
+        launches.push({ agentType: args.session.agentType, mode: args.mode, command: args.command });
+        return 'launched';
+      },
+      logger: { warn() {} },
+    });
+    return { service, launches };
+  }
+
+  it('launches codex over codex-app-server when structuredChat + flag are set', async () => {
+    const { service, launches } = await makeGatedService('1');
+    await service.createSession(
+      { projectId: PROJECT_ID, agentType: 'codex', structuredChat: true },
+      { userId: USER_ID },
+    );
+    expect(launches).toEqual([
+      { agentType: 'codex', mode: 'codex-app-server', command: ['codex', 'app-server'] },
+    ]);
+  });
+
+  it('leaves codex on the PTY path when structuredChat is off', async () => {
+    const { service, launches } = await makeGatedService('1');
+    await service.createSession(
+      { projectId: PROJECT_ID, agentType: 'codex' },
+      { userId: USER_ID },
+    );
+    expect(launches[0]!.mode).toBeUndefined();
+    expect(launches[0]!.command).toEqual(['codex']);
+  });
+
+  it('leaves codex on the PTY path when the flag is off even with structuredChat', async () => {
+    const { service, launches } = await makeGatedService(undefined);
+    await service.createSession(
+      { projectId: PROJECT_ID, agentType: 'codex', structuredChat: true },
+      { userId: USER_ID },
+    );
+    expect(launches[0]!.mode).toBeUndefined();
+    expect(launches[0]!.command).toEqual(['codex']);
+  });
+
+  it('still routes claude-code to claude-stream (precedence preserved)', async () => {
+    const { service, launches } = await makeGatedService('1');
+    await service.createSession(
+      { projectId: PROJECT_ID, agentType: 'claude-code', structuredChat: true },
+      { userId: USER_ID },
+    );
+    expect(launches[0]!.mode).toBe('claude-stream');
+    expect(launches[0]!.command?.[0]).toBe('claude');
   });
 });

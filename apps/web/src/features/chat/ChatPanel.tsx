@@ -11,30 +11,141 @@
  * conversation lives in the Terminal tab. As more agents stream structured
  * messages, they light up here automatically.
  */
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import hljs from 'highlight.js/lib/common';
 import {
   ArrowDown,
   Bot,
   Check,
+  ChevronDown,
   ChevronRight,
   Copy,
+  FolderGit2,
   ListChecks,
   Loader2,
+  Paperclip,
+  Plus,
   Send,
   ShieldAlert,
+  Slash,
   TriangleAlert,
   User,
   Wrench,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Session } from '@flock/shared';
-import { qk, useSessionEvents } from '../../data/queries';
-import { EmptyState } from '../../components/ui';
+import type { AgentType, Session } from '@flock/shared';
+import { qk, useAgentModels, useRelaunchSession, useSessionEvents } from '../../data/queries';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  EmptyState,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  toast,
+} from '../../components/ui';
+import { makeNodeDir, writeNodeFile } from '../../data/treeApi';
 import { Sheep } from '../../components/SheepIcon';
 import { usePaddock } from '../../store/paddock';
 import { LiveStatusTransitionContext, useLiveStatuses } from '../paddock/liveData';
 import { RespondBar } from '../paddock/RespondBar';
-import { chatTimeline, type PlanItem, type TimelineItem, type ToolStatus } from './chatTimeline';
+import { isChatCapable } from './chatCapable';
+import { chatTimeline, latestCommands, type DiffHunk, type PlanItem, type TimelineItem, type ToolStatus } from './chatTimeline';
+
+/**
+ * Type text into a session's PTY stdin. Prefers the session's OWN per-session writer
+ * (registered by every mounted terminal → works for any tile in the multi-agent
+ * grid), falling back to the global focused-terminal seam for older single-view
+ * paths. No-op if neither is available (terminal not mounted).
+ */
+function typeToSession(sessionId: string, text: string): void {
+  const s = usePaddock.getState();
+  (s.sessionInputs[sessionId] ?? s.terminalInput)?.(text);
+}
+
+/**
+ * Per-agent catalog of slash commands for the composer's quick "/" menu — the common
+ * built-ins for that CLI, typed verbatim into its PTY stdin. Not exhaustive (custom
+ * project/plugin commands still work by typing them), and session-disruptive ones
+ * (/login, /logout, /quit) are deliberately omitted. An empty list hides the button.
+ */
+const SLASH_COMMANDS: Partial<Record<AgentType, readonly string[]>> = {
+  'claude-code': [
+    '/clear',
+    '/compact',
+    '/context',
+    '/cost',
+    '/model',
+    '/config',
+    '/memory',
+    '/agents',
+    '/mcp',
+    '/permissions',
+    '/review',
+    '/pr-comments',
+    '/status',
+    '/doctor',
+    '/init',
+    '/resume',
+    '/vim',
+    '/add-dir',
+    '/terminal-setup',
+    '/release-notes',
+    '/bug',
+    '/help',
+  ],
+  codex: [
+    '/model',
+    '/approvals',
+    '/new',
+    '/diff',
+    '/mention',
+    '/status',
+    '/mcp',
+    '/init',
+    '/compact',
+    '/review',
+  ],
+  antigravity: ['/help'],
+};
+
+/**
+ * Agents whose CLI resumes the most-recent conversation on relaunch (they have
+ * `resumeArgs` in the orchestrator's AGENT_CAPS). For everyone else a model switch
+ * restarts the agent as a FRESH conversation — the switcher copy must say so rather
+ * than promise a resume it won't deliver.
+ */
+const RESUMES_ON_RELAUNCH: ReadonlySet<AgentType> = new Set<AgentType>([
+  'claude-code',
+  'antigravity',
+]);
+
+/** ~4MB client cap (the server caps at 5MB); keeps a friendly error before the wire. */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+/** Read a File as base64 (no `data:` prefix), for the node file-write endpoint. */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read file'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      resolve(result.slice(result.indexOf(',') + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 
 /** Compact relative time: "now", "3m", "2h", "4d". Pure. */
@@ -97,7 +208,7 @@ function renderInline(text: string): ReactNode[] {
       nodes.push(
         <code
           key={key++}
-          className="rounded-sm bg-flock-surface-2 px-1 font-mono text-flock-ink-primary"
+          className="rounded border border-[var(--flock-border)] bg-flock-surface-2 px-1.5 py-0.5 font-mono text-[0.92em] text-flock-ink-primary"
         >
           {m[1]}
         </code>,
@@ -115,31 +226,66 @@ function renderInline(text: string): ReactNode[] {
   return nodes;
 }
 
-/** A fenced code block: mono on surface-2 with a copy button. */
-function CodeBlock({ lang, content }: { lang: string; content: string }): JSX.Element {
+/** A small ghost copy button (Copy → Check), for code blocks and messages. */
+function CopyButton({
+  text,
+  label = 'Copy',
+  showLabel = true,
+  className = '',
+}: {
+  text: string;
+  label?: string;
+  showLabel?: boolean;
+  className?: string;
+}): JSX.Element {
   const [copied, setCopied] = useState(false);
   const copy = (): void => {
-    void navigator.clipboard?.writeText(content).then(() => {
+    void navigator.clipboard?.writeText(text).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     });
   };
   return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={label}
+      className={`flex items-center gap-1 rounded-xs px-1 py-0.5 text-2xs text-flock-ink-muted transition-colors hover:bg-flock-surface-1 hover:text-flock-ink-primary ${className}`}
+    >
+      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+      {showLabel ? (copied ? 'Copied' : label) : null}
+    </button>
+  );
+}
+
+/** A fenced code block: syntax-highlighted (highlight.js, themed to the terminal's
+ *  Atom One ANSI palette so it flips with the theme) with a lang label + copy. */
+function CodeBlock({ lang, content }: { lang: string; content: string }): JSX.Element {
+  // Highlight to HTML: honor the fence language when known, else auto-detect. The
+  // result is trusted markup from highlight.js (escapes the source), rendered into
+  // a .hljs container whose token colours map to --flock-term-ansi-* in index.css.
+  const html = useMemo<string | null>(() => {
+    try {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(content, { language: lang, ignoreIllegals: true }).value;
+      }
+      return hljs.highlightAuto(content).value;
+    } catch {
+      return null;
+    }
+  }, [lang, content]);
+  return (
     <div className="group/code relative my-1 overflow-hidden rounded-md border border-[var(--flock-border)] bg-flock-surface-2">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--flock-border)] px-2.5 py-1">
         <span className="font-mono text-2xs text-flock-ink-muted">{lang || 'code'}</span>
-        <button
-          type="button"
-          onClick={copy}
-          aria-label="Copy code"
-          className="flex items-center gap-1 rounded-xs px-1 py-0.5 text-2xs text-flock-ink-muted transition-colors hover:bg-flock-surface-1 hover:text-flock-ink-primary"
-        >
-          <Copy className="size-3" />
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <CopyButton text={content} label="Copy" className="hover:!bg-flock-surface-1" />
       </div>
       <pre className="overflow-x-auto px-3 py-2 font-mono text-2xs leading-relaxed text-flock-ink-primary">
-        <code>{content}</code>
+        {html != null ? (
+          <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
+        ) : (
+          <code>{content}</code>
+        )}
       </pre>
     </div>
   );
@@ -177,10 +323,44 @@ function ToolStatusIcon({ status }: { status: ToolStatus }): JSX.Element {
   return <Wrench className="size-3.5 shrink-0 text-flock-ink-muted" aria-label="pending" />;
 }
 
-/** A tool call rendered as a card: icon · title · status, with collapsible detail. */
+/** A structuredPatch rendered as +/- lines with red/green gutters. */
+function DiffView({ hunks }: { hunks: DiffHunk[] }): JSX.Element {
+  return (
+    <div className="overflow-x-auto border-t border-[var(--flock-border)] font-mono text-2xs leading-relaxed">
+      {hunks.map((hunk, hi) => (
+        <div key={hi}>
+          {(hunk.lines ?? []).map((line, li) => {
+            const sign = line.charAt(0);
+            const cls =
+              sign === '+'
+                ? 'bg-status-idle/10 text-status-idle'
+                : sign === '-'
+                  ? 'bg-status-error/10 text-status-error'
+                  : 'text-flock-ink-muted';
+            return (
+              <div key={li} className={`whitespace-pre px-3 ${cls}`}>
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A tool call rendered as a card: icon · title · one-line args summary · status,
+ * with a collapsible section showing the diff (structuredPatch, red/green) or the
+ * result text. All of input/diff/output are optional — a name-only tool (ACP, or
+ * before agentd ships the structured fields) still renders cleanly.
+ */
 function ToolCard({ item }: { item: ToolItem }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const hasDetail = item.detail != null && item.detail.length > 0;
+  const hasDiff = item.diff != null && item.diff.length > 0;
+  const output = item.output ?? item.detail;
+  const hasOutput = output != null && output.length > 0;
+  const expandable = hasDiff || hasOutput;
   return (
     <div
       data-testid="chat-tool-card"
@@ -190,25 +370,42 @@ function ToolCard({ item }: { item: ToolItem }): JSX.Element {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        disabled={!hasDetail}
+        disabled={!expandable}
         className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-flock-surface-2 disabled:cursor-default disabled:hover:bg-transparent"
       >
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-flock-surface-2">
           <Wrench className="size-3 text-flock-ink-muted" />
         </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-2xs text-flock-ink-primary">
-          {item.title}
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className="shrink-0 font-mono text-2xs font-semibold text-flock-ink-primary">
+            {item.title}
+          </span>
+          {item.input ? (
+            <span
+              className="min-w-0 truncate font-mono text-2xs text-flock-ink-muted"
+              data-testid="chat-tool-input"
+            >
+              {item.input}
+            </span>
+          ) : null}
         </span>
         <ToolStatusIcon status={item.status} />
-        {hasDetail ? (
+        {expandable ? (
           <ChevronRight
             className={`size-3.5 shrink-0 text-flock-ink-muted transition-transform ${open ? 'rotate-90' : ''}`}
           />
         ) : null}
       </button>
-      {open && hasDetail ? (
-        <pre className="overflow-x-auto border-t border-[var(--flock-border)] px-3 py-2 font-mono text-2xs leading-relaxed text-flock-ink-primary">
-          <code>{item.detail}</code>
+      {open && hasDiff ? (
+        <div data-testid="chat-tool-diff">
+          <DiffView hunks={item.diff!} />
+        </div>
+      ) : open && hasOutput ? (
+        <pre
+          data-testid="chat-tool-output"
+          className="overflow-x-auto border-t border-[var(--flock-border)] px-3 py-2 font-mono text-2xs leading-relaxed text-flock-ink-primary"
+        >
+          <code>{output}</code>
         </pre>
       ) : null}
     </div>
@@ -247,22 +444,58 @@ function PlanCard({ items }: { items: PlanItem[] }): JSX.Element {
 }
 
 /**
- * A permission/input request the agent is blocked on. Approve/Deny are
- * best-effort today (typed into the agent's stdin); a real audited approval
- * lands with the ACP request/response round-trip (plan §Phase 1).
+ * A permission/input request the agent is blocked on. For Claude's stream-json
+ * transport this is a REAL audited approval: agentd surfaces a `can_use_tool`
+ * control_request as `request.opened` (carrying the tool name + args), and
+ * Approve/Deny type 'y'/'n' into the session's stdin, which agentd's driver
+ * consumes as the control_response answer (NOT a prompt). `request.resolved`
+ * greys the card out once answered.
  */
-function RequestCard({ item }: { item: Extract<TimelineItem, { kind: 'request' }> }): JSX.Element {
-  const respond = (text: string): void => usePaddock.getState().terminalInput?.(`${text}\r`);
+function RequestCard({
+  item,
+  sessionId,
+}: {
+  item: Extract<TimelineItem, { kind: 'request' }>;
+  sessionId: string;
+}): JSX.Element {
+  // Route to THIS session's PTY (per-session writer), not the global focused-terminal
+  // seam — so an approval in a non-focused grid tile reaches its own agent.
+  const respond = (text: string): void => typeToSession(sessionId, `${text}\r`);
+  const isPermission = item.requestKind === 'permission';
+  // "Approve <tool> — <args>?" so the operator sees WHAT they're approving.
+  const heading = item.title
+    ? isPermission
+      ? `Approve ${item.title}`
+      : item.title
+    : isPermission
+      ? 'Approval requested'
+      : 'Input requested';
   return (
     <div
       data-testid="chat-request-card"
-      className="rounded-lg border border-status-awaiting/40 bg-status-awaiting/5 px-3 py-2"
+      data-resolved={item.resolved ? 'true' : 'false'}
+      className={`rounded-lg border px-3 py-2 ${
+        item.resolved
+          ? 'border-[var(--flock-border)] bg-flock-surface-1 opacity-60'
+          : 'border-status-awaiting/40 bg-status-awaiting/5'
+      }`}
     >
-      <div className="flex items-center gap-1.5 text-xs font-medium text-flock-ink-primary">
-        <ShieldAlert className="size-3.5 shrink-0 text-status-awaiting" />
-        {item.title ?? (item.requestKind === 'permission' ? 'Approval requested' : 'Input requested')}
+      <div className="flex min-w-0 items-baseline gap-1.5 text-xs font-medium text-flock-ink-primary">
+        <ShieldAlert
+          className={`size-3.5 shrink-0 self-center ${item.resolved ? 'text-flock-ink-muted' : 'text-status-awaiting'}`}
+        />
+        <span className="shrink-0">{heading}</span>
+        {item.input ? (
+          <span
+            className="min-w-0 truncate font-mono text-2xs text-flock-ink-muted"
+            data-testid="chat-request-input"
+          >
+            — {item.input}
+          </span>
+        ) : null}
+        {isPermission && !item.input ? <span aria-hidden>?</span> : null}
       </div>
-      {item.requestKind === 'permission' ? (
+      {isPermission && !item.resolved ? (
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
@@ -280,6 +513,8 @@ function RequestCard({ item }: { item: Extract<TimelineItem, { kind: 'request' }
           </button>
           <span className="text-2xs text-flock-ink-muted">sent to the agent&rsquo;s input</span>
         </div>
+      ) : item.resolved ? (
+        <div className="mt-1.5 text-2xs text-flock-ink-muted">Resolved</div>
       ) : null}
     </div>
   );
@@ -316,7 +551,7 @@ function Bubble({ msg, now }: { msg: MessageItem; now: number }): JSX.Element {
   }
   const isUser = msg.role === 'user';
   return (
-    <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`group flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
         className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${
           isUser ? 'bg-flock-accent/15 text-flock-accent' : 'bg-flock-surface-2 text-flock-ink-muted'
@@ -334,10 +569,22 @@ function Bubble({ msg, now }: { msg: MessageItem; now: number }): JSX.Element {
         >
           {isUser ? msg.text : <MessageBody text={msg.text} />}
         </div>
-        {msg.ts ? (
-          <time className="px-1 text-2xs tabular-nums text-flock-ink-muted/70">
-            {chatTimeAgo(msg.ts, now)}
-          </time>
+        {!isUser || msg.ts ? (
+          <div className={`flex items-center gap-1.5 px-1 ${isUser ? 'flex-row-reverse' : ''}`}>
+            {msg.ts ? (
+              <time className="text-2xs tabular-nums text-flock-ink-muted/70">
+                {chatTimeAgo(msg.ts, now)}
+              </time>
+            ) : null}
+            {!isUser ? (
+              <CopyButton
+                text={msg.text}
+                label="Copy message"
+                showLabel={false}
+                className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+              />
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
@@ -345,7 +592,15 @@ function Bubble({ msg, now }: { msg: MessageItem; now: number }): JSX.Element {
 }
 
 /** Route a timeline item to its renderer. */
-function TimelineRow({ item, now }: { item: TimelineItem; now: number }): JSX.Element {
+function TimelineRow({
+  item,
+  now,
+  sessionId,
+}: {
+  item: TimelineItem;
+  now: number;
+  sessionId: string;
+}): JSX.Element | null {
   switch (item.kind) {
     case 'message':
       return <Bubble msg={item} now={now} />;
@@ -354,53 +609,334 @@ function TimelineRow({ item, now }: { item: TimelineItem; now: number }): JSX.El
     case 'plan':
       return <PlanCard items={item.items} />;
     case 'request':
-      return <RequestCard item={item} />;
+      return <RequestCard item={item} sessionId={sessionId} />;
     case 'error':
       return <ErrorRow text={item.text} />;
+    case 'commands':
+      // Invisible side-channel — the dynamic slash-command catalog feeds the
+      // composer's SlashMenu (via latestCommands), it isn't rendered inline.
+      return null;
   }
 }
 
-/** The always-present composer — types a prompt into the agent's PTY (as stdin). */
-function Composer(): JSX.Element {
+/** One row in the model picker: label + a check when it's the current model. */
+function ModelOption({
+  label,
+  active,
+  onSelect,
+}: {
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-flock-ink-primary transition-colors hover:bg-flock-surface-2"
+    >
+      <Check className={`size-3.5 shrink-0 ${active ? 'text-flock-accent' : 'invisible'}`} />
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * Bottom-left live model switcher (Phase B) — a compact combobox: pick a suggested
+ * model OR type ANY alias/full id (e.g. `claude-fable-5`), since some CLIs (claude,
+ * codex) don't enumerate their full model list. Choosing one relaunches the session
+ * in place. The "restarts the agent" note lives INSIDE the popover (not a hover
+ * tooltip that overlaps the conversation). Shown only for chat-capable agents that
+ * support model selection (non-empty catalog).
+ */
+function ModelSwitcher({ session }: { session: Session }): JSX.Element | null {
+  const { data: modelsData } = useAgentModels(session.nodeId, session.agentType);
+  const relaunch = useRelaunchSession();
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const models = modelsData?.models ?? [];
+  if (!isChatCapable(session.agentType) || models.length === 0) return null;
+
+  const currentModel = session.model ?? null;
+  const pending = relaunch.isPending;
+  const resumes = RESUMES_ON_RELAUNCH.has(session.agentType);
+
+  const apply = (model: string | null): void => {
+    setOpen(false);
+    setDraft('');
+    if (model === currentModel) return;
+    relaunch.mutate(
+      { id: session.id, patch: { model } },
+      {
+        // The relaunch swaps the PTY under the same id; the terminal saw the old
+        // process 'exit' and won't auto-reattach, so force it to reconnect to the
+        // new PTY (a short delay lets agentd finish opening it). Without this,
+        // terminalInput keeps writing to the dead socket → messages go nowhere.
+        onSuccess: () => window.setTimeout(() => usePaddock.getState().terminalReconnect?.(), 600),
+      },
+    );
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Model"
+          data-testid="chat-model-switcher"
+          disabled={pending}
+          className="flex h-7 max-w-[14rem] items-center gap-1 rounded-md border border-[var(--flock-border)] px-2 text-2xs text-flock-ink-primary transition-colors hover:bg-flock-surface-2 disabled:opacity-60"
+        >
+          {pending ? (
+            <Loader2 className="size-3 shrink-0 animate-spin text-flock-ink-muted" />
+          ) : (
+            <Bot className="size-3 shrink-0 text-flock-ink-muted" />
+          )}
+          <span className="truncate">{pending ? 'Switching…' : (currentModel ?? 'Default')}</span>
+          <ChevronDown className="size-3 shrink-0 text-flock-ink-muted" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="top" className="w-64 p-0">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const t = draft.trim();
+            if (t) apply(t);
+          }}
+          className="border-b border-[var(--flock-border)] p-2"
+        >
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type any model, e.g. claude-fable-5"
+            spellCheck={false}
+            autoComplete="off"
+            className="h-7 text-xs"
+          />
+        </form>
+        <div className="max-h-56 overflow-y-auto p-1">
+          <ModelOption
+            label="Default (CLI decides)"
+            active={currentModel === null}
+            onSelect={() => apply(null)}
+          />
+          {models.map((m) => (
+            <ModelOption key={m} label={m} active={currentModel === m} onSelect={() => apply(m)} />
+          ))}
+        </div>
+        <div className="border-t border-[var(--flock-border)] px-2.5 py-1.5 text-2xs leading-snug text-flock-ink-muted">
+          Switching restarts the agent{resumes ? ' and resumes this conversation.' : ' as a new conversation.'}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Resolve the slash commands the composer should offer: the session's LIVE
+ * commands (streamed via Claude's stream-json `init` → commands.updated events)
+ * when any have arrived, else the static per-agent catalog. Live commands arrive
+ * bare (e.g. "compact") — normalized to the "/compact" form the catalog and the
+ * PTY both use. Pure + unit-tested.
+ */
+export function resolveSlashCommands(agentType: AgentType, liveCommands: string[] | null): readonly string[] {
+  if (liveCommands && liveCommands.length > 0) {
+    return liveCommands.map((c) => (c.startsWith('/') ? c : `/${c}`));
+  }
+  return SLASH_COMMANDS[agentType] ?? [];
+}
+
+/**
+ * Slash-command quick menu (Phase C) — sends the chosen command to the agent's
+ * stdin. Prefers the session's LIVE slash commands so Claude shows its real ~40
+ * commands; falls back to the static per-agent catalog before any arrive.
+ */
+function SlashMenu({
+  session,
+  liveCommands,
+}: {
+  session: Session;
+  liveCommands: string[] | null;
+}): JSX.Element | null {
+  const commands = resolveSlashCommands(session.agentType, liveCommands);
+  if (commands.length === 0) return null;
+  const run = (cmd: string): void => typeToSession(session.id, `${cmd}\r`);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Slash commands"
+          data-testid="chat-slash-menu"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--flock-border)] text-flock-ink-muted transition-colors hover:bg-flock-surface-2 hover:text-flock-ink-primary"
+        >
+          <Slash className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 min-w-[10rem] overflow-y-auto">
+        {commands.map((cmd) => (
+          <DropdownMenuItem key={cmd} onSelect={() => run(cmd)} className="font-mono text-xs">
+            {cmd}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The always-present composer — types a prompt into the agent's PTY (as stdin),
+ *  with an inline toolbar: model switcher · slash menu · image upload · send. */
+function Composer({
+  session,
+  liveCommands,
+}: {
+  session: Session;
+  liveCommands: string[] | null;
+}): JSX.Element {
+  const [draft, setDraft] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadedName, setUploadedName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const send = (): void => {
     const text = draft.trim();
     if (text.length === 0) return;
-    usePaddock.getState().terminalInput?.(`${text}\r`);
+    typeToSession(session.id, `${text}\r`);
     setDraft('');
+    setUploadedName(null); // the attachment (if any) is now part of the sent prompt
   };
+
+  // Phase D: write the picked image into the node workspace, then drop its
+  // absolute path into the draft so the user can reference it by path.
+  const onPickImage = async (file: File): Promise<void> => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Image is too large (max 4MB).');
+      return;
+    }
+    setUploading(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+      const fileName = `${Date.now()}-${safeName}`;
+      // Prefer a tidy .flock-uploads dir; tolerate "already exists" and fall back
+      // to the workspace root if the dir can't be created at all.
+      let dir = session.workingDir;
+      try {
+        await makeNodeDir(session.nodeId, session.workingDir, '.flock-uploads');
+        dir = `${session.workingDir.replace(/\/+$/, '')}/.flock-uploads`;
+      } catch {
+        dir = `${session.workingDir.replace(/\/+$/, '')}/.flock-uploads`;
+        // Assume "already exists"; a real failure surfaces on the write below.
+      }
+      let path = `${dir.replace(/\/+$/, '')}/${fileName}`;
+      try {
+        await writeNodeFile(session.nodeId, path, base64);
+      } catch {
+        // Directory couldn't be used — fall back to the workspace root.
+        path = `${session.workingDir.replace(/\/+$/, '')}/${fileName}`;
+        await writeNodeFile(session.nodeId, path, base64);
+      }
+      setDraft((d) => (d.length === 0 ? path : `${d} ${path}`));
+      setUploadedName(file.name);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not upload image.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div className="flex items-end gap-2 border-t border-[var(--flock-border)] bg-flock-surface-1 p-2">
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            send();
-          }
-        }}
-        rows={1}
-        placeholder="Send a prompt to the agent…"
-        data-testid="chat-composer"
-        className="max-h-32 min-h-[2rem] min-w-0 flex-1 resize-none rounded-md border border-[var(--flock-border)] bg-flock-surface-0 px-2.5 py-1.5 text-xs text-flock-ink-primary outline-none placeholder:text-flock-ink-muted focus:border-flock-accent"
-      />
-      <button
-        type="button"
-        onClick={send}
-        disabled={draft.trim().length === 0}
-        aria-label="Send prompt"
-        className="flex size-8 shrink-0 items-center justify-center rounded-md bg-flock-accent text-[var(--flock-accent-foreground)] transition-opacity hover:bg-flock-accent-hover disabled:opacity-40"
-      >
-        <Send className="size-4" />
-      </button>
+    // No footer bar / divider — the composer floats on the same page surface as the
+    // conversation (t3code-style), so the input, model select and "/"·"+" controls
+    // read as one box ON the page rather than an isolated bottom section.
+    <div className="bg-flock-bg px-3 pb-3 pt-1">
+      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-[var(--flock-border)] bg-flock-surface-0 shadow-sm transition-colors focus-within:border-flock-accent">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          rows={1}
+          placeholder="Send a prompt to the agent…"
+          data-testid="chat-composer"
+          className="max-h-40 min-h-[2.75rem] w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-xs text-flock-ink-primary outline-none focus:outline-none focus-visible:outline-none placeholder:text-flock-ink-muted"
+        />
+        <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
+          <ModelSwitcher session={session} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            data-testid="chat-attach-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void onPickImage(file);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Attach image"
+            data-testid="chat-attach"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--flock-border)] text-flock-ink-muted transition-colors hover:bg-flock-surface-2 hover:text-flock-ink-primary disabled:opacity-40"
+          >
+            <Plus className="size-4" />
+          </button>
+          <SlashMenu session={session} liveCommands={liveCommands} />
+          {uploading ? (
+            <span className="flex items-center gap-1 text-2xs text-flock-ink-muted">
+              <Loader2 className="size-3 animate-spin" /> Uploading…
+            </span>
+          ) : uploadedName ? (
+            <span
+              className="flex items-center gap-1 truncate rounded-full bg-flock-surface-2 px-2 py-0.5 text-2xs text-flock-ink-muted"
+              data-testid="chat-upload-chip"
+            >
+              <Paperclip className="size-3" /> uploaded {uploadedName}
+            </span>
+          ) : null}
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={send}
+              disabled={draft.trim().length === 0}
+              aria-label="Send prompt"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-flock-accent text-[var(--flock-accent-foreground)] transition-opacity hover:bg-flock-accent-hover disabled:opacity-40"
+            >
+              <Send className="size-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto mt-1.5 flex w-full max-w-2xl items-center gap-1.5 px-1.5 text-2xs text-flock-ink-muted">
+        <FolderGit2 className="size-3 shrink-0" />
+        <span className="truncate" title={session.workingDir}>
+          {session.workingDir}
+        </span>
+      </div>
     </div>
   );
 }
 
 export function ChatPanel({ session }: { session: Session }): JSX.Element {
   const { data: events = [] } = useSessionEvents(session.id);
-  const timeline = chatTimeline(events);
+  // The events API returns newest-first (desc seq); a chat reads oldest → newest
+  // (top → bottom), and chatTimeline's tool-lifecycle merge also assumes
+  // chronological order, so fold the reversed (ascending) list.
+  const timeline = chatTimeline([...events].reverse());
+  const liveCommands = latestCommands(timeline);
+  // The `commands` item is an invisible side-channel (consumed by latestCommands for
+  // the slash menu) — exclude it from what's rendered AND from the "is the chat
+  // empty?" check, else a session that only posted commands.updated (from init)
+  // would suppress the empty state and show a blank panel.
+  const visible = timeline.filter((item) => item.kind !== 'commands');
   const now = Date.now();
   const liveStatus = useLiveStatuses().get(session.id) ?? session.status;
   const working = liveStatus === 'running' || liveStatus === 'starting';
@@ -444,13 +980,9 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col bg-flock-bg" data-testid="chat-panel">
       <div className="relative min-h-0 flex-1">
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="h-full space-y-3 overflow-y-auto p-3"
-        >
-          {timeline.length === 0 && !working ? (
-            <div className="flex h-full items-center justify-center">
+        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
+          {visible.length === 0 && !working ? (
+            <div className="flex h-full items-center justify-center p-3">
               <EmptyState
                 icon={<Sheep className="text-flock-ink-muted" />}
                 title="Start the conversation"
@@ -458,12 +990,13 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
               />
             </div>
           ) : (
-            <>
-              {timeline.map((item) => (
-                <TimelineRow key={item.id} item={item} now={now} />
+            // ChatGPT-style narrow, centered reading column.
+            <div className="mx-auto w-full max-w-2xl space-y-3 px-4 py-4">
+              {visible.map((item) => (
+                <TimelineRow key={item.id} item={item} now={now} sessionId={session.id} />
               ))}
               {working ? <WorkingRow /> : null}
-            </>
+            </div>
           )}
         </div>
 
@@ -480,7 +1013,7 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
       </div>
 
       <RespondBar session={session} />
-      <Composer />
+      <Composer session={session} liveCommands={liveCommands} />
     </div>
   );
 }

@@ -19,11 +19,46 @@ export interface PlanItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
+/** One hunk of a unified diff (Claude's `structuredPatch` entry); all fields optional. */
+export interface DiffHunk {
+  oldStart?: number;
+  oldLines?: number;
+  newStart?: number;
+  newLines?: number;
+  lines?: string[];
+}
+
 export type TimelineItem =
   | { kind: 'message'; id: string; role: 'user' | 'assistant' | 'reasoning'; text: string; ts?: string }
-  | { kind: 'tool'; id: string; title: string; detail?: string; status: ToolStatus; ts?: string }
+  | {
+      kind: 'tool';
+      id: string;
+      title: string;
+      detail?: string;
+      /** A compact human summary of the tool's args (e.g. a file_path or command). */
+      input?: string;
+      /** The tool result's text output, when the transport carries it. */
+      output?: string;
+      /** Claude's structuredPatch (unified-diff hunks), when present. */
+      diff?: DiffHunk[];
+      status: ToolStatus;
+      ts?: string;
+    }
   | { kind: 'plan'; id: string; items: PlanItem[]; ts?: string }
-  | { kind: 'request'; id: string; requestKind: 'permission' | 'input'; title?: string; resolved: boolean; ts?: string }
+  | {
+      kind: 'request';
+      id: string;
+      requestKind: 'permission' | 'input';
+      /** The tool name being approved (e.g. "Write"), from request.opened's title. */
+      title?: string;
+      /** A compact human summary of the tool's args (reuses {@link summarizeToolInput}). */
+      input?: string;
+      resolved: boolean;
+      ts?: string;
+    }
+  // Invisible side-channel: the session's latest dynamic slash-command catalog
+  // (Claude stream-json `init`). Not rendered — read via {@link latestCommands}.
+  | { kind: 'commands'; id: string; commands: string[]; ts?: string }
   | { kind: 'error'; id: string; text: string; ts?: string };
 
 interface RawEvent {
@@ -40,11 +75,38 @@ type F5Shape = {
   toolId?: string;
   title?: string;
   status?: string;
+  toolInput?: unknown;
+  toolOutput?: string | null;
+  toolDiff?: DiffHunk[] | null;
+  commands?: string[];
   items?: Array<{ text?: string; status?: string }>;
   requestId?: string;
   requestKind?: string;
   message?: string;
 };
+
+/**
+ * Boil a tool's args object down to a short one-line summary for the tool card
+ * header — prefers the common single-value keys (file_path, command, path,
+ * pattern, url), else a truncated JSON.stringify. Returns undefined for empty.
+ */
+export function summarizeToolInput(input: unknown): string | undefined {
+  if (input == null) return undefined;
+  if (typeof input === 'string') return input.length > 0 ? truncate(input) : undefined;
+  if (typeof input !== 'object') return truncate(String(input));
+  const obj = input as Record<string, unknown>;
+  for (const key of ['file_path', 'command', 'path', 'pattern', 'query', 'url', 'filePath']) {
+    const v = obj[key];
+    if (typeof v === 'string' && v.length > 0) return truncate(v);
+  }
+  const json = JSON.stringify(input);
+  if (!json || json === '{}') return undefined;
+  return truncate(json);
+}
+function truncate(s: string, max = 120): string {
+  const oneLine = s.replace(/\s+/g, ' ').trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+}
 
 const TOOL_STATUS: Record<string, ToolStatus> = {
   pending: 'pending',
@@ -110,6 +172,7 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
             kind: 'tool',
             id: raw.toolId ?? e.id,
             title: raw.title ?? cap(raw.toolId ?? 'tool'),
+            input: summarizeToolInput(raw.toolInput),
             status: 'running',
             ts: e.ts,
           }) - 1;
@@ -119,11 +182,23 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
       case 'tool.updated': {
         const idx = raw.toolId != null ? toolIndex.get(raw.toolId) : undefined;
         const status = raw.status ? (TOOL_STATUS[raw.status] ?? 'running') : 'running';
+        const output = raw.toolOutput != null && raw.toolOutput.length > 0 ? raw.toolOutput : undefined;
+        const diff = Array.isArray(raw.toolDiff) && raw.toolDiff.length > 0 ? raw.toolDiff : undefined;
         if (idx != null) {
           const item = out[idx];
-          if (item && item.kind === 'tool') item.status = status;
+          if (item && item.kind === 'tool') {
+            item.status = status;
+            if (output != null) item.output = output;
+            if (diff != null) item.diff = diff;
+          }
         } else {
-          out.push({ kind: 'tool', id: raw.toolId ?? e.id, title: raw.title ?? 'Tool', status, ts: e.ts });
+          out.push({ kind: 'tool', id: raw.toolId ?? e.id, title: raw.title ?? 'Tool', status, output, diff, ts: e.ts });
+        }
+        break;
+      }
+      case 'commands.updated': {
+        if (Array.isArray(raw.commands)) {
+          out.push({ kind: 'commands', id: e.id, commands: raw.commands, ts: e.ts });
         }
         break;
       }
@@ -143,6 +218,7 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
             id: raw.requestId ?? e.id,
             requestKind: raw.requestKind === 'input' ? 'input' : 'permission',
             title: raw.title,
+            input: summarizeToolInput(raw.toolInput),
             resolved: false,
             ts: e.ts,
           }) - 1;
@@ -173,6 +249,19 @@ export function pendingRequest(items: readonly TimelineItem[]): Extract<Timeline
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === 'request' && !it.resolved) return it;
+  }
+  return null;
+}
+
+/**
+ * The session's most-recent dynamic slash-command catalog (from `commands.updated`
+ * events), or `null` if none has arrived — so the composer can prefer the agent's
+ * REAL commands and fall back to its static catalog otherwise.
+ */
+export function latestCommands(items: readonly TimelineItem[]): string[] | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === 'commands') return it.commands;
   }
   return null;
 }

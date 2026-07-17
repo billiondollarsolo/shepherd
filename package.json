@@ -1,6 +1,6 @@
 {
   "name": "flock",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "private": true,
   "description": "Shepherd — manage nodes, projects, and CLI coding agents from one web paddock.",
   "license": "MIT",

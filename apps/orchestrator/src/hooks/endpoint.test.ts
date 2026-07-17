@@ -251,6 +251,32 @@ describe('HookEndpointService.handle (US-15)', () => {
     );
   });
 
+  it('stores a structured tool.started event (kind/toolId/title/toolInput) verbatim', async () => {
+    // The claude-stream transport POSTs structured tool cards; the endpoint must
+    // enqueue the raw body UNCHANGED (opaque jsonb), exactly as it does {chat:…}.
+    const { service, enqueueEvent, onTransition } = build();
+    const body = {
+      kind: 'tool.started',
+      toolId: 'toolu_abc',
+      title: 'Write',
+      toolInput: { file_path: '/x', content: 'hi' },
+    };
+    const result = await service.handle({
+      sessionId: SESSION_ID,
+      token: GOOD_TOKEN,
+      body,
+      agentType: 'claude-code',
+    });
+    expect(result).toEqual({ ok: true });
+    // A tool.started is not a Claude hook lifecycle event → no status transition,
+    // but it is still logged so the timeline can render the tool card.
+    expect(onTransition).not.toHaveBeenCalled();
+    expect(enqueueEvent).toHaveBeenCalledTimes(1);
+    const evt = enqueueEvent.mock.calls[0]![0] as { agentEventRaw: unknown };
+    // Round-trips unchanged — nothing narrowed or dropped, including toolInput.
+    expect(evt.agentEventRaw).toEqual(body);
+  });
+
   it('appends a `plan` event when the hook carries a TodoWrite (US-34)', async () => {
     const { service, enqueueEvent } = build();
     await service.handle({

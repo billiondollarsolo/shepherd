@@ -175,6 +175,19 @@ func (s *Session) acpFail(err error) {
 
 // renderACPEvent renders a structured event into the terminal stream + pushes
 // derived status/telemetry.
+// maxToolFieldBytes bounds each structured tool field (input/output/diff) so the
+// posted event stays well under the hook route's body limit (256 KB). The web uses
+// these for a short summary/preview, not the full payload.
+const maxToolFieldBytes = 24 * 1024
+
+// capToolField truncates an oversized tool output string with a marker.
+func capToolField(s string) string {
+	if len(s) <= maxToolFieldBytes {
+		return s
+	}
+	return s[:maxToolFieldBytes] + "\n… (truncated)"
+}
+
 func (s *Session) renderACPEvent(e acp.Event) {
 	ast := s.acp
 	switch e.Kind {
@@ -194,12 +207,46 @@ func (s *Session) renderACPEvent(e acp.Event) {
 	case acp.EventToolStarted:
 		if ast != nil {
 			s.flushAssistantChat(ast)
-			if e.ToolName != "" {
-				s.postChat(ast, "tool", e.ToolName)
+			// Structured tool card (name + args). Replaces the old flattened
+			// {chat:{role:"tool",text:name}} — do NOT double-post.
+			body := map[string]any{
+				"kind":   "tool.started",
+				"toolId": e.ToolID,
+				"title":  e.ToolName,
 			}
+			// Cap each structured field well under the hook route's body limit — the
+			// web only needs a short args summary, not e.g. a 300 KB file body. An
+			// oversized field is elided (the card still renders title + status) rather
+			// than dropping the whole event to a 413.
+			if len(e.ToolInput) > 0 && len(e.ToolInput) <= maxToolFieldBytes {
+				body["toolInput"] = e.ToolInput
+			}
+			postAgentEvent(ast.hookURL, ast.hookToken, body)
 		}
 		if e.ToolName != "" {
 			s.broadcast([]byte("\r\n\x1b[36m• " + e.ToolName + "\x1b[0m\r\n"))
+		}
+	case acp.EventToolUpdated:
+		if ast != nil {
+			body := map[string]any{
+				"kind":   "tool.updated",
+				"toolId": e.ToolID,
+				"status": e.ToolStatus,
+			}
+			if e.ToolOutput != "" {
+				body["toolOutput"] = capToolField(e.ToolOutput)
+			}
+			if len(e.ToolDiff) > 0 && len(e.ToolDiff) <= maxToolFieldBytes {
+				body["toolDiff"] = e.ToolDiff
+			}
+			postAgentEvent(ast.hookURL, ast.hookToken, body)
+		}
+	case acp.EventCommandsUpdated:
+		if ast != nil && len(e.Commands) > 0 {
+			postAgentEvent(ast.hookURL, ast.hookToken, map[string]any{
+				"kind":     "commands.updated",
+				"commands": e.Commands,
+			})
 		}
 	case acp.EventTurnCompleted:
 		if ast != nil {
@@ -342,6 +389,36 @@ func postChatEvent(hookURL, hookToken, role, text string) {
 	body, err := json.Marshal(map[string]any{
 		"chat": map[string]string{"role": role, "text": text},
 	})
+	if err != nil {
+		return
+	}
+	go func() {
+		req, rerr := http.NewRequest(http.MethodPost, hookURL, bytes.NewReader(body))
+		if rerr != nil {
+			return
+		}
+		req.Header.Set("content-type", "application/json")
+		if hookToken != "" {
+			req.Header.Set("authorization", "Bearer "+hookToken)
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		if resp, derr := client.Do(req); derr == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+}
+
+// postAgentEvent forwards an arbitrary structured agentEventRaw body (tool.started
+// / tool.updated / commands.updated) to the SAME hook endpoint postChatEvent uses,
+// with the identical POST shape/headers (the endpoint stores the body verbatim as
+// events.agentEventRaw). Fire-and-forget; never blocks the agent stream. Unlike
+// postChatEvent this posts the caller's object AS the whole body (not wrapped in a
+// {chat:…} envelope).
+func postAgentEvent(hookURL, hookToken string, raw any) {
+	if hookURL == "" || raw == nil {
+		return
+	}
+	body, err := json.Marshal(raw)
 	if err != nil {
 		return
 	}

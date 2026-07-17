@@ -12,7 +12,13 @@
  * diff-route convention.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ListNodeDirQuery, NodeFileWriteRequest, NodeMakeDirRequest, Uuid } from '@flock/shared';
+import {
+  AgentModelsQuery,
+  ListNodeDirQuery,
+  NodeFileWriteRequest,
+  NodeMakeDirRequest,
+  Uuid,
+} from '@flock/shared';
 import { z } from 'zod';
 import { badRequest } from '../http/reply.js';
 
@@ -47,6 +53,26 @@ export function registerNodeFsRoute(
       try {
         const result = await deps.service.listDir(params.data.id, query.data.path);
         return reply.code(200).send(result);
+      } catch (err) {
+        return mapFsError(reply, err);
+      }
+    },
+  );
+
+  // Models an agent CLI offers on this node (drives the model picker). Discovery
+  // failures degrade to an empty list in the service, so this is a plain 200.
+  app.get(
+    '/api/nodes/:id/agent-models',
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = NodeIdParams.safeParse(request.params);
+      if (!params.success) return badRequest(reply, 'a valid node id is required.');
+      const query = AgentModelsQuery.safeParse(request.query);
+      if (!query.success) return badRequest(reply, 'a valid agentType is required.');
+      try {
+        return reply
+          .code(200)
+          .send(await deps.service.listAgentModels(params.data.id, query.data.agentType));
       } catch (err) {
         return mapFsError(reply, err);
       }

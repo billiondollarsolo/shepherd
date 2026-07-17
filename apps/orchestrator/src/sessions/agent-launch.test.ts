@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentLaunchCommand, initialSessionStatus } from './agent-launch.js';
+import {
+  agentLaunchCommand,
+  agentResumeArgs,
+  claudeStreamLaunchCommand,
+  codexAppServerLaunchCommand,
+  initialSessionStatus,
+} from './agent-launch.js';
 
 describe('agentLaunchCommand', () => {
   it('maps each first-class agent to its CLI argv', () => {
@@ -12,6 +18,49 @@ describe('agentLaunchCommand', () => {
   it('launches a bare default shell (no command) for terminal', () => {
     // undefined => tmux opens its default-shell with no explicit program.
     expect(agentLaunchCommand('terminal')).toBeUndefined();
+  });
+
+  it('appends --model for agents with a model flag (value with spaces stays one arg)', () => {
+    expect(agentLaunchCommand('claude-code', 'default', undefined, 'opus')).toEqual([
+      'claude',
+      '--model',
+      'opus',
+    ]);
+    // agy model names carry the effort in parens; the array arg needs no quoting.
+    expect(
+      agentLaunchCommand('antigravity', 'default', undefined, 'Claude Opus 4.6 (Thinking)'),
+    ).toEqual(['agy', '--model', 'Claude Opus 4.6 (Thinking)']);
+  });
+
+  it('maps codex reasoning-effort to a config override, skipping default', () => {
+    expect(agentLaunchCommand('codex', 'default', undefined, 'gpt-5', 'high')).toEqual([
+      'codex',
+      '--model',
+      'gpt-5',
+      '-c',
+      'model_reasoning_effort=high',
+    ]);
+    expect(agentLaunchCommand('codex', 'default', undefined, undefined, 'default')).toEqual([
+      'codex',
+    ]);
+  });
+
+  it('does not add --model for agents without a model flag (opencode)', () => {
+    expect(agentLaunchCommand('opencode', 'default', undefined, 'whatever')).toEqual(['opencode']);
+  });
+
+  it('appends extraArgs verbatim (e.g. a resume flag on model-switch relaunch)', () => {
+    expect(
+      agentLaunchCommand('antigravity', 'default', undefined, 'Gemini 3.1 Pro (High)', undefined, [
+        '--continue',
+      ]),
+    ).toEqual(['agy', '--model', 'Gemini 3.1 Pro (High)', '--continue']);
+  });
+
+  it('ends with the resume flag when relaunching with agentResumeArgs (antigravity)', () => {
+    expect(
+      agentLaunchCommand('antigravity', 'default', undefined, 'X', undefined, agentResumeArgs('antigravity')),
+    ).toEqual(['agy', '--model', 'X', '--continue']);
   });
 
   it('defaults to no permission flags (interactive) when mode is omitted/default', () => {
@@ -121,6 +170,93 @@ describe('agent capability table', () => {
     expect(agentUsesActivityStatus('codex')).toBe(false);
     expect(agentUsesActivityStatus('opencode')).toBe(false);
     expect(agentUsesActivityStatus('terminal')).toBe(false);
+  });
+
+  it('agentResumeArgs returns the resume flag only for agents whose CLI can resume', () => {
+    expect(agentResumeArgs('antigravity')).toEqual(['--continue']);
+    expect(agentResumeArgs('claude-code')).toEqual(['--continue']);
+    // codex/gemini/others relaunch fresh (no resume flag).
+    expect(agentResumeArgs('codex')).toEqual([]);
+    expect(agentResumeArgs('gemini')).toEqual([]);
+  });
+
+  describe('claudeStreamLaunchCommand', () => {
+    const base = [
+      'claude',
+      '--print',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-prompt-tool',
+      'stdio',
+    ];
+
+    it('returns null for every non-claude agent (PTY/ACP path unchanged)', () => {
+      expect(claudeStreamLaunchCommand('codex')).toBeNull();
+      expect(claudeStreamLaunchCommand('gemini')).toBeNull();
+      expect(claudeStreamLaunchCommand('opencode')).toBeNull();
+      expect(claudeStreamLaunchCommand('terminal')).toBeNull();
+      expect(claudeStreamLaunchCommand('dev')).toBeNull();
+    });
+
+    it('gates default via the stdio permission-prompt-tool (no auto-run, no permission-mode flag)', () => {
+      expect(claudeStreamLaunchCommand('claude-code', 'default')).toEqual([...base]);
+    });
+
+    it('passes plan/acceptEdits through with the prompt-tool flag still present', () => {
+      expect(claudeStreamLaunchCommand('claude-code', 'plan')).toEqual([
+        ...base,
+        '--permission-mode',
+        'plan',
+      ]);
+      expect(claudeStreamLaunchCommand('claude-code', 'acceptEdits')).toEqual([
+        ...base,
+        '--permission-mode',
+        'acceptEdits',
+      ]);
+    });
+
+    it('autonomous skips approval entirely — no prompt-tool flag (mutually exclusive)', () => {
+      // base intentionally excluded: --dangerously-skip-permissions must NOT be combined
+      // with --permission-prompt-tool stdio.
+      expect(claudeStreamLaunchCommand('claude-code', 'autonomous')).toEqual([
+        'claude',
+        '--print',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--dangerously-skip-permissions',
+      ]);
+    });
+
+    it('appends --model when a model is given', () => {
+      expect(claudeStreamLaunchCommand('claude-code', 'plan', 'opus')).toEqual([
+        ...base,
+        '--permission-mode',
+        'plan',
+        '--model',
+        'opus',
+      ]);
+    });
+  });
+
+  describe('codexAppServerLaunchCommand', () => {
+    it('returns the app-server argv for codex only', () => {
+      expect(codexAppServerLaunchCommand('codex')).toEqual(['codex', 'app-server']);
+    });
+
+    it('returns null for every non-codex agent (no launch flags — approvals ride the protocol)', () => {
+      expect(codexAppServerLaunchCommand('claude-code')).toBeNull();
+      expect(codexAppServerLaunchCommand('gemini')).toBeNull();
+      expect(codexAppServerLaunchCommand('antigravity')).toBeNull();
+      expect(codexAppServerLaunchCommand('opencode')).toBeNull();
+      expect(codexAppServerLaunchCommand('terminal')).toBeNull();
+      expect(codexAppServerLaunchCommand('dev')).toBeNull();
+    });
   });
 
   it('isBareAgentProcessName catches TUI process names (not real tools)', async () => {

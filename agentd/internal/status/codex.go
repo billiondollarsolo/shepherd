@@ -26,14 +26,14 @@ import (
 // (Shepherd hook injection, passed per-session) wins — codex then writes under
 // <scoped>/sessions, so the tailer must follow it (the daemon's OWN env has no
 // per-session CODEX_HOME). Falls back to a daemon-wide CODEX_HOME, then ~/.codex.
-func codexSessionsDir(configDir string) string {
+func codexSessionsDir(configDir, home string) string {
 	if configDir != "" {
 		return filepath.Join(configDir, "sessions")
 	}
 	if h := os.Getenv("CODEX_HOME"); h != "" {
 		return filepath.Join(h, "sessions")
 	}
-	return filepath.Join(homeDir(), ".codex", "sessions")
+	return filepath.Join(homeOr(home), ".codex", "sessions")
 }
 
 type rolloutLine struct {
@@ -50,8 +50,8 @@ type taggedEvent struct {
 	Type string `json:"type"`
 }
 
-func watchCodex(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
-	dir := codexSessionsDir(configDir)
+func watchCodex(ctx context.Context, cwd, configDir, home string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
+	dir := codexSessionsDir(configDir, home)
 	path := waitForFile(ctx, func() string { return findCodexRollout(dir, cwd, startedAt, claim) })
 	if path == "" {
 		return

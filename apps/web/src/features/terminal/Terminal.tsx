@@ -86,6 +86,12 @@ export interface TerminalProps {
    * drag-and-drop without coupling Terminal to a store.
    */
   registerInput?: (send: ((text: string) => void) | null) => void;
+  /** Register this terminal's PTY writer under its session id (per-session seam), so
+   *  a chat composer can type into THIS agent even when it isn't the focused cell. */
+  registerSessionInput?: (sessionId: string, send: ((text: string) => void) | null) => void;
+  /** Expose a stable "force reconnect" to the parent (used after a relaunch swaps
+   *  the PTY, which the terminal otherwise treats as 'exited' and won't reattach). */
+  registerReconnect?: (reconnect: (() => void) | null) => void;
   /**
    * Optional command to run ONCE when the PTY first opens (used by split panes
    * created as "Command"/agent splits — e.g. `npm run dev` or `claude`). Typed
@@ -134,6 +140,8 @@ export default function Terminal({
   xtermFactory,
   wsFactory,
   registerInput,
+  registerSessionInput,
+  registerReconnect,
   initialCommand,
 }: TerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -472,6 +480,24 @@ export default function Terminal({
     registerInput((text: string) => sendInputRef.current(text));
     return () => registerInput(null);
   }, [registerInput, sessionId]);
+
+  // Per-session writer: registered by EVERY mounted terminal (unlike registerInput,
+  // which only the focused cell provides) so a chat composer reaches its own agent.
+  useEffect(() => {
+    if (!registerSessionInput) return;
+    registerSessionInput(sessionId, (text: string) => sendInputRef.current(text));
+    return () => registerSessionInput(sessionId, null);
+  }, [registerSessionInput, sessionId]);
+
+  // Expose a stable "force reconnect" to the parent (relaunch → PTY swap). Kept in a
+  // ref so the registered callback stays stable across reconnectNow identity changes.
+  const reconnectNowRef = useRef(reconnectNow);
+  reconnectNowRef.current = reconnectNow;
+  useEffect(() => {
+    if (!registerReconnect) return;
+    registerReconnect(() => reconnectNowRef.current());
+    return () => registerReconnect(null);
+  }, [registerReconnect, sessionId]);
 
   // Re-fit when the PTY socket OPENS: the very first fit on mount happens before
   // the socket connects, so its resize is dropped and the daemon stays at the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEvent, agentEventToStatus } from './agentEvents.js';
+import { AgentEvent, AgentEventRaw, agentEventToStatus } from './agentEvents.js';
 
 describe('AgentEvent taxonomy (F5)', () => {
   it('validates a content delta with stream kind', () => {
@@ -52,5 +52,48 @@ describe('AgentEvent taxonomy (F5)', () => {
         status: 'completed',
       }),
     ).toBeNull();
+    expect(
+      agentEventToStatus({ kind: 'commands.updated', sessionId: 's', commands: ['model'] }),
+    ).toBeNull();
+  });
+});
+
+describe('AgentEventRaw wire shapes (hook agentEventRaw contract)', () => {
+  it('validates a structured tool.started with args', () => {
+    const parsed = AgentEventRaw.parse({
+      kind: 'tool.started',
+      toolId: 'toolu_abc',
+      title: 'Write',
+      toolInput: { file_path: '/x', content: 'hi' },
+    });
+    expect(parsed.kind).toBe('tool.started');
+  });
+
+  it('validates a tool.updated with output + structuredPatch diff', () => {
+    const parsed = AgentEventRaw.parse({
+      kind: 'tool.updated',
+      toolId: 'toolu_abc',
+      status: 'completed',
+      toolOutput: 'File created…',
+      toolDiff: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 1, lines: ['+hi'] }],
+    });
+    expect(parsed.kind).toBe('tool.updated');
+  });
+
+  it('validates a commands.updated catalog and the existing chat shape', () => {
+    expect(
+      AgentEventRaw.parse({ kind: 'commands.updated', commands: ['compact', 'model'] }).kind,
+    ).toBe('commands.updated');
+    // Backward compatible: the existing transcript path still validates.
+    expect(AgentEventRaw.safeParse({ chat: { role: 'assistant', text: 'hi' } }).success).toBe(true);
+  });
+
+  it('accepts tool events with only the required fields (graceful degradation)', () => {
+    expect(
+      AgentEventRaw.safeParse({ kind: 'tool.started', toolId: 't', title: 'Bash' }).success,
+    ).toBe(true);
+    expect(
+      AgentEventRaw.safeParse({ kind: 'tool.updated', toolId: 't', status: 'in_progress' }).success,
+    ).toBe(true);
   });
 });

@@ -171,6 +171,53 @@ func TestClaudeLineToUpdate(t *testing.T) {
 	}
 }
 
+// TestWatchAntigravityUsesRuntimeHome proves the watcher tails the RUNTIME user's
+// home (the `home` param), not the daemon's HOME env. agentd runs as root
+// (HOME=/root) while agy writes under /home/<user>, so a regression here means no
+// chat / no status for antigravity sessions.
+func TestWatchAntigravityUsesRuntimeHome(t *testing.T) {
+	// Point HOME at an EMPTY dir; the transcript lives only under runtimeHome. If
+	// the watcher used HOME (the old bug) it would find nothing and emit nothing.
+	t.Setenv("HOME", t.TempDir())
+	runtimeHome := t.TempDir()
+	dir := filepath.Join(runtimeHome, ".gemini", "antigravity-cli", "brain", "conv-1", ".system_generated", "logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{
+		`{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nhello\n</USER_REQUEST>"}`,
+		`{"step_index":1,"source":"SYSTEM","type":"CONVERSATION_HISTORY","status":"DONE","content":null}`,
+		`{"step_index":2,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"hi there"}`,
+	}
+	if err := os.WriteFile(filepath.Join(dir, "transcript.jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var states []string
+	var msgs []ChatMsg
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		watchAntigravity(ctx, "/home/flock-agent/proj", "", runtimeHome, time.Now(), alwaysClaim,
+			func(u Update) { mu.Lock(); states = append(states, u.State); mu.Unlock() },
+			func(role, text string) { mu.Lock(); msgs = append(msgs, ChatMsg{role, text}); mu.Unlock() })
+		close(done)
+	}()
+	time.Sleep(800 * time.Millisecond)
+	cancel()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	wantMsgs := []ChatMsg{{Role: "user", Text: "hello"}, {Role: "assistant", Text: "hi there"}}
+	if fmt.Sprint(msgs) != fmt.Sprint(wantMsgs) {
+		t.Fatalf("antigravity chat = %v, want %v", msgs, wantMsgs)
+	}
+	wantStates := []string{StateRunning, StateIdle} // USER_INPUT(running) → PLANNER_RESPONSE DONE(idle)
+	if fmt.Sprint(states) != fmt.Sprint(wantStates) {
+		t.Fatalf("antigravity states = %v, want %v", states, wantStates)
+	}
+}
+
 func TestWatchClaudeEmitsStateProgression(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -194,7 +241,7 @@ func TestWatchClaudeEmitsStateProgression(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		watchClaude(ctx, cwd, "", start, alwaysClaim, func(u Update) { mu.Lock(); states = append(states, u.State); mu.Unlock() }, nil)
+		watchClaude(ctx, cwd, "", "", start, alwaysClaim, func(u Update) { mu.Lock(); states = append(states, u.State); mu.Unlock() }, nil)
 		close(done)
 	}()
 	time.Sleep(800 * time.Millisecond)
@@ -284,7 +331,7 @@ func TestWatchCodexEmitsStateProgression(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		watchCodex(ctx, cwd, "", start, alwaysClaim, func(u Update) {
+		watchCodex(ctx, cwd, "", "", start, alwaysClaim, func(u Update) {
 			mu.Lock()
 			states = append(states, u.State)
 			mu.Unlock()

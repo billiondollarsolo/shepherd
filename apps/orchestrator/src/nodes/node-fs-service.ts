@@ -18,6 +18,7 @@
  * read; an unreadable/missing path surfaces as a clean error.
  */
 import type {
+  AgentType,
   ListNodeDirResponse,
   NodeDirEntry,
   NodeFileReadResponse,
@@ -27,6 +28,13 @@ import type {
 } from '@flock/shared';
 
 import type { NodeCommandTransport } from './transport/transport.js';
+import {
+  CODEX_MODEL_LIST_REQUESTS,
+  isNodeDiscoveredModels,
+  parseAgyModels,
+  parseCodexModelList,
+  staticModelsFor,
+} from './agent-models-catalog.js';
 
 /** Thrown when the node has no live transport (unreachable ssh node) → 422. */
 export class NodeUnreachableError extends Error {
@@ -133,6 +141,33 @@ export const FS_MKDIR_SCRIPT =
 
 export function fsMkdirArgv(parent: string, name: string): string[] {
   return ['sh', '-c', FS_MKDIR_SCRIPT, 'flock-fs', parent, name];
+}
+
+/**
+ * The one-shot `codex app-server` model-discovery script: feed the ndjson JSON-RPC
+ * requests ($1 = initialize, $2 = model/list) into `codex app-server` on stdin and
+ * capture its stdout responses. `codex app-server` SHUTS DOWN on stdin EOF before it
+ * flushes its responses, so we must hold stdin open: after writing the two requests we
+ * `sleep` to keep the pipe open while codex processes them and streams stdout. `timeout`
+ * then BOUNDS the whole exchange — it kills codex and we parse whatever responses
+ * arrived (`timeout`'s 124 exit is expected and harmless; we key off stdout, not the
+ * exit code). stderr (the bubblewrap warning) is dropped. Both requests are passed
+ * POSITIONALLY, never spliced into the script text → injection-safe (same form as the
+ * fs scripts).
+ */
+export const CODEX_MODELS_SCRIPT =
+  `{ printf '%s\n' "$1" "$2"; sleep 6; } | timeout 8 codex app-server 2>/dev/null`;
+
+/** Build the argv for codex model discovery: `sh -c <script> flock-models <init> <list>`. */
+export function codexModelsArgv(): string[] {
+  return [
+    'sh',
+    '-c',
+    CODEX_MODELS_SCRIPT,
+    'flock-models',
+    CODEX_MODEL_LIST_REQUESTS[0],
+    CODEX_MODEL_LIST_REQUESTS[1],
+  ];
 }
 
 /** POSIX dirname of an absolute path, or null at the filesystem root. */
@@ -348,5 +383,55 @@ export class NodeFsService {
       );
     }
     return { path: resolved };
+  }
+
+  /**
+   * The models an agent CLI offers on this node, for the model picker. Two agents are
+   * discovered live on the node: antigravity (`agy models`, one model per line) and
+   * codex (a one-shot `codex app-server` initialize → model/list JSON-RPC exchange —
+   * the DYNAMIC list from the tool itself). Every other agent returns its curated
+   * static catalog without touching the node.
+   *
+   * Discovery is best-effort: antigravity degrades to [] on any failure, and codex
+   * degrades to its STATIC catalog whenever the exchange yields no models (codex
+   * returns none until authenticated, or the node/CLI errored/timed out) — so the
+   * picker always has something and never blocks the dialog.
+   */
+  async listAgentModels(
+    nodeId: string,
+    agentType: AgentType,
+  ): Promise<{ models: string[]; source: 'node' | 'static' }> {
+    if (!isNodeDiscoveredModels(agentType)) {
+      return { models: staticModelsFor(agentType), source: 'static' };
+    }
+    const transport = await this.transports.transportForNode(nodeId);
+    if (!transport) {
+      // No live transport → codex still shows its static catalog; antigravity has none.
+      return agentType === 'codex'
+        ? { models: staticModelsFor('codex'), source: 'static' }
+        : { models: [], source: 'node' };
+    }
+
+    if (agentType === 'codex') {
+      try {
+        // `timeout` may kill codex (it does not exit on EOF): parse stdout regardless
+        // of exitCode/timedOut, since the model/list response arrives before the bound.
+        const r = await transport.exec(codexModelsArgv(), { timeoutMs: this.timeoutMs });
+        const models = parseCodexModelList(r.stdout);
+        if (models.length > 0) return { models, source: 'node' };
+      } catch {
+        /* fall through to the static catalog. */
+      }
+      return { models: staticModelsFor('codex'), source: 'static' };
+    }
+
+    // antigravity (`agy models`).
+    try {
+      const r = await transport.exec(['agy', 'models'], { timeoutMs: this.timeoutMs });
+      if (r.timedOut || r.exitCode !== 0) return { models: [], source: 'node' };
+      return { models: parseAgyModels(r.stdout), source: 'node' };
+    } catch {
+      return { models: [], source: 'node' };
+    }
   }
 }

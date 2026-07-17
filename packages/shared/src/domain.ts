@@ -75,6 +75,16 @@ export type AgentType = z.infer<typeof AgentTypeEnum>;
 export const SessionPermissionModeEnum = z.enum(['default', 'acceptEdits', 'plan', 'autonomous']);
 export type SessionPermissionMode = z.infer<typeof SessionPermissionModeEnum>;
 
+/**
+ * Reasoning-effort / "speed" axis for agents that expose it as a knob independent
+ * of the model (Codex: `model_reasoning_effort`). Agents that bake effort into the
+ * model choice (Antigravity's "… (High)/(Low)/(Thinking)" model names) don't use
+ * this — their effort travels inside {@link SessionSchema.model}. `default` = leave
+ * the CLI's own default.
+ */
+export const SessionReasoningEffortEnum = z.enum(['default', 'minimal', 'low', 'medium', 'high']);
+export type SessionReasoningEffort = z.infer<typeof SessionReasoningEffortEnum>;
+
 export const EventSourceEnum = z.enum(['hook', 'osc', 'pty', 'orchestrator']);
 export type EventSource = z.infer<typeof EventSourceEnum>;
 
@@ -258,6 +268,18 @@ export const SessionRecordSchema = z.object({
    * safety-relevant state) and so the session can be restarted as-is.
    */
   permissionMode: SessionPermissionModeEnum,
+  /** The model the agent was launched with (CLI `--model` value), or null = the
+   *  CLI's own default. Persisted so a model switch restarts as-is and the chat
+   *  header can show/change the current model. */
+  model: z.string().nullable(),
+  /** Reasoning-effort / speed for agents that expose it independently of the model
+   *  (Codex); null = the CLI default. */
+  reasoningEffort: SessionReasoningEffortEnum.nullable(),
+  /** Whether this session runs over the STRUCTURED chat transport (stream-json/ACP:
+   *  tool cards, approvals, dynamic slash) instead of PTY + transcript (the real TUI).
+   *  Persisted so a relaunch keeps the same transport. Per-session opt-in; default
+   *  false (terminal-first). Only honored for agents with a structured transport. */
+  structuredChat: z.boolean(),
   /** Effective Shepherd agent-to-agent authority. Contains no credential material. */
   orchestrationAuthority: AgentAuthorityEnum,
   createdAt: IsoTimestamp,

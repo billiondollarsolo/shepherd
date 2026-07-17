@@ -53,11 +53,11 @@
   --flock-space-7: 32px;
   --flock-space-8: 48px;
 
-  /* --- radius (Linear: 6–8px, restrained) --- */
-  --flock-radius-xs: 3px;
-  --flock-radius-sm: 5px;
-  --flock-radius-md: 8px;
-  --flock-radius-lg: 12px;
+  /* --- radius (t3-style: softer, rounder chrome) --- */
+  --flock-radius-xs: 4px;
+  --flock-radius-sm: 7px;
+  --flock-radius-md: 10px;
+  --flock-radius-lg: 14px;
   --flock-radius-full: 999px;
 
   /* --- layout sizing (Codex three-region proportions, FR-UI1; tightened) --- */

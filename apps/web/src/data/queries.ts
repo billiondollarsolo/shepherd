@@ -50,6 +50,7 @@ import {
   getGitStatus,
   getSessionPlan,
   listNodeDir,
+  fetchAgentModels,
   listNodes,
   listProjects,
   listSessionEvents,
@@ -57,6 +58,7 @@ import {
   listSessions,
   pushGit,
   stageGitFiles,
+  relaunchSession,
   terminateSession,
   unstageGitFiles,
   updateSession,
@@ -77,7 +79,7 @@ import {
   updateDeploymentPreviewSettings,
   testDeploymentPreviewRouting,
 } from './treeApi';
-import type { UpdateSessionRequest } from '@flock/shared';
+import type { RelaunchSessionRequest, UpdateSessionRequest } from '@flock/shared';
 import type { ListNodeDirResponse, NodeFileReadResponse, NodeFsTreeResponse } from '@flock/shared';
 import { getNodeFsTree, makeNodeDir, readNodeFile, writeNodeFile } from './treeApi';
 import { getAgentdStatus, type AgentdHealth } from './treeApi';
@@ -85,6 +87,7 @@ import { getNodeStack, type NodeStack } from './treeApi';
 import { getNodeInfo, getNodePreflight } from './treeApi';
 import { getLatestVersion, type LatestVersion } from './treeApi';
 import type { NodeInfo, NodePreflightResponse } from '@flock/shared';
+import type { AgentModelsResponse, AgentType } from '@flock/shared';
 import { ApiError } from '../routes/api';
 import { toast } from '../components/ui/sonner';
 
@@ -418,6 +421,24 @@ export function useNodeInfo(nodeId: string | null): UseQueryResult<NodeInfo> {
   });
 }
 
+/**
+ * The models an agent CLI offers on a node (drives the model picker). Antigravity
+ * is discovered live on the node; other agents return a static list. Cached a while
+ * (models rarely change) and never retried (failures degrade to an empty list).
+ */
+export function useAgentModels(
+  nodeId: string | null,
+  agentType: AgentType | null,
+): UseQueryResult<AgentModelsResponse> {
+  return useQuery({
+    queryKey: ['agent-models', nodeId ?? '', agentType ?? ''],
+    enabled: nodeId != null && agentType != null,
+    queryFn: () => fetchAgentModels(nodeId as string, agentType as AgentType),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 export function useNodePreflight(nodeId: string | null): UseQueryResult<NodePreflightResponse> {
   return useQuery({
     queryKey: ['node-preflight', nodeId ?? ''],
@@ -678,6 +699,25 @@ export function useTerminateSession() {
     onError: (e) => toast.error(errMessage(e, 'Could not terminate session')),
   });
 }
+/**
+ * Relaunch a session's agent in place with a new model / reasoning effort (Phase B
+ * live model switcher). The session id is preserved and the CLI resumes the
+ * conversation, so we invalidate the sessions list (status → starting) and the
+ * session's event log so the swapped process's transcript re-streams.
+ */
+export function useRelaunchSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: RelaunchSessionRequest }) =>
+      relaunchSession(id, patch),
+    onSuccess: ({ session }) => {
+      void qc.invalidateQueries({ queryKey: qk.sessions });
+      void qc.invalidateQueries({ queryKey: qk.events(session.id) });
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not switch model')),
+  });
+}
+
 /** Update a session's pin / note (cosmetic supervisor metadata). */
 export function useUpdateSession() {
   const qc = useQueryClient();

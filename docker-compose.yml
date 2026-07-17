@@ -140,9 +140,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.node-runtime
       args:
-        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.5.3}
+        IMAGE_VERSION: ${FLOCK_NODE_RUNTIME_VERSION:-0.6.0}
         VCS_REF: ${FLOCK_VCS_REF:-unknown}
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.5.3}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-node-runtime:${FLOCK_NODE_RUNTIME_VERSION:-0.6.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -200,7 +200,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.orchestrator
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.5.3}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-orchestrator:${FLOCK_VERSION:-0.6.0}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -272,6 +272,9 @@ services:
       # binary's version → ensureRunning re-ships+relaunches the daemon on every
       # connect (kills live sessions). Leave empty unless intentionally overriding.
       FLOCK_AGENTD_VERSION: ${FLOCK_AGENTD_VERSION:-}
+      # Experimental: run Claude Code over its structured stream-json transport
+      # (dynamic/structured chat) instead of PTY+transcript. Off unless set.
+      FLOCK_CLAUDE_STREAM: ${FLOCK_CLAUDE_STREAM:-}
       FLOCK_AGENTD_SOCKET: /run/flock-agentd/control.sock
       FLOCK_AGENTD_SECRET_FILE: /run/flock-agentd/control.key
       FLOCK_AGENTD_NODE_ID_FILE: /run/flock-agentd/node-id
@@ -327,7 +330,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.5.3}
+    image: ${FLOCK_IMAGE_REGISTRY:-ghcr.io/billiondollarsolo}/shepherd-web:${FLOCK_VERSION:-0.6.0}
     restart: unless-stopped
     read_only: true
     security_opt:

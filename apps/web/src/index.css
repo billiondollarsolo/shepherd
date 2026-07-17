@@ -133,3 +133,70 @@ samp,
     'cv01' 1;
   letter-spacing: -0.03em;
 }
+
+/*
+ * Syntax highlighting for chat code blocks (highlight.js). Rather than ship one
+ * of hljs's own theme stylesheets, map its token classes onto the terminal's
+ * Atom One ANSI palette (--flock-term-ansi-*), which already flips light/dark —
+ * so highlighted code matches the terminal and re-themes for free.
+ */
+.hljs {
+  color: var(--flock-ink-primary);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--flock-term-ansi-8);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-formula {
+  color: var(--flock-term-ansi-5);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta-string {
+  color: var(--flock-term-ansi-2);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--flock-term-ansi-3);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--flock-term-ansi-4);
+}
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title,
+.hljs-type {
+  color: var(--flock-term-ansi-3);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-deletion {
+  color: var(--flock-term-ansi-1);
+}
+.hljs-meta,
+.hljs-link,
+.hljs-symbol {
+  color: var(--flock-term-ansi-6);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: var(--flock-weight-semibold);
+}

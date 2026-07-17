@@ -130,18 +130,17 @@ describe('ProjectRow scoped highlight (task 3.3)', () => {
   it('mirrors the selected treatment on the currently-scoped project', () => {
     usePaddock.setState({ selectedProjectId: 'P2', selectedSessionId: null });
     render(<NodeRow node={NODE} onReorder={noop} onMove={noop} />);
-    // The scoped project row carries the accent wash + a left accent bar.
+    // The scoped project row carries the solid raised-surface selection pill.
     const label = screen.getByText('beta');
     const row = label.closest('.group\\/prow') as HTMLElement;
-    expect(row.className).toContain('bg-flock-accent/12');
+    expect(row.className).toContain('bg-flock-surface-3');
     expect(within(row).getByRole('button', { name: 'New session' })).toBeTruthy();
-    expect(row.querySelector('.bg-flock-accent')).not.toBeNull();
   });
 
   it('does NOT scope-highlight when a single session is maximized', () => {
     usePaddock.setState({ selectedProjectId: 'P2', selectedSessionId: 's-run' });
     render(<NodeRow node={NODE} onReorder={noop} onMove={noop} />);
     const row = screen.getByText('beta').closest('.group\\/prow') as HTMLElement;
-    expect(row.className).not.toContain('bg-flock-accent/12');
+    expect(row.className).not.toContain('bg-flock-surface-3');
   });
 });

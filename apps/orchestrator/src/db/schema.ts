@@ -72,6 +72,8 @@ const AGENT_TYPE_VALUES: EnumTuple = [
 ];
 // T18: persisted agent autonomy level (mirrors shared SessionPermissionModeEnum).
 const PERMISSION_MODE_VALUES: EnumTuple = ['default', 'acceptEdits', 'plan', 'autonomous'];
+// Persisted reasoning-effort/speed (mirrors shared SessionReasoningEffortEnum).
+const REASONING_EFFORT_VALUES: EnumTuple = ['default', 'minimal', 'low', 'medium', 'high'];
 const AGENT_AUTHORITY_VALUES: EnumTuple = [
   'callback_only',
   'observe',
@@ -374,6 +376,16 @@ export const agentSessions = pgTable(
     permissionMode: text('permission_mode', { enum: PERMISSION_MODE_VALUES })
       .notNull()
       .default('default'),
+    /** The model the agent was launched with (maps to the CLI `--model` flag), or
+     *  null = the CLI's own default. Persisted so a model switch relaunches as-is
+     *  and the UI can show/change the current model. */
+    model: text('model'),
+    /** Reasoning-effort / speed for agents that expose it independently of the model
+     *  (Codex); null = the CLI default. */
+    reasoningEffort: text('reasoning_effort', { enum: REASONING_EFFORT_VALUES }),
+    /** Per-session opt-in to the structured chat transport (stream-json/ACP) instead
+     *  of PTY + transcript. Persisted so a relaunch keeps the same transport. */
+    structuredChat: boolean('structured_chat').notNull().default(false),
     orchestrationAuthority: text('orchestration_authority', { enum: AGENT_AUTHORITY_VALUES })
       .notNull()
       .default('callback_only'),

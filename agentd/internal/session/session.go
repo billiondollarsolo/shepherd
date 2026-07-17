@@ -37,7 +37,10 @@ type Spec struct {
 	Command []string // argv; empty → the user's default shell as a login shell
 	// Mode selects the transport: "" / "pty" = raw PTY (default, universal); "acp"
 	// = structured Agent Client Protocol over stdio (F6). For "acp", Command is the
-	// ACP launch argv (e.g. gemini --experimental-acp).
+	// ACP launch argv (e.g. gemini --experimental-acp). "claude-stream" = Claude
+	// Code's structured stream-json transport (a persistent `claude --print
+	// --input-format stream-json …` process); Command is that full argv. See
+	// claudestream_session.go.
 	Mode string
 	Cols uint16
 	Rows uint16
@@ -94,7 +97,13 @@ type Session struct {
 	// ACP (structured) mode: non-nil for Mode=="acp" sessions. statusPush sends
 	// derived status to the manager (PTY sessions use the manager's status watcher
 	// instead). See acp_session.go.
+	//
+	// claude-stream mode (Mode=="claude-stream") ALSO sets acp (reused for chat
+	// forwarding so renderACPEvent works unchanged) and additionally sets claude,
+	// the persistent stdin pipe + line-edit buffer. See claudestream_session.go.
 	acp        *acpState
+	claude     *claudeState
+	codex      *codexState
 	statusPush func(status.Update)
 
 	// inAlt tracks whether the foreground program is on the ALTERNATE screen (vim,
@@ -510,10 +519,26 @@ func (s *Session) finalize() {
 // dev restart's brief gap the PTY may be unavailable; the write is then dropped.
 func (s *Session) Write(p []byte) error {
 	s.mu.Lock()
+	claudeState := s.claude
+	codexState := s.codex
 	acpState := s.acp
 	ptmx := s.ptmx
 	exited := s.exited
 	s.mu.Unlock()
+	// codex-app-server sessions have no PTY — input is line-edited then submitted as a
+	// turn/start over JSON-RPC (or answers a pending approval). Checked BEFORE acp
+	// because a codex session also sets s.acp (for chat forwarding reuse). See
+	// codexappserver_session.go.
+	if codexState != nil {
+		return s.codexInput(p)
+	}
+	// claude-stream sessions have no PTY — input is line-edited then framed as a
+	// {"type":"user",…} turn on the process stdin. Checked BEFORE acp because a
+	// claude-stream session also sets s.acp (for chat forwarding reuse). See
+	// claudestream_session.go.
+	if claudeState != nil {
+		return s.claudeInput(p)
+	}
 	// ACP sessions have no PTY — input is line-edited then sent as a prompt (or a
 	// permission answer). See acp_session.go.
 	if acpState != nil {

@@ -52,7 +52,8 @@ type Control struct {
 	Cwd     string   `json:"cwd,omitempty"`
 	Env     []string `json:"env,omitempty"`
 	Command []string `json:"command,omitempty"`
-	// Mode selects the session transport: "" / "pty" (default) or "acp" (F6).
+	// Mode selects the session transport: "" / "pty" (default), "acp" (F6), or
+	// "claude-stream" (Claude's structured stream-json transport).
 	Mode   string `json:"mode,omitempty"`
 	Cols   uint16 `json:"cols,omitempty"`
 	Rows   uint16 `json:"rows,omitempty"`

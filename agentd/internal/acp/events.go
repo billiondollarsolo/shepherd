@@ -7,16 +7,17 @@ import "encoding/json"
 type EventKind string
 
 const (
-	EventSessionStarted EventKind = "session.started"
-	EventSessionEnded   EventKind = "session.ended"
-	EventTurnStarted    EventKind = "turn.started"
-	EventTurnCompleted  EventKind = "turn.completed"
-	EventContentDelta   EventKind = "content.delta"
-	EventToolStarted    EventKind = "tool.started"
-	EventToolUpdated    EventKind = "tool.updated"
-	EventPlanUpdated    EventKind = "plan.updated"
-	EventUsageUpdated   EventKind = "usage.updated"
-	EventError          EventKind = "error"
+	EventSessionStarted  EventKind = "session.started"
+	EventSessionEnded    EventKind = "session.ended"
+	EventTurnStarted     EventKind = "turn.started"
+	EventTurnCompleted   EventKind = "turn.completed"
+	EventContentDelta    EventKind = "content.delta"
+	EventToolStarted     EventKind = "tool.started"
+	EventToolUpdated     EventKind = "tool.updated"
+	EventPlanUpdated     EventKind = "plan.updated"
+	EventUsageUpdated    EventKind = "usage.updated"
+	EventCommandsUpdated EventKind = "commands.updated"
+	EventError           EventKind = "error"
 )
 
 // PlanItem is one entry of a plan/tasks update.
@@ -43,6 +44,12 @@ type Event struct {
 	ToolID     string // tool.*
 	ToolName   string // tool.started (title/kind)
 	ToolStatus string // tool.updated: pending|in_progress|completed|failed
+	// Structured tool detail (populated by the claude-stream transport; the ACP
+	// path leaves these empty — its tool calls are name-only).
+	ToolInput  json.RawMessage // tool.started: the tool's args object (e.g. {file_path,content} or {command})
+	ToolOutput string          // tool.updated: the tool_result content as text
+	ToolDiff   json.RawMessage // tool.updated: Claude's structuredPatch (unified-diff hunks)
+	Commands   []string        // commands.updated: the agent's live slash-command list
 	Plan       []PlanItem
 	Usage      *Usage
 	Message    string // error

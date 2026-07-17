@@ -39,6 +39,8 @@ export function TerminalArea({
 }): JSX.Element {
   const write = useWriteNodeFile(session.nodeId);
   const setTerminalInput = usePaddock((s) => s.setTerminalInput);
+  const setTerminalReconnect = usePaddock((s) => s.setTerminalReconnect);
+  const registerSessionInput = usePaddock((s) => s.registerSessionInput);
   const insert = (text: string): void => usePaddock.getState().terminalInput?.(text);
 
   function onDragOver(e: DragEvent): void {
@@ -95,6 +97,8 @@ export function TerminalArea({
           <Terminal
             sessionId={session.id}
             registerInput={register ? setTerminalInput : undefined}
+            registerReconnect={register ? setTerminalReconnect : undefined}
+            registerSessionInput={registerSessionInput}
           />
         </Suspense>
       </div>

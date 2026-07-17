@@ -239,7 +239,7 @@ export const lightTheme: ThemeTokens = {
     2: '#eaecf0',
     3: '#e0e3e9',
   },
-  accent: '#2563eb',
+  accent: '#4f46e5',
   accentForeground: '#ffffff',
   ink: {
     primary: '#1c2024',
@@ -263,7 +263,7 @@ export const lightTheme: ThemeTokens = {
     bg: '#ffffff', // = surface-0
     fg: '#1c2024', // = ink-primary
     cursor: '#1c2024',
-    selection: 'rgba(37, 99, 235, 0.22)',
+    selection: 'rgba(79, 70, 229, 0.22)',
     ansi: TERM_ANSI_LIGHT,
   },
   font: {
@@ -280,13 +280,13 @@ export const lightTheme: ThemeTokens = {
  */
 export const darkTheme: ThemeTokens = {
   surface: {
-    0: '#080808', // app background — true near-black
-    1: '#111111', // panels / cards
-    2: '#191919', // raised / hover
-    3: '#222222', // highest — chips / nested raised
+    0: '#0d0d0f', // app background — cool graphite near-black
+    1: '#151517', // panels / cards / sidebar
+    2: '#1c1c1f', // raised / hover / composer
+    3: '#26262a', // highest — chips / nested raised
   },
-  accent: '#5b8cff', // deliberate highlight on otherwise neutral surfaces
-  accentForeground: '#080808',
+  accent: '#6470f0', // soft periwinkle-indigo — the one confident interaction hue
+  accentForeground: '#ffffff',
   ink: {
     primary: '#ededed', // near-white, neutral
     muted: '#8c8c8c', // neutral grey secondary text
@@ -298,7 +298,7 @@ export const darkTheme: ThemeTokens = {
   diff: {
     add: '#11261a', // muted green wash, sits on graphite
     remove: '#2f1518', // muted red wash
-    context: '#111111', // = surface-1
+    context: '#151517', // = surface-1
     addForeground: '#3fb950', // saturated green, AA on the add wash
     removeForeground: '#f85149', // saturated red, AA on the remove wash
   },
@@ -306,10 +306,10 @@ export const darkTheme: ThemeTokens = {
   scrim: 'rgba(0, 0, 0, 0.6)',
   scrimBlur: '2px',
   term: {
-    bg: '#080808', // = surface-0, true near-black
+    bg: '#0d0d0f', // = surface-0, cool graphite near-black
     fg: '#c8ccd4', // soft light-grey terminal text
     cursor: '#ededed', // = ink-primary
-    selection: 'rgba(91, 140, 255, 0.3)',
+    selection: 'rgba(100, 112, 240, 0.3)',
     ansi: TERM_ANSI_DARK,
   },
   font: {

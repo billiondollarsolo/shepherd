@@ -8,6 +8,7 @@ import {
   type LauncherPreset,
   type NodeInfo,
   type SessionPermissionMode,
+  type SessionReasoningEffort,
 } from '@flock/shared';
 import {
   Button,
@@ -24,7 +25,7 @@ import {
   SelectValue,
 } from '../../../components/ui';
 import { usePaddock } from '../../../store/paddock';
-import { useCreateSession, useNodeInfo, useProjects } from '../../../data/queries';
+import { useAgentModels, useCreateSession, useNodeInfo, useProjects } from '../../../data/queries';
 import { fetchLauncherPresets } from '../../shell/launcherPresetsApi';
 import { DialogField as Field } from './DialogField';
 import { PRODUCT_NAME } from '../../../brand';
@@ -127,6 +128,21 @@ const MODES_BY_AGENT: Partial<Record<AgentType, readonly SessionPermissionMode[]
   gemini: ['default', 'acceptEdits', 'autonomous'], // no real read-only plan mode
 };
 
+/**
+ * Reasoning-effort ("speed") options for agents that expose it independently of the
+ * model (Codex). Antigravity bakes effort into the model name, so it has none here.
+ */
+const EFFORT_BY_AGENT: Partial<Record<AgentType, readonly SessionReasoningEffort[]>> = {
+  codex: ['default', 'low', 'medium', 'high'],
+};
+const EFFORT_LABELS: Record<SessionReasoningEffort, string> = {
+  default: 'Default',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
 export function AddSessionDialog(): JSX.Element {
   const { data: projects = [] } = useProjects();
   const fixedProjectId = usePaddock((s) => s.dialogProjectId);
@@ -140,6 +156,12 @@ export function AddSessionDialog(): JSX.Element {
   );
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [permissionMode, setPermissionMode] = useState<SessionPermissionMode>('default');
+  // '' = the CLI's own default model; otherwise the exact --model value.
+  const [model, setModel] = useState<string>('');
+  const [reasoningEffort, setReasoningEffort] = useState<SessionReasoningEffort>('default');
+  // Opt into the structured chat transport (rich tool cards + approvals) instead of
+  // the real TUI. Terminal-first: default off. Only offered for agents that have one.
+  const [structuredChat, setStructuredChat] = useState(false);
   const [authority, setAuthority] = useState<'project_default' | AgentAuthority>('project_default');
   const [confirmedManage, setConfirmedManage] = useState(false);
   const [devCommand, setDevCommand] = useState('');
@@ -192,6 +214,27 @@ export function AddSessionDialog(): JSX.Element {
   // a node that doesn't report info) so we never block every agent.
   const nodeInfoQuery = useNodeInfo(project?.nodeId ?? null);
   const daemonLaunchBlock = daemonLaunchBlockMessage(nodeInfoQuery.data);
+
+  // Model picker: the models this agent offers on the project's node (Antigravity is
+  // discovered live via `agy models`; others return a static list). Reset the chosen
+  // model whenever the agent or node changes — a value valid for one CLI isn't for
+  // another. Effort options come from the static per-agent map.
+  const modelsQuery = useAgentModels(project?.nodeId ?? null, agentType);
+  const availableModels = modelsQuery.data?.models ?? [];
+  const showModel = availableModels.length > 0;
+  const efforts = EFFORT_BY_AGENT[agentType] ?? [];
+  const showEffort = efforts.length > 0;
+  const effectiveEffort: SessionReasoningEffort = efforts.includes(reasoningEffort)
+    ? reasoningEffort
+    : 'default';
+  useEffect(() => {
+    setModel('');
+    setReasoningEffort('default');
+    setStructuredChat(false);
+  }, [agentType, project?.nodeId]);
+  // Agents that have a structured chat transport (rich tool cards + approvals). The
+  // rest run PTY-only; the toggle is hidden for them.
+  const showStructuredChat = agentType === 'claude-code' || agentType === 'codex';
   const detected = useMemo(
     () => new Set((nodeInfoQuery.data?.agents ?? []).map((a) => a.name)),
     [nodeInfoQuery.data],
@@ -230,6 +273,11 @@ export function AddSessionDialog(): JSX.Element {
         agentType,
         // Only send a mode for agents that honor it; default otherwise.
         ...(showMode && effectiveMode !== 'default' ? { permissionMode: effectiveMode } : {}),
+        // Model + speed: only when explicitly chosen (else the CLI default applies).
+        ...(showModel && model ? { model } : {}),
+        ...(showEffort && effectiveEffort !== 'default' ? { reasoningEffort: effectiveEffort } : {}),
+        // Structured chat transport opt-in (else the real TUI over PTY).
+        ...(showStructuredChat && structuredChat ? { structuredChat: true } : {}),
         // Dev session: the supervised, auto-restarting command (sh -lc on the node).
         ...(isDev ? { devCommand: devCommand.trim() } : {}),
         ...(authority === 'project_default' ? {} : { orchestrationAuthority: authority }),
@@ -334,6 +382,65 @@ export function AddSessionDialog(): JSX.Element {
             </SelectContent>
           </Select>
         </Field>
+      ) : null}
+      {showModel ? (
+        <Field
+          label="Model"
+          htmlFor="sess-model"
+          hint="Which model this agent runs. Leave on Default to use the CLI's own default."
+        >
+          {/* Sentinel '' = the CLI default (Radix Select can't take an empty value). */}
+          <Select value={model || '__default__'} onValueChange={(v) => setModel(v === '__default__' ? '' : v)}>
+            <SelectTrigger id="sess-model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">Default (CLI decides)</SelectItem>
+              {availableModels.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
+      {showEffort ? (
+        <Field label="Speed" htmlFor="sess-effort" hint="Reasoning effort — higher is slower but more thorough.">
+          <Select
+            value={effectiveEffort}
+            onValueChange={(v) => setReasoningEffort(v as SessionReasoningEffort)}
+          >
+            <SelectTrigger id="sess-effort">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {efforts.map((e) => (
+                <SelectItem key={e} value={e}>
+                  {EFFORT_LABELS[e]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
+      {showStructuredChat ? (
+        <label className="flex items-start gap-2 rounded-lg border border-[var(--flock-border)] bg-flock-surface-1 p-3 text-xs text-flock-ink-primary">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={structuredChat}
+            onChange={(e) => setStructuredChat(e.target.checked)}
+            data-testid="sess-structured-chat"
+          />
+          <span>
+            <span className="block font-medium">Structured chat mode</span>
+            <span className="mt-0.5 block text-flock-ink-muted">
+              Rich tool cards with diffs, real approve/deny, and the agent&rsquo;s live slash
+              menu — over its structured protocol. Off keeps the real terminal (TUI).
+            </span>
+          </span>
+        </label>
       ) : null}
       <Field
         label={`${PRODUCT_NAME} authority`}

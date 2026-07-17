@@ -103,7 +103,7 @@ func New(mgr *session.Manager, version, nodeID, secret, credentialFile string, l
 }
 
 var controlCapabilities = []string{
-	"pty", "resize", "scrollback", "status", "node-info", "layout", "acp",
+	"pty", "resize", "scrollback", "status", "node-info", "layout", "acp", "claude-stream", "codex-app-server",
 	"listening_ports_v1", "exec_v1", "tcp_tunnel_v1",
 }
 

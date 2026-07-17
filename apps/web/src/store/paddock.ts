@@ -355,6 +355,14 @@ export interface PaddockUiState {
   diffSelectedStaged: boolean | null;
   viewerFile: string | null;
   terminalInput: ((text: string) => void) | null;
+  /** Force the active terminal to reconnect (used after a relaunch swaps the PTY,
+   *  which the terminal otherwise treats as a terminal 'exited' and won't reattach). */
+  terminalReconnect: (() => void) | null;
+  /** Per-session PTY input writers, keyed by session id. Every MOUNTED terminal
+   *  registers here (not just the focused one), so a chat composer can type into its
+   *  OWN agent even in the multi-agent grid — where the single `terminalInput` seam
+   *  (focused cell only) can't. */
+  sessionInputs: Record<string, (text: string) => void>;
   nodeInfoNodeId: string | null;
 
   /** Zoomed leaf id for project layout (null = show full layout). */
@@ -410,6 +418,8 @@ export interface PaddockUiState {
   openFileInViewer: (path: string) => void;
   closeFileViewer: () => void;
   setTerminalInput: (fn: ((text: string) => void) | null) => void;
+  setTerminalReconnect: (fn: (() => void) | null) => void;
+  registerSessionInput: (sessionId: string, fn: ((text: string) => void) | null) => void;
   /** Paddock lens (preserves selection). */
   openMission: () => void;
   openSettings: (section?: SettingsSection) => void;
@@ -451,6 +461,8 @@ export const usePaddock = create<PaddockUiState>((set) => ({
   diffSelectedStaged: null,
   viewerFile: null,
   terminalInput: null,
+  terminalReconnect: null,
+  sessionInputs: {},
   nodeInfoNodeId: null,
   zoomLeafId: null,
   sessionOrder: {},
@@ -669,6 +681,14 @@ export const usePaddock = create<PaddockUiState>((set) => ({
     set({ viewerFile: path, rightTab: 'files', rightOpen: true, chrome: 'tools' }),
   closeFileViewer: () => set({ viewerFile: null }),
   setTerminalInput: (fn) => set({ terminalInput: fn }),
+  setTerminalReconnect: (fn) => set({ terminalReconnect: fn }),
+  registerSessionInput: (sessionId, fn) =>
+    set((s) => {
+      const next = { ...s.sessionInputs };
+      if (fn) next[sessionId] = fn;
+      else delete next[sessionId];
+      return { sessionInputs: next };
+    }),
 
   openMission: () => {
     set({

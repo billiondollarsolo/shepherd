@@ -23,6 +23,7 @@ vi.mock('../../../data/queries', () => ({
     ],
   }),
   useNodeInfo: () => ({ data: nodeInfo, isSuccess: true }),
+  useAgentModels: () => ({ data: { models: [], source: 'static' } }),
   useCreateSession: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 

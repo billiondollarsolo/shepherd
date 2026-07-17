@@ -427,7 +427,9 @@ export function SessionPane(): JSX.Element {
                 via `invisible` (which preserves layout size) so switching views
                 never resizes or tears down the terminal. */}
             <div className={`absolute inset-0 ${chatActive ? 'invisible' : ''}`}>
-              <StageLayout />
+              {/* All-agents view (no stage header) → per-tile Terminal/Chat toggle;
+                  single-agent view already has the header toggle. */}
+              <StageLayout showLeafToggle={stageSession == null} />
             </div>
             {stageChatCapable && stageSession ? (
               <div

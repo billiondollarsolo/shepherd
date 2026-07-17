@@ -30,11 +30,11 @@ import (
 // scoped CLAUDE_CONFIG_DIR (for hook injection), claude writes under
 // <scoped>/projects — NOT ~/.claude/projects — so the tailer MUST follow the
 // session's scoped dir or it never sees the transcript (→ no tokens/model/ctx%).
-func claudeProjectsDir(configDir string) string {
+func claudeProjectsDir(configDir, home string) string {
 	if configDir != "" {
 		return filepath.Join(configDir, "projects")
 	}
-	return filepath.Join(homeDir(), ".claude", "projects")
+	return filepath.Join(homeOr(home), ".claude", "projects")
 }
 
 type claudeLine struct {
@@ -53,8 +53,8 @@ type claudeLine struct {
 	} `json:"message"`
 }
 
-func watchClaude(ctx context.Context, cwd, configDir string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
-	dir := claudeProjectsDir(configDir)
+func watchClaude(ctx context.Context, cwd, configDir, home string, startedAt time.Time, claim func(string) bool, emit func(Update), chat func(role, text string)) {
+	dir := claudeProjectsDir(configDir, home)
 	path := waitForFile(ctx, func() string { return findClaudeTranscript(dir, cwd, startedAt, claim) })
 	if path == "" {
 		return

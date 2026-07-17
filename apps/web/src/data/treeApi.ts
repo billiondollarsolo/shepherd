@@ -20,6 +20,7 @@ import {
   NodeEnvResponse as NodeEnvResponseSchema,
   NodeFileReadResponse as NodeFileReadResponseSchema,
   NodeFileWriteResponse as NodeFileWriteResponseSchema,
+  AgentModelsResponse as AgentModelsResponseSchema,
   NodeFsTreeResponse as NodeFsTreeResponseSchema,
   NodeInfoSchema,
   NodePreflightResponseSchema,
@@ -61,6 +62,8 @@ import {
   type ConfigureNodeDockerRequest,
   type NodeFileReadResponse,
   type NodeFileWriteResponse,
+  type AgentModelsResponse,
+  type AgentType,
   type NodeMakeDirResponse,
   type NodeFsTreeResponse,
   type Project,
@@ -76,6 +79,7 @@ import {
   type NodeResponse,
   type NodeEnvResponse,
   type SessionResponse,
+  type RelaunchSessionRequest,
   type TerminateSessionResponse,
   type UpdateSessionRequest,
   type UpdateNodeRequest,
@@ -278,6 +282,18 @@ export function writeNodeFile(
     schema: NodeFileWriteResponseSchema,
   });
 }
+/** The models an agent CLI offers on a node (model picker). Discovery failures
+ *  degrade to an empty list server-side, so this never rejects on a live node. */
+export function fetchAgentModels(
+  nodeId: string,
+  agentType: AgentType,
+): Promise<AgentModelsResponse> {
+  return apiRequest(
+    `/api/nodes/${encodeURIComponent(nodeId)}/agent-models?agentType=${encodeURIComponent(agentType)}`,
+    { schema: AgentModelsResponseSchema },
+  );
+}
+
 /** Create a new directory `name` inside `parent` (path picker "New folder"). */
 export function makeNodeDir(
   nodeId: string,
@@ -335,6 +351,18 @@ export function terminateSession(id: string): Promise<TerminateSessionResponse> 
 export function updateSession(id: string, patch: UpdateSessionRequest): Promise<SessionResponse> {
   return apiRequest(`/api/sessions/${id}`, {
     method: 'PATCH',
+    body: JSON.stringify(patch),
+    schema: SessionResponseSchema,
+  });
+}
+/** POST /api/sessions/:id/relaunch — swap the running agent's model / reasoning
+ *  effort in place (same session id; the CLI resumes the conversation). */
+export function relaunchSession(
+  id: string,
+  patch: RelaunchSessionRequest,
+): Promise<SessionResponse> {
+  return apiRequest(`/api/sessions/${id}/relaunch`, {
+    method: 'POST',
     body: JSON.stringify(patch),
     schema: SessionResponseSchema,
   });

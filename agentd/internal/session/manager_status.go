@@ -163,8 +163,14 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	// session's own hook env (same vars the agent gets); "" → no-op.
 	hookURL, hookToken := hookEndpointFromEnv(spec.Env)
 	// Native config remains in the agent's standard home, so no alternate transcript
-	// root is needed.
-	go status.Watch(ctx, agent, spec.Cwd, "", startedAt, claim, func(u status.Update) {
+	// root is needed — but that home is the RUNTIME user's, not the daemon's (agentd
+	// runs as root). Pass spec.Identity.Home so the tailer looks under /home/<user>,
+	// not /root; "" (dev same-user mode) falls back to the daemon's home.
+	runtimeHome := ""
+	if spec.Identity != nil {
+		runtimeHome = spec.Identity.Home
+	}
+	go status.Watch(ctx, agent, spec.Cwd, "", runtimeHome, startedAt, claim, func(u status.Update) {
 		m.emitStatus(StatusEvent{ID: id, Update: u})
 	}, func(role, text string) {
 		postChatEvent(hookURL, hookToken, role, text)

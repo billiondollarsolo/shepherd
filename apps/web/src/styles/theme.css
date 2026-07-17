@@ -29,13 +29,13 @@
   --flock-surface-1: #f5f6f8;
   --flock-surface-2: #eaecf0;
   --flock-surface-3: #e0e3e9;
-  --flock-accent: #2563eb;
+  --flock-accent: #4f46e5;
   --flock-accent-foreground: #ffffff;
   --flock-ink-primary: #1c2024;
   --flock-ink-muted: #5b6470;
   /* Raw RGB channels mirroring the hex above — Tailwind needs these to inject the
      /opacity modifier (rgb(var(--x) / <alpha>)); a hex value can't be alpha-composited. */
-  --flock-accent-rgb: 37 99 235;
+  --flock-accent-rgb: 79 70 229;
   --flock-ink-primary-rgb: 28 32 36;
   --flock-ink-muted-rgb: 91 100 112;
   --flock-status-starting: #64748b;
@@ -69,7 +69,7 @@
   --flock-term-bg: #ffffff;
   --flock-term-fg: #1c2024;
   --flock-term-cursor: #1c2024;
-  --flock-term-selection: rgba(37, 99, 235, 0.22);
+  --flock-term-selection: rgba(79, 70, 229, 0.22);
   --flock-term-ansi-0: #383a42;
   --flock-term-ansi-1: #e45649;
   --flock-term-ansi-2: #50a14f;
@@ -100,15 +100,15 @@
 /* OS prefers dark and the user has not made an explicit choice yet. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --flock-surface-0: #080808;
-    --flock-surface-1: #111111;
-    --flock-surface-2: #191919;
-    --flock-surface-3: #222222;
-    --flock-accent: #5b8cff;
-    --flock-accent-foreground: #080808;
+    --flock-surface-0: #0d0d0f;
+    --flock-surface-1: #151517;
+    --flock-surface-2: #1c1c1f;
+    --flock-surface-3: #26262a;
+    --flock-accent: #6470f0;
+    --flock-accent-foreground: #ffffff;
     --flock-ink-primary: #ededed;
     --flock-ink-muted: #8c8c8c;
-    --flock-accent-rgb: 91 140 255;
+    --flock-accent-rgb: 100 112 240;
     --flock-ink-primary-rgb: 237 237 237;
     --flock-ink-muted-rgb: 140 140 140;
     --flock-status-starting: #8a8a8a;
@@ -120,7 +120,7 @@
     --flock-status-disconnected: #6b7280;
     --flock-diff-add: #11261a;
     --flock-diff-remove: #2f1518;
-    --flock-diff-context: #111111;
+    --flock-diff-context: #151517;
     --flock-diff-add-fg: #3fb950;
     --flock-diff-remove-fg: #f85149;
     --flock-intent-success: #2f7d3a;
@@ -133,10 +133,10 @@
     --flock-intent-info-foreground: #ffffff;
     --flock-scrim: rgba(0, 0, 0, 0.6);
     --flock-scrim-blur: 2px;
-    --flock-term-bg: #080808;
+    --flock-term-bg: #0d0d0f;
     --flock-term-fg: #c8ccd4;
     --flock-term-cursor: #ededed;
-    --flock-term-selection: rgba(91, 140, 255, 0.3);
+    --flock-term-selection: rgba(100, 112, 240, 0.3);
     --flock-term-ansi-0: #282c34;
     --flock-term-ansi-1: #e06c75;
     --flock-term-ansi-2: #98c379;
@@ -161,15 +161,15 @@
 /* Explicit dark choice (persisted) — always wins over the media query.
  * Neutral black + graphite (mirrors darkTheme in tokens.ts). */
 :root[data-theme='dark'] {
-  --flock-surface-0: #080808;
-  --flock-surface-1: #111111;
-  --flock-surface-2: #191919;
-  --flock-surface-3: #222222;
-  --flock-accent: #5b8cff;
-  --flock-accent-foreground: #080808;
+  --flock-surface-0: #0d0d0f;
+  --flock-surface-1: #151517;
+  --flock-surface-2: #1c1c1f;
+  --flock-surface-3: #26262a;
+  --flock-accent: #6470f0;
+  --flock-accent-foreground: #ffffff;
   --flock-ink-primary: #ededed;
   --flock-ink-muted: #8c8c8c;
-  --flock-accent-rgb: 91 140 255;
+  --flock-accent-rgb: 100 112 240;
   --flock-ink-primary-rgb: 237 237 237;
   --flock-ink-muted-rgb: 140 140 140;
   --flock-status-starting: #8a8a8a;
@@ -181,7 +181,7 @@
   --flock-status-disconnected: #6b7280;
   --flock-diff-add: #11261a;
   --flock-diff-remove: #2f1518;
-  --flock-diff-context: #111111;
+  --flock-diff-context: #151517;
   --flock-diff-add-fg: #3fb950;
   --flock-diff-remove-fg: #f85149;
   --flock-intent-success: #2f7d3a;
@@ -194,10 +194,10 @@
   --flock-intent-info-foreground: #ffffff;
   --flock-scrim: rgba(0, 0, 0, 0.6);
   --flock-scrim-blur: 2px;
-  --flock-term-bg: #080808;
+  --flock-term-bg: #0d0d0f;
   --flock-term-fg: #c8ccd4;
   --flock-term-cursor: #ededed;
-  --flock-term-selection: rgba(91, 140, 255, 0.3);
+  --flock-term-selection: rgba(100, 112, 240, 0.3);
   --flock-term-ansi-0: #282c34;
   --flock-term-ansi-1: #e06c75;
   --flock-term-ansi-2: #98c379;

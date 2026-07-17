@@ -463,7 +463,7 @@ export function Sidebar(): JSX.Element {
               <span className="font-wordmark truncate text-xl font-semibold leading-[18px] text-flock-ink-primary">
                 {PRODUCT_NAME}
               </span>
-              <span className="truncate text-[9px] font-medium leading-[9px] tracking-wide text-flock-ink-muted">
+              <span className="mt-0.5 truncate text-[9px] font-medium leading-[9px] tracking-wide text-flock-ink-muted">
                 {PRODUCT_TAGLINE}
               </span>
             </span>

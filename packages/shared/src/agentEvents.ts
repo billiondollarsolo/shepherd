@@ -38,6 +38,19 @@ export const AgentPlanItem = z.object({
 });
 export type AgentPlanItem = z.infer<typeof AgentPlanItem>;
 
+/**
+ * One hunk of a unified diff (Claude's `structuredPatch` entry). All fields are
+ * optional so a partial/absent hunk still validates (graceful degradation).
+ */
+export const DiffHunk = z.object({
+  oldStart: z.number().optional(),
+  oldLines: z.number().optional(),
+  newStart: z.number().optional(),
+  newLines: z.number().optional(),
+  lines: z.array(z.string()).optional(),
+});
+export type DiffHunk = z.infer<typeof DiffHunk>;
+
 /** Fields every event carries: the session it belongs to + an optional raw source. */
 const base = { sessionId: z.string(), raw: z.unknown().optional() };
 
@@ -65,16 +78,25 @@ export const AgentEvent = z.discriminatedUnion('kind', [
     toolId: z.string(),
     name: z.string().optional(),
     title: z.string().optional(),
+    /** The tool's args object (e.g. {file_path, content} or {command}); opaque. */
+    toolInput: z.unknown().optional(),
     ...base,
   }),
   z.object({
     kind: z.literal('tool.updated'),
     toolId: z.string(),
     status: AgentToolStatus,
+    /** The tool result's text output, when the transport carries it. */
+    toolOutput: z.string().optional(),
+    /** Claude's structuredPatch (unified-diff hunks), when present. */
+    toolDiff: z.array(DiffHunk).optional(),
     ...base,
   }),
 
   z.object({ kind: z.literal('plan.updated'), items: z.array(AgentPlanItem), ...base }),
+
+  // The agent's DYNAMIC slash-command catalog (Claude stream-json `init`).
+  z.object({ kind: z.literal('commands.updated'), commands: z.array(z.string()), ...base }),
 
   z.object({
     kind: z.literal('usage.updated'),
@@ -129,6 +151,73 @@ export function agentEventToStatus(event: AgentEvent): Status | null {
     case 'tool.updated':
     case 'plan.updated':
     case 'usage.updated':
+    case 'commands.updated':
       return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Wire contract — the `agentEventRaw` shapes agentd POSTs to the hook endpoint
+// and the web `chatTimeline` reads back verbatim. These are DISTINCT from the
+// canonical {@link AgentEvent} union above: they carry NO `sessionId` (the URL
+// path segment identifies the session) and are stored opaquely as `jsonb`.
+// Typed here so producers (agentd contract mirror) and the web consumer agree
+// on the EXACT shapes. All are `.passthrough()` + optional so a missing field
+// renders what's there and never drops the event.
+// ---------------------------------------------------------------------------
+
+/** EXISTING transcript path: a whole user/assistant/tool message. */
+export const ChatEventRaw = z
+  .object({
+    chat: z.object({
+      role: z.string(),
+      text: z.string(),
+    }),
+  })
+  .passthrough();
+export type ChatEventRaw = z.infer<typeof ChatEventRaw>;
+
+/** A tool call started: name/title + the tool's args object. */
+export const ToolStartedEventRaw = z
+  .object({
+    kind: z.literal('tool.started'),
+    toolId: z.string(),
+    title: z.string(),
+    toolInput: z.unknown().optional().nullable(),
+  })
+  .passthrough();
+export type ToolStartedEventRaw = z.infer<typeof ToolStartedEventRaw>;
+
+/** A tool call finished: terminal status + optional result text and diff. */
+export const ToolUpdatedEventRaw = z
+  .object({
+    kind: z.literal('tool.updated'),
+    toolId: z.string(),
+    status: z.enum(['completed', 'error', 'in_progress']),
+    toolOutput: z.string().optional().nullable(),
+    toolDiff: z.array(DiffHunk).optional().nullable(),
+  })
+  .passthrough();
+export type ToolUpdatedEventRaw = z.infer<typeof ToolUpdatedEventRaw>;
+
+/** The agent's dynamic slash-command catalog (Claude stream-json `init`). */
+export const CommandsUpdatedEventRaw = z
+  .object({
+    kind: z.literal('commands.updated'),
+    commands: z.array(z.string()),
+  })
+  .passthrough();
+export type CommandsUpdatedEventRaw = z.infer<typeof CommandsUpdatedEventRaw>;
+
+/**
+ * The full set of `agentEventRaw` shapes the hook endpoint stores. A parse
+ * helper rather than a strict gate — the endpoint accepts ANY object (schema
+ * drift never drops an event); this is for typed producers/consumers.
+ */
+export const AgentEventRaw = z.union([
+  ChatEventRaw,
+  ToolStartedEventRaw,
+  ToolUpdatedEventRaw,
+  CommandsUpdatedEventRaw,
+]);
+export type AgentEventRaw = z.infer<typeof AgentEventRaw>;

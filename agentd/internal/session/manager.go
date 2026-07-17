@@ -77,13 +77,26 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 
 		var s *Session
 		var err error
-		if spec.Mode == "acp" {
+		switch spec.Mode {
+		case "acp":
 			// Structured transport (F6): the ACP session pushes its own derived
 			// status straight to the manager (no transcript/PTY watcher needed).
 			s, err = OpenACP(spec, func(u status.Update) {
 				m.emitStatus(StatusEvent{ID: spec.ID, Update: u})
 			})
-		} else {
+		case "claude-stream":
+			// Claude's structured stream-json transport: like ACP, it pushes its own
+			// derived status straight to the manager (no transcript/PTY watcher).
+			s, err = OpenClaudeStream(spec, func(u status.Update) {
+				m.emitStatus(StatusEvent{ID: spec.ID, Update: u})
+			})
+		case "codex-app-server":
+			// Codex's structured app-server (JSON-RPC) transport: like ACP + claude-stream,
+			// it pushes its own derived status straight to the manager (no watcher).
+			s, err = OpenCodexAppServer(spec, func(u status.Update) {
+				m.emitStatus(StatusEvent{ID: spec.ID, Update: u})
+			})
+		default:
 			s, err = Open(spec)
 		}
 		m.mu.Lock()
@@ -98,9 +111,9 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		}
 
 		// Start deriving live status — transcript tail (claude/codex) or PTY-activity
-		// (gemini via spec.ActivityStatus); no-op for plain shells. ACP sessions push
-		// their own status (above), so they skip the watcher.
-		if spec.Mode != "acp" {
+		// (gemini via spec.ActivityStatus); no-op for plain shells. ACP and
+		// claude-stream sessions push their own status (above), so they skip the watcher.
+		if spec.Mode != "acp" && spec.Mode != "claude-stream" && spec.Mode != "codex-app-server" {
 			m.startStatusWatcher(spec, s)
 		}
 

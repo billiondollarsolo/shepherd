@@ -212,7 +212,7 @@ export function AgentsSwitcher(): JSX.Element {
           >
             {penMode ? (
               <div
-                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'bg-flock-accent/10 text-flock-ink-primary' : 'text-flock-ink-muted'}`}
+                className={`group/pen flex min-h-8 items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide ${g.zone === activePenId ? 'text-flock-ink-primary' : 'text-flock-ink-muted'}`}
               >
                 <button
                   type="button"
