@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { chatTimeline, latestCommands, pendingRequest, summarizeToolInput, toolTitle } from './chatTimeline';
+import {
+  chatTimeline,
+  latestCommands,
+  pendingRequest,
+  summarizeToolInput,
+  toolTitle,
+} from './chatTimeline';
 
 const ev = (id: string, agentEventRaw: unknown, ts?: string) => ({ id, agentEventRaw, ts });
 
@@ -62,8 +68,19 @@ describe('chatTimeline — F5 structured union', () => {
   });
 
   it('tracks request open → resolved and surfaces the pending one', () => {
-    const open = chatTimeline([ev('1', { kind: 'request.opened', requestId: 'R1', requestKind: 'permission', title: 'Run rm -rf?' })]);
-    expect(pendingRequest(open)).toMatchObject({ kind: 'request', title: 'Run rm -rf?', resolved: false });
+    const open = chatTimeline([
+      ev('1', {
+        kind: 'request.opened',
+        requestId: 'R1',
+        requestKind: 'permission',
+        title: 'Run rm -rf?',
+      }),
+    ]);
+    expect(pendingRequest(open)).toMatchObject({
+      kind: 'request',
+      title: 'Run rm -rf?',
+      resolved: false,
+    });
     const resolved = chatTimeline([
       ev('1', { kind: 'request.opened', requestId: 'R1', requestKind: 'permission' }),
       ev('2', { kind: 'request.resolved', requestId: 'R1' }),
@@ -83,14 +100,30 @@ describe('chatTimeline — F5 structured union', () => {
         toolInput: { file_path: '/etc/hosts', content: 'x' },
       }),
     ]);
-    expect(t[0]).toMatchObject({ kind: 'request', title: 'Write', input: '/etc/hosts', resolved: false });
+    expect(t[0]).toMatchObject({
+      kind: 'request',
+      title: 'Write',
+      input: '/etc/hosts',
+      resolved: false,
+    });
   });
 
   it('carries toolInput (as a summary), toolOutput and toolDiff onto the tool item', () => {
     const diff = [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 1, lines: ['+hi'] }];
     const t = chatTimeline([
-      ev('1', { kind: 'tool.started', toolId: 'T1', title: 'Write', toolInput: { file_path: '/x', content: 'hi' } }),
-      ev('2', { kind: 'tool.updated', toolId: 'T1', status: 'completed', toolOutput: 'File created', toolDiff: diff }),
+      ev('1', {
+        kind: 'tool.started',
+        toolId: 'T1',
+        title: 'Write',
+        toolInput: { file_path: '/x', content: 'hi' },
+      }),
+      ev('2', {
+        kind: 'tool.updated',
+        toolId: 'T1',
+        status: 'completed',
+        toolOutput: 'File created',
+        toolDiff: diff,
+      }),
     ]);
     expect(t).toHaveLength(1);
     expect(t[0]).toMatchObject({
@@ -119,6 +152,9 @@ describe('chatTimeline — F5 structured union', () => {
       ev('1', { kind: 'content.delta', streamKind: 'assistant_text', text: 'hello' }),
       ev('2', { kind: 'content.delta', streamKind: 'reasoning_text', text: 'thinking' }),
     ]);
-    expect(t.map((i) => (i.kind === 'message' ? i.role : i.kind))).toEqual(['assistant', 'reasoning']);
+    expect(t.map((i) => (i.kind === 'message' ? i.role : i.kind))).toEqual([
+      'assistant',
+      'reasoning',
+    ]);
   });
 });

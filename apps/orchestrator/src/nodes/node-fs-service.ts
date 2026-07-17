@@ -155,8 +155,7 @@ export function fsMkdirArgv(parent: string, name: string): string[] {
  * POSITIONALLY, never spliced into the script text → injection-safe (same form as the
  * fs scripts).
  */
-export const CODEX_MODELS_SCRIPT =
-  `{ printf '%s\n' "$1" "$2"; sleep 6; } | timeout 8 codex app-server 2>/dev/null`;
+export const CODEX_MODELS_SCRIPT = `{ printf '%s\n' "$1" "$2"; sleep 6; } | timeout 8 codex app-server 2>/dev/null`;
 
 /** Build the argv for codex model discovery: `sh -c <script> flock-models <init> <list>`. */
 export function codexModelsArgv(): string[] {

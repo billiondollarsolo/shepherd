@@ -66,7 +66,14 @@ import { usePaddock } from '../../store/paddock';
 import { LiveStatusTransitionContext, useLiveStatuses } from '../paddock/liveData';
 import { RespondBar } from '../paddock/RespondBar';
 import { isChatCapable } from './chatCapable';
-import { chatTimeline, latestCommands, type DiffHunk, type PlanItem, type TimelineItem, type ToolStatus } from './chatTimeline';
+import {
+  chatTimeline,
+  latestCommands,
+  type DiffHunk,
+  type PlanItem,
+  type TimelineItem,
+  type ToolStatus,
+} from './chatTimeline';
 
 /**
  * Type text into a session's PTY stdin. Prefers the session's OWN per-session writer
@@ -151,7 +158,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
 
 /** Compact relative time: "now", "3m", "2h", "4d". Pure. */
 export function chatTimeAgo(iso: string, now: number): string {
@@ -320,7 +326,12 @@ type ToolItem = Extract<TimelineItem, { kind: 'tool' }>;
 /** Small status glyph for a tool card's lifecycle state. */
 function ToolStatusIcon({ status }: { status: ToolStatus }): JSX.Element {
   if (status === 'running')
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-status-running" aria-label="running" />;
+    return (
+      <Loader2
+        className="size-3.5 shrink-0 animate-spin text-status-running"
+        aria-label="running"
+      />
+    );
   if (status === 'success')
     return <Check className="size-3.5 shrink-0 text-status-idle" aria-label="done" />;
   if (status === 'error')
@@ -538,7 +549,10 @@ function ErrorRow({ text }: { text: string }): JSX.Element {
 /** A subtle "agent is working" pulse shown while the session is running. */
 function WorkingRow(): JSX.Element {
   return (
-    <div className="flex items-center gap-2 px-1 text-2xs text-flock-ink-muted" data-testid="chat-working">
+    <div
+      className="flex items-center gap-2 px-1 text-2xs text-flock-ink-muted"
+      data-testid="chat-working"
+    >
       <Loader2 className="size-3.5 animate-spin" />
       <span className="animate-pulse">Agent is working…</span>
     </div>
@@ -728,7 +742,8 @@ function ModelSwitcher({ session }: { session: Session }): JSX.Element | null {
           ))}
         </div>
         <div className="border-t border-[var(--flock-border)] px-2.5 py-1.5 text-2xs leading-snug text-flock-ink-muted">
-          Switching restarts the agent{resumes ? ' and resumes this conversation.' : ' as a new conversation.'}
+          Switching restarts the agent
+          {resumes ? ' and resumes this conversation.' : ' as a new conversation.'}
         </div>
       </PopoverContent>
     </Popover>
@@ -742,7 +757,10 @@ function ModelSwitcher({ session }: { session: Session }): JSX.Element | null {
  * bare (e.g. "compact") — normalized to the "/compact" form the catalog and the
  * PTY both use. Pure + unit-tested.
  */
-export function resolveSlashCommands(agentType: AgentType, liveCommands: string[] | null): readonly string[] {
+export function resolveSlashCommands(
+  agentType: AgentType,
+  liveCommands: string[] | null,
+): readonly string[] {
   if (liveCommands && liveCommands.length > 0) {
     return liveCommands.map((c) => (c.startsWith('/') ? c : `/${c}`));
   }
@@ -788,7 +806,9 @@ function PermissionModeSwitcher({ session }: { session: Session }): JSX.Element 
           ) : (
             <Shield className="size-3 shrink-0 text-flock-ink-muted" />
           )}
-          <span className="truncate">{pending ? 'Switching…' : PERMISSION_MODE_SHORT[current]}</span>
+          <span className="truncate">
+            {pending ? 'Switching…' : PERMISSION_MODE_SHORT[current]}
+          </span>
           <ChevronDown className="size-3 shrink-0 text-flock-ink-muted" />
         </button>
       </PopoverTrigger>

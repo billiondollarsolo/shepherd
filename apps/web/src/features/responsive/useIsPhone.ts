@@ -25,8 +25,7 @@ import { useEffect, useState } from 'react';
  * SINGLE SOURCE OF TRUTH — mirror any change by hand in `styles/responsive.css`
  * (custom properties can't parameterize a `@media` query).
  */
-export const PHONE_MEDIA_QUERY =
-  '(max-width: 767px), (pointer: coarse) and (max-height: 575px)';
+export const PHONE_MEDIA_QUERY = '(max-width: 767px), (pointer: coarse) and (max-height: 575px)';
 
 function getMql(): MediaQueryList | null {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;

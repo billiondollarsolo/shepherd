@@ -539,11 +539,7 @@ export class SessionRestService {
       patch.permissionMode === undefined ? record.permissionMode : patch.permissionMode;
 
     // Resolve the node for the launch (name/kind), like createSession does.
-    const [node] = await this.db
-      .select()
-      .from(nodes)
-      .where(eq(nodes.id, record.nodeId))
-      .limit(1);
+    const [node] = await this.db.select().from(nodes).where(eq(nodes.id, record.nodeId)).limit(1);
     if (!node) {
       throw new SessionRelaunchNotFoundError(id);
     }

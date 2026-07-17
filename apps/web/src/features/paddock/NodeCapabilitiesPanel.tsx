@@ -92,8 +92,8 @@ function BundledRuntimeCard(): JSX.Element {
         ) : null}
       </div>
       <p className="mt-2 max-w-2xl text-xs text-flock-ink-muted">
-        This node&rsquo;s coding tools ship inside Shepherd and update together, so per-tool installs
-        aren&rsquo;t available here. Update Shepherd to change its bundled tools.
+        This node&rsquo;s coding tools ship inside Shepherd and update together, so per-tool
+        installs aren&rsquo;t available here. Update Shepherd to change its bundled tools.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <code className="rounded-md border border-[var(--flock-border)] bg-flock-surface-0 px-2 py-1 font-mono text-2xs text-flock-ink-primary">

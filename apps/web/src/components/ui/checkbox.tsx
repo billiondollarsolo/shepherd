@@ -18,7 +18,10 @@ export interface CheckboxProps
 }
 
 export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
-  ({ checked: checkedProp, defaultChecked, onCheckedChange, className, onClick, ...props }, ref) => {
+  (
+    { checked: checkedProp, defaultChecked, onCheckedChange, className, onClick, ...props },
+    ref,
+  ) => {
     const [uncontrolled, setUncontrolled] = React.useState(defaultChecked ?? false);
     const checked = checkedProp ?? uncontrolled;
 

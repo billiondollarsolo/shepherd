@@ -82,7 +82,13 @@ export const SETTINGS_SECTIONS: readonly SectionDef[] = [
     Component: NotificationsSection,
     group: 'personal',
   },
-  { id: 'account', label: 'Account', Icon: UserCircle, Component: AccountSection, group: 'personal' },
+  {
+    id: 'account',
+    label: 'Account',
+    Icon: UserCircle,
+    Component: AccountSection,
+    group: 'personal',
+  },
   { id: 'nodes', label: 'Nodes', Icon: HardDrive, Component: NodesSection, group: 'workspace' },
   {
     id: 'deployment-preview',

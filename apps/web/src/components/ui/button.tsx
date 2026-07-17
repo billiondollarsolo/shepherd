@@ -19,10 +19,8 @@ export const buttonVariants = cva(
       variant: {
         primary:
           'bg-flock-accent text-[var(--flock-accent-foreground)] shadow-sm hover:bg-flock-accent-hover active:brightness-95',
-        secondary:
-          'bg-flock-surface-2 text-flock-ink-primary border hover:bg-flock-hover',
-        outline:
-          'border border-strong bg-transparent text-flock-ink-primary hover:bg-flock-hover',
+        secondary: 'bg-flock-surface-2 text-flock-ink-primary border hover:bg-flock-hover',
+        outline: 'border border-strong bg-transparent text-flock-ink-primary hover:bg-flock-hover',
         ghost:
           'bg-transparent text-flock-ink-muted hover:bg-flock-hover hover:text-flock-ink-primary',
         destructive:
@@ -57,7 +55,17 @@ export interface ButtonProps
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { className, variant, size, asChild = false, loading = false, loadingText, disabled, children, ...props },
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading = false,
+      loadingText,
+      disabled,
+      children,
+      ...props
+    },
     ref,
   ) => {
     const Comp = asChild ? Slot : 'button';

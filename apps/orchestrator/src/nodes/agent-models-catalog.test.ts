@@ -49,8 +49,7 @@ describe('agent-models-catalog', () => {
     });
 
     it('falls back to `model` when `id` is absent and de-dupes, preserving order', () => {
-      const stdout =
-        '{"id":2,"result":{"data":[{"model":"a"},{"id":"b"},{"id":"a"},{"id":"b"}]}}';
+      const stdout = '{"id":2,"result":{"data":[{"model":"a"},{"id":"b"},{"id":"a"},{"id":"b"}]}}';
       expect(parseCodexModelList(stdout)).toEqual(['a', 'b']);
     });
 

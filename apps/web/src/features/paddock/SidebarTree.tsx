@@ -404,7 +404,9 @@ function ProjectRow({
   const selectProject = usePaddock((s) => s.selectProject);
   // The scoped project = the one the grid is currently scoped to (project clicked,
   // no single session maximized). Mirror the SessionRow selected treatment on it.
-  const scoped = usePaddock((s) => s.selectedProjectId === project.id && s.selectedSessionId === null);
+  const scoped = usePaddock(
+    (s) => s.selectedProjectId === project.id && s.selectedSessionId === null,
+  );
   const setTreeExpanded = usePaddock((s) => s.setTreeExpanded);
   // Branch-level attention (FR-UI3): when COLLAPSED, a pulsing dot stands in for the
   // hidden session dots so an awaiting/errored agent is visible without expanding.

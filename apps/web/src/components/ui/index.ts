@@ -1,13 +1,6 @@
 export { Badge, badgeVariants, type BadgeProps, Chip, type ChipProps } from './badge';
 export { Button, buttonVariants, type ButtonProps } from './button';
-export {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from './card';
+export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './card';
 export { Checkbox, type CheckboxProps } from './checkbox';
 export {
   Dialog,

@@ -463,13 +463,7 @@ function NodeDiagnostics({
                     : 'text-flock-ink-muted'
               }
             >
-              {control
-                ? secure
-                  ? 'Secure'
-                  : 'Insecure'
-                : failure
-                  ? 'Unreachable'
-                  : 'Unavailable'}
+              {control ? (secure ? 'Secure' : 'Insecure') : failure ? 'Unreachable' : 'Unavailable'}
             </span>
           </span>
           <span

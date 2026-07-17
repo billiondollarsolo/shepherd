@@ -59,7 +59,14 @@ describe('agentLaunchCommand', () => {
 
   it('ends with the resume flag when relaunching with agentResumeArgs (antigravity)', () => {
     expect(
-      agentLaunchCommand('antigravity', 'default', undefined, 'X', undefined, agentResumeArgs('antigravity')),
+      agentLaunchCommand(
+        'antigravity',
+        'default',
+        undefined,
+        'X',
+        undefined,
+        agentResumeArgs('antigravity'),
+      ),
     ).toEqual(['agy', '--model', 'X', '--continue']);
   });
 

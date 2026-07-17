@@ -6,10 +6,7 @@ import { ToggleChip } from './toggle-chip';
 describe('ToggleChip', () => {
   it('reflects the selected state via aria-pressed', () => {
     const { rerender } = render(<ToggleChip>Errors</ToggleChip>);
-    expect(screen.getByRole('button', { name: 'Errors' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    expect(screen.getByRole('button', { name: 'Errors' })).toHaveAttribute('aria-pressed', 'false');
     rerender(<ToggleChip selected>Errors</ToggleChip>);
     expect(screen.getByRole('button', { name: 'Errors' })).toHaveAttribute('aria-pressed', 'true');
   });

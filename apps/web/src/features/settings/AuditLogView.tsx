@@ -110,11 +110,7 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps = {}): JSX.Element
           ))}
         </div>
       ) : error ? (
-        <div
-          role="alert"
-          className="px-4 py-6 text-sm text-status-error"
-          data-testid="audit-error"
-        >
+        <div role="alert" className="px-4 py-6 text-sm text-status-error" data-testid="audit-error">
           {error}
         </div>
       ) : entries.length === 0 ? (
@@ -156,7 +152,9 @@ export function AuditLogView({ fetchImpl }: AuditLogViewProps = {}): JSX.Element
                   <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
                     {e.targetType ? `${e.targetType}:${e.targetId ?? '—'}` : '—'}
                   </td>
-                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">{e.ip ?? '—'}</td>
+                  <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
+                    {e.ip ?? '—'}
+                  </td>
                   <td className="px-2 py-1 font-mono text-xs text-flock-ink-muted">
                     {e.detail ?? '—'}
                   </td>

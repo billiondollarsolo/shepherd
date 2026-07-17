@@ -10,7 +10,12 @@
  * Keeping this in one place means adding/renaming an agent binary is a one-line
  * change, and both the local and SSH transports launch agents identically.
  */
-import type { AgentType, SessionPermissionMode, SessionReasoningEffort, Status } from '@flock/shared';
+import type {
+  AgentType,
+  SessionPermissionMode,
+  SessionReasoningEffort,
+  Status,
+} from '@flock/shared';
 
 /**
  * Map a Shepherd {@link SessionReasoningEffort} to Codex's config override flags.

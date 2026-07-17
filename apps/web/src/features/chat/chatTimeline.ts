@@ -29,7 +29,13 @@ export interface DiffHunk {
 }
 
 export type TimelineItem =
-  | { kind: 'message'; id: string; role: 'user' | 'assistant' | 'reasoning'; text: string; ts?: string }
+  | {
+      kind: 'message';
+      id: string;
+      role: 'user' | 'assistant' | 'reasoning';
+      text: string;
+      ts?: string;
+    }
   | {
       kind: 'tool';
       id: string;
@@ -162,7 +168,12 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
     switch (raw.kind) {
       case 'content.delta': {
         if (!raw.text) break;
-        const role = raw.streamKind === 'user_text' ? 'user' : raw.streamKind === 'reasoning_text' ? 'reasoning' : 'assistant';
+        const role =
+          raw.streamKind === 'user_text'
+            ? 'user'
+            : raw.streamKind === 'reasoning_text'
+              ? 'reasoning'
+              : 'assistant';
         out.push({ kind: 'message', id: e.id, role, text: raw.text, ts: e.ts });
         break;
       }
@@ -182,8 +193,10 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
       case 'tool.updated': {
         const idx = raw.toolId != null ? toolIndex.get(raw.toolId) : undefined;
         const status = raw.status ? (TOOL_STATUS[raw.status] ?? 'running') : 'running';
-        const output = raw.toolOutput != null && raw.toolOutput.length > 0 ? raw.toolOutput : undefined;
-        const diff = Array.isArray(raw.toolDiff) && raw.toolDiff.length > 0 ? raw.toolDiff : undefined;
+        const output =
+          raw.toolOutput != null && raw.toolOutput.length > 0 ? raw.toolOutput : undefined;
+        const diff =
+          Array.isArray(raw.toolDiff) && raw.toolDiff.length > 0 ? raw.toolDiff : undefined;
         if (idx != null) {
           const item = out[idx];
           if (item && item.kind === 'tool') {
@@ -192,7 +205,15 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
             if (diff != null) item.diff = diff;
           }
         } else {
-          out.push({ kind: 'tool', id: raw.toolId ?? e.id, title: raw.title ?? 'Tool', status, output, diff, ts: e.ts });
+          out.push({
+            kind: 'tool',
+            id: raw.toolId ?? e.id,
+            title: raw.title ?? 'Tool',
+            status,
+            output,
+            diff,
+            ts: e.ts,
+          });
         }
         break;
       }
@@ -245,7 +266,9 @@ export function chatTimeline(events: ReadonlyArray<RawEvent>): TimelineItem[] {
 }
 
 /** The newest unresolved permission/input request, if any (drives the approval UI). */
-export function pendingRequest(items: readonly TimelineItem[]): Extract<TimelineItem, { kind: 'request' }> | null {
+export function pendingRequest(
+  items: readonly TimelineItem[],
+): Extract<TimelineItem, { kind: 'request' }> | null {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === 'request' && !it.resolved) return it;

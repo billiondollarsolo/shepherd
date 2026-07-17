@@ -64,7 +64,8 @@ export function parseCodexModelList(stdout: string): string[] {
     if (!Array.isArray(data)) continue;
     for (const entry of data) {
       const m = entry as { id?: unknown; model?: unknown };
-      const id = (typeof m.id === 'string' && m.id) || (typeof m.model === 'string' && m.model) || '';
+      const id =
+        (typeof m.id === 'string' && m.id) || (typeof m.model === 'string' && m.model) || '';
       if (!id || seen.has(id)) continue;
       seen.add(id);
       out.push(id);

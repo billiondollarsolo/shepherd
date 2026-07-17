@@ -188,10 +188,12 @@ function GridCellInner({
               aria-label="Session view"
               className="flex shrink-0 items-center gap-0.5 rounded border border-[var(--flock-border)] bg-flock-surface-2 p-0.5"
             >
-              {([
-                ['terminal', SquareTerminal, 'Terminal view'],
-                ['chat', MessageSquare, 'Chat view'],
-              ] as const).map(([v, Icon, label]) => (
+              {(
+                [
+                  ['terminal', SquareTerminal, 'Terminal view'],
+                  ['chat', MessageSquare, 'Chat view'],
+                ] as const
+              ).map(([v, Icon, label]) => (
                 <button
                   key={v}
                   type="button"

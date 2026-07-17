@@ -415,7 +415,11 @@ describe('structured-transport selection', () => {
       hashToken: async (t: string) => `hash:${t.slice(0, 6)}`,
       audit: new AuditLogger({ async write() {} }),
       agentdLaunch: async (args) => {
-        launches.push({ agentType: args.session.agentType, mode: args.mode, command: args.command });
+        launches.push({
+          agentType: args.session.agentType,
+          mode: args.mode,
+          command: args.command,
+        });
         return 'launched';
       },
       logger: { warn() {} },
@@ -436,10 +440,7 @@ describe('structured-transport selection', () => {
 
   it('leaves codex on the PTY path when structuredChat is off', async () => {
     const { service, launches } = await makeGatedService('1');
-    await service.createSession(
-      { projectId: PROJECT_ID, agentType: 'codex' },
-      { userId: USER_ID },
-    );
+    await service.createSession({ projectId: PROJECT_ID, agentType: 'codex' }, { userId: USER_ID });
     expect(launches[0]!.mode).toBeUndefined();
     expect(launches[0]!.command).toEqual(['codex']);
   });

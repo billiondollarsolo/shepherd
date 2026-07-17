@@ -75,9 +75,7 @@ export const RadioGroupItem = React.forwardRef<HTMLButtonElement, RadioGroupItem
       );
       const idx = items.indexOf(event.currentTarget);
       const forward = event.key === 'ArrowDown' || event.key === 'ArrowRight';
-      const next = forward
-        ? (idx + 1) % items.length
-        : (idx - 1 + items.length) % items.length;
+      const next = forward ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
       const target = items[next];
       if (target) {
         target.focus();

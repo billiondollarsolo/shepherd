@@ -111,10 +111,14 @@ describe('groupAttentionCount (US-32 per-node "N need you" rollup)', () => {
 
 describe('groupAttentionStatus (collapsed-branch dot colour)', () => {
   it('returns the MOST-URGENT needs-you status (awaiting_input over error)', () => {
-    expect(groupAttentionStatus([s('a', 'error'), s('b', 'awaiting_input')])).toBe('awaiting_input');
+    expect(groupAttentionStatus([s('a', 'error'), s('b', 'awaiting_input')])).toBe(
+      'awaiting_input',
+    );
   });
   it('returns error when only errors ring', () => {
-    expect(groupAttentionStatus([s('a', 'running'), s('b', 'error'), s('c', 'idle')])).toBe('error');
+    expect(groupAttentionStatus([s('a', 'running'), s('b', 'error'), s('c', 'idle')])).toBe(
+      'error',
+    );
   });
   it('returns null when nothing rings (never a calm status)', () => {
     expect(groupAttentionStatus([s('a', 'running'), s('b', 'idle'), s('c', 'done')])).toBeNull();

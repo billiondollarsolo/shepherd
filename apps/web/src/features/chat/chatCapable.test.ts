@@ -9,7 +9,18 @@ describe('isChatCapable', () => {
   });
 
   it('is false for terminal-only agents and unknown/empty input', () => {
-    for (const a of ['grok', 'aider', 'cursor-agent', 'amp', 'terminal', 'dev', 'nope', '', null, undefined]) {
+    for (const a of [
+      'grok',
+      'aider',
+      'cursor-agent',
+      'amp',
+      'terminal',
+      'dev',
+      'nope',
+      '',
+      null,
+      undefined,
+    ]) {
       expect(isChatCapable(a)).toBe(false);
     }
   });

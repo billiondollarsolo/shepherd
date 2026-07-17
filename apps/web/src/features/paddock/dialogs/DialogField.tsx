@@ -114,10 +114,7 @@ export function FieldGroup({
     >
       <span
         id={labelId}
-        className={cn(
-          'text-xs font-medium text-flock-ink-muted',
-          error && 'text-status-error',
-        )}
+        className={cn('text-xs font-medium text-flock-ink-muted', error && 'text-status-error')}
       >
         <LabelContent label={label} required={required} />
       </span>

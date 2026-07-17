@@ -184,7 +184,10 @@ describe('ChatPanel composer controls (Phases B/C/D)', () => {
 
   it('keeps the slash menu present when the session streams a dynamic catalog', () => {
     EVENTS = [
-      { id: 'e1', agentEventRaw: { kind: 'commands.updated', commands: ['compact', 'context', 'model'] } },
+      {
+        id: 'e1',
+        agentEventRaw: { kind: 'commands.updated', commands: ['compact', 'context', 'model'] },
+      },
     ];
     MODELS = [];
     renderPanel(chatSession);

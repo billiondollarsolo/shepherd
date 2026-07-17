@@ -31,12 +31,17 @@ export interface BadgeProps
   dot?: boolean;
 }
 
-export function Badge({ className, variant, size, dot, children, ...props }: BadgeProps): JSX.Element {
+export function Badge({
+  className,
+  variant,
+  size,
+  dot,
+  children,
+  ...props
+}: BadgeProps): JSX.Element {
   return (
     <span className={cn(badgeVariants({ variant, size }), className)} {...props}>
-      {dot && (
-        <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-      )}
+      {dot && <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />}
       {children}
     </span>
   );

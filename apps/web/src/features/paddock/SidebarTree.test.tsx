@@ -67,7 +67,9 @@ describe('NodeRow branch-level attention (task 3.2)', () => {
     const awaiting = screen.getByTestId('session-s-await');
     const running = screen.getByTestId('session-s-run');
     // P1 (awaiting) precedes P2 (running) despite P2 being first in the data.
-    expect(awaiting.compareDocumentPosition(running) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      awaiting.compareDocumentPosition(running) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('shows the per-node "N need you" rollup count', () => {

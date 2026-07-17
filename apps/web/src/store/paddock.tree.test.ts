@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  resolveTreeExpanded,
-  treeKeydownAction,
-  usePaddock,
-  type TreeRow,
-} from './paddock';
+import { resolveTreeExpanded, treeKeydownAction, usePaddock, type TreeRow } from './paddock';
 
 // A flattened, fully-expanded tree: node → project → sessions, plus a collapsed
 // sibling project and a collapsed sibling node (mirrors the sidebar DOM order).

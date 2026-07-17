@@ -16,7 +16,8 @@ vi.mock('../../data/queries', () => ({
   useLatestVersion: () => ({ data: latestVersion }),
 }));
 
-const BUNDLED_REASON = 'The bundled local runtime is immutable; update Shepherd to change its bundled tools.';
+const BUNDLED_REASON =
+  'The bundled local runtime is immutable; update Shepherd to change its bundled tools.';
 
 /** Rewrite the fixture so every tool reports the immutable bundled-runtime reason. */
 function bundledRuntime(): NodeCapabilitiesResponse {

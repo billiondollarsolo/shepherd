@@ -278,7 +278,9 @@ export function AddSessionDialog(): JSX.Element {
         ...(showMode && effectiveMode !== 'default' ? { permissionMode: effectiveMode } : {}),
         // Model + speed: only when explicitly chosen (else the CLI default applies).
         ...(showModel && model ? { model } : {}),
-        ...(showEffort && effectiveEffort !== 'default' ? { reasoningEffort: effectiveEffort } : {}),
+        ...(showEffort && effectiveEffort !== 'default'
+          ? { reasoningEffort: effectiveEffort }
+          : {}),
         // Structured chat transport opt-in (else the real TUI over PTY).
         ...(showStructuredChat && structuredChat ? { structuredChat: true } : {}),
         // Dev session: the supervised, auto-restarting command (sh -lc on the node).
@@ -393,7 +395,10 @@ export function AddSessionDialog(): JSX.Element {
           hint="Which model this agent runs. Leave on Default to use the CLI's own default."
         >
           {/* Sentinel '' = the CLI default (Radix Select can't take an empty value). */}
-          <Select value={model || '__default__'} onValueChange={(v) => setModel(v === '__default__' ? '' : v)}>
+          <Select
+            value={model || '__default__'}
+            onValueChange={(v) => setModel(v === '__default__' ? '' : v)}
+          >
             <SelectTrigger id="sess-model">
               <SelectValue />
             </SelectTrigger>
@@ -409,7 +414,11 @@ export function AddSessionDialog(): JSX.Element {
         </Field>
       ) : null}
       {showEffort ? (
-        <Field label="Speed" htmlFor="sess-effort" hint="Reasoning effort — higher is slower but more thorough.">
+        <Field
+          label="Speed"
+          htmlFor="sess-effort"
+          hint="Reasoning effort — higher is slower but more thorough."
+        >
           <Select
             value={effectiveEffort}
             onValueChange={(v) => setReasoningEffort(v as SessionReasoningEffort)}

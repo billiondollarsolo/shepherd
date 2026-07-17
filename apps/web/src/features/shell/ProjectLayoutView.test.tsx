@@ -175,9 +175,17 @@ describe('ProjectLayoutView', () => {
     // jsdom lacks PointerEvent, so dispatch coordinate-carrying MouseEvents typed
     // as pointer events (ResizeSeparator listens on pointerdown/move/up).
     sep.dispatchEvent(
-      new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 100, clientY: 100 }),
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+      }),
     );
-    document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 100 }));
+    document.dispatchEvent(
+      new MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 100 }),
+    );
     document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
     expect(onChange).toHaveBeenCalled();
     const next = onChange.mock.calls.at(-1)![0];
@@ -223,7 +231,13 @@ describe('ProjectLayoutView', () => {
     const sep = screen.getByTestId(`layout-separator-${splitId}`);
     // clientY 150 / height 200 → ratio 0.75 (apply-once on pointerdown).
     sep.dispatchEvent(
-      new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 200, clientY: 150 }),
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX: 200,
+        clientY: 150,
+      }),
     );
     document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
     const next = onChange.mock.calls.at(-1)![0];

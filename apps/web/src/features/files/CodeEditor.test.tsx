@@ -48,7 +48,10 @@ function renderInTheme(mode: 'light' | 'dark') {
 
 /** The token/font chrome extension is always first in the extensions array. */
 function chromeExt(): { __flockTheme: boolean; opts: { dark?: boolean } } {
-  const exts = captured.props?.extensions as Array<{ __flockTheme?: boolean; opts?: { dark?: boolean } }>;
+  const exts = captured.props?.extensions as Array<{
+    __flockTheme?: boolean;
+    opts?: { dark?: boolean };
+  }>;
   return exts[0] as { __flockTheme: boolean; opts: { dark?: boolean } };
 }
 
