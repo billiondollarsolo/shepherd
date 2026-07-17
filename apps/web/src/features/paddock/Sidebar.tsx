@@ -470,46 +470,10 @@ export function Sidebar(): JSX.Element {
           </button>
         </div>
         <div className="space-y-1 p-2">
-          <SidebarLensNav />
           <div className="flex items-center gap-1">
-            {/* Paddock = create anything. In the Agents lens you're inside a project,
-                where the only thing to create is a session (the "New session" button
-                lives in the project header), so the global New menu is hidden here. */}
-            {lens === 'mission' ? (
-              <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" aria-label="New" className="flex-1 justify-start">
-                  <Plus className="size-4" />
-                  New
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Add</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => openDialog('node')}>
-                  <HardDrive /> New node
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openDialog('project')}>
-                  <FolderGit2 /> New project
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openDialog('session')}>
-                  <Bot /> New session
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openDialog('race')}>
-                  <GitCompareArrows /> Race a task…
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openDialog('config')}>
-                  <FileCode2 /> Config (flock.yml)…
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => openMission()}>
-                  <LayoutGrid /> Paddock
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openSettings()}>
-                  <Settings /> Settings
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+            <div className="min-w-0 flex-1">
+              <SidebarLensNav />
+            </div>
             <SimpleTooltip label="Collapse sidebar">
               <Button
                 size="icon-sm"
@@ -521,6 +485,51 @@ export function Sidebar(): JSX.Element {
               </Button>
             </SimpleTooltip>
           </div>
+          {/* Paddock = create anything. In the Agents lens you're inside a project,
+              where the only thing to create is a session (the "New session" button
+              lives in the project header), so the global New menu is hidden here. */}
+          {lens === 'mission' ? (
+            <div className="flex">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label="New"
+                    className="flex-1 justify-start"
+                  >
+                    <Plus className="size-4" />
+                    New
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Add</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => openDialog('node')}>
+                    <HardDrive /> New node
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openDialog('project')}>
+                    <FolderGit2 /> New project
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openDialog('session')}>
+                    <Bot /> New session
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openDialog('race')}>
+                    <GitCompareArrows /> Race a task…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openDialog('config')}>
+                    <FileCode2 /> Config (flock.yml)…
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => openMission()}>
+                    <LayoutGrid /> Paddock
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openSettings()}>
+                    <Settings /> Settings
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : null}
         </div>
       </header>
 
