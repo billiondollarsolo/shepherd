@@ -7,9 +7,8 @@ import {
   type ProjectPensV1,
   ProjectPensResponseSchema,
 } from '@flock/shared';
-import { MessageSquare, SquareTerminal } from 'lucide-react';
 import type { Session } from '@flock/shared';
-import { usePaddock, stageViewFor, type PenAction, type PenSummary } from '../../store/paddock';
+import { usePaddock, type PenAction, type PenSummary } from '../../store/paddock';
 import { useSessions } from '../../data/queries';
 import { TerminalArea } from '../terminal/TerminalArea';
 import { ChatPanel } from '../chat/ChatPanel';
@@ -22,65 +21,20 @@ import { isChatCapable } from '../chat/chatCapable';
  * terminal stays MOUNTED under the chat view (kept `invisible`) so its PTY + the
  * per-session input writer survive the toggle.
  */
-function StageLeaf({
-  session,
-  focused,
-  showToggle,
-}: {
-  session: Session;
-  focused: boolean;
-  /** Show the in-tile Terminal/Chat toggle. Off in single-agent view, where the
-   *  stage header already carries the toggle (avoids a duplicate control). */
-  showToggle: boolean;
-}): JSX.Element {
-  const setStageView = usePaddock((s) => s.setStageView);
-  const stageView = usePaddock((s) => stageViewFor(s.stageViews, session.id));
-  const chatCapable = isChatCapable(session.agentType);
-  const chatActive = chatCapable && stageView === 'chat';
+function StageLeaf({ session, focused }: { session: Session; focused: boolean }): JSX.Element {
+  // The transport is chosen at launch (Chat vs Terminal), so the view is fixed:
+  // a structured (Chat-mode) session shows the chat; a PTY (Terminal-mode) session
+  // shows the native TUI. No in-tile toggle — the mode can't change, so there's
+  // nothing to switch between.
+  const chatActive = isChatCapable(session.agentType) && session.structuredChat;
   return (
     <div className="relative h-full min-h-0">
       <div className={`absolute inset-0 ${chatActive ? 'invisible' : ''}`}>
         <TerminalArea session={session} register={focused} />
       </div>
       {chatActive ? (
-        // When the in-tile toggle is shown it floats top-right (z-10) over the
-        // transcript; inset the chat top so the first message clears it. bg-flock-bg
-        // == the tile surface, so the gutter is seamless and the toggle sits in it.
-        <div
-          className={`absolute inset-0 ${showToggle ? 'pt-9' : ''}`}
-          data-testid={`stage-chat-${session.id}`}
-        >
+        <div className="absolute inset-0" data-testid={`stage-chat-${session.id}`}>
           <ChatPanel session={session} />
-        </div>
-      ) : null}
-      {chatCapable && showToggle ? (
-        <div
-          role="tablist"
-          aria-label="Session view"
-          className="absolute right-1.5 top-1.5 z-10 flex items-center gap-0.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-2/90 p-0.5 shadow-flock-sm backdrop-blur"
-        >
-          {(
-            [
-              ['terminal', SquareTerminal, 'Terminal view'],
-              ['chat', MessageSquare, 'Chat view'],
-            ] as const
-          ).map(([v, Icon, label]) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={stageView === v}
-              aria-label={label}
-              onClick={() => setStageView(session.id, v)}
-              className={`rounded p-0.5 transition-colors ${
-                stageView === v
-                  ? 'bg-flock-surface-0 text-flock-ink-primary shadow-flock-sm'
-                  : 'text-flock-ink-muted hover:text-flock-ink-primary'
-              }`}
-            >
-              <Icon className="size-3" />
-            </button>
-          ))}
         </div>
       ) : null}
     </div>
@@ -103,7 +57,7 @@ function summaries(document: ProjectPensV1 | null): PenSummary[] {
   );
 }
 
-export function StageLayout({ showLeafToggle = false }: { showLeafToggle?: boolean } = {}): JSX.Element {
+export function StageLayout(): JSX.Element {
   const selectedSessionId = usePaddock((state) => state.selectedSessionId);
   const selectedProjectId = usePaddock((state) => state.selectedProjectId);
   const selectProject = usePaddock((state) => state.selectProject);
@@ -461,7 +415,7 @@ export function StageLayout({ showLeafToggle = false }: { showLeafToggle?: boole
           </button>
         </div>
         <div className="min-h-0 flex-1">
-          <StageLeaf session={selected} focused showToggle={showLeafToggle} />
+          <StageLeaf session={selected} focused />
         </div>
       </div>
     );
@@ -523,7 +477,7 @@ export function StageLayout({ showLeafToggle = false }: { showLeafToggle?: boole
               );
             const focused =
               displayLayout.zoomedLeafId === leafId || displayLayout.focusedLeafId === leafId;
-            return <StageLeaf session={session} focused={focused} showToggle={showLeafToggle} />;
+            return <StageLeaf session={session} focused={focused} />;
           }}
         />
       </div>

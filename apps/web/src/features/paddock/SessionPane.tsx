@@ -10,7 +10,6 @@ import {
   Command,
   GitBranch,
   LayoutGrid,
-  MessageSquare,
   PanelBottom,
   PanelRight,
   SquareTerminal,
@@ -57,7 +56,7 @@ const AUTHORITY_LABEL: Record<AgentAuthority, string> = {
 };
 import { useShell } from '../../app/KeyboardProvider';
 import { shortcutLabel } from '../../app/commands';
-import { usePaddock, stageViewFor } from '../../store/paddock';
+import { usePaddock } from '../../store/paddock';
 import { useSessions, useSessionEvents, useGitStatus } from '../../data/queries';
 import { useLiveStatuses } from './liveData';
 import { StatusDot } from '../../components/StatusDot';
@@ -93,45 +92,6 @@ function BranchChip({ sessionId }: { sessionId: string }): JSX.Element | null {
         <span className="tabular-nums text-flock-accent">·{git.files.length}</span>
       ) : null}
     </button>
-  );
-}
-
-/** Segmented Terminal ⇄ Chat switch for the session stage (chat-capable agents). */
-function StageViewToggle({ sessionId }: { sessionId: string }): JSX.Element {
-  const stageViews = usePaddock((s) => s.stageViews);
-  const setStageView = usePaddock((s) => s.setStageView);
-  const current = stageViewFor(stageViews, sessionId);
-  const options = [
-    { v: 'terminal' as const, label: 'Terminal', Icon: SquareTerminal },
-    { v: 'chat' as const, label: 'Chat', Icon: MessageSquare },
-  ];
-  return (
-    <div
-      role="tablist"
-      aria-label="Session view"
-      className="flex shrink-0 items-center gap-0.5 rounded-md border border-[var(--flock-border)] bg-flock-surface-2 p-0.5"
-    >
-      {options.map(({ v, label, Icon }) => {
-        const active = current === v;
-        return (
-          <button
-            key={v}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => setStageView(sessionId, v)}
-            className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
-              active
-                ? 'bg-flock-surface-0 text-flock-ink-primary shadow-flock-sm'
-                : 'text-flock-ink-muted hover:text-flock-ink-primary'
-            }`}
-          >
-            <Icon className="size-3.5" />
-            {label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -193,8 +153,6 @@ function Header({ session }: { session: Session }): JSX.Element {
           {session.id.slice(0, 8)}
         </code>
       </div>
-
-      {isChatCapable(session.agentType) ? <StageViewToggle sessionId={session.id} /> : null}
 
       <Badge variant={STATUS_VARIANT[liveStatus] ?? 'neutral'} className="ml-1">
         <StatusDot status={liveStatus} />
@@ -335,7 +293,6 @@ export function SessionPane(): JSX.Element {
 
   const rightOpen = usePaddock((s) => s.rightOpen);
   const chrome = usePaddock((s) => s.chrome);
-  const stageViews = usePaddock((s) => s.stageViews);
   const assistivePanels = usePaddock((s) => s.assistivePanels);
   const closeTools = usePaddock((s) => s.closeTools);
   // If the selected agent vanishes, leave tools chrome so we don't strand UI.
@@ -404,11 +361,11 @@ export function SessionPane(): JSX.Element {
   if (open.length === 0) return <EmptyState />;
   const panelSession = stageSession;
   const toolsOpen = chrome === 'tools' && rightOpen && panelSession != null;
-  // Chat is a first-class alternative to the terminal for agents that produce a
-  // transcript; the terminal stays the floor (always mounted, kept alive).
+  // The transport is fixed at launch: a structured (Chat-mode) session shows the
+  // chat; a PTY (Terminal-mode) session shows the native TUI. No view toggle — the
+  // mode can't change. The terminal stays the floor (always mounted, kept alive).
   const stageChatCapable = isChatCapable(stageSession?.agentType);
-  const chatActive =
-    stageChatCapable && stageSession != null && stageViewFor(stageViews, stageSession.id) === 'chat';
+  const chatActive = stageChatCapable && stageSession != null && stageSession.structuredChat;
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-chrome={chrome}>
@@ -427,9 +384,7 @@ export function SessionPane(): JSX.Element {
                 via `invisible` (which preserves layout size) so switching views
                 never resizes or tears down the terminal. */}
             <div className={`absolute inset-0 ${chatActive ? 'invisible' : ''}`}>
-              {/* All-agents view (no stage header) → per-tile Terminal/Chat toggle;
-                  single-agent view already has the header toggle. */}
-              <StageLayout showLeafToggle={stageSession == null} />
+              <StageLayout />
             </div>
             {stageChatCapable && stageSession ? (
               <div
