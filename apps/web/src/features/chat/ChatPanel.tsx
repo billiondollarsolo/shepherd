@@ -918,7 +918,7 @@ function Composer({
     // conversation (t3code-style), so the input, model select and "/"·"+" controls
     // read as one box ON the page rather than an isolated bottom section.
     <div className="bg-flock-bg px-3 pb-3 pt-1">
-      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-[var(--flock-border)] bg-flock-surface-0 shadow-sm transition-colors focus-within:border-flock-accent">
+      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-[var(--flock-border)] bg-flock-surface-0 shadow-sm transition-colors focus-within:border-flock-accent">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -984,7 +984,7 @@ function Composer({
           </div>
         </div>
       </div>
-      <div className="mx-auto mt-1.5 flex w-full max-w-2xl items-center gap-1.5 px-1.5 text-2xs text-flock-ink-muted">
+      <div className="mx-auto mt-1.5 flex w-full max-w-3xl items-center gap-1.5 px-1.5 text-2xs text-flock-ink-muted">
         <FolderGit2 className="size-3 shrink-0" />
         <span className="truncate" title={session.workingDir}>
           {session.workingDir}
@@ -1060,7 +1060,7 @@ export function ChatPanel({ session }: { session: Session }): JSX.Element {
             </div>
           ) : (
             // ChatGPT-style narrow, centered reading column.
-            <div className="mx-auto w-full max-w-2xl space-y-3 px-4 py-4">
+            <div className="mx-auto w-full max-w-3xl space-y-3 px-4 py-4">
               {visible.map((item) => (
                 <TimelineRow key={item.id} item={item} now={now} sessionId={session.id} />
               ))}
