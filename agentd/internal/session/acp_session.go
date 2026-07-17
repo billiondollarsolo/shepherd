@@ -96,7 +96,10 @@ func (s *Session) runACP(argv []string) {
 		}
 	}()
 
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// Resolve argv[0] to an ABSOLUTE path against the agent's augmented bin dirs
+	// (same as the PTY path): the daemon's minimal $PATH won't find a userland
+	// ~/.local/bin install otherwise, failing cmd.Start() with "not found".
+	cmd := exec.CommandContext(ctx, resolveExecutable(argv[0], homeForSpec(s.spec)), argv[1:]...)
 	cmd.Dir = s.spec.Cwd
 	cmd.Env = agentEnvironment(s.spec)
 	if s.spec.Identity != nil {

@@ -109,7 +109,11 @@ func (s *Session) runClaudeStream(argv []string) {
 		}
 	}()
 
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// Resolve argv[0] to an ABSOLUTE path against the agent's augmented bin dirs
+	// (same as the PTY path in session.go): exec.LookPath uses the DAEMON's minimal
+	// $PATH and ignores cmd.Env, so a userland-installed CLI (~/.local/bin/claude on
+	// a fresh node) would otherwise fail with "not found" here.
+	cmd := exec.CommandContext(ctx, resolveExecutable(argv[0], homeForSpec(s.spec)), argv[1:]...)
 	cmd.Dir = s.spec.Cwd
 	cmd.Env = agentEnvironment(s.spec)
 	if s.spec.Identity != nil {
