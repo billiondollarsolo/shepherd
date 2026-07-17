@@ -286,7 +286,10 @@ export const darkTheme: ThemeTokens = {
     3: '#26262a', // highest — chips / nested raised
   },
   accent: '#6470f0', // soft periwinkle-indigo — the one confident interaction hue
-  accentForeground: '#ffffff',
+  // Dark text on the accent fill: white on #6470f0 is only 4.1:1 (below AA 4.5),
+  // whereas near-black is 4.73:1 — and keeping the accent bright preserves its
+  // contrast when used AS text/icons on the dark surface. (Light theme keeps white.)
+  accentForeground: '#0d0d0f',
   ink: {
     primary: '#ededed', // near-white, neutral
     muted: '#8c8c8c', // neutral grey secondary text
