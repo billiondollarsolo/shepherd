@@ -11,6 +11,7 @@ import {
   RadioTower,
   MoveRight,
   Pencil,
+  Plus,
   Rows2,
   Trash2,
 } from 'lucide-react';
@@ -131,9 +132,9 @@ export function AgentsSwitcher(): JSX.Element {
           <div className="grid gap-0.5 px-1 pb-1.5 text-2xs text-flock-ink-muted">
             {contextProject && contextProjectNode ? (
               <div className="flex min-w-0 items-center gap-1">
-                <span>Host:</span>
+                <span className="font-semibold text-flock-ink-primary">Host:</span>
                 <span
-                  className="truncate font-semibold text-flock-ink-primary"
+                  className="truncate text-flock-ink-muted"
                   title={contextProjectNode.host ?? contextProjectNode.name}
                 >
                   {contextProjectNode.name}
@@ -141,14 +142,24 @@ export function AgentsSwitcher(): JSX.Element {
               </div>
             ) : null}
             <div className="flex min-w-0 items-center gap-1">
-              <span>{contextProject ? 'Project' : 'Node'}:</span>
-              <span className="truncate font-semibold text-flock-ink-primary">
+              <span className="font-semibold text-flock-ink-primary">
+                {contextProject ? 'Project' : 'Node'}:
+              </span>
+              <span className="truncate text-flock-ink-muted">
                 {contextProject?.name ?? contextNode?.name}
               </span>
             </div>
           </div>
           {contextProject ? (
             <div className="grid gap-0.5">
+              <button
+                type="button"
+                onClick={() => openDialog('session', { projectId: contextProject.id })}
+                data-testid="agents-new-session"
+                className="flex w-full items-center gap-2 rounded-md border border-[var(--flock-border)] bg-flock-surface-1 px-2 py-1.5 text-xs font-medium text-flock-ink-primary hover:bg-flock-surface-2"
+              >
+                <Plus className="size-3.5" /> New session
+              </button>
               <button
                 type="button"
                 onClick={() => openProjectGit(contextProject.id)}
