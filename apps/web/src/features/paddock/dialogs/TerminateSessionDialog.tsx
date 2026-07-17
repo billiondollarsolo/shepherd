@@ -14,6 +14,7 @@ export function TerminateSessionDialog(): JSX.Element {
   const closeDialog = usePaddock((s) => s.closeDialog);
   const selectedSessionId = usePaddock((s) => s.selectedSessionId);
   const selectSession = usePaddock((s) => s.selectSession);
+  const selectProject = usePaddock((s) => s.selectProject);
   const { data: sessions = [] } = useSessions();
   const terminate = useTerminateSession();
   const session = sessions.find((s) => s.id === sessionId);
@@ -21,9 +22,17 @@ export function TerminateSessionDialog(): JSX.Element {
 
   async function onConfirm(): Promise<void> {
     if (!sessionId) return;
+    // Capture the project BEFORE the delete so we can keep the view scoped to it.
+    const projectId = session?.projectId ?? null;
     try {
       await terminate.mutateAsync(sessionId);
-      if (selectedSessionId === sessionId) selectSession(null);
+      // If the deleted session was the selected one, fall back to its PROJECT
+      // rather than clearing the selection outright — otherwise contextProjectId
+      // goes null and the grouped Pen view collapses to a flat agent list.
+      if (selectedSessionId === sessionId) {
+        if (projectId) selectProject(projectId);
+        else selectSession(null);
+      }
       closeDialog();
     } catch {
       /* error toast handled by the mutation */
