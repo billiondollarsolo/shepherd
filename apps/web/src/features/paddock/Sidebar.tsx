@@ -472,7 +472,11 @@ export function Sidebar(): JSX.Element {
         <div className="space-y-1 p-2">
           <SidebarLensNav />
           <div className="flex items-center gap-1">
-            <DropdownMenu>
+            {/* Paddock = create anything. In the Agents lens you're inside a project,
+                where the only thing to create is a session (the "New session" button
+                lives in the project header), so the global New menu is hidden here. */}
+            {lens === 'mission' ? (
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" aria-label="New" className="flex-1 justify-start">
                   <Plus className="size-4" />
@@ -504,7 +508,8 @@ export function Sidebar(): JSX.Element {
                   <Settings /> Settings
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+              </DropdownMenu>
+            ) : null}
             <SimpleTooltip label="Collapse sidebar">
               <Button
                 size="icon-sm"
