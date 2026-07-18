@@ -110,7 +110,7 @@ Authenticated operations currently include:
 - PTY input, output, resize, exit, and scrollback replay;
 - status and node metrics;
 - persisted workspace layout get/set;
-- PTY and structured ACP session modes.
+- PTY and structured session modes (ACP, `claude-stream`, `codex-app-server`).
 
 The daemon owns runtime identity selection. UID/GID is never accepted from the client.
 

@@ -27,10 +27,11 @@ generic AI gradient-and-glass look.
 
 Five rules drive every token (operationalizing Appendix A.4 "calm density"):
 
-1. **One accent, used sparingly.** A single confident blue (`accent`) marks the
-   active session, primary actions, links, and focus. It is never used for body
-   text or large fills. (`running` shares the accent so a working agent reads as
-   the live focus.)
+1. **One accent, used sparingly.** A single confident periwinkle-indigo (`accent`)
+   marks the active session, primary actions, links, and focus. It is never used for
+   body text or large fills. `running` is deliberately a **distinct, calm indigo** —
+   OFF the interaction accent — so a working agent never reads the same as a selected
+   or focused one.
 2. **Quiet surfaces.** Near-monochrome backgrounds in small steps
    (`surface.0/1/2`); elevation is carried by 1px hairline borders, not drop
    shadows. Shadows exist only for true overlays (menus, modals).
@@ -76,7 +77,7 @@ explicit choice persisted (US-31).
 
 | flock-theme | flat             | Light     | Dark      |
 | ----------- | ---------------- | --------- | --------- |
-| `accent`    | `--flock-accent` | `#2563eb` | `#3b82f6` |
+| `accent`    | `--flock-accent` | `#4f46e5` | `#6470f0` |
 
 Tailwind: `text-flock-accent`, `bg-flock-accent`, plus `border-accent` and the
 `:focus-visible` outline (US-37) all reference `--flock-accent`.
@@ -85,9 +86,9 @@ Tailwind: `text-flock-accent`, `bg-flock-accent`, plus `border-accent` and the
 
 | flock-theme | flat                | Light     | Dark      |
 | ----------- | ------------------- | --------- | --------- |
-| `surface.0` | `--flock-surface-0` | `#ffffff` | `#0f1115` |
-| `surface.1` | `--flock-surface-1` | `#f5f6f8` | `#171a21` |
-| `surface.2` | `--flock-surface-2` | `#eaecf0` | `#21262f` |
+| `surface.0` | `--flock-surface-0` | `#ffffff` | `#0d0d0f` |
+| `surface.1` | `--flock-surface-1` | `#f5f6f8` | `#151517` |
+| `surface.2` | `--flock-surface-2` | `#eaecf0` | `#1c1c1f` |
 
 Legacy aliases mapped in `index.css`: `--flock-bg`→surface-0,
 `--flock-surface`→surface-1, `--flock-fg`→ink-primary, `--flock-muted`→ink-muted.
@@ -96,8 +97,8 @@ Legacy aliases mapped in `index.css`: `--flock-bg`→surface-0,
 
 | flock-theme   | flat                  | Light     | Dark      |
 | ------------- | --------------------- | --------- | --------- |
-| `ink.primary` | `--flock-ink-primary` | `#1c2024` | `#e6e8eb` |
-| `ink.muted`   | `--flock-ink-muted`   | `#5b6470` | `#9aa3af` |
+| `ink.primary` | `--flock-ink-primary` | `#1c2024` | `#ededed` |
+| `ink.muted`   | `--flock-ink-muted`   | `#5b6470` | `#8c8c8c` |
 
 ### 3.4 Status palette (`status.*` — the only warm/alert hues)
 
@@ -107,15 +108,15 @@ Keys mirror the shared `StatusEnum` (spec §7;
 `StatusEnum` value `awaiting_input` → `--flock-status-awaiting`. These drive the
 8px dot/ring (FR-ST6, FR-UI3); never whole-row fills.
 
-| StatusEnum       | flat                          | Light     | Dark      | Sidebar (§7)        |
-| ---------------- | ----------------------------- | --------- | --------- | ------------------- |
-| `starting`       | `--flock-status-starting`     | `#64748b` | `#94a3b8` | no                  |
-| `running`        | `--flock-status-running`      | `#2563eb` | `#3b82f6` | no (= accent)       |
-| `awaiting_input` | `--flock-status-awaiting`     | `#d97706` | `#f59e0b` | **ring + pulse**    |
-| `idle`           | `--flock-status-idle`         | `#16a34a` | `#22c55e` | gentle (dimmed) dot |
-| `done`           | `--flock-status-done`         | `#0d9488` | `#2dd4bf` | no ring             |
-| `error`          | `--flock-status-error`        | `#dc2626` | `#ef4444` | **ring**            |
-| `disconnected`   | `--flock-status-disconnected` | `#9aa3af` | `#6b7280` | stale (dimmed) dot  |
+| StatusEnum       | flat                          | Light     | Dark      | Sidebar (§7)         |
+| ---------------- | ----------------------------- | --------- | --------- | -------------------- |
+| `starting`       | `--flock-status-starting`     | `#64748b` | `#8a8a8a` | no                   |
+| `running`        | `--flock-status-running`      | `#5850c4` | `#7b74d4` | no (distinct indigo) |
+| `awaiting_input` | `--flock-status-awaiting`     | `#d97706` | `#f59e0b` | **ring + pulse**     |
+| `idle`           | `--flock-status-idle`         | `#16a34a` | `#3fb950` | gentle (dimmed) dot  |
+| `done`           | `--flock-status-done`         | `#0d9488` | `#2bb6a3` | no ring              |
+| `error`          | `--flock-status-error`        | `#dc2626` | `#ef4444` | **ring**             |
+| `disconnected`   | `--flock-status-disconnected` | `#9aa3af` | `#6b7280` | stale (dimmed) dot   |
 
 Tailwind: `bg-status-<state>` / `ring-status-<state>` (the `StatusIndicator`
 component uses these). `awaiting_input` is the money state (spec §7) — it rings
@@ -194,8 +195,8 @@ terminal, the Diff tab, session ids/tokens, kbd chips, and tabular numerics
 
 | flat                  | px  | Tailwind                             |
 | --------------------- | --- | ------------------------------------ |
-| `--flock-radius-xs`   | 3   | `rounded-xs` (badges, kbd, chips)    |
-| `--flock-radius-sm`   | 6   | `rounded-sm` (buttons, inputs, rows) |
+| `--flock-radius-xs`   | 4   | `rounded-xs` (badges, kbd, chips)    |
+| `--flock-radius-sm`   | 7   | `rounded-sm` (buttons, inputs, rows) |
 | `--flock-radius-md`   | 10  | `rounded-md` (panels, cards, tabs)   |
 | `--flock-radius-lg`   | 14  | `rounded-lg` (modals, palette)       |
 | `--flock-radius-full` | 999 | `rounded-full` (the status dot)      |
