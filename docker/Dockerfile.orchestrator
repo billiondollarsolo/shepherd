@@ -9,7 +9,7 @@
 # ---- Stage 0: build remote-node flock-agentd rollout artifacts ---------------
 # The local executable lives in shepherd-node-runtime. The orchestrator retains
 # both remote architectures solely to provision SSH nodes.
-FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS agentd-build
+FROM golang:1.26-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS agentd-build
 WORKDIR /agentd
 COPY agentd/ ./
 RUN mkdir -p /out/dist \
@@ -22,7 +22,7 @@ RUN mkdir -p /out/dist \
 
 # PostgreSQL 16 client tools. Debian Bookworm defaults to v15, which refuses to
 # dump a newer v16 server. The manifest digest keeps release builds reproducible.
-FROM postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55 AS pg-client
+FROM postgres:18-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296 AS pg-client
 ARG RELEASE_REFRESH=manual
 RUN echo "$RELEASE_REFRESH" >/dev/null \
     && apt-get update \
@@ -31,7 +31,7 @@ RUN echo "$RELEASE_REFRESH" >/dev/null \
 
 # ---- Stage 1: base toolchain (Node 22 + pnpm via corepack) ------------------
 # T16: node base pinned to a digest for reproducible builds (the tag floats).
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS base
+FROM node:26-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -73,7 +73,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 # T16: pinned to a digest for reproducible builds (the tag floats). The
 # stateless runtime uses current Debian stable independently of PostgreSQL's
 # data-volume base, which remains Bookworm for collation compatibility.
-FROM node:22-trixie-slim@sha256:4228fca437e45714a3ebd1d4ecd1dcc583cf79f5a940aa025e286b472d93b67c AS runtime
+FROM node:26-trixie-slim@sha256:715e55e4b84e4bb0ff48e49b398a848f08e55daed8eb6a0ea1839ae53bc57583 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/billiondollarsolo/shepherd" \
       org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production
