@@ -4,11 +4,19 @@ Notable changes to Shepherd are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while allowing breaking changes in
 minor releases before 1.0.
 
-## [Unreleased]
+## [0.6.2] - 2026-07-18
 
 ### Removed
 
-- Gemini CLI agent integration (superseded by Antigravity).
+- Gemini CLI agent integration, completely, across the whole stack (shared
+  contracts, orchestrator, web, agentd, docs, scripts). Gemini is superseded by
+  the Antigravity CLI (`agy`); Shepherd now ships eight supported coding tools.
+
+### Documentation
+
+- Accuracy sweep of the living docs (README, agent-integration matrix,
+  node-tooling, flock-agentd design, design tokens) for the current agent
+  roster, structured transports, and as-built theme tokens.
 
 ## [0.6.1] - 2026-07-17
 

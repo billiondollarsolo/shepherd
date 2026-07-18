@@ -288,6 +288,7 @@ func codexPlanFromResponseItem(payload []byte) string {
 //     cached — that would double-count; verified against real rollouts).
 //   - contextLimit: info.model_context_window — Codex's own context window, so the
 //     orchestrator can show an EXACT context-% instead of a table estimate.
+//
 // `info` can be null (rate-limit-only token_count events) → all zeros.
 func codexTokens(payload []byte) (total int, contextTokens int, contextLimit int) {
 	type usage struct {

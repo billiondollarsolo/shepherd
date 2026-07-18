@@ -482,7 +482,7 @@ installation publicly. Report vulnerabilities through
 
 ## Version and compatibility
 
-**Current release: v0.6.1.** Shepherd is actively developed pre-1.0 software. Review
+**Current release: v0.6.2.** Shepherd is actively developed pre-1.0 software. Review
 the [changelog](CHANGELOG.md) before upgrading. The application, edge proxy, database
 pins, web app, and preferred node daemon are validated together; the UI reports when a
 node daemon is compatible, recommended to upgrade, or required to upgrade.

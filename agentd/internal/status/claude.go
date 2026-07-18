@@ -219,28 +219,29 @@ func claudeLineToUpdate(b []byte) (Update, bool) {
 		return Update{}, false
 	}
 	switch cl.Type {
-	case "assistant": {
-		u := cl.Message.Usage
-		out := Update{
-			Tokens: u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
-			Tool:   claudeToolFromContent(cl.Message.Content),
-			Model:  cl.Message.Model,
-			// T19: context occupancy = the prompt the model just saw (input + both
-			// cache tiers), excluding the output it generated.
-			ContextTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+	case "assistant":
+		{
+			u := cl.Message.Usage
+			out := Update{
+				Tokens: u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+				Tool:   claudeToolFromContent(cl.Message.Content),
+				Model:  cl.Message.Model,
+				// T19: context occupancy = the prompt the model just saw (input + both
+				// cache tiers), excluding the output it generated.
+				ContextTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+			}
+			sr := ""
+			if cl.Message.StopReason != nil {
+				sr = *cl.Message.StopReason
+			}
+			switch sr {
+			case "end_turn", "stop_sequence", "max_tokens":
+				out.State = StateIdle
+			default: // "tool_use", or streaming (no stop_reason yet)
+				out.State = StateRunning
+			}
+			return out, true
 		}
-		sr := ""
-		if cl.Message.StopReason != nil {
-			sr = *cl.Message.StopReason
-		}
-		switch sr {
-		case "end_turn", "stop_sequence", "max_tokens":
-			out.State = StateIdle
-		default: // "tool_use", or streaming (no stop_reason yet)
-			out.State = StateRunning
-		}
-		return out, true
-	}
 	case "user":
 		return Update{State: StateRunning}, true
 	case "error":
