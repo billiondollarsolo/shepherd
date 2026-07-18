@@ -180,7 +180,7 @@ runtime_exec() {
 }
 agent_version() {
   local agent="$1" bin version status
-  case "$agent" in claude|codex|opencode|agy|gemini|grok|aider|cursor-agent|amp) ;;
+  case "$agent" in claude|codex|opencode|agy|grok|aider|cursor-agent|amp) ;;
     *) die "unsupported agent name" ;;
   esac
   bin="$(runtime_exec sh -c 'command -v "$1"' sh "$agent")"
@@ -220,11 +220,6 @@ install_agent() {
     opencode) run_installer https://opencode.ai/install --no-modify-path ;;
     # Antigravity CLI (binary `agy`) — installs to the runtime user's ~/.local/bin.
     agy) run_installer https://antigravity.google/cli/install.sh ;;
-    gemini)
-      command -v npm >/dev/null || die "Gemini CLI installation requires Node.js and npm"
-      runtime_exec timeout --kill-after=15s 540s \
-        npm install -g --prefix "$home/.local/share/npm" @google/gemini-cli@latest
-      ;;
     grok) run_installer https://x.ai/cli/install.sh ;;
     aider) run_installer https://aider.chat/install.sh ;;
     cursor-agent) run_installer https://cursor.com/install ;;

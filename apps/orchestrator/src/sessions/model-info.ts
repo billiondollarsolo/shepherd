@@ -41,9 +41,6 @@ const MODEL_TABLE: Record<string, ModelInfo> = {
   o4: { contextLimit: 200 * K, inputPer1M: 1.1, outputPer1M: 4.4 },
   o3: { contextLimit: 200 * K, inputPer1M: 2, outputPer1M: 8 },
   codex: { contextLimit: 400 * K, inputPer1M: 1.25, outputPer1M: 10 },
-  // Google Gemini 2.5 Pro: $1.25 in / $10 out (≤200k prompt; rises above). We use
-  // the ≤200k tier as the estimate.
-  'gemini-2': { contextLimit: 1000 * K, inputPer1M: 1.25, outputPer1M: 10 },
   // xAI Grok (grok-build-0.1 / grok-4 / grok-code-*) — ~256k context. grok-build-0.1
   // is ~$1 in / $2 out. Prefix-matched so version suffixes resolve.
   grok: { contextLimit: 256 * K, inputPer1M: 1, outputPer1M: 2 },

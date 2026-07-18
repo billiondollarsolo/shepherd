@@ -33,8 +33,8 @@ const SESSION_FLOCK_KEYS = new Set([
 const PROVIDER_GRANTS: Partial<Record<string, ReadonlySet<AgentType>>> = {
   ANTHROPIC_API_KEY: new Set(['claude-code', 'opencode', 'aider']),
   OPENAI_API_KEY: new Set(['codex', 'opencode', 'aider']),
-  GEMINI_API_KEY: new Set(['gemini', 'opencode']),
-  GOOGLE_API_KEY: new Set(['gemini', 'opencode']),
+  GEMINI_API_KEY: new Set(['opencode']),
+  GOOGLE_API_KEY: new Set(['opencode']),
   XAI_API_KEY: new Set(['grok', 'opencode']),
   CURSOR_API_KEY: new Set(['cursor-agent']),
   AMP_API_KEY: new Set(['amp']),

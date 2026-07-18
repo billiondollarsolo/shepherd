@@ -111,7 +111,7 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		}
 
 		// Start deriving live status — transcript tail (claude/codex) or PTY-activity
-		// (gemini via spec.ActivityStatus); no-op for plain shells. ACP and
+		// (via spec.ActivityStatus); no-op for plain shells. ACP and
 		// claude-stream sessions push their own status (above), so they skip the watcher.
 		if spec.Mode != "acp" && spec.Mode != "claude-stream" && spec.Mode != "codex-app-server" {
 			m.startStatusWatcher(spec, s)

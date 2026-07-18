@@ -32,7 +32,7 @@ const SESSIONS = [
   },
   {
     id: 's-err',
-    agentType: 'gemini',
+    agentType: 'grok',
     status: 'idle',
     closedAt: null,
     nodeId: 'n2',
@@ -68,7 +68,7 @@ vi.mock('../../data/queries', () => ({
   useProjects: () => ({
     data: [
       { id: 'p1', name: 'Apollo' },
-      { id: 'p2', name: 'Gemini' },
+      { id: 'p2', name: 'Orion' },
     ],
   }),
 }));

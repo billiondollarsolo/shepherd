@@ -11,7 +11,6 @@ import (
 
 func TestLaunchCommand(t *testing.T) {
 	cases := map[string][]string{
-		"gemini": {"gemini", "--experimental-acp"},
 		"cursor": {"cursor-agent", "acp"},
 	}
 	for agent, want := range cases {
@@ -45,7 +44,9 @@ func TestParseSessionUpdate(t *testing.T) {
 		want   func(Event) bool
 	}{
 		{"assistant chunk", `{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"hi"}}}`,
-			func(e Event) bool { return e.Kind == EventContentDelta && e.StreamKind == "assistant_text" && e.Text == "hi" }},
+			func(e Event) bool {
+				return e.Kind == EventContentDelta && e.StreamKind == "assistant_text" && e.Text == "hi"
+			}},
 		{"reasoning chunk", `{"update":{"sessionUpdate":"agent_thought_chunk","content":{"text":"why"}}}`,
 			func(e Event) bool { return e.Kind == EventContentDelta && e.StreamKind == "reasoning_text" }},
 		{"tool call", `{"update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Run shell"}}`,
@@ -53,7 +54,9 @@ func TestParseSessionUpdate(t *testing.T) {
 		{"tool update", `{"update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed"}}`,
 			func(e Event) bool { return e.Kind == EventToolUpdated && e.ToolStatus == "completed" }},
 		{"plan", `{"update":{"sessionUpdate":"plan","entries":[{"content":"step","status":"in_progress"}]}}`,
-			func(e Event) bool { return e.Kind == EventPlanUpdated && len(e.Plan) == 1 && e.Plan[0].Status == "in_progress" }},
+			func(e Event) bool {
+				return e.Kind == EventPlanUpdated && len(e.Plan) == 1 && e.Plan[0].Status == "in_progress"
+			}},
 		{"usage", `{"update":{"sessionUpdate":"usage_update","usage":{"totalTokens":42}}}`,
 			func(e Event) bool { return e.Kind == EventUsageUpdated && e.Usage != nil && e.Usage.TotalTokens == 42 }},
 	}

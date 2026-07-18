@@ -72,27 +72,6 @@ function codexPermissionFlags(mode: SessionPermissionMode): string[] {
   }
 }
 
-/**
- * Map a Shepherd {@link SessionPermissionMode} to Gemini CLI's approval flags (T20):
- *   default      → none (interactive — Gemini asks)
- *   plan         → --approval-mode plan (read-only plan mode; current gemini CLI)
- *   acceptEdits  → --approval-mode auto_edit (auto-accept edits, ask for the rest)
- *   autonomous   → --yolo (auto-approve everything)
- */
-function geminiPermissionFlags(mode: SessionPermissionMode): string[] {
-  switch (mode) {
-    case 'plan':
-      return ['--approval-mode', 'plan'];
-    case 'acceptEdits':
-      return ['--approval-mode', 'auto_edit'];
-    case 'autonomous':
-      return ['--yolo'];
-    case 'default':
-    default:
-      return [];
-  }
-}
-
 // Antigravity CLI (`agy`) permission modes (from `agy --help`, v1.1.3):
 //   plan        → --mode plan           (read-only plan mode)
 //   acceptEdits → --mode accept-edits   (auto-accept edits, ask for the rest)
@@ -183,7 +162,7 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     command: ['agy'],
     permissionFlags: antigravityPermissionFlags,
     // agy's model list (from `agy models`) bakes the speed/effort into the model
-    // name, e.g. "Claude Opus 4.6 (Thinking)" / "Gemini 3.5 Flash (High)", so there
+    // name, e.g. "Claude Opus 4.6 (Thinking)", so there
     // is no separate reasoning-effort flag.
     modelFlag: '--model',
     // `agy --continue` resumes the most-recent conversation in the cwd, so a
@@ -209,17 +188,6 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     initialStatus: 'starting',
     activityStatus: false,
   },
-  // Gemini launches over ACP (`acpLaunchCommand`) for status + chat. activityStatus
-  // is false so a PTY path wouldn't fight hooks; the live ACP path also sets
-  // activityStatus:false at open. Permission flags apply to both PTY and ACP argv.
-  gemini: {
-    command: ['gemini'],
-    permissionFlags: geminiPermissionFlags,
-    modelFlag: '--model',
-    kind: 'agent',
-    initialStatus: 'starting',
-    activityStatus: false,
-  },
   // xAI Grok Build CLI (binary `grok`). No documented autonomy flags (Plan Mode is
   // its built-in safety gate). Grok fires Claude-Code-compatible lifecycle hooks
   // (session_start/pre_tool_use/post_tool_use/stop) that reach Shepherd's hook
@@ -237,7 +205,7 @@ const AGENT_CAPS: Record<AgentType, AgentCaps> = {
     authBootstrap: 'grok login --device-auth',
   },
   // Additional CLI agents — launchable if installed on the node; status via PTY
-  // activity (no transcript/hook integration yet, like gemini/grok historically).
+  // activity (no transcript/hook integration yet, like grok historically).
   aider: { command: ['aider'], kind: 'agent', initialStatus: 'starting', activityStatus: true },
   'cursor-agent': {
     command: ['cursor-agent'],
@@ -274,7 +242,7 @@ export function agentLaunchCommand(
   const caps = AGENT_CAPS[agentType];
   if (!caps.command) return undefined;
   const argv = [...caps.command, ...(caps.permissionFlags?.(permissionMode) ?? [])];
-  // Select the model for agents with a flag for it (claude/codex/gemini/agy). argv
+  // Select the model for agents with a flag for it (claude/codex/agy). argv
   // is exec'd as an ARRAY (no shell), so a value with spaces/parens needs no quoting.
   if (model && caps.modelFlag && !(caps.authProbe && caps.authBootstrap)) {
     argv.push(caps.modelFlag, model);
@@ -304,7 +272,7 @@ export function agentLaunchCommand(
 /**
  * The status a freshly-created session starts in. Agent sessions with a hook
  * stream begin `starting` (hooks move them to running/awaiting_input); sessions
- * with no status source (terminal/dev/gemini) start `running` so they don't sit
+ * with no status source (terminal/dev) start `running` so they don't sit
  * at `starting` forever.
  */
 export function initialSessionStatus(agentType: AgentType): Status {
@@ -331,27 +299,19 @@ export function agentResumeArgs(agentType: AgentType): string[] {
  * Client Protocol, or null when the agent has no ACP entrypoint (→ use the PTY
  * path).
  *
- * VERIFIED LIVE (2026-06-08): only **gemini** (`--experimental-acp`) answers the
- * ACP `initialize` handshake. **grok** does NOT — `grok agent stdio` is a JSON
- * line protocol but ignores ACP's `initialize` (no response), so it must run as a
- * native PTY (status via its Claude-compatible hooks), not ACP. Re-add an agent
- * here only after confirming it responds to `initialize` over stdio.
+ * No current agent takes the ACP path — every first-class agent runs as a native
+ * PTY (status via hooks/transcript). Re-add an agent here only after confirming it
+ * responds to the ACP `initialize` handshake over stdio, and once Shepherd drives
+ * the ACP auth handshake (ACP is headless, so an interactive sign-in has nowhere
+ * to appear).
  */
 export function acpLaunchCommand(
   agentType: AgentType,
-  // Reserved for when ACP is re-enabled with an auth handshake (Gemini's autonomy
-  // flags carry into the ACP argv); unused while every agent takes the PTY path.
+  // Reserved for when ACP is re-enabled with an auth handshake (autonomy flags
+  // carry into the ACP argv); unused while every agent takes the PTY path.
   _permissionMode: SessionPermissionMode = 'default',
 ): string[] | null {
   switch (agentType) {
-    // Gemini CAN speak ACP (`--experimental-acp`), and agentd still supports it,
-    // but ACP is headless (no PTY) — which means the interactive Google sign-in
-    // has nowhere to appear, so an unauthenticated node dead-ends at
-    // "API key is missing". Until Shepherd drives the ACP auth handshake, launch
-    // Gemini on the PTY path instead: the terminal shows the real Gemini TUI, the
-    // sign-in prompt works exactly like before, and the Chat view still renders
-    // its transcript. Re-enable ACP here once the auth flow is wired (structured
-    // chat plan §Phase 1). Permission flags still apply on the PTY argv below.
     default:
       return null;
   }
@@ -439,7 +399,6 @@ export function agentUsesActivityStatus(agentType: AgentType): boolean {
 const BARE_AGENT_PROCESS_NAMES = new Set([
   'grok',
   'opencode',
-  'gemini',
   'claude',
   'codex',
   'aider',

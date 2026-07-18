@@ -33,16 +33,11 @@ export const AgentTypeEnum = z.enum([
   'claude-code',
   'codex',
   'opencode',
-  // Google Antigravity CLI (binary `agy`, https://antigravity.google) — the
-  // successor to the Gemini CLI (Gemini CLI is being retired 2026-06-18). Native
+  // Google Antigravity CLI (binary `agy`, https://antigravity.google). Native
   // PTY/TUI, no ACP: interactive terminal login (browser, or an SSH auth URL on
   // remote nodes). Permission modes map to `--mode plan` / `--mode accept-edits`
   // / `--dangerously-skip-permissions`; `-p` is headless print.
   'antigravity',
-  // DEPRECATED (retiring 2026-06-18): Google Gemini CLI. Kept in the enum for
-  // back-compat with existing session records; removed from the new-session
-  // picker/catalog in favor of `antigravity`. Launches on the PTY path.
-  'gemini',
   // xAI Grok Build CLI (https://x.ai/cli, binary `grok`). Native PTY + lifecycle
   // hooks (~/.grok/hooks/flock.json). Does NOT speak ACP. Status from hooks;
   // no transcript → no Chat tab yet. Auth bootstrap: device-code when unauthed.

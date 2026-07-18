@@ -26,7 +26,6 @@ const AGENT_LABELS: Record<AgentType, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
   antigravity: 'Antigravity',
-  gemini: 'Gemini',
   grok: 'Grok',
   aider: 'Aider',
   'cursor-agent': 'Cursor Agent',

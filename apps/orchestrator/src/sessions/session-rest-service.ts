@@ -369,7 +369,7 @@ export class SessionRestService {
     // Transport is AUTO-SELECTED per agent so the user never chooses (and always
     // gets a structured Chat log): native PTY for agents Shepherd can tail a live
     // transcript from — claude/codex (+ opencode via hooks) — preserving their
-    // native TUI; ACP for agents with NO live transcript (gemini/grok) so their
+    // native TUI; ACP for agents with NO live transcript so their
     // conversation is still captured as structured messages. `dev` is always a
     // supervised shell command.
     // Claude's structured stream-json transport. PER-SESSION opt-in: the caller sets

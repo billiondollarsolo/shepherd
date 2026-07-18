@@ -72,8 +72,8 @@ func SetAgentHome(home string) {
 
 // knownAgents are the coding-agent CLIs we probe for on the node. T20: dropped
 // "aider" (not launchable/integrated — advertising it implied breadth we don't
-// deliver). "gemini" stays: it's now a launchable agent type.
-var knownAgents = []string{"claude", "codex", "opencode", "agy", "gemini", "grok"}
+// deliver).
+var knownAgents = []string{"claude", "codex", "opencode", "agy", "grok"}
 
 // agentRescan is how often the background loop re-detects installed agents, so an
 // agent installed AFTER the daemon started shows up without a restart.
@@ -319,8 +319,8 @@ func resolveAgent(name string) string {
 		return p
 	}
 	// LookPath misses installs outside the daemon's (often minimal) $PATH — npm /
-	// version-manager dirs. Search the shared agent-install dirs (FIX: gemini
-	// detection; same source of truth the spawn PATH augments — see agentpath).
+	// version-manager dirs. Search the shared agent-install dirs (same source of
+	// truth the spawn PATH augments — see agentpath).
 	agentMu.Lock()
 	home := agentHome
 	agentMu.Unlock()

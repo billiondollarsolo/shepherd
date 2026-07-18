@@ -28,10 +28,10 @@ import (
 
 // Normalized status states (subset of Shepherd's Status enum the transcript can prove).
 const (
-	StateRunning   = "running"
-	StateAwaiting  = "awaiting_input"
-	StateIdle      = "idle"
-	StateError     = "error"
+	StateRunning  = "running"
+	StateAwaiting = "awaiting_input"
+	StateIdle     = "idle"
+	StateError    = "error"
 )
 
 // Update is a partial status change for a session. Empty/zero fields mean
@@ -106,7 +106,7 @@ func Watch(ctx context.Context, agent, cwd, configDir, home string, startedAt ti
 		watchClaude(ctx, cwd, configDir, home, startedAt, claim, emit, chat)
 	case "antigravity":
 		watchAntigravity(ctx, cwd, configDir, home, startedAt, claim, emit, chat)
-	// "opencode" is handled via its hook plugin (T1/T21), not transcript tailing.
+		// "opencode" is handled via its hook plugin (T1/T21), not transcript tailing.
 	}
 }
 
@@ -129,7 +129,7 @@ func homeDir() string {
 
 // homeOr returns the runtime user's home when known, else the daemon's own home.
 // The transcript watchers MUST resolve the RUNTIME user's home — with a non-root
-// runtime user, ~/.claude · ~/.codex · ~/.gemini live under /home/<user>, not
+// runtime user, ~/.claude · ~/.codex live under /home/<user>, not
 // /root, so tailing the daemon's home would find nothing (no chat / no status).
 func homeOr(home string) string {
 	if home != "" {

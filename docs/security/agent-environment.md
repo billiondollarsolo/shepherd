@@ -9,14 +9,14 @@ orchestrator or secure agentd service environment.
 | ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Control-only              | master key, database URL, agentd credentials, Docker/SSH sockets, loader variables | Always removed, including when supplied in node environment settings                 |
 | Session capability        | `FLOCK_HOOK_TOKEN`, `FLOCK_ORCHESTRATE_TOKEN`, session ID and callback URL         | Created by the orchestrator for one session; node settings cannot spoof them         |
-| Provider credential grant | Anthropic, OpenAI, Gemini/Google, xAI, Cursor, and Amp API keys                    | Passed only to the compatible coding-agent types listed below                        |
+| Provider credential grant | Anthropic, OpenAI, Google, xAI, Cursor, and Amp API keys                           | Passed only to the compatible coding-agent types listed below                        |
 | Operator environment      | Build flags, proxy settings, project configuration                                 | Explicit node configuration; visible to every matching session launched on that node |
 
 Provider grants currently map as follows:
 
 - `ANTHROPIC_API_KEY`: Claude Code, OpenCode, Aider
 - `OPENAI_API_KEY`: Codex, OpenCode, Aider
-- `GEMINI_API_KEY` and `GOOGLE_API_KEY`: Gemini, OpenCode
+- `GEMINI_API_KEY` and `GOOGLE_API_KEY`: OpenCode
 - `XAI_API_KEY`: Grok, OpenCode
 - `CURSOR_API_KEY`: Cursor Agent
 - `AMP_API_KEY`: Amp

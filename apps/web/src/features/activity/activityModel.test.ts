@@ -181,7 +181,7 @@ describe('buildStatusTimeline (US-34, status timeline from events)', () => {
     expect(timeline.find((e) => e.status === 'running')?.detail).toBe('Bash: echo hi');
   });
 
-  it('suppresses a brief running⇄idle flap (gemini activity heuristic)', () => {
+  it('suppresses a brief running⇄idle flap (PTY activity heuristic)', () => {
     const events: Event[] = [
       evt({ id: 'r1', ts: '2026-05-29T09:00:00.000Z', mappedStatus: 'running', detail: 'Bash' }),
       evt({ id: 'i1', ts: '2026-05-29T09:00:02.000Z', mappedStatus: 'idle' }), // 2s blip → flap

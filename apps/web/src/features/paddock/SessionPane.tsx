@@ -45,7 +45,6 @@ const ChatPanel = lazy(() => import('../chat/ChatPanel').then((m) => ({ default:
 const HANDOFF_TARGETS: ReadonlyArray<{ type: AgentType; label: string }> = [
   { type: 'claude-code', label: 'Claude' },
   { type: 'codex', label: 'Codex' },
-  { type: 'gemini', label: 'Gemini' },
   { type: 'grok', label: 'Grok' },
   { type: 'opencode', label: 'OpenCode' },
 ];

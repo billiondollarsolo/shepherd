@@ -69,7 +69,7 @@ export function translateGrokHook(body: unknown): GrokTransition | null {
     case 'session_start':
       // Booted + ready (waiting for you) = idle, NOT starting. A launched agent
       // you haven't prompted only fires session_start; 'starting' left it stuck
-      // until the first tool. Matches Claude/Gemini SessionStart → idle.
+      // until the first tool. Matches Claude SessionStart → idle.
       return { status: 'idle', detail: null };
     case 'pre_tool_use':
       return { status: 'running', detail: tool };

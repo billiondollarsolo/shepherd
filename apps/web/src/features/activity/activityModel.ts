@@ -19,7 +19,7 @@ export const DEFAULT_TIMELINE_LIMIT = 50;
 
 /**
  * A `running`/`idle` transition that reverts within this window is treated as a
- * transient FLAP (e.g. gemini's PTY-activity heuristic toggling on a brief
+ * transient FLAP (e.g. a PTY-activity heuristic toggling on a brief
  * thinking pause) and suppressed. The "money" states (`awaiting_input`, `error`)
  * are never suppressed — a brief one still matters.
  */
@@ -103,7 +103,7 @@ export function buildStatusTimeline(
     }
 
     // 2) Flap suppression: a brief A → B → A where B is a transient running/idle
-    //    blip (gemini's activity heuristic) — drop B and fold this back into A.
+    //    blip (a PTY-activity heuristic) — drop B and fold this back into A.
     const prev = out[out.length - 2];
     if (
       last &&

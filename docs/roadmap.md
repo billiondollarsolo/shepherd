@@ -129,7 +129,7 @@ pnpm test:e2e                       # Playwright — for web-surface changes
   tree, focus + grid/hive terminals, status dots, telemetry bottom bar, source-control
   (diff + stage/commit/push), live plan artifact, activity timeline, node file browser,
   expiring Remote Preview links, ripgrep search, command palette, and mobile terminals.
-- **Agents (5):** claude-code, codex, opencode, gemini, grok — transcript + hooks →
+- **Agents (4):** claude-code, codex, opencode, grok — transcript + hooks →
   unified `Status` enum + telemetry. Tolerant parsers as of the 2026-06 audit.
 - **Already shipped (do not re-plan):** per-session git worktrees, find-in-files search,
   command-palette shell, calm web-push model, multi-node SSH + persistence.
@@ -250,7 +250,7 @@ stdio`, `cursor-agent acp`) — all referencing Synara's `effect-acp`. Tests:
   Invariant 1 preserved, PTY path untouched).
 
   - **Why:** the keystone. Unlocks chat, the control plane, handoff, and the
-    Gemini/Grok/Cursor telemetry gaps — without losing any-agent (PTY stays the fallback).
+    Grok/Cursor telemetry gaps — without losing any-agent (PTY stays the fallback).
   - **Scope:** `agentd/` (new `internal/acp/` — JSON-RPC over stdio client), session
     launch (a session can run in `pty` or `acp` mode), proto (carry runtime events),
     orchestrator ingestion → F5 taxonomy. Reference: `synara/packages/effect-acp`.
@@ -258,7 +258,7 @@ stdio`, `cursor-agent acp`) — all referencing Synara's `effect-acp`. Tests:
     setSessionModel + client handlers requestPermission/elicit/createTerminal/
     sessionUpdate). A new agent "mode" launches the agent's ACP entrypoint and streams
     `session/update` → canonical events. PTY mode unchanged and default.
-  - **Success criteria:** at least one ACP agent (Gemini _or_ Grok — both ship ACP) runs
+  - **Success criteria:** at least one ACP agent (Grok, which ships ACP) runs
     in `acp` mode end-to-end on a live node, producing canonical events (tokens, plan,
     tool calls, approval requests); PTY mode for all agents still works unchanged.
   - **Tests:** Go unit tests against a **mock ACP agent** (stdio fixture); int test for an
@@ -315,7 +315,7 @@ unchanged PTY sessions; all gates green.
     `respondToRequest`/`respondToUserInput`), orchestrator (respond routes + WS), agentd
     (deliver decisions back), web (approve/deny/answer UI on the session).
   - **Approach:** start with **OpenCode** (its plugin already round-trips
-    `permission.updated` — extend it to accept a decision back). Then Claude/Gemini hooks
+    `permission.updated` — extend it to accept a decision back). Then Claude hooks
     (return `permissionDecision`), then ACP agents (F6 `requestPermission`/`elicit`),
     then Codex (app-server). PTY-only agents: surface the prompt + let the user type into
     the terminal (graceful fallback).
@@ -384,7 +384,7 @@ unchanged PTY sessions; all gates green.
   - **Deps:** none (independent of the spine). **Risk:** low–medium.
 
 - [ ] **P6 — Cross-provider handoff.**
-  - **Why:** "hand this task from Gemini to Claude with context" — a natural fleet move.
+  - **Why:** "hand this task from Codex to Claude with context" — a natural fleet move.
   - **Scope:** orchestrator (serialize transcript/events → bootstrap prompt → spawn target
     agentType), web (handoff action). Reference:
     `synara/apps/server/src/orchestration/handoff.ts`.
@@ -401,10 +401,9 @@ unchanged PTY sessions; all gates green.
 - [ ] **P7 — Telemetry parity.**
 
   - **Why:** known gaps from the matrix.
-  - **Scope:** Codex cost/token split (stop discarding parsed input/output), Gemini
-    transcript tailer (`~/.gemini/tmp/.../chats/*.jsonl` → tokens/model/ctx%), Grok via
+  - **Scope:** Codex cost/token split (stop discarding parsed input/output), Grok via
     ACP (F6).
-  - **Success criteria:** matrix shows ✅ tokens/model/context% for Codex, Gemini, Grok.
+  - **Success criteria:** matrix shows ✅ tokens/model/context% for Codex, Grok.
   - **Tests:** per-agent translator/tailer unit tests with captured fixtures; live
     validation.
   - **Deps:** F6 for Grok. **Risk:** low–medium.

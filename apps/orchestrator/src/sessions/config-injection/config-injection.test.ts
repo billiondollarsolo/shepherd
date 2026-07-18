@@ -59,24 +59,6 @@ describe('renderHookConfig (agentd-seeded native hook config)', () => {
     expect(r!.files['hooks/flock.json']).toContain('flock-hook.sh');
   });
 
-  it('seeds Gemini settings.json hooks (native ~/.gemini merge)', async () => {
-    const r = await renderHookConfig('gemini');
-    expect(r).not.toBeNull();
-    expect(r!.configBaseSubdir).toBe('.gemini');
-    const hooks = JSON.parse(r!.files['settings.json']) as { hooks: Record<string, unknown> };
-    expect(Object.keys(hooks.hooks)).toEqual(
-      expect.arrayContaining([
-        'SessionStart',
-        'BeforeTool',
-        'AfterTool',
-        'Notification',
-        'AfterAgent',
-        'SessionEnd',
-      ]),
-    );
-    expect(r!.files['flock-hook.sh']).toBeTruthy();
-  });
-
   it('agents with no first-class hook config return null', async () => {
     expect(await renderHookConfig('terminal')).toBeNull();
     expect(await renderHookConfig('dev')).toBeNull();

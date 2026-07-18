@@ -815,7 +815,7 @@ export async function main(): Promise<void> {
       agentdSessionMeta.set(id, merged);
       // TEMP (agent-integration validation): when FLOCK_DEBUG_TELEMETRY is set, log
       // every per-session status frame + its derived telemetry so we can verify the
-      // claude/codex/opencode/gemini pipelines end-to-end. Remove after validation.
+      // claude/codex/opencode pipelines end-to-end. Remove after validation.
       if (process.env.FLOCK_DEBUG_TELEMETRY) {
         // eslint-disable-next-line no-console
         console.log(
@@ -966,7 +966,7 @@ export async function main(): Promise<void> {
           if (compatibilityBlock) return compatibilityBlock;
           // Scoped hook-config (US-19, T1): agentd seeds it on the node so the agent
           // calls back into Shepherd's hook endpoint (→ awaiting_input, Plan, Web Push).
-          // ACP sessions (Gemini) skip hook injection — status + chat come from the
+          // ACP sessions skip hook injection — status + chat come from the
           // ACP stream (`acp_bridge`), not hooks.
           const isAcp = mode === 'acp';
           const scoped = isAcp ? null : await renderHookConfig(session.agentType).catch(() => null);

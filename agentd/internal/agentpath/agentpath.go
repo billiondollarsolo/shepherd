@@ -1,4 +1,4 @@
-// Package agentpath centralizes where coding-agent CLIs (claude/codex/gemini/
+// Package agentpath centralizes where coding-agent CLIs (claude/codex/
 // opencode) install on a node, so agent DETECTION (metrics.resolveAgent) and the
 // spawn PATH augmentation (session) share ONE source of truth instead of two
 // hand-synced dir lists (which previously drifted: "detected but won't launch").
@@ -11,7 +11,7 @@ import (
 
 // agents whose per-agent install dirs (~/.<agent>/bin, /opt/<agent>/bin) are also
 // searched, beyond the generic npm / version-manager locations below.
-var agents = []string{"opencode", "claude", "codex", "gemini", "grok", "aider", "cursor-agent", "amp"}
+var agents = []string{"opencode", "claude", "codex", "grok", "aider", "cursor-agent", "amp"}
 
 // BinDirs returns the EXISTING bin directories where agent CLIs commonly install
 // under home: npm-global, Node version managers (nvm/fnm/n), volta/bun/deno/asdf/

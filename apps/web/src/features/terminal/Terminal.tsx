@@ -288,7 +288,7 @@ export default function Terminal({
     // Coalesce ALL fit triggers (ResizeObserver, window resize, splitter drag,
     // right-panel toggle, focus⇄grid show/hide) into ONE fit after the size
     // SETTLES. Fitting on every tick reflows xterm's buffer repeatedly, which
-    // visibly garbles alt-screen TUIs (gemini/claude/htop) mid-drag and can leave
+    // visibly garbles alt-screen TUIs (claude/htop) mid-drag and can leave
     // WebGL artifacts. One settled fit → one SIGWINCH → the app repaints once.
     let fitTimer: ReturnType<typeof setTimeout> | undefined;
     const fitEdgeToEdge = (): void => {

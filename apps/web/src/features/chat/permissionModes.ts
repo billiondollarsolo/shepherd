@@ -22,8 +22,8 @@ export const PERMISSION_MODE_SHORT: Record<SessionPermissionMode, string> = {
 
 /**
  * The permission modes each agent ACTUALLY supports. The four aren't interchangeable
- * across CLIs: Gemini has no read-only "plan" mode. Agents not listed (opencode =
- * in-app perms, terminal/dev) expose no picker.
+ * across CLIs. Agents not listed (opencode = in-app perms, terminal/dev) expose no
+ * picker.
  */
 export const PERMISSION_MODES_BY_AGENT: Partial<
   Record<AgentType, readonly SessionPermissionMode[]>
@@ -31,7 +31,6 @@ export const PERMISSION_MODES_BY_AGENT: Partial<
   'claude-code': ['default', 'acceptEdits', 'plan', 'autonomous'],
   codex: ['default', 'acceptEdits', 'plan', 'autonomous'],
   antigravity: ['default', 'plan', 'acceptEdits', 'autonomous'],
-  gemini: ['default', 'acceptEdits', 'autonomous'],
 };
 
 /** The modes an agent supports, or [] when it exposes no permission picker. */

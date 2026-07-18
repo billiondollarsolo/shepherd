@@ -77,7 +77,7 @@ interface LiveSession {
   hookTokenHash: string;
   /**
    * Agent type for the hook endpoint translator (DB-free). Required for correct
-   * dispatch when payloads share shapes (Claude/Gemini `hook_event_name`, etc.).
+   * dispatch when payloads share shapes (Claude `hook_event_name`, etc.).
    */
   agentType?: AgentType;
   /** Initial status to seed the live map with (defaults to 'starting'). A

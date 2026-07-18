@@ -64,7 +64,7 @@ const TOOLS = [
       properties: {
         agentType: {
           type: 'string',
-          description: 'claude-code | codex | gemini | grok | opencode | terminal',
+          description: 'claude-code | codex | grok | opencode | terminal',
         },
       },
       required: ['agentType'],

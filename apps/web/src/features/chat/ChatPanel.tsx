@@ -766,7 +766,7 @@ export function resolveSlashCommands(
 
 /** Permission/autonomy mode switch (plan · accept-edits · full-access) — relaunches
  *  the agent in the chosen mode, mirroring the ModelSwitcher relaunch dance. Shown
- *  only for agents that expose modes (claude/codex/antigravity/gemini). */
+ *  only for agents that expose modes (claude/codex/antigravity). */
 function PermissionModeSwitcher({ session }: { session: Session }): JSX.Element | null {
   const relaunch = useRelaunchSession();
   const [open, setOpen] = useState(false);

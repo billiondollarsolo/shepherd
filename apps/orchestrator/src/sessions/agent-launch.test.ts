@@ -51,10 +51,15 @@ describe('agentLaunchCommand', () => {
 
   it('appends extraArgs verbatim (e.g. a resume flag on model-switch relaunch)', () => {
     expect(
-      agentLaunchCommand('antigravity', 'default', undefined, 'Gemini 3.1 Pro (High)', undefined, [
-        '--continue',
-      ]),
-    ).toEqual(['agy', '--model', 'Gemini 3.1 Pro (High)', '--continue']);
+      agentLaunchCommand(
+        'antigravity',
+        'default',
+        undefined,
+        'Claude Opus 4.6 (Thinking)',
+        undefined,
+        ['--continue'],
+      ),
+    ).toEqual(['agy', '--model', 'Claude Opus 4.6 (Thinking)', '--continue']);
   });
 
   it('ends with the resume flag when relaunching with agentResumeArgs (antigravity)', () => {
@@ -116,18 +121,6 @@ describe('agentLaunchCommand', () => {
     expect(agentLaunchCommand('terminal', 'autonomous')).toBeUndefined();
   });
 
-  it('maps Gemini permission modes to its approval flags (T20)', () => {
-    expect(agentLaunchCommand('gemini')).toEqual(['gemini']);
-    expect(agentLaunchCommand('gemini', 'default')).toEqual(['gemini']);
-    expect(agentLaunchCommand('gemini', 'plan')).toEqual(['gemini', '--approval-mode', 'plan']);
-    expect(agentLaunchCommand('gemini', 'acceptEdits')).toEqual([
-      'gemini',
-      '--approval-mode',
-      'auto_edit',
-    ]);
-    expect(agentLaunchCommand('gemini', 'autonomous')).toEqual(['gemini', '--yolo']);
-  });
-
   it('wraps Grok in an auth-then-run shell: device-code login only if unauthed', () => {
     const cmd = agentLaunchCommand('grok');
     expect(cmd?.[0]).toBe('sh');
@@ -154,17 +147,12 @@ describe('initialSessionStatus', () => {
     // Otherwise it would sit at "starting" forever — nothing reports for a shell.
     expect(initialSessionStatus('terminal')).toBe('running');
   });
-
-  it('starts gemini at "starting" (its v0.26+ hooks advance it, like the other agents)', () => {
-    expect(initialSessionStatus('gemini')).toBe('starting');
-  });
 });
 
 describe('agent capability table', () => {
   it('agentSessionKind maps to the daemon kind', async () => {
     const { agentSessionKind } = await import('./agent-launch.js');
     expect(agentSessionKind('claude-code')).toBe('agent');
-    expect(agentSessionKind('gemini')).toBe('agent');
     expect(agentSessionKind('terminal')).toBe('shell');
     expect(agentSessionKind('dev')).toBe('dev');
   });
@@ -172,7 +160,6 @@ describe('agent capability table', () => {
   it('agentUsesActivityStatus follows explicit per-agent status capabilities', async () => {
     const { agentUsesActivityStatus } = await import('./agent-launch.js');
     expect(agentUsesActivityStatus('aider')).toBe(true);
-    expect(agentUsesActivityStatus('gemini')).toBe(false);
     expect(agentUsesActivityStatus('claude-code')).toBe(false);
     expect(agentUsesActivityStatus('codex')).toBe(false);
     expect(agentUsesActivityStatus('opencode')).toBe(false);
@@ -182,9 +169,8 @@ describe('agent capability table', () => {
   it('agentResumeArgs returns the resume flag only for agents whose CLI can resume', () => {
     expect(agentResumeArgs('antigravity')).toEqual(['--continue']);
     expect(agentResumeArgs('claude-code')).toEqual(['--continue']);
-    // codex/gemini/others relaunch fresh (no resume flag).
+    // codex/others relaunch fresh (no resume flag).
     expect(agentResumeArgs('codex')).toEqual([]);
-    expect(agentResumeArgs('gemini')).toEqual([]);
   });
 
   describe('claudeStreamLaunchCommand', () => {
@@ -202,7 +188,6 @@ describe('agent capability table', () => {
 
     it('returns null for every non-claude agent (PTY/ACP path unchanged)', () => {
       expect(claudeStreamLaunchCommand('codex')).toBeNull();
-      expect(claudeStreamLaunchCommand('gemini')).toBeNull();
       expect(claudeStreamLaunchCommand('opencode')).toBeNull();
       expect(claudeStreamLaunchCommand('terminal')).toBeNull();
       expect(claudeStreamLaunchCommand('dev')).toBeNull();
@@ -258,7 +243,6 @@ describe('agent capability table', () => {
 
     it('returns null for every non-codex agent (no launch flags — approvals ride the protocol)', () => {
       expect(codexAppServerLaunchCommand('claude-code')).toBeNull();
-      expect(codexAppServerLaunchCommand('gemini')).toBeNull();
       expect(codexAppServerLaunchCommand('antigravity')).toBeNull();
       expect(codexAppServerLaunchCommand('opencode')).toBeNull();
       expect(codexAppServerLaunchCommand('terminal')).toBeNull();

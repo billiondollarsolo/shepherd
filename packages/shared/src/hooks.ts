@@ -176,43 +176,6 @@ export const GrokHookPayload = z
   .passthrough();
 export type GrokHookPayload = z.infer<typeof GrokHookPayload>;
 
-// ---------------------------------------------------------------------------
-// Gemini CLI (Google). Gemini CLI v0.26.0+ ships Claude-Code-style lifecycle
-// hooks (settings.json `hooks` block, stdin-JSON delivery). Events:
-//   SessionStart -> starting; Before/After Agent/Model + tools -> running;
-//   Notification (tool-permission alert) -> awaiting_input; AfterAgent -> idle;
-//   SessionEnd -> done.  (Doc-based; validate field casing on a live authed gemini.)
-// ---------------------------------------------------------------------------
-
-export const GeminiHookEventNameEnum = z.enum([
-  'SessionStart',
-  'SessionEnd',
-  'BeforeAgent',
-  'AfterAgent',
-  'BeforeModel',
-  'AfterModel',
-  'BeforeTool',
-  'BeforeToolSelection',
-  'AfterTool',
-  'Notification',
-  'PreCompress',
-]);
-export type GeminiHookEventName = z.infer<typeof GeminiHookEventNameEnum>;
-
-export const GeminiHookPayload = z
-  .object({
-    // Gemini delivers `hook_event_name` on stdin; accept the camelCase variant too.
-    hook_event_name: GeminiHookEventNameEnum.optional(),
-    hookEventName: GeminiHookEventNameEnum.optional(),
-    session_id: z.string().optional(),
-    tool_name: z.string().optional(),
-    toolName: z.string().optional(),
-    /** Notification text (alert kind), used to keep awaiting_input precise. */
-    message: z.string().optional(),
-  })
-  .passthrough();
-export type GeminiHookPayload = z.infer<typeof GeminiHookPayload>;
-
 /**
  * RAW per-turn telemetry a hook event can carry (distinct from the COMPUTED
  * {@link AgentTelemetry} the UI consumes): the agent's own model id, token total,

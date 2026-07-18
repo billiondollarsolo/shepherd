@@ -81,7 +81,7 @@ type Control struct {
 	// T17 — Landlock FS sandbox for autonomous sessions (open: client→daemon).
 	Sandbox      bool     `json:"sandbox,omitempty"`
 	SandboxAllow []string `json:"sandboxAllow,omitempty"`
-	// T61 — derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
+	// T61 — derive status from PTY activity (agents with no transcript/hook).
 	ActivityStatus bool `json:"activityStatus,omitempty"`
 
 	// error

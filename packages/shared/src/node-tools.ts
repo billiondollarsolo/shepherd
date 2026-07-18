@@ -40,8 +40,7 @@ export const NODE_TOOL_CATALOG: readonly NodeToolDefinition[] = [
     documentationUrl: 'https://opencode.ai/docs',
   },
   {
-    // Antigravity CLI (`agy`) replaces the retiring Gemini CLI. `gemini` stays a
-    // valid AgentType for old records but is no longer offered/detected here.
+    // Antigravity CLI (`agy`), Google's supported coding-agent CLI.
     id: 'antigravity',
     agentType: 'antigravity',
     label: 'Antigravity',

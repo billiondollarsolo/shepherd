@@ -27,14 +27,14 @@ describe('agent environment policy', () => {
     const node = {
       ANTHROPIC_API_KEY: 'anthropic',
       OPENAI_API_KEY: 'openai',
-      GEMINI_API_KEY: 'gemini',
+      XAI_API_KEY: 'xai',
     };
     expect(buildAgentEnvironment('claude-code', node, {})).toEqual({
       ANTHROPIC_API_KEY: 'anthropic',
     });
     expect(buildAgentEnvironment('codex', node, {})).toEqual({ OPENAI_API_KEY: 'openai' });
     expect(buildAgentEnvironment('opencode', node, {})).toEqual(node);
-    expect(providerCredentialKeysFor('gemini')).toEqual(['GEMINI_API_KEY', 'GOOGLE_API_KEY']);
+    expect(providerCredentialKeysFor('grok')).toEqual(['XAI_API_KEY']);
   });
 
   it('allows only the explicit session capability variables', () => {

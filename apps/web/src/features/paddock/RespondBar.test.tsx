@@ -8,7 +8,7 @@ import { usePaddock } from '../../store/paddock';
 import { RespondBar } from './RespondBar';
 import type { Session } from '@flock/shared';
 
-const session = { id: 's1', agentType: 'gemini', status: 'idle' } as unknown as Session;
+const session = { id: 's1', agentType: 'grok', status: 'idle' } as unknown as Session;
 const sent: string[] = [];
 
 beforeEach(() => {

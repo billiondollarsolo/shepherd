@@ -23,7 +23,6 @@ import { translateClaudeHook } from '../status/translators/claude.js';
 import { translateCodexHook } from '../status/translators/codex.js';
 import { translateOpenCodeHook } from '../status/translators/opencode.js';
 import { translateGrokHook } from '../status/translators/grok.js';
-import { translateGeminiHook } from '../status/translators/gemini.js';
 
 /**
  * A derived live frame. `translateHookEvent` returns `null` when an event maps
@@ -57,8 +56,6 @@ export function translateHookEvent(body: unknown, agentType?: AgentType): Transl
       return translateOpenCodeHook(body);
     case 'grok':
       return translateGrokHook(body);
-    case 'gemini':
-      return translateGeminiHook(body);
     case 'terminal':
       // A plain terminal has no structured hook payload.
       return null;

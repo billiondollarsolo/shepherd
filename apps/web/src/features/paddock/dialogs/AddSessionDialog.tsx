@@ -35,7 +35,6 @@ const AGENT_LABELS: Record<AgentType, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
   antigravity: 'Antigravity',
-  gemini: 'Gemini',
   grok: 'Grok',
   aider: 'Aider',
   'cursor-agent': 'Cursor Agent',
@@ -44,12 +43,7 @@ const AGENT_LABELS: Record<AgentType, string> = {
   dev: 'Dev server (auto-restart)',
 };
 
-// Deprecated agents kept as valid types (old records) but no longer offered for
-// new sessions — Gemini CLI is retiring 2026-06-18 in favour of Antigravity.
-const DEPRECATED_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>(['gemini']);
-const OFFERED_AGENTS = (Object.keys(AGENT_LABELS) as AgentType[]).filter(
-  (a) => !DEPRECATED_AGENTS.has(a),
-);
+const OFFERED_AGENTS = Object.keys(AGENT_LABELS) as AgentType[];
 
 const AUTHORITY_LABELS: Record<AgentAuthority, string> = {
   callback_only: 'Independent — callback only',
@@ -78,7 +72,6 @@ const REQUIRED_BIN: Record<AgentType, string | null> = {
   codex: 'codex',
   opencode: 'opencode',
   antigravity: 'agy',
-  gemini: 'gemini',
   grok: 'grok',
   aider: 'aider',
   'cursor-agent': 'cursor-agent',
@@ -117,15 +110,13 @@ export function daemonLaunchBlockMessage(info: NodeInfo | undefined): string | n
 /**
  * The permission modes each agent ACTUALLY supports — mirrors the orchestrator's
  * per-agent flag mapping (agent-launch.ts). The options used to be the same four
- * for every CLI agent, but they aren't interchangeable: Gemini has no read-only
- * "plan" mode (it maps to the same as default), so offering it was misleading.
+ * for every CLI agent, but they aren't interchangeable across CLIs.
  * Agents not listed (opencode = in-app perms, terminal/dev) show no picker.
  */
 const MODES_BY_AGENT: Partial<Record<AgentType, readonly SessionPermissionMode[]>> = {
   'claude-code': ['default', 'acceptEdits', 'plan', 'autonomous'],
   codex: ['default', 'acceptEdits', 'plan', 'autonomous'],
   antigravity: ['default', 'plan', 'acceptEdits', 'autonomous'],
-  gemini: ['default', 'acceptEdits', 'autonomous'], // no real read-only plan mode
 };
 
 /**
@@ -185,8 +176,8 @@ export function AddSessionDialog(): JSX.Element {
     if (p.permissionMode) setPermissionMode(p.permissionMode);
   }
   // Only the modes THIS agent supports; if the current selection isn't valid for
-  // the chosen agent (e.g. switched to Gemini while "plan" was picked), fall back
-  // to default so we never send an unsupported mode.
+  // the chosen agent (e.g. switched to an agent without "plan" while it was picked),
+  // fall back to default so we never send an unsupported mode.
   const modes = MODES_BY_AGENT[agentType] ?? [];
   const showMode = modes.length > 0;
   const effectiveMode: SessionPermissionMode = modes.includes(permissionMode)

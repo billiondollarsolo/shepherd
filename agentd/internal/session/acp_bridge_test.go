@@ -26,7 +26,7 @@ func TestAcpEventToUpdate(t *testing.T) {
 		{"tool completed → no update", acp.Event{Kind: acp.EventToolUpdated, ToolStatus: "completed"}, status.Update{}, false},
 		{"turn complete → idle", acp.Event{Kind: acp.EventTurnCompleted}, status.Update{State: status.StateIdle}, true},
 		{"error → error", acp.Event{Kind: acp.EventError, Message: "boom"}, status.Update{State: status.StateError}, true},
-		{"usage → tokens/model/ctx", acp.Event{Kind: acp.EventUsageUpdated, Usage: &acp.Usage{TotalTokens: 100, InputTokens: 40, Model: "gemini-2"}}, status.Update{Tokens: 100, Model: "gemini-2", ContextTokens: 40}, true},
+		{"usage → tokens/model/ctx", acp.Event{Kind: acp.EventUsageUpdated, Usage: &acp.Usage{TotalTokens: 100, InputTokens: 40, Model: "grok-2"}}, status.Update{Tokens: 100, Model: "grok-2", ContextTokens: 40}, true},
 	}
 	for _, c := range cases {
 		got, ok := acpEventToUpdate(c.ev)

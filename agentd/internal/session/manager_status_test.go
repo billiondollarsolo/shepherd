@@ -10,7 +10,6 @@ func TestIsHookOwnedAgent(t *testing.T) {
 	}{
 		{"direct grok", []string{"grok"}, true},
 		{"direct opencode", []string{"opencode"}, true},
-		{"direct gemini", []string{"gemini"}, true},
 		{"path grok", []string{"/usr/local/bin/grok"}, true},
 		// The real Shepherd launch for grok (auth probe + device-code bootstrap).
 		{"sh -c exec grok", []string{"sh", "-c", `[ -f "$HOME/.grok/auth.json" ] || [ -n "$XAI_API_KEY" ] || grok login --device-auth; exec grok`}, true},

@@ -3,7 +3,7 @@ import type { AgentType } from '@flock/shared';
 /**
  * Agents that produce a structured transcript Shepherd can render as a chat view
  * today (transcript/hook tailing — claude/codex/antigravity JSONL, opencode
- * hooks; gemini is deprecated but existing sessions still render). Everything
+ * hooks). Everything
  * else (grok, aider, cursor-agent, amp, terminal, dev) is terminal-only by
  * nature — no first-class transcript — so the Terminal ⇄ Chat toggle isn't
  * offered for them and the terminal stays the sole view. See
@@ -14,7 +14,6 @@ const CHAT_CAPABLE_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
   'codex',
   'opencode',
   'antigravity',
-  'gemini',
 ]);
 
 export function isChatCapable(agentType: AgentType | string | null | undefined): boolean {

@@ -2,7 +2,7 @@
  * OpenCodeChatAssembler — turns OpenCode's streamed message PARTS into whole Chat
  * messages for the structured Chat tab.
  *
- * OpenCode (unlike claude/codex with a transcript, or gemini/grok over ACP) emits
+ * OpenCode (unlike claude/codex with a transcript, or grok with hooks) emits
  * its conversation on its event bus: `message.updated` carries only METADATA
  * (id/role/model/tokens — NO text), while the text streams as `message.part.updated`
  * snapshots (`part = {id, type:'text'|'reasoning'|..., text, messageID}`). So we:

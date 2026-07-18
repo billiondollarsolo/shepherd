@@ -75,7 +75,7 @@ export interface AgentdControl {
   // T17: Landlock FS sandbox for autonomous sessions on `open` (client→daemon).
   sandbox?: boolean;
   sandboxAllow?: string[];
-  // T61: derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
+  // T61: derive status from PTY activity (agents with no transcript/hook, e.g. aider).
   activityStatus?: boolean;
   // Native hook-config injection (US-19) on `open` (client→daemon).
   configFiles?: Record<string, string>;

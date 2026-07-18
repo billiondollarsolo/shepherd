@@ -80,7 +80,7 @@ var flockMcpScript string
 
 // detectSetupAgent maps a launch command to an agent name for per-session SETUP
 // (trust + MCP) — broader than status.DetectAgent (which only knows the two
-// transcript agents). Matches the binary base, so gemini/grok/opencode are covered.
+// transcript agents). Matches the binary base, so grok/opencode are covered.
 func detectSetupAgent(command []string) string {
 	if len(command) == 0 {
 		return ""
@@ -101,8 +101,6 @@ func detectSetupAgent(command []string) string {
 		return "claude"
 	case "codex":
 		return "codex"
-	case "gemini":
-		return "gemini"
 	case "grok":
 		return "grok"
 	case "opencode":
@@ -144,16 +142,6 @@ func ensureFolderTrust(agent, cwd string, runtime *identity.Runtime) {
 			p["hasTrustDialogAccepted"] = true
 			addMcpServer(m, mcp)
 		})
-	case "gemini":
-		// ~/.gemini/trustedFolders.json → trust; settings.json → MCP server.
-		mergeJSONFile(filepath.Join(home, ".gemini", "trustedFolders.json"), func(m map[string]any) {
-			m[cwd] = "TRUST_FOLDER"
-		})
-		if mcp != nil {
-			mergeJSONFile(filepath.Join(home, ".gemini", "settings.json"), func(m map[string]any) {
-				addMcpServer(m, mcp)
-			})
-		}
 	case "codex":
 		// codex config is TOML — append an [mcp_servers.flock] block if absent.
 		if mcp != nil {
@@ -261,8 +249,6 @@ func ensureTrustOwnership(home, agent string, runtime *identity.Runtime) {
 	switch agent {
 	case "claude":
 		_ = os.Lchown(filepath.Join(home, ".claude.json"), int(runtime.UID), int(runtime.GID))
-	case "gemini":
-		_ = chownTree(filepath.Join(home, ".gemini"), runtime)
 	case "codex":
 		_ = chownTree(filepath.Join(home, ".codex"), runtime)
 	case "grok":

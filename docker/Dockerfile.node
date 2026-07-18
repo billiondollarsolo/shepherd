@@ -31,7 +31,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --- agent CLIs (best-effort; image still builds if a download is unavailable)-
 # codex: npm global. claude + opencode: official install scripts → /usr/local/bin.
 RUN npm install -g @openai/codex || echo "WARN: codex install skipped"
-RUN npm install -g @google/gemini-cli || echo "WARN: gemini install skipped"
 RUN curl -fsSL https://x.ai/cli/install.sh | bash \
       && (cp /root/.grok/bin/grok /usr/local/bin/grok 2>/dev/null \
           || cp /root/.local/bin/grok /usr/local/bin/grok 2>/dev/null || true) \

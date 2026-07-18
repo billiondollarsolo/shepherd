@@ -49,7 +49,7 @@ export interface AgentdSessionSpec {
   // T17: Landlock FS sandbox for autonomous sessions (the daemon confines writes).
   sandbox?: boolean;
   sandboxAllow?: string[];
-  // T61: derive status from PTY activity (agents with no transcript/hook, e.g. gemini).
+  // T61: derive status from PTY activity (agents with no transcript/hook, e.g. aider).
   activityStatus?: boolean;
 }
 

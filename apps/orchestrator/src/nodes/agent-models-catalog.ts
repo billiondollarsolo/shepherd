@@ -4,7 +4,7 @@
  * Two sources:
  *   - Antigravity (`agy`) is DISCOVERED live on the node — `agy models` prints one
  *     model per line, and the effort/speed is baked into the name, e.g.
- *     "Claude Opus 4.6 (Thinking)" / "Gemini 3.5 Flash (High)". Those exact strings
+ *     "Claude Opus 4.6 (Thinking)". Those exact strings
  *     are the `--model` values.
  *   - Other agents get a curated STATIC list of `--model` values known to work with
  *     that CLI. The web also allows a free-text model, so a stale static entry is a

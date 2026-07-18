@@ -78,7 +78,7 @@ func TestSessionOutput(t *testing.T) {
 }
 
 // T61: LastActivity is zero before any output and set after the PTY produces
-// some — the signal the activity-status watcher reads for gemini.
+// some — the signal the activity-status watcher reads.
 func TestLastActivityTracksOutput(t *testing.T) {
 	s, err := Open(Spec{ID: "act1", Command: []string{"sh", "-c", "printf hi"}})
 	if err != nil {

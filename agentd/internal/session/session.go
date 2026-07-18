@@ -37,7 +37,7 @@ type Spec struct {
 	Command []string // argv; empty → the user's default shell as a login shell
 	// Mode selects the transport: "" / "pty" = raw PTY (default, universal); "acp"
 	// = structured Agent Client Protocol over stdio (F6). For "acp", Command is the
-	// ACP launch argv (e.g. gemini --experimental-acp). "claude-stream" = Claude
+	// ACP launch argv (e.g. cursor-agent acp). "claude-stream" = Claude
 	// Code's structured stream-json transport (a persistent `claude --print
 	// --input-format stream-json …` process); Command is that full argv. See
 	// claudestream_session.go.
@@ -67,7 +67,7 @@ type Spec struct {
 
 	// ActivityStatus (T61): when set, derive running/idle from PTY OUTPUT ACTIVITY
 	// (recent output → running; quiet → idle) instead of a transcript/hook. Set by
-	// the orchestrator for agents with no better status source (e.g. gemini), so
+	// the orchestrator for agents with no better status source, so
 	// they get a live dot instead of being stuck. Cannot express awaiting_input.
 	ActivityStatus bool
 }
@@ -124,7 +124,7 @@ type Session struct {
 	droppedOutputBytes atomic.Uint64
 	// lastActivityNanos is the unix-nano timestamp of the most recent PTY output.
 	// Read lock-free by the activity-status watcher (T61) to derive running/idle for
-	// agents with no transcript/hook status source (e.g. gemini).
+	// agents with no transcript/hook status source.
 	lastActivityNanos atomic.Int64
 
 	closeCh chan struct{} // closed by Close() to interrupt a backoff sleep
@@ -205,7 +205,7 @@ func (s *Session) startProcess() error {
 	// CRITICAL: exec.Command resolves a bare name via exec.LookPath using the
 	// DAEMON's own $PATH — it IGNORES cmd.Env. So a minimal systemd/nohup daemon
 	// (whose $PATH lacks ~/.local/bin, ~/.nvm/.../bin, …) would never find a
-	// userland-installed agent (gemini/opencode), even though cmd.Env's PATH below
+	// userland-installed agent (opencode), even though cmd.Env's PATH below
 	// is augmented. Resolving here (same dirs as the spawn PATH) is what actually
 	// lets those launch; claude/codex in /usr/bin resolve via LookPath as before.
 	home := homeForSpec(s.spec)
@@ -217,8 +217,8 @@ func (s *Session) startProcess() error {
 	// own environment, so the agent still inherits PATH/HOME/etc. from the node.
 	// PATH augmentation: a systemd/nohup-launched daemon has a MINIMAL $PATH that
 	// usually excludes Node version-manager / npm-global bin dirs (~/.nvm/.../bin,
-	// ~/.local/bin, …) — exactly where claude/codex/gemini/opencode install. Without
-	// this, a bare `gemini`/`codex` argv fails with "not found" on such nodes even
+	// ~/.local/bin, …) — exactly where claude/codex/opencode install. Without
+	// this, a bare `codex`/`opencode` argv fails with "not found" on such nodes even
 	// though detection found it. Prepend the agent bin dirs to PATH (a later env
 	// entry wins; spec.Env may still override PATH after this).
 	// Hand the agent a base env WITHOUT the daemon's PRIVATE auth secret: the

@@ -6,6 +6,10 @@ minor releases before 1.0.
 
 ## [Unreleased]
 
+### Removed
+
+- Gemini CLI agent integration (superseded by Antigravity).
+
 ## [0.6.1] - 2026-07-17
 
 ### Added

@@ -32,7 +32,7 @@ import { OpenCodeChatAssembler } from './opencode-chat.js';
 /**
  * Resolve which agent translator/plan extractor to use. Prefer the live session
  * binding (always known for a Shepherd-managed session) over body inference — Claude
- * and Gemini both use `hook_event_name`, Codex can too, and Grok may emit either
+ * uses `hook_event_name`, Codex can too, and Grok may emit either
  * camelCase or snake_case field names. Body `agentType` (OpenCode plugin) and
  * payload-shape inference remain as fallbacks.
  */
@@ -263,7 +263,7 @@ export class HookEndpointService {
     }
 
     // 3) Resolve agent type (session binding → body tag → shape inference) then
-    //    translate. Without a reliable agentType, Claude/Gemini/Codex payloads
+    //    translate. Without a reliable agentType, Claude/Codex payloads
     //    that share `hook_event_name` mis-route, and Grok/OpenCode plan/chat
     //    extraction can silently no-op.
     const agentType = resolveAgentType(input.agentType, auth.agentType, input.body);

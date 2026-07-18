@@ -12,7 +12,6 @@
 [Codex](https://openai.com/codex/) ·
 [OpenCode](https://opencode.ai/) ·
 [Antigravity](https://antigravity.google) ·
-[Gemini](https://geminicli.com/) ·
 [Grok](https://x.ai/cli) ·
 [Aider](https://aider.chat/) ·
 [Cursor Agent](https://docs.cursor.com/en/cli) ·
@@ -325,19 +324,15 @@ first-class integrations add richer status and metadata.
 | **Codex**        | Transcript         |    ⚠️     |            ✅            |  ✅  |
 | **OpenCode**     | Plugin             |    ✅     |            ✅            |  ✅  |
 | **Antigravity**  | Transcript         |    ✅     |            ⚠️            |  ⚠️  |
-| **Gemini**       | ACP                |    ✅     |            ⚠️            |  ⚠️  |
 | **Grok**         | Hooks              |     —     |            —             |  —   |
 | **Aider**        | PTY / process      |     —     |            —             |  —   |
 | **Cursor Agent** | PTY / process      |     —     |            —             |  —   |
 | **Amp**          | PTY / process      |     —     |            —             |  —   |
 
-> **Antigravity** (Google's `agy`) is the successor to the **Gemini** CLI, which Google
-> is retiring. Existing Gemini sessions still render; new work should prefer Antigravity.
-
 Integration details and limitations are documented in the
 [agent integration matrix](docs/agent-integration-matrix.md).
 
-The first six are first-class integrations with structured lifecycle signals where the
+The first five are first-class integrations with structured lifecycle signals where the
 tool exposes them. Aider, Cursor Agent, and Amp are supported terminal integrations:
 Shepherd launches and supervises the real CLI, but does not claim structured chat,
 token, plan, or attention telemetry that the tool does not provide.

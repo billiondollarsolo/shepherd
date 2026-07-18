@@ -1,6 +1,6 @@
 // Package acp implements a client for the Agent Client Protocol
 // (agentclientprotocol.com) — the structured, JSON-RPC-over-stdio transport that
-// Cursor, Gemini, and Grok speak. It is the rich path alongside agentd's raw-PTY
+// Cursor speaks. It is the rich path alongside agentd's raw-PTY
 // transport (the universal fallback); see docs/roadmap.md F6.
 //
 // Wire format (verified against Synara's reference implementation,

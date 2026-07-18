@@ -61,7 +61,7 @@ export const CreateSessionRequest = z
      */
     devCommand: z.string().min(1).max(2000).optional(),
     /**
-     * Session transport (F6). `acp` runs an ACP-capable agent (gemini/grok) over the
+     * Session transport (F6). `acp` runs an ACP-capable agent over the
      * structured Agent Client Protocol instead of a raw PTY — enabling structured
      * status, telemetry, and approve/deny. Ignored (falls back to PTY) for agents
      * with no ACP entrypoint. Default: PTY.

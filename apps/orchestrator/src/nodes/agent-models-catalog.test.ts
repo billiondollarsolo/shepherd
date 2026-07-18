@@ -9,9 +9,10 @@ import {
 
 describe('agent-models-catalog', () => {
   it('parses `agy models` stdout into one --model value per non-empty line', () => {
-    const stdout = 'Gemini 3.5 Flash (High)\nClaude Opus 4.6 (Thinking)\n\nGPT-OSS 120B (Medium)\n';
+    const stdout =
+      'Claude Sonnet 4.6 (Fast)\nClaude Opus 4.6 (Thinking)\n\nGPT-OSS 120B (Medium)\n';
     expect(parseAgyModels(stdout)).toEqual([
-      'Gemini 3.5 Flash (High)',
+      'Claude Sonnet 4.6 (Fast)',
       'Claude Opus 4.6 (Thinking)',
       'GPT-OSS 120B (Medium)',
     ]);

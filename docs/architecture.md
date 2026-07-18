@@ -112,7 +112,7 @@ dialog surface each node's live metrics.
 ## How a status dot lights up (the live path)
 
 1. An agent does something — finishes a turn, hits a permission prompt, runs a tool.
-2. The agent emits a **hook** (Claude/Gemini/Grok/OpenCode) and/or writes to its
+2. The agent emits a **hook** (Claude/Grok/OpenCode) and/or writes to its
    **transcript** (Claude/Codex). Hooks `curl` the orchestrator's hook endpoint over the
    node's reverse tunnel; transcripts are tailed by `flock-agentd`.
 3. The orchestrator's per-agent **translator** maps that into the unified `Status` (+

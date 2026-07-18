@@ -16,7 +16,6 @@ import (
 var hookOwnedAgentNames = map[string]struct{}{
 	"opencode": {},
 	"grok":     {},
-	"gemini":   {},
 }
 
 // isHookOwnedAgent reports whether the session command launches a hook-owned
@@ -121,7 +120,7 @@ func (m *Manager) emitStatus(ev StatusEvent) {
 
 // startStatusWatcher derives live status for a session: by tailing the agent's
 // transcript (claude/codex) when one exists, else — when spec.ActivityStatus is
-// set (e.g. gemini) — by PTY OUTPUT ACTIVITY. No-op for plain shells/unknown with
+// set — by PTY OUTPUT ACTIVITY. No-op for plain shells/unknown with
 // neither source. Stopped via stopStatusWatcher (statusStops[id]).
 func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	agent := status.DetectAgent(spec.Command)
@@ -178,7 +177,7 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 }
 
 // watchActivity derives running/idle from PTY output gaps for agents with no
-// transcript/hook (T61, e.g. gemini). Recent output (< activeWindow) → running;
+// transcript/hook (T61). Recent output (< activeWindow) → running;
 // a longer quiet gap → idle (turn complete / waiting for you). It cannot tell
 // idle from awaiting_input — that needs a real signal the agent doesn't give us.
 //

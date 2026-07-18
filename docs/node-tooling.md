@@ -11,8 +11,7 @@ separate decisions so adding a node never silently mutates it or grants privileg
 | Claude Code  | First-class |          Yes           | Native PTY (Terminal) or the `claude-stream` structured Chat transport; hooks/transcript status, chat, telemetry, and plans |
 | Codex        | First-class |          Yes           | Native PTY (Terminal) or the `codex-app-server` structured Chat transport; transcript status, chat, telemetry, and plans    |
 | OpenCode     | First-class |          Yes           | Native PTY plus plugin status, chat, telemetry, and plans                                                                   |
-| Antigravity  | First-class |          Yes           | Native PTY plus transcript-derived status and chat (Google's `agy`; successor to the Gemini CLI)                            |
-| Gemini CLI   | First-class |          Yes           | Native PTY plus transcript/hook status and permissions (ACP support is dormant; the Gemini CLI is being retired)            |
+| Antigravity  | First-class |          Yes           | Native PTY plus transcript-derived status and chat (Google's `agy`)                                                         |
 | Grok Build   | First-class |          Yes           | Native PTY plus the lifecycle hooks Grok exposes                                                                            |
 | Aider        | Terminal    |          Yes           | Native PTY, process supervision, reconnect, scrollback, and activity state                                                  |
 | Cursor Agent | Terminal    |          Yes           | Native PTY, process supervision, reconnect, scrollback, and activity state                                                  |
@@ -95,7 +94,7 @@ image release. Use a prepared remote node for Docker workloads.
 
 On a prepared remote node:
 
-1. Node details lists all nine tools, including missing tools, without changing them.
+1. Node details lists all eight tools, including missing tools, without changing them.
 2. Installing Amp (or another missing tool) requires confirmation and returns a verified
    path/version owned by the runtime identity.
 3. Provider authentication is still requested by the tool itself on first launch.

@@ -3,7 +3,7 @@ import { isChatCapable } from './chatCapable';
 
 describe('isChatCapable', () => {
   it('is true for agents with a structured transcript', () => {
-    for (const a of ['claude-code', 'codex', 'opencode', 'gemini']) {
+    for (const a of ['claude-code', 'codex', 'opencode', 'antigravity']) {
       expect(isChatCapable(a)).toBe(true);
     }
   });

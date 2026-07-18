@@ -8,7 +8,6 @@ import (
 // LaunchCommand returns the argv to start an agent in ACP (structured) mode, and
 // whether the agent supports ACP at all.
 //
-//	gemini → gemini --experimental-acp  (answers ACP initialize; VERIFIED)
 //	cursor → cursor-agent acp
 //
 // Grok is intentionally NOT listed: `grok agent stdio` is a JSON line protocol
@@ -17,8 +16,6 @@ import (
 // use the raw-PTY transport (the universal fallback, Invariant 1).
 func LaunchCommand(agentType string) ([]string, bool) {
 	switch agentType {
-	case "gemini":
-		return []string{"gemini", "--experimental-acp"}, true
 	case "cursor":
 		return []string{"cursor-agent", "acp"}, true
 	default:

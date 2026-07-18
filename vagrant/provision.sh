@@ -22,7 +22,7 @@ apt-get update -y
 apt-get install -y --no-install-recommends \
   openssh-server tmux curl ca-certificates git build-essential locales sudo
 
-# Node.js 22 is required by Gemini's official npm distribution. Install it before
+# Node.js 22 is required by Codex's official npm distribution. Install it before
 # invoking the shared node-preparation path so all supported installers are tested.
 if ! command -v node >/dev/null 2>&1; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -

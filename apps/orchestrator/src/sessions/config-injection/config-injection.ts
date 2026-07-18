@@ -137,32 +137,6 @@ export async function renderHookConfig(agentType: AgentType): Promise<RenderedHo
         },
       };
     }
-    case 'gemini': {
-      // NATIVE install: merge Shepherd's hooks into the real ~/.gemini/settings.json
-      // (the generic JSON deep-merge in the daemon preserves the user's gemini
-      // config). Gemini CLI v0.26.0+ fires Claude-Code-style lifecycle hooks with
-      // the SAME settings.json shape — so this lifts gemini from the old PTY-activity
-      // heuristic to real running/awaiting_input/idle/done (the gemini translator
-      // maps them). Forwarder no-ops without FLOCK_HOOK_*.
-      const settings = {
-        hooks: {
-          SessionStart: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          BeforeAgent: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          BeforeTool: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          AfterTool: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          Notification: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          AfterAgent: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-          SessionEnd: [{ hooks: [{ type: 'command', command: HOOK_CMD }] }],
-        },
-      };
-      return {
-        configBaseSubdir: '.gemini',
-        files: {
-          'settings.json': JSON.stringify(settings, null, 2),
-          'flock-hook.sh': HOOK_FORWARDER_SH,
-        },
-      };
-    }
     default:
       return null;
   }

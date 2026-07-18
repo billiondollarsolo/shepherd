@@ -16,8 +16,13 @@ describe('permissionModesForAgent', () => {
       'autonomous',
     ]);
     expect(permissionModesForAgent('codex')).toEqual(PERMISSION_MODES_BY_AGENT.codex);
-    // gemini has no read-only plan mode.
-    expect(permissionModesForAgent('gemini')).toEqual(['default', 'acceptEdits', 'autonomous']);
+    // antigravity orders plan before acceptEdits.
+    expect(permissionModesForAgent('antigravity')).toEqual([
+      'default',
+      'plan',
+      'acceptEdits',
+      'autonomous',
+    ]);
   });
 
   it('returns [] for agents without a picker and for null/undefined/unknown', () => {

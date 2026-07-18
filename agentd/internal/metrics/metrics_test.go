@@ -7,7 +7,7 @@ import (
 )
 
 // resolveAgent must find an agent installed under a Node version-manager layout
-// (nvm/npm) even when it is NOT on the daemon's $PATH — the gemini-detection fix.
+// (nvm/npm) even when it is NOT on the daemon's $PATH — the agent-detection fix.
 func TestResolveAgentFindsNvmInstall(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -17,13 +17,13 @@ func TestResolveAgentFindsNvmInstall(t *testing.T) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(binDir, "gemini")
+	bin := filepath.Join(binDir, "grok")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if got := resolveAgent("gemini"); got != bin {
-		t.Fatalf("resolveAgent(gemini) = %q, want %q", got, bin)
+	if got := resolveAgent("grok"); got != bin {
+		t.Fatalf("resolveAgent(grok) = %q, want %q", got, bin)
 	}
 	// A genuinely-absent agent still resolves to "".
 	if got := resolveAgent("definitely-not-installed-xyz"); got != "" {
