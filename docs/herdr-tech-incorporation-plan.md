@@ -4,7 +4,7 @@
 **Audience:** AI agents implementing; humans reviewing PRs  
 **Date:** 2026-08-01  
 **Decisions locked:** 2026-08-01 (product review)  
-**Repos:** `herdr/`, `shepherd/`, `flock-tui/` (sibling trees under `shepherd-all/`)  
+**Repos:** `herdr/`, `shepherd/`, `shep-tui/` (sibling trees under `shepherd-all/`)  
 **Companions:**  
 [`architecture.md`](./architecture.md) · [`agent-integration-matrix.md`](./agent-integration-matrix.md) · [`flock-agentd-design.md`](./flock-agentd-design.md) · [`roadmap.md`](./roadmap.md) · [`architecture/state-ownership.md`](./architecture/state-ownership.md) · herdr docs (`agents`, `agent-automation`, `socket-api`, `session-state`, `integrations`) · herdr `AGENTS.md` / `skills/herdr/SKILL.md`
 
@@ -30,7 +30,7 @@ Each task has: **Why · Scope · Approach · Success criteria · Tests · Valida
 | | **Herdr** | **Shepherd** |
 | --- | --- | --- |
 | One-liner | Terminal agent **multiplexer/runtime** (one machine, many panes) | Multi-node **operations platform** for coding agents |
-| Primary UI | Mouse-first TUI (Rust) + CLI | Web paddock (React) + optional `flock-tui` |
+| Primary UI | Mouse-first TUI (Rust) + CLI | Web paddock (React) + optional `shep-tui` |
 | Process owner | Herdr server (headless runtime + PTY panes) | `flock-agentd` (Go daemon, privilege-separated) |
 | Topology | Workspace → tab → pane → agent occupant | Node → project → session (+ pens presentation) |
 | Multi-machine | Remote attach / experimental handoff | First-class SSH nodes + orchestrator |
@@ -38,7 +38,7 @@ Each task has: **Why · Scope · Approach · Success criteria · Tests · Valida
 | Auth / multi-user | Local socket, single operator | Cookie auth, push, vault, audit, self-host fleet |
 | Differentiator | Screen-aware agent state + agent-to-agent automation | Fleet, structured Chat, privilege boundary, Preview |
 
-**Strategic conclusion:** Shepherd should **absorb Herdr’s agent intelligence and automation primitives into `agentd` + orchestrator APIs**, not become a Herdr fork. Herdr remains a competitive reference and a source of manifests/rules/UX patterns. `flock-tui` can expose the same control surface locally without the orchestrator.
+**Strategic conclusion:** Shepherd should **absorb Herdr’s agent intelligence and automation primitives into `agentd` + orchestrator APIs**, not become a Herdr fork. Herdr remains a competitive reference and a source of manifests/rules/UX patterns. `shep-tui` can expose the same control surface locally without the orchestrator.
 
 ### Pass B — Herdr capability inventory (what is worth taking)
 
@@ -59,7 +59,7 @@ Prioritized by value to Shepherd’s “Needs you / guide the flock” mission:
 | **P3** | **Worktree CLI/API as automation primitive** | Shepherd has worktree service; Herdr exposes create/open/list to agents | orchestrator + skill |
 | **P3** | **Plugins / marketplace** | Extensibility moat (roadmap Layer 2) — later | optional |
 | **P3** | **Live PTY FD handoff across server replace** | Elite zero-downtime upgrade; hard with agentd root/setuid model | experimental later |
-| **Defer** | Herdr TUI, mouse-first chrome, workspace/tab geometry as identity, libghostty-vt as product UI | Overlaps web + flock-tui; wrong stack ownership | — |
+| **Defer** | Herdr TUI, mouse-first chrome, workspace/tab geometry as identity, libghostty-vt as product UI | Overlaps web + shep-tui; wrong stack ownership | — |
 | **Defer** | Replacing agentd with Herdr server | Breaks privilege separation, multi-node, protocol v2, Go clients | — |
 
 ### Pass C — Shepherd baseline (what we already have)
@@ -71,7 +71,7 @@ Strengths **not** to regress:
 - Unified `Status` enum already uses Herdr-aligned **display words** (`Working`, `Needs you`) in `packages/shared/src/status.ts`.
 - Orchestrator merge → `/ws/status` → paddock dots + Web Push on `awaiting_input` / `error` / `done`.
 - Structured Chat, Pens, multi-node SSH, Preview, git, vault.
-- `flock-tui` local/fleet modes with `sessions wait` (poll-based), pens, VT client renderer.
+- `shep-tui` local/fleet modes with `sessions wait` (poll-based), pens, VT client renderer.
 
 Gaps vs Herdr (the incorporation target):
 
@@ -89,7 +89,7 @@ Gaps vs Herdr (the incorporation target):
 | Herdr concept | Shepherd concept | Notes |
 | --- | --- | --- |
 | Server | `flock-agentd` (+ orchestrator for fleet) | Server-owned runtime already true |
-| Client TUI | `apps/web` / `flock-tui` | Presentation only |
+| Client TUI | `apps/web` / `shep-tui` | Presentation only |
 | Workspace | **Project** (or node-local group) | Do not add Herdr workspaces as identity |
 | Tab | **Pen** or single session focus | Presentation / grouping |
 | Pane | **Session** (1:1 with PTY) | Shepherd’s atomic unit stays session |
@@ -119,7 +119,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 | ID | Decision | Locked choice | Rationale |
 | --- | --- | --- | --- |
 | **D1** | Where screen detection runs | **Inside `agentd`**, on a **parsed bottom-buffer snapshot** per session | Only place with continuous PTY bytes, multi-client fanout, and node FS; matches “node is source of truth” |
-| **D2** | VT / screen model in agentd | **Minimal Go line/grid decoder** in agentd (cols×rows or line buffer + OSC title/progress + alt-screen flag). Learn from `flock-tui/internal/vt`; **do not** vendor libghostty-vt; **do not** ship strip-ANSI-only as the long-term model | Enough for Herdr-class region matchers without Ghostty weight or full tui↔daemon package merge in v1 |
+| **D2** | VT / screen model in agentd | **Minimal Go line/grid decoder** in agentd (cols×rows or line buffer + OSC title/progress + alt-screen flag). Learn from `shep-tui/internal/vt`; **do not** vendor libghostty-vt; **do not** ship strip-ANSI-only as the long-term model | Enough for Herdr-class region matchers without Ghostty weight or full tui↔daemon package merge in v1 |
 | **D3** | Herdr TOML manifests | **Yes for rule content**; engine **reimplemented in Go** with fixture compatibility tests; keep `min_engine_version` | Fastest path to real agent UIs |
 | **D4** | Authority precedence (Terminal mode) | **Lifecycle authority (if active) > visible_blocker screen > transcript/hooks partial > PTY activity > idle fallback** | Fixes money-state misses; mirrors Herdr terminal behavior |
 | **D5** | Automation surface (v1 after detection trusted) | **Full stack: agentd ops + orchestrator REST/WS + in-session skill** | Fleet + local + multi-agent coordination; not a second private socket language |
@@ -139,7 +139,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 
 ```text
                     ┌──────────────────────────────────────────┐
-                    │  web / flock-tui / agent skill / scripts │
+                    │  web / shep-tui / agent skill / scripts │
                     └───────────────────┬──────────────────────┘
                                         │ REST/WS (auth)
                                         ▼
@@ -179,11 +179,11 @@ All rows below are binding. Implementers treat them as requirements, not options
 #### [ ] H0.1 — Capability & protocol scaffolding
 
 - **Why:** All new behavior must negotiate cleanly with old agentd.
-- **Scope:** `agentd/COMPATIBILITY.json`, `agentd/proto`, orchestrator `protocol.ts` / `agentd-compatibility.ts`, flock-tui import path if shared.
+- **Scope:** `agentd/COMPATIBILITY.json`, `agentd/proto`, orchestrator `protocol.ts` / `agentd-compatibility.ts`, shep-tui import path if shared.
 - **Approach:** Add optional capabilities: `screendetect_v1`, `agent_control_v1`, `status_authority_v1`. Bump daemon version when shipping. Document in compatibility matrix.
 - **Success criteria:** Old clients ignore unknown caps; new clients feature-detect; CI compatibility test covers helloOk caps list.
 - **Tests:** Go + TS unit tests for helloOk capability advertising; orchestrator preflight “optional caps missing → degrade” test.
-- **Validation:** Connect orchestrator and flock-tui to new agentd; existing open/subscribe/PTY still pass.
+- **Validation:** Connect orchestrator and shep-tui to new agentd; existing open/subscribe/PTY still pass.
 - **Deps:** none. **Risk:** low.
 - **Out of scope:** implementing detection logic.
 
@@ -228,7 +228,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Scope:** `agentd/internal/session/` (or `internal/screen/`).
 - **Approach (D2 locked):**
   - On PTY output, feed a **minimal Go line/grid VT decoder** that tracks: cell grid or line buffer, cursor, alt-screen active, OSC 0/2 title, optional OSC progress.
-  - Learn from `flock-tui/internal/vt` semantics; **do not** import Ghostty; **do not** rely on strip-ANSI last-N alone as the permanent model.
+  - Learn from `shep-tui/internal/vt` semantics; **do not** import Ghostty; **do not** rely on strip-ANSI last-N alone as the permanent model.
   - Expose `DetectionSnapshot{ Text, OSCTitle, OSCProgress, AltScreen, Cols, Rows, Revision }`.
   - Snapshot for detection = **live bottom buffer**, independent of client scrollback view.
   - Expand decoder only when fixtures fail (CUP/EL/ED/alt-screen first).
@@ -236,7 +236,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Tests:** table-driven VT cases; fuzz optional; race test on concurrent write+snapshot.
 - **Validation:** attach real Claude TUI; dump snapshot; human-compare to visible bottom chrome.
 - **Deps:** H0.1. **Risk:** high (VT correctness) — isolate package; screendetect **default off** (D10) until H1.3+H1.5 matrix green.
-- **Out of scope:** full xterm compatibility; client-side detection; shared flock-tui package move (optional H5.4 later).
+- **Out of scope:** full xterm compatibility; client-side detection; shared shep-tui package move (optional H5.4 later).
 
 #### [ ] H1.2 — TOML manifest engine (Go)
 
@@ -263,7 +263,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 #### [ ] H1.4 — `status.explain` / session explain API
 
 - **Why:** Operators and agents must debug wrong dots.
-- **Scope:** agentd control op + orchestrator `GET /api/sessions/:id/status-explain` + optional CLI in flock-tui.
+- **Scope:** agentd control op + orchestrator `GET /api/sessions/:id/status-explain` + optional CLI in shep-tui.
 - **Approach:** Mirror Herdr explain fields: agent, state, source, matched rule, evaluated rules (truncated), visible flags, fallback reason, manifest version.
 - **Success criteria:** Explain JSON stable schema in `packages/shared`; UI can show “why Needs you” in session menu (minimal).
 - **Tests:** schema tests; engine explain unit tests.
@@ -339,11 +339,11 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Deps:** H2.2, H1.5. **Risk:** **critical security** — threat-model addendum in `docs/security/agent-environment.md`.
 - **Out of scope:** whole-node tokens; plugin marketplace.
 
-#### [x] H2.4 — flock-tui / CLI parity for wait & explain
+#### [x] H2.4 — shep-tui / CLI parity for wait & explain
 
 - **Why:** Local elite ops without browser.
-- **Scope:** `flock-tui` CLI: improve `sessions wait` to use server-side wait when cap present; add `sessions explain`, `sessions prompt`.
-- **Success criteria:** Docs in flock-tui KEYBINDS/PRODUCT updated; works local mode.
+- **Scope:** `shep-tui` CLI: improve `sessions wait` to use server-side wait when cap present; add `sessions explain`, `sessions prompt`.
+- **Success criteria:** Docs in shep-tui KEYBINDS/PRODUCT updated; works local mode.
 - **Tests:** backend mock tests.
 - **Validation:** manual local.
 - **Deps:** H2.1. **Risk:** low.
@@ -356,7 +356,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 #### [ ] H3.1 — Unseen-idle attention (`unseenIdle`)
 
 - **Why:** Surface “finished while you were away” without Herdr’s remap of idle → `done`.
-- **Scope:** status/telemetry metadata + web (and flock-tui) attention UI.
+- **Scope:** status/telemetry metadata + web (and shep-tui) attention UI.
 - **Approach (D9 locked):**
   - Wire status on turn complete remains **`idle`**.
   - Wire **`done` only on session/process end** (existing calm push model).
@@ -457,7 +457,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 
 - Spike: can root agentd pass PTY FDs across restart safely under privilege separation? Write spike doc; no production commitment.
 
-#### [ ] H5.4 — Cross-pollinate flock-tui VT with agentd screen model
+#### [ ] H5.4 — Cross-pollinate shep-tui VT with agentd screen model
 
 - Share Go package if useful; avoid two diverging VT stacks long-term.
 
@@ -561,7 +561,7 @@ Plus task-specific live checks above.
 | Automation token escape | Node takeover | Scoped tokens; no agentd secret; audit; security tests |
 | Manifest drift vs Herdr | Divergent maintenance | D13 periodic import script + review; fixtures |
 | Scope creep (plugins, handoff) | Never ships P0 | Phase 5 parking lot |
-| Protocol drift flock-tui | TUI broken | Shared proto packages (existing alignment work) |
+| Protocol drift shep-tui | TUI broken | Shared proto packages (existing alignment work) |
 
 ---
 
@@ -591,7 +591,7 @@ If only one sprint: **land screen detection for money state**.
 - [ ] `docs/roadmap.md` — cross-links (do not duplicate all tasks)
 - [ ] `agentd/COMPATIBILITY.json` — caps
 - [ ] `THIRD_PARTY_NOTICES.md` — Herdr attribution
-- [ ] flock-tui docs if CLI changes
+- [ ] shep-tui docs if CLI changes
 - [ ] This plan checkboxes
 
 ---
@@ -635,7 +635,7 @@ Recorded 2026-08-01. Full table: **§1 Pass F**. No open product questions remai
 | Status enum | `shepherd/packages/shared/src/status.ts` |
 | Protocol | `shepherd/agentd/proto/`, orchestrator `nodes/agentd/` |
 | Matrix | `shepherd/docs/agent-integration-matrix.md` |
-| TUI VT (reference) | `flock-tui/internal/vt/` |
+| TUI VT (reference) | `shep-tui/internal/vt/` |
 
 ---
 
