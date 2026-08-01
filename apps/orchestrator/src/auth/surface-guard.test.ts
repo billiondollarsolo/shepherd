@@ -57,7 +57,12 @@ function makeReply(): ReplyStub {
   return reply;
 }
 
-function makeRequest(opts: { method?: string; url: string; cookie?: string }): {
+function makeRequest(opts: {
+  method?: string;
+  url: string;
+  cookie?: string;
+  headers?: Record<string, string>;
+}): {
   method: string;
   url: string;
   raw: { url: string };
@@ -67,7 +72,10 @@ function makeRequest(opts: { method?: string; url: string; cookie?: string }): {
     method: opts.method ?? 'GET',
     url: opts.url,
     raw: { url: opts.url },
-    headers: opts.cookie ? { cookie: opts.cookie } : {},
+    headers: {
+      ...(opts.cookie ? { cookie: opts.cookie } : {}),
+      ...(opts.headers ?? {}),
+    },
   };
 }
 
@@ -162,6 +170,26 @@ describe('makeSurfaceAuthGuard (HTTP default-deny)', () => {
     await guard(req as never, reply as never);
 
     expect(reply.code).not.toHaveBeenCalled();
+    expect(getUserBySession).not.toHaveBeenCalled();
+  });
+
+  it('lets session automation skill paths through with Bearer / X-Automation-Token (no cookie)', async () => {
+    const getUserBySession = vi.fn(async () => null);
+    const guard = makeSurfaceAuthGuard({ getUserBySession });
+    const sid = '11111111-1111-4111-8111-111111111111';
+    for (const headers of [
+      { authorization: 'Bearer orch-token' },
+      { 'x-automation-token': 'orch-token' },
+    ]) {
+      const req = makeRequest({
+        method: 'POST',
+        url: `/api/sessions/${sid}/prompt`,
+        headers,
+      });
+      const reply = makeReply();
+      await guard(req as never, reply as never);
+      expect(reply.code).not.toHaveBeenCalled();
+    }
     expect(getUserBySession).not.toHaveBeenCalled();
   });
 });

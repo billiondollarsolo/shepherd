@@ -14,6 +14,39 @@ func agentcontrolNextUnseen(prev, next string, focused, prevUnseen bool) bool {
 	return agentcontrol.NextUnseenIdle(prev, next, focused, prevUnseen)
 }
 
+// watchResumeRef polls for a claimed transcript path and records its basename
+// as the native resume ref when FLOCK_RESUME_REF was not set at open (H3.3).
+func (m *Manager) watchResumeRef(id string, s *Session) {
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		if done, _ := s.Exited(); done {
+			return
+		}
+		// claimedFiles maps path → session id
+		m.statusMu.Lock()
+		var found string
+		for path, sid := range m.claimedFiles {
+			if sid == id {
+				found = path
+				break
+			}
+		}
+		m.statusMu.Unlock()
+		if found != "" {
+			base := filepath.Base(found)
+			// strip extension for claude uuid.jsonl
+			if i := strings.LastIndex(base, "."); i > 0 {
+				base = base[:i]
+			}
+			if base != "" && base != "transcript" {
+				m.NoteResumeRef(id, base)
+			}
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // hookOwnedAgentNames are CLIs whose live status is owned by Shepherd hooks
 // (not transcript tailing, not PTY-foreground). Their process stays in the
 // foreground for the whole session, so watchForeground would always report
@@ -141,19 +174,44 @@ func (m *Manager) emitStatus(ev StatusEvent) {
 	}
 }
 
-// SetFocused marks a session as focused/opened (clears unseenIdle on next emit).
+// SetFocused marks a session as focused/opened. When focused becomes true,
+// immediately clears unseenIdle and fans out a status frame (D9 badge clear).
 func (m *Manager) SetFocused(id string, focused bool) {
 	m.statusMu.Lock()
-	defer m.statusMu.Unlock()
 	if m.focused == nil {
 		m.focused = make(map[string]bool)
 	}
 	m.focused[id] = focused
+	var fanout *StatusEvent
 	if focused {
 		if ev, ok := m.lastStatus[id]; ok {
 			f := false
-			ev.UnseenIdle = &f
-			m.lastStatus[id] = ev
+			// Only fan-out when the badge was actually set.
+			if ev.UnseenIdle == nil || *ev.UnseenIdle {
+				ev.UnseenIdle = &f
+				m.lastStatus[id] = ev
+				cp := ev
+				fanout = &cp
+			} else {
+				ev.UnseenIdle = &f
+				m.lastStatus[id] = ev
+			}
+		}
+	}
+	var subs []chan StatusEvent
+	if fanout != nil {
+		subs = make([]chan StatusEvent, 0, len(m.statusSubs))
+		for _, ch := range m.statusSubs {
+			subs = append(subs, ch)
+		}
+	}
+	m.statusMu.Unlock()
+	if fanout != nil {
+		for _, ch := range subs {
+			select {
+			case ch <- *fanout:
+			default:
+			}
 		}
 	}
 }

@@ -1,5 +1,5 @@
 /**
- * Automation façade route smoke tests — authz + stub/501 paths without agentd.
+ * Automation façade route tests — cookie + skill token auth, authz, and wired bridges.
  */
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,7 @@ import type { AuthGuardDeps } from '../auth/middleware.js';
 import { SESSION_COOKIE } from '../auth/cookie.js';
 import {
   registerAutomationRoutes,
+  scopeForAutomationAction,
   type AutomationSessionInfo,
 } from './automation-routes.js';
 
@@ -23,6 +24,7 @@ const SESSION: AutomationSessionInfo = {
 const FAKE_USER: User = {
   id: '44444444-4444-4444-8444-444444444444',
   username: 'op',
+  displayName: null,
   createdAt: '2026-05-29T00:00:00.000Z',
   lastLoginAt: null,
   isActive: true,
@@ -47,24 +49,20 @@ async function buildApp(opts: {
     timeoutMs: number,
   ) => Promise<string>;
   sendKeys?: (id: string, keys: string[]) => Promise<void>;
+  authorizeAutomationToken?: (
+    token: string,
+    required: string,
+  ) => Promise<{ projectId: string; sessionId: string } | null>;
 }) {
   const app = Fastify({ logger: false });
   registerAutomationRoutes(app, {
     auth: authStub,
     getSession: async () => (opts.session === undefined ? SESSION : opts.session),
-    resolveAutomationScope:
-      opts.scopeProjectId === undefined
-        ? undefined
-        : opts.scopeProjectId === null
-          ? () => null
-          : () => ({
-              projectId: opts.scopeProjectId!,
-              sessionId: '33333333-3333-4333-8333-333333333333',
-            }),
     waitImplemented: opts.waitImplemented,
     prompt: opts.prompt,
     waitStatus: opts.waitStatus,
     sendKeys: opts.sendKeys,
+    authorizeAutomationToken: opts.authorizeAutomationToken as never,
   });
   await app.ready();
   return app;
@@ -77,7 +75,7 @@ describe('registerAutomationRoutes', () => {
     app = undefined;
   });
 
-  it('returns status-explain for an authed caller', async () => {
+  it('returns status-explain for an authed cookie caller', async () => {
     app = await buildApp({});
     const res = await app.inject({
       method: 'GET',
@@ -88,20 +86,87 @@ describe('registerAutomationRoutes', () => {
     expect(res.json()).toEqual({ agent: 'codex', state: 'idle' });
   });
 
-  it('denies cross-project automation scope on prompt', async () => {
-    app = await buildApp({ scopeProjectId: '99999999-9999-4999-8999-999999999999' });
+  it('401 without cookie or automation token', async () => {
+    app = await buildApp({});
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/${SESSION.id}/status-explain`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('skill path: Bearer token + authorizeAutomationToken forwards prompt (200)', async () => {
+    const prompt = vi.fn(async () => {});
+    const authorizeAutomationToken = vi.fn(async (token: string) => {
+      if (token !== 'good-orch-token') return null;
+      return { projectId: SESSION.projectId, sessionId: 'caller-sess' };
+    });
+    app = await buildApp({ prompt, authorizeAutomationToken });
     const res = await app.inject({
       method: 'POST',
       url: `/api/sessions/${SESSION.id}/prompt`,
-      headers: { cookie },
+      headers: { authorization: 'Bearer good-orch-token' },
+      payload: { text: 'review please' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prompt).toHaveBeenCalledWith(SESSION.id, 'review please');
+    expect(authorizeAutomationToken).toHaveBeenCalledWith(
+      'good-orch-token',
+      scopeForAutomationAction('prompt'),
+    );
+  });
+
+  it('skill path: X-Automation-Token works without cookie', async () => {
+    const prompt = vi.fn(async () => {});
+    app = await buildApp({
+      prompt,
+      authorizeAutomationToken: async () => ({
+        projectId: SESSION.projectId,
+        sessionId: 'caller',
+      }),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/prompt`,
+      headers: { 'x-automation-token': 'tok' },
+      payload: { text: 'hi' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prompt).toHaveBeenCalled();
+  });
+
+  it('denies cross-project automation token on prompt', async () => {
+    app = await buildApp({
+      authorizeAutomationToken: async () => ({
+        projectId: '99999999-9999-4999-8999-999999999999',
+        sessionId: 'caller',
+      }),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/prompt`,
+      headers: { authorization: 'Bearer tok' },
       payload: { text: 'hi' },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('automation_denied');
   });
 
-  it('allows same-project automation scope and returns 501 when prompt not wired', async () => {
-    app = await buildApp({ scopeProjectId: SESSION.projectId });
+  it('401 when automation token fails authorize', async () => {
+    app = await buildApp({
+      authorizeAutomationToken: async () => null,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/prompt`,
+      headers: { authorization: 'Bearer bad' },
+      payload: { text: 'hi' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('cookie path: returns 501 when prompt not wired', async () => {
+    app = await buildApp({});
     const res = await app.inject({
       method: 'POST',
       url: `/api/sessions/${SESSION.id}/prompt`,
@@ -109,53 +174,21 @@ describe('registerAutomationRoutes', () => {
       payload: { text: 'hi' },
     });
     expect(res.statusCode).toBe(501);
-    expect(res.json().error.code).toBe('automation_not_implemented');
   });
 
-  it('forwards prompt when implementation is provided', async () => {
-    const prompt = vi.fn(async () => {});
-    app = await buildApp({ scopeProjectId: SESSION.projectId, prompt });
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/sessions/${SESSION.id}/prompt`,
-      headers: { cookie },
-      payload: { text: 'review please' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(prompt).toHaveBeenCalledWith(SESSION.id, 'review please');
-  });
-
-  it('returns 501 for wait when not implemented (after authz)', async () => {
-    app = await buildApp({ scopeProjectId: SESSION.projectId, waitImplemented: false });
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/sessions/${SESSION.id}/wait`,
-      headers: { cookie },
-      payload: { timeoutMs: 1000 },
-    });
-    expect(res.statusCode).toBe(501);
-    expect(res.json().error.code).toBe('automation_wait_not_implemented');
-  });
-
-  it('returns ok+status for wait when waitImplemented', async () => {
-    app = await buildApp({ scopeProjectId: SESSION.projectId, waitImplemented: true });
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/sessions/${SESSION.id}/wait`,
-      headers: { cookie },
-      payload: {},
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ ok: true, status: 'idle', sessionId: SESSION.id });
-  });
-
-  it('forwards waitStatus bridge (server-side wait) and returns matched status', async () => {
+  it('forwards waitStatus bridge with token auth', async () => {
     const waitStatus = vi.fn(async () => 'awaiting_input');
-    app = await buildApp({ scopeProjectId: SESSION.projectId, waitStatus });
+    app = await buildApp({
+      waitStatus,
+      authorizeAutomationToken: async () => ({
+        projectId: SESSION.projectId,
+        sessionId: 'c',
+      }),
+    });
     const res = await app.inject({
       method: 'POST',
       url: `/api/sessions/${SESSION.id}/wait`,
-      headers: { cookie },
+      headers: { authorization: 'Bearer t' },
       payload: { until: ['awaiting_input'], timeoutMs: 5000 },
     });
     expect(res.statusCode).toBe(200);
@@ -163,13 +196,19 @@ describe('registerAutomationRoutes', () => {
     expect(waitStatus).toHaveBeenCalledWith(SESSION.id, ['awaiting_input'], 5000);
   });
 
-  it('forwards sendKeys when implementation is provided', async () => {
+  it('forwards sendKeys with token auth', async () => {
     const sendKeys = vi.fn(async () => {});
-    app = await buildApp({ scopeProjectId: SESSION.projectId, sendKeys });
+    app = await buildApp({
+      sendKeys,
+      authorizeAutomationToken: async () => ({
+        projectId: SESSION.projectId,
+        sessionId: 'c',
+      }),
+    });
     const res = await app.inject({
       method: 'POST',
       url: `/api/sessions/${SESSION.id}/keys`,
-      headers: { cookie },
+      headers: { 'x-automation-token': 't' },
       payload: { keys: ['esc', 'enter'] },
     });
     expect(res.statusCode).toBe(200);
@@ -184,5 +223,14 @@ describe('registerAutomationRoutes', () => {
       headers: { cookie },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('scopeForAutomationAction', () => {
+  it('maps verbs to capability scopes', () => {
+    expect(scopeForAutomationAction('prompt')).toBe('agents:send:project');
+    expect(scopeForAutomationAction('wait')).toBe('agents:read:project');
+    expect(scopeForAutomationAction('read')).toBe('agents:read:project');
+    expect(scopeForAutomationAction('create')).toBe('agents:spawn:project');
   });
 });

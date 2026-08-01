@@ -322,6 +322,14 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		focus := ctrl.Message != "0" && ctrl.Message != "false"
 		c.s.mgr.SetFocused(ctrl.ID, focus)
 		c.sendControl(proto.Control{Op: "session.focusOk", ID: ctrl.ID})
+	case "session.report_resume":
+		// H3.3: native session id discovered after open (hooks/transcript/ACP).
+		if ctrl.ID == "" || ctrl.Text == "" {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "id and text (resume ref) required"})
+			return
+		}
+		c.s.mgr.NoteResumeRef(ctrl.ID, ctrl.Text)
+		c.sendControl(proto.Control{Op: "session.reportResumeOk", ID: ctrl.ID})
 	case "unsubscribe":
 		c.dropSub(ctrl.ID)
 	case "resize":

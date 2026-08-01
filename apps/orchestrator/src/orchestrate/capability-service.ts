@@ -96,6 +96,58 @@ export class AgentCapabilityService {
         ),
       )
       .limit(1);
+    return this.finishAuthorize(row, required);
+  }
+
+  /**
+   * Authorize by opaque token only (no caller session id in the path).
+   * Used by session automation REST (H2.2/H2.3 skill) so agents present
+   * `Authorization: Bearer $FLOCK_ORCHESTRATE_TOKEN` or `X-Automation-Token`
+   * without a browser cookie.
+   */
+  async authorizeToken(
+    token: string,
+    required: AgentCapabilityScope,
+  ): Promise<AuthorizedAgentCapability> {
+    if (!token) throw new AgentCapabilityError();
+    const [row] = await this.deps.db
+      .select({
+        sessionId: agentCapabilities.sessionId,
+        projectId: agentCapabilities.projectId,
+        installationId: agentCapabilities.installationId,
+        scopes: agentCapabilities.scopes,
+        createdBy: agentSessions.createdBy,
+        agentPolicy: projects.agentPolicy,
+      })
+      .from(agentCapabilities)
+      .innerJoin(agentSessions, eq(agentSessions.id, agentCapabilities.sessionId))
+      .innerJoin(projects, eq(projects.id, agentCapabilities.projectId))
+      .where(
+        and(
+          eq(agentCapabilities.tokenHash, hashCapabilityToken(token)),
+          eq(agentCapabilities.installationId, this.deps.installationId),
+          isNull(agentCapabilities.revokedAt),
+          gt(agentCapabilities.expiresAt, this.now()),
+          isNull(agentSessions.closedAt),
+        ),
+      )
+      .limit(1);
+    return this.finishAuthorize(row, required);
+  }
+
+  private finishAuthorize(
+    row:
+      | {
+          sessionId: string;
+          projectId: string;
+          installationId: string;
+          scopes: unknown;
+          createdBy: string;
+          agentPolicy: unknown;
+        }
+      | undefined,
+    required: AgentCapabilityScope,
+  ): AuthorizedAgentCapability {
     const scopes = (row?.scopes ?? []) as AgentCapabilityScope[];
     if (!row || !scopes.includes(required)) throw new AgentCapabilityError();
     const policy = ProjectAgentPolicySchema.parse(row.agentPolicy);

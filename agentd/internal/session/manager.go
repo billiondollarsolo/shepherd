@@ -55,13 +55,12 @@ func (m *Manager) persistResume(spec Spec) {
 	if ref == "" {
 		ref = envValue(spec.Env, "CLAUDE_SESSION_ID")
 	}
-	if ref == "" {
-		return
-	}
 	kind := status.DetectToolName(spec.Command)
 	if kind == "" {
 		kind = status.DetectAgent(spec.Command)
 	}
+	// Always record argv/cwd so we can rebind identity after restart even when
+	// the native resume ref is not known yet (filled later via NoteResumeRef).
 	_ = store.Put(agentresume.Record{
 		SessionID: spec.ID,
 		AgentKind: kind,
@@ -70,6 +69,42 @@ func (m *Manager) persistResume(spec Spec) {
 		Argv:      append([]string(nil), spec.Command...),
 		Mode:      spec.Mode,
 	})
+}
+
+// NoteResumeRef updates the durable resume record when a native session id is
+// discovered after open (transcript init, hooks, ACP handshake).
+func (m *Manager) NoteResumeRef(sessionID, resumeRef string) {
+	if sessionID == "" || resumeRef == "" {
+		return
+	}
+	m.mu.Lock()
+	store := m.resumeStore
+	m.mu.Unlock()
+	if store == nil {
+		return
+	}
+	rec, ok := store.Get(sessionID)
+	if !ok {
+		// Session may have been opened before store was attached; create minimal.
+		if s := m.Get(sessionID); s != nil {
+			sp := s.SpecValue()
+			kind := status.DetectToolName(sp.Command)
+			if kind == "" {
+				kind = status.DetectAgent(sp.Command)
+			}
+			rec = agentresume.Record{
+				SessionID: sessionID,
+				AgentKind: kind,
+				Cwd:       sp.Cwd,
+				Argv:      append([]string(nil), sp.Command...),
+				Mode:      sp.Mode,
+			}
+		} else {
+			rec = agentresume.Record{SessionID: sessionID}
+		}
+	}
+	rec.ResumeRef = resumeRef
+	_ = store.Put(rec)
 }
 
 func envValue(env []string, key string) string {
@@ -160,7 +195,7 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 			return nil, err
 		}
 
-		// Persist native resume metadata when env carries FLOCK_RESUME_REF (H3.3).
+		// Persist native resume metadata (H3.3); ref may be filled later via NoteResumeRef.
 		m.persistResume(spec)
 
 		// Start deriving live status — transcript tail (claude/codex) or PTY-activity
@@ -168,6 +203,8 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		// claude-stream sessions push their own status (above), so they skip the watcher.
 		if spec.Mode != "acp" && spec.Mode != "claude-stream" && spec.Mode != "codex-app-server" {
 			m.startStatusWatcher(spec, s)
+			// Best-effort: when transcript path appears, treat basename as resume ref.
+			go m.watchResumeRef(spec.ID, s)
 		}
 
 		// Auto-remove from the registry when the process exits.

@@ -43,6 +43,14 @@ const HOOK_PREFIX = '/api/hooks/';
 const ORCHESTRATE_PREFIX = '/api/orchestrate/';
 
 /**
+ * Session automation façade used by the Shepherd skill (H2.2/H2.3).
+ * Cookie-optional when Bearer / X-Automation-Token is present; route handlers
+ * enforce project-scoped capability auth (D12).
+ */
+const SESSION_AUTOMATION_RE =
+  /^\/api\/sessions\/[^/]+\/(prompt|wait|keys|status-explain)$/;
+
+/**
  * Surfaces reachable WITHOUT a session cookie. Deliberately tiny: only the
  * routes a user must reach before they have a session (log in / first-run
  * setup), the logout route (idempotent; clears the cookie), and the health
@@ -80,6 +88,23 @@ export function isOrchestratePath(url: string): boolean {
   return normalizePath(url).startsWith(ORCHESTRATE_PREFIX);
 }
 
+/** True when path is session automation and request carries an automation token. */
+export function isSessionAutomationTokenPath(
+  url: string,
+  headers: { authorization?: string | string[] | undefined; [k: string]: unknown },
+): boolean {
+  if (!SESSION_AUTOMATION_RE.test(normalizePath(url))) return false;
+  const auth = headers.authorization;
+  const authStr = Array.isArray(auth) ? auth[0] : auth;
+  if (typeof authStr === 'string' && authStr.startsWith('Bearer ') && authStr.length > 7) {
+    return true;
+  }
+  const raw = headers['x-automation-token'];
+  if (typeof raw === 'string' && raw.trim()) return true;
+  if (Array.isArray(raw) && typeof raw[0] === 'string' && raw[0].trim()) return true;
+  return false;
+}
+
 /** True when the path is on the unauthenticated public allow-list. */
 export function isPublicPath(url: string): boolean {
   return PUBLIC_PATHS.has(normalizePath(url));
@@ -111,6 +136,9 @@ export function makeSurfaceAuthGuard(deps: AuthGuardDeps) {
     // The agent orchestration API authenticates with the caller's session token
     // (its handler verifies it) — never cookie-gate it.
     if (isOrchestratePath(url)) return;
+
+    // Skill automation (H2.2): Bearer / X-Automation-Token — route enforces capability.
+    if (isSessionAutomationTokenPath(url, request.headers as Record<string, unknown>)) return;
 
     // Public, pre-session surfaces (login / setup / logout / health).
     if (isPublicPath(url)) return;

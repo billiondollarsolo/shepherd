@@ -1553,6 +1553,7 @@ export async function main(): Promise<void> {
         }
       : undefined,
     // H2.2 automation façade: project-scoped ops via agentd agent_control_v1.
+    // Skill path: Bearer / X-Automation-Token → AgentCapabilityService.authorizeToken.
     automation: useAgentd
       ? {
           getSession: async (id: string) => {
@@ -1567,6 +1568,14 @@ export async function main(): Promise<void> {
               matchedRuleId: null,
               statusSource: null,
             };
+          },
+          authorizeAutomationToken: async (token, required) => {
+            try {
+              const cap = await agentCapabilities.authorizeToken(token, required);
+              return { projectId: cap.projectId, sessionId: cap.sessionId };
+            } catch {
+              return null;
+            }
           },
           prompt: async (sessionId: string, text: string) => {
             const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
