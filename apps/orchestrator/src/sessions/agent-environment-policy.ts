@@ -1,5 +1,7 @@
 import type { AgentType } from '@flock/shared';
 
+import { CONTROL_CREDENTIAL_ENV_VARS } from './automation-authz.js';
+
 const VALID_ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const CONTROL_ONLY = new Set([
@@ -20,6 +22,8 @@ const CONTROL_ONLY = new Set([
   'BASH_ENV',
   'ENV',
   'NODE_OPTIONS',
+  // D12: never leak agentd/node control credentials into agent env (canonical list).
+  ...CONTROL_CREDENTIAL_ENV_VARS,
 ]);
 
 const SESSION_FLOCK_KEYS = new Set([

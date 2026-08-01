@@ -11,3 +11,6 @@ export * from './git-service.js';
 export * from './git-route.js';
 export * from './session-rest-service.js';
 export * from './session-rest-routes.js';
+export * from './automation-authz.js';
+export * from './automation-service.js';
+export * from './automation-routes.js';

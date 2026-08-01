@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -64,19 +65,47 @@ func DetectAgent(command []string) string {
 	if len(command) == 0 {
 		return ""
 	}
-	switch filepath.Base(command[0]) {
+	base := filepath.Base(command[0])
+	switch base {
 	case "claude":
 		return "claude"
 	case "codex":
 		return "codex"
 	case "agy":
 		return "antigravity"
-	// T21: OpenCode is intentionally NOT tailed here. Its on-disk store is a sea of
-	// small JSON files (no JSONL), so the old heuristic was node-global mtime
-	// activity — which CLOBBERED per-session status and couldn't express
-	// awaiting_input/error. OpenCode now reports accurate PER-SESSION status via its
-	// hook plugin (T1) → the orchestrator's OpenCode translator, exactly like
-	// claude/codex hooks. So we return "" (no transcript watcher) and let hooks own it.
+	// T21: OpenCode is intentionally NOT tailed here (hooks own status).
+	// H3.2 catalog: still recognize binary for node-info / screen path via DetectScreenAgent.
+	default:
+		return ""
+	}
+}
+
+// DetectToolName returns a tool label for node-info / catalog (H3.2), including
+// terminal-tier agents that have no transcript watcher.
+func DetectToolName(command []string) string {
+	if a := DetectAgent(command); a != "" {
+		return a
+	}
+	if len(command) == 0 {
+		return ""
+	}
+	joined := strings.Join(command, " ")
+	for _, name := range []string{"opencode", "grok", "cursor-agent", "amp", "aider", "pi", "claude", "codex", "agy"} {
+		if strings.Contains(joined, name) {
+			if name == "cursor-agent" {
+				return "cursor"
+			}
+			if name == "agy" {
+				return "antigravity"
+			}
+			return name
+		}
+	}
+	switch filepath.Base(command[0]) {
+	case "opencode", "grok", "amp", "aider", "pi":
+		return filepath.Base(command[0])
+	case "cursor-agent":
+		return "cursor"
 	default:
 		return ""
 	}

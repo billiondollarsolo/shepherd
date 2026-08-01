@@ -111,6 +111,18 @@ type Control struct {
 	ContextTokens int    `json:"contextTokens,omitempty"`
 	ContextLimit  int    `json:"contextLimit,omitempty"` // T60: agent-reported context window
 	Plan          string `json:"plan,omitempty"`         // T62: JSON [{content,status}] task list
+
+	// Master improvement plan: screendetect / automation / attention
+	StatusSource string          `json:"statusSource,omitempty"` // lifecycle|screen|transcript|transport|…
+	MatchedRule  string          `json:"matchedRule,omitempty"`
+	UnseenIdle   bool            `json:"unseenIdle,omitempty"`
+	Text         string          `json:"text,omitempty"`         // prompt text / screen text
+	Keys         []string        `json:"keys,omitempty"`         // logical key names
+	Until        []string        `json:"until,omitempty"`        // wait_status targets
+	Match        string          `json:"match,omitempty"`        // wait_output substring
+	Regex        string          `json:"regex,omitempty"`        // wait_output regex
+	Explain      json.RawMessage `json:"explain,omitempty"`      // statusExplain payload
+	MatchedLine  string          `json:"matchedLine,omitempty"`
 }
 
 // SessionInfo is a session summary for `list`.

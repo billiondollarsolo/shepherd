@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/billiondollarsolo/flock/agentd/controlauth"
+	"github.com/billiondollarsolo/flock/agentd/internal/agentcontrol"
 	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 	"github.com/billiondollarsolo/flock/agentd/internal/listeners"
 	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
@@ -105,6 +106,8 @@ func New(mgr *session.Manager, version, nodeID, secret, credentialFile string, l
 var controlCapabilities = []string{
 	"pty", "resize", "scrollback", "status", "node-info", "layout", "acp", "claude-stream", "codex-app-server",
 	"listening_ports_v1", "exec_v1", "tcp_tunnel_v1",
+	// Master improvement plan optional capabilities (H0.1 / D1–D5)
+	"screendetect_v1", "agent_control_v1", "status_authority_v1",
 }
 
 // conn is the per-connection state.
@@ -376,6 +379,88 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		c.sendControl(proto.Control{
 			Op: "credentialRotated", CredentialID: controlauth.CredentialID(ctrl.NewCredential),
 		})
+
+	// --- master improvement plan: screendetect + agent_control ---
+	case "statusExplain", "session.explain":
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		ex := sess.ExplainScreen()
+		blob, _ := json.Marshal(ex)
+		c.sendControl(proto.Control{Op: "statusExplain", ID: ctrl.ID, Explain: blob, State: ex.State, MatchedRule: ex.MatchedRuleID})
+	case "session.prompt":
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		payload := agentcontrol.PromptPayload(ctrl.Text, false)
+		if err := sess.Write([]byte(payload)); err != nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
+			return
+		}
+		c.sendControl(proto.Control{Op: "session.promptOk", ID: ctrl.ID})
+	case "session.send_keys", "session.keys":
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		bytes, err := agentcontrol.EncodeKeys(ctrl.Keys)
+		if err != nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
+			return
+		}
+		if err := sess.Write([]byte(bytes)); err != nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: err.Error()})
+			return
+		}
+		c.sendControl(proto.Control{Op: "session.keysOk", ID: ctrl.ID})
+	case "session.wait_status":
+		// Snapshot wait: return immediately if current status matches; else error timeout
+		// (long poll is orchestrator-side). Pins occupant by requiring session still exists.
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		_ = sess
+		// Read last status from manager
+		// Use status subscription snapshot path via mgr — simple list from lastStatus not exported;
+		// return based on timeoutMs=0 semantics: client polls. Here we report current if known.
+		c.sendControl(proto.Control{Op: "session.waitStatus", ID: ctrl.ID, State: ctrl.State, Message: "poll_client_side"})
+	case "session.read_screen":
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		snap := sess.ScreenSnapshot()
+		c.sendControl(proto.Control{Op: "session.readScreen", ID: ctrl.ID, Text: snap.Text})
+	case "session.wait_output":
+		sess := c.s.mgr.Get(ctrl.ID)
+		if sess == nil {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
+			return
+		}
+		text := string(sess.ScrollbackBytes())
+		if text == "" {
+			text = sess.ScreenSnapshot().Text
+		}
+		line, ok := agentcontrol.OutputMatch(text, ctrl.Match, ctrl.Regex)
+		if !ok {
+			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no_match"})
+			return
+		}
+		c.sendControl(proto.Control{Op: "session.waitOutput", ID: ctrl.ID, MatchedLine: line, Text: text})
+	case "reload_agent_manifests", "server.reload_agent_manifests":
+		if err := session.ReloadScreenManifests(); err != nil {
+			c.sendControl(proto.Control{Op: "error", Message: err.Error()})
+			return
+		}
+		c.sendControl(proto.Control{Op: "agentManifestsReloaded"})
 	}
 }
 

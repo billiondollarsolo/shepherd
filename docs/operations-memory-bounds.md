@@ -29,3 +29,9 @@ scrollback buffer requires updating this table and diagnostics.
 event, request-budget, login, orchestration, and agentd collections retain focused
 unit/integration tests. The authenticated diagnostics bundle reports current
 low-cardinality sizes without exposing session content.
+
+## Screen model (screendetect)
+
+Per-session screen models retain ~24–40 rows of cell text plus a small scroll
+cap (~200 lines). Detection runs on a 400ms poll only when `FLOCK_SCREENDETECT`
+is enabled. Explain payloads truncate screen previews (~500 chars).

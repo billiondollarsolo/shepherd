@@ -152,6 +152,8 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 		} else {
 			go m.watchForeground(ctx, id, s)
 		}
+		// Screen detection still helps hook-owned / activity agents for blockers.
+		go m.watchScreenDetect(ctx, id, s)
 		return
 	}
 
@@ -174,6 +176,8 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	}, func(role, text string) {
 		postChatEvent(hookURL, hookToken, role, text)
 	})
+	// Optional screen-manifest detection (D10 default off via FLOCK_SCREENDETECT).
+	go m.watchScreenDetect(ctx, id, s)
 }
 
 // watchActivity derives running/idle from PTY output gaps for agents with no

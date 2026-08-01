@@ -20,3 +20,6 @@ export * from './backup.js';
 export * from './diagnostics.js';
 export * from './agentd-compatibility.js';
 export * from './node-tools.js';
+export * from './status-authority.js';
+export * from './automation-authz.js';
+export * from './unseen-idle.js';

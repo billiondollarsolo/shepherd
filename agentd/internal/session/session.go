@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/billiondollarsolo/flock/agentd/internal/identity"
+	"github.com/billiondollarsolo/flock/agentd/internal/screen"
 	"github.com/billiondollarsolo/flock/agentd/internal/status"
 
 	"github.com/creack/pty"
@@ -127,6 +128,10 @@ type Session struct {
 	// agents with no transcript/hook status source.
 	lastActivityNanos atomic.Int64
 
+	// screenModel is a minimal VT bottom-buffer for screendetect (H1.1). Optional;
+	// nil when screen tracking is not needed.
+	screenModel *screen.Model
+
 	closeCh chan struct{} // closed by Close() to interrupt a backoff sleep
 	done    chan struct{} // closed once when supervision ends (terminal exit/close)
 }
@@ -144,12 +149,20 @@ func (s *Session) LastActivity() time.Time {
 // the scrollback ring + subscribers. For a "dev" session a supervisor respawns
 // the command on exit until Close(). The caller owns Close().
 func Open(spec Spec) (*Session, error) {
+	cols, rows := int(spec.Cols), int(spec.Rows)
+	if cols <= 0 {
+		cols = 80
+	}
+	if rows <= 0 {
+		rows = 24
+	}
 	s := &Session{
-		spec:    spec,
-		ring:    newRing(defaultScrollbackBytes),
-		subs:    make(map[int]chan []byte),
-		closeCh: make(chan struct{}),
-		done:    make(chan struct{}),
+		spec:        spec,
+		ring:        newRing(defaultScrollbackBytes),
+		subs:        make(map[int]chan []byte),
+		closeCh:     make(chan struct{}),
+		done:        make(chan struct{}),
+		screenModel: screen.New(cols, rows),
 	}
 	// Seed native hook config on this node before the first process starts.
 	if err := seedHookConfig(spec); err != nil {
@@ -388,6 +401,9 @@ func (s *Session) broadcast(chunk []byte) {
 	}
 	// T61: record output time for the activity-status watcher (lock-free read).
 	s.lastActivityNanos.Store(time.Now().UnixNano())
+	if s.screenModel != nil {
+		s.screenModel.Write(chunk)
+	}
 	wasAlt := s.inAlt
 	s.updateAltState(chunk)
 	ringChunk := chunk
@@ -551,6 +567,27 @@ func (s *Session) Write(p []byte) error {
 	return err
 }
 
+// ScreenSnapshot returns the detection screen model snapshot (H1.1).
+func (s *Session) ScreenSnapshot() screen.Snapshot {
+	s.mu.Lock()
+	m := s.screenModel
+	s.mu.Unlock()
+	if m == nil {
+		return screen.Snapshot{}
+	}
+	return m.Snapshot()
+}
+
+// ScrollbackBytes returns a copy of the reconnect ring (for wait_output).
+func (s *Session) ScrollbackBytes() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ring == nil {
+		return nil
+	}
+	return s.ring.snapshot()
+}
+
 // Resize sets the current PTY window size; the foreground program gets SIGWINCH.
 // The size is remembered on the spec so a dev restart re-opens at the same size.
 func (s *Session) Resize(cols, rows uint16) error {
@@ -564,6 +601,9 @@ func (s *Session) Resize(cols, rows uint16) error {
 	}
 	s.spec.Cols = c
 	s.spec.Rows = r
+	if s.screenModel != nil {
+		s.screenModel.Resize(int(c), int(r))
+	}
 	ptmx := s.ptmx
 	s.mu.Unlock()
 	if ptmx == nil {

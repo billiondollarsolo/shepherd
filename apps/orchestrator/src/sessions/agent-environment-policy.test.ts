@@ -51,4 +51,27 @@ describe('agent environment policy', () => {
       ),
     ).toEqual({ FLOCK_SESSION_ID: 's', FLOCK_ORCHESTRATE_TOKEN: 'token' });
   });
+
+  it('strips D12 control credential keys from node and session env', () => {
+    const env = buildAgentEnvironment(
+      'codex',
+      {
+        AGENTD_CONTROL_SECRET: 'nope',
+        FLOCK_NODE_CREDENTIAL: 'nope',
+        FLOCK_AGENTD_CREDENTIAL: 'nope',
+        FLOCK_MASTER_KEY: 'nope',
+        PATH: '/usr/bin',
+      },
+      {
+        FLOCK_SESSION_ID: 's',
+        AGENTD_CONTROL_SECRET: 'still-no',
+        FLOCK_NODE_CREDENTIAL: 'still-no',
+      },
+    );
+    expect(env).toEqual({ PATH: '/usr/bin', FLOCK_SESSION_ID: 's' });
+    expect(env).not.toHaveProperty('AGENTD_CONTROL_SECRET');
+    expect(env).not.toHaveProperty('FLOCK_NODE_CREDENTIAL');
+    expect(env).not.toHaveProperty('FLOCK_AGENTD_CREDENTIAL');
+    expect(env).not.toHaveProperty('FLOCK_MASTER_KEY');
+  });
 });

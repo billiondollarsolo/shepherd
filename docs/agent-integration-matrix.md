@@ -208,6 +208,29 @@ name); the transcript carries no token/context/plan telemetry.
   running(tool) / error / done) — `activityStatus:false`. No token/model/plan
   events, so no telemetry. Auth: `grok login --device-auth` wrapper on first run.
 
+## Screen detection & status authority (master improvement plan)
+
+Planned incorporation of Herdr-class PTY screen-manifest detection and status
+arbitration is specified in
+[`master-improvement-plan.md`](./master-improvement-plan.md) and locked in
+[`decisions/status-authority.md`](./decisions/status-authority.md). Matrix
+intent for implementers:
+
+- **Authority column (product intent):** when sources disagree, Terminal mode
+  uses lifecycle authority (if active) → `visible_blocker` screen →
+  transcript/hooks partial → PTY activity → idle fallback (**D4**). Chat / ACP /
+  stream sessions keep **transport-owned** status; screen is diagnostic-only and
+  must not apply `visible_blocker` overrides (**D11**). Wire `done` remains
+  session-end only; unseen turn-complete uses `unseenIdle` metadata (**D9**).
+- **Screendetect feature flag:** detection ships **default off** until the live
+  matrix is green for claude, codex, opencode, grok, and antigravity; only then
+  flip default on for gated builds (**D10**). Rows above that claim
+  `awaiting_input` from hooks/transcripts stay accurate until screen path is
+  enabled and validated.
+- **Provenance:** adapted manifests under
+  `agentd/internal/screendetect/manifests/` — see
+  [`herdr-attribution.md`](./herdr-attribution.md).
+
 ## Known gaps / follow-ups (prioritized)
 
 1. **OpenCode telemetry — DONE (wired); validate against a live OpenCode** (⁴).

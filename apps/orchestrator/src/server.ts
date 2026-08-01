@@ -14,10 +14,12 @@ import {
   registerGitRoutes,
   registerTerminateSessionRoute,
   registerSessionRestRoutes,
+  registerAutomationRoutes,
   type DiffService,
   type GitService,
   type TerminateService,
   type SessionRestService,
+  type AutomationRouteDeps,
 } from './sessions/index.js';
 import { errorEnvelope } from './http/reply.js';
 import { registerEventRoute, type EventReadService } from './events/index.js';
@@ -202,6 +204,12 @@ export interface BuildServerDeps {
   surfaceAuth?: AuthGuardDeps;
   /** Authenticated, redacted operational health and bounded failure history. */
   diagnostics?: () => Promise<unknown>;
+  /**
+   * Session automation façade (H2.2 / D12): prompt / wait / keys / status-explain.
+   * Optional — when omitted, routes are not registered (safe for incomplete wiring).
+   * Auth is taken from `deps.auth` so callers only supply getSession + optional ops.
+   */
+  automation?: Omit<AutomationRouteDeps, 'auth'>;
 }
 
 /**
@@ -404,6 +412,11 @@ export function buildServer(deps: BuildServerDeps = {}): FastifyInstance {
     // Session list/create (FR-S2/S3): cookie-authed.
     if (deps.sessions) {
       registerSessionRestRoutes(app, { service: deps.sessions, auth: deps.auth });
+    }
+
+    // H2.2 automation façade — only when explicitly wired (prompt/wait may 501).
+    if (deps.automation) {
+      registerAutomationRoutes(app, { ...deps.automation, auth: deps.auth });
     }
 
     if (deps.previews && deps.projectPorts) {

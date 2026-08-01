@@ -70,3 +70,18 @@ Source: https://github.com/notofonts/symbols
 
 The SIL Open Font License text shipped with these fonts is included at
 [`apps/web/src/styles/fonts/OFL.txt`](apps/web/src/styles/fonts/OFL.txt).
+
+## Herdr (Apache-2.0) — adapted screen-detection manifests
+
+Shepherd includes **adapted** agent screen-detection TOML manifests and engine
+ideas derived from [Herdr](https://github.com/herdrdev/herdr), which is licensed under the
+Apache License 2.0. There is **no runtime dependency** on Herdr; manifests are
+Shepherd-owned and may be refreshed only via human-reviewed periodic import
+(see `docs/herdr-attribution.md` and `scripts/import-herdr-manifests.mjs`).
+
+Adapted files (non-exhaustive; see attribution doc for the current list):
+
+- `agentd/internal/screendetect/manifests/*.toml`
+
+Copyright holders and full Apache-2.0 terms are those of the Herdr project.
+Shepherd’s MIT License continues to cover Shepherd original code.
