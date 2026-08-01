@@ -813,16 +813,17 @@ func (c *conn) startStatusForwarder() {
 
 // statusControl converts a manager StatusEvent into the wire `status` frame. One
 // place to map the telemetry snapshot → Control (was two identical literals).
+//
+// D9: UnseenIdle is assigned as a *bool so JSON encodes false when clearing the
+// badge. Copying into a plain bool + omitempty would drop false on the wire and
+// leave orchestrator merge sticky-true.
 func statusControl(ev session.StatusEvent) proto.Control {
-	ctrl := proto.Control{
+	return proto.Control{
 		Op: "status", ID: ev.ID,
 		State: ev.State, Tokens: ev.Tokens, Tool: ev.Tool,
 		Model: ev.Model, ContextTokens: ev.ContextTokens, ContextLimit: ev.ContextLimit, Plan: ev.Plan,
+		UnseenIdle: ev.UnseenIdle, // pointer: nil omit, &false / &true always present
 	}
-	if ev.UnseenIdle != nil {
-		ctrl.UnseenIdle = *ev.UnseenIdle
-	}
-	return ctrl
 }
 
 func (c *conn) cleanup() {
