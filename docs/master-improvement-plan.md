@@ -4,7 +4,7 @@
 **Audience:** AI agents implementing; humans reviewing PRs  
 **Date:** 2026-08-01  
 **Decisions locked:** 2026-08-01 (product review)  
-**Repos:** `herdr/`, `shepherd/`, `shep-tui/` (sibling trees under `shepherd-all/`)  
+**Repos:** `herdr/` (sibling reference) + `shepherd/` monorepo including `shep-tui/` and `agentd/`  
 **Companions:**  
 [`architecture.md`](./architecture.md) · [`agent-integration-matrix.md`](./agent-integration-matrix.md) · [`flock-agentd-design.md`](./flock-agentd-design.md) · [`roadmap.md`](./roadmap.md) · [`architecture/state-ownership.md`](./architecture/state-ownership.md) · herdr docs (`agents`, `agent-automation`, `socket-api`, `session-state`, `integrations`) · herdr `AGENTS.md` / `skills/herdr/SKILL.md`
 

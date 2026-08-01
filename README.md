@@ -399,6 +399,9 @@ PTYs · status         PTYs · status
 metrics · transcripts metrics · transcripts
 ```
 
+- **`shep-tui`** is the optional standalone terminal paddock (`shep-tui/` next to
+  `agentd/`). Build with `(cd shep-tui && make build)`; it talks to local
+  `flock-agentd` without the browser or orchestrator.
 - **`flock-agentd`** is the small Go daemon on each node. It owns PTYs, keeps sessions
   alive, reports metrics, and observes supported agent lifecycle data.
 - **The orchestrator** is the Fastify/Postgres control plane. It owns authentication,
