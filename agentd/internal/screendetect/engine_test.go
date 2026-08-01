@@ -161,14 +161,14 @@ contains = ["ZZBLOCK"]
 }
 
 func TestEnabledFromEnv(t *testing.T) {
-	if EnabledFromEnv("") {
-		t.Fatal("default off")
+	if !EnabledFromEnv("") {
+		t.Fatal("default must be on when env unset/empty")
 	}
-	if !EnabledFromEnv("1") || !EnabledFromEnv("true") {
+	if !EnabledFromEnv("1") || !EnabledFromEnv("true") || !EnabledFromEnv("on") {
 		t.Fatal("should enable")
 	}
-	if EnabledFromEnv("0") {
-		t.Fatal("should disable")
+	if EnabledFromEnv("0") || EnabledFromEnv("false") || EnabledFromEnv("off") || EnabledFromEnv("no") {
+		t.Fatal("kill-switch must disable")
 	}
 }
 

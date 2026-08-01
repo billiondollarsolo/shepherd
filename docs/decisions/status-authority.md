@@ -63,10 +63,11 @@ structured driver.
 
 ### 4. Screendetect default (D10)
 
-Screen-manifest detection ships **default off** until the live integration
-matrix is green for first-wave agents (claude, codex, opencode, grok,
-antigravity). After that gate, flip default **on** only for builds that pass
-the gate. Prevents false “Needs you” in production.
+Screen-manifest detection is **default on** after the fixture and authority
+gate for first-wave agents (claude, codex, opencode, grok, antigravity hard
+fixtures + Chat non-override). Operators kill-switch with
+`FLOCK_SCREENDETECT=0|false|off|no`. Live multi-agent soak remains recommended
+but is not required to keep the product default.
 
 ## Consequences
 

@@ -222,11 +222,11 @@ intent for implementers:
   stream sessions keep **transport-owned** status; screen is diagnostic-only and
   must not apply `visible_blocker` overrides (**D11**). Wire `done` remains
   session-end only; unseen turn-complete uses `unseenIdle` metadata (**D9**).
-- **Screendetect feature flag:** detection ships **default off** until the live
-  matrix is green for claude, codex, opencode, grok, and antigravity; only then
-  flip default on for gated builds (**D10**). Rows above that claim
-  `awaiting_input` from hooks/transcripts stay accurate until screen path is
-  enabled and validated.
+- **Screendetect feature flag:** detection is **default on** after the fixture
+  and authority gate (**D10** flipped). Kill-switch: `FLOCK_SCREENDETECT=0`,
+  `false`, `off`, or `no`. Chat/structured modes still never let screen override
+  transport status (**D11**). Live soak on claude/codex/opencode/grok/antigravity
+  remains recommended.
 - **Provenance:** adapted manifests under
   `agentd/internal/screendetect/manifests/` — see
   [`herdr-attribution.md`](./herdr-attribution.md).

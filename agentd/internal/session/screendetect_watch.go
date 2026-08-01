@@ -40,7 +40,7 @@ func ReloadScreenManifests() error {
 	return e.Reload()
 }
 
-// ScreenDetectEnabled is D10: default off unless FLOCK_SCREENDETECT is truthy.
+// ScreenDetectEnabled is product default-on; FLOCK_SCREENDETECT=0/false/off disables.
 func ScreenDetectEnabled() bool {
 	return screendetect.EnabledFromEnv(os.Getenv("FLOCK_SCREENDETECT"))
 }

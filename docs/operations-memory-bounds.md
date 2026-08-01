@@ -33,5 +33,6 @@ low-cardinality sizes without exposing session content.
 ## Screen model (screendetect)
 
 Per-session screen models retain ~24–40 rows of cell text plus a small scroll
-cap (~200 lines). Detection runs on a 400ms poll only when `FLOCK_SCREENDETECT`
-is enabled. Explain payloads truncate screen previews (~500 chars).
+cap (~200 lines). Detection runs on a 400ms poll by default (product default-on);
+set `FLOCK_SCREENDETECT=0|false|off` to disable. Explain payloads truncate screen
+previews (~500 chars).

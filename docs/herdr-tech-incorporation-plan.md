@@ -127,7 +127,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 | **D7** | Live PTY FD handoff | **Out of v1** (Phase 5 research only) | High risk under setuid privilege separation |
 | **D8** | Relationship to roadmap F4/F6/control plane | This plan **feeds** those epics; does not supersede structured Chat/ACP | Screen path for **Terminal** mode; structured path for **Chat** mode |
 | **D9** | Done / unseen semantics | **`done` = session end only.** Turn complete → `idle`. Unseen finished work → **`unseenIdle` metadata + UI attention**, not wire `done`. Web Push on `done` stays session-end only | Avoids push spam and collision with session-end `done`; Herdr unseen→done is explicitly rejected |
-| **D10** | Screendetect default when shipping | **Default off** until live matrix green (claude, codex, opencode, grok, antigravity); then flip default **on** for builds that pass the gate | Prevents false Needs you in production |
+| **D10** | Screendetect default when shipping | **Default on** after fixture/authority gate (H1.3 path + hard fixtures). Kill-switch: `FLOCK_SCREENDETECT=0\|false\|off\|no`. Live matrix still recommended for soak | Prevents false Needs you until fixtures green; product default now on |
 | **D11** | Structured Chat mode vs screen | **Transport owns status.** Screen is **diagnostic-only** (explain/fixtures); `visible_blocker` must **not** override Chat/ACP/stream status | Avoid dual-source thrash in Chat mode |
 | **D12** | Automation token scope | **Project siblings only.** Session automation token may list/prompt/wait/read/keys/create only within the **same project**. Never agentd control credential in agent env | Least privilege for multi-agent work |
 | **D13** | Manifest maintenance | **Shepherd-owned adapted manifests** + **periodic Herdr import as reviewed patches** (script/process). Not a live runtime dependency on Herdr | Independent product control with upstream leverage |
@@ -339,7 +339,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Deps:** H2.2, H1.5. **Risk:** **critical security** — threat-model addendum in `docs/security/agent-environment.md`.
 - **Out of scope:** whole-node tokens; plugin marketplace.
 
-#### [ ] H2.4 — flock-tui / CLI parity for wait & explain
+#### [x] H2.4 — flock-tui / CLI parity for wait & explain
 
 - **Why:** Local elite ops without browser.
 - **Scope:** `flock-tui` CLI: improve `sessions wait` to use server-side wait when cap present; add `sessions explain`, `sessions prompt`.
@@ -347,6 +347,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Tests:** backend mock tests.
 - **Validation:** manual local.
 - **Deps:** H2.1. **Risk:** low.
+- **Done (thin slice):** `sessions explain` / `prompt` / server-side `wait` via `AgentController` when `agent_control_v1` present; poll fallback; unit dispatch tests + CLI help. Full KEYBINDS/PRODUCT polish optional.
 
 ---
 
@@ -527,8 +528,8 @@ Plus task-specific live checks above.
 
 | Flag | Default | Flip when |
 | --- | --- | --- |
-| `screendetect` / env | **off** (D10) | H1.3 + H1.5 live matrix green for claude/codex/opencode/grok/antigravity → default **on** |
-| `agent_control` | **off** until cap clients ready | H2.1 + security notes |
+| `screendetect` / env | **on** (D10 flipped; kill-switch `0/false/off/no`) | Live soak continues; fixture/authority gate green |
+| `agent_control` | **on** when agentd advertises caps (clients type-assert) | H2.1 + H2.4 CLI |
 | `session_automation_token` / skill install | **off** (D14) | H1 path trusted + H2.3 threat model signed off → enable skill install |
 | `alt_screen_read` | **off** | H4.3 validated |
 | `remote_manifests` | **off** | H4.2 signed (optional; D13 does not require this) |

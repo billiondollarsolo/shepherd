@@ -681,13 +681,16 @@ func afterLastPrompt(screen string) string {
 	return screen[last:]
 }
 
-// Enabled reports whether screendetect should apply (D10: default off).
-// FLOCK_SCREENDETECT=1|true|on enables; 0|false|off disables; empty defaults to false.
+// EnabledFromEnv reports whether screendetect should apply.
+// Default is ON when env is unset/empty (product default after fixture gate).
+// Explicit kill-switch: 0, false, off, no, disable, disabled.
+// Explicit enable: 1, true, on, yes (same as default).
 func EnabledFromEnv(env string) bool {
 	switch strings.ToLower(strings.TrimSpace(env)) {
-	case "1", "true", "on", "yes":
-		return true
-	default:
+	case "0", "false", "off", "no", "disable", "disabled":
 		return false
+	default:
+		// empty and all other values enable (default-on)
+		return true
 	}
 }

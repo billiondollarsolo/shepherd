@@ -274,7 +274,7 @@ func (m *Manager) startStatusWatcher(spec Spec, s *Session) {
 	}, func(role, text string) {
 		postChatEvent(hookURL, hookToken, role, text)
 	})
-	// Optional screen-manifest detection (D10 default off via FLOCK_SCREENDETECT).
+	// Screen-manifest detection (default on; FLOCK_SCREENDETECT=0|false|off kills).
 	go m.watchScreenDetect(ctx, id, s)
 }
 

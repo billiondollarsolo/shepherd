@@ -75,5 +75,5 @@ See the script’s help text for the workflow stub.
 | --- | --- |
 | **D3** | Herdr TOML for rule content; engine reimplemented in Go |
 | **D13** | Shepherd-owned manifests + periodic Herdr import as reviewed patches |
-| **D10** | Screendetect default off until live matrix green |
+| **D10** | Screendetect default on after fixture/authority gate; kill-switch env |
 | **D4 / D11** | Status authority — see [`decisions/status-authority.md`](./decisions/status-authority.md) |

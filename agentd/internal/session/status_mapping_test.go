@@ -66,13 +66,21 @@ func TestTerminalScreenBlockerWins(t *testing.T) {
 	}
 }
 
-func TestScreenDetectDefaultOff(t *testing.T) {
+func TestScreenDetectDefaultOnAndKillSwitch(t *testing.T) {
 	t.Setenv("FLOCK_SCREENDETECT", "")
+	if !ScreenDetectEnabled() {
+		t.Fatal("default must be on when env unset")
+	}
+	t.Setenv("FLOCK_SCREENDETECT", "0")
 	if ScreenDetectEnabled() {
-		t.Fatal("default must be off")
+		t.Fatal("0 must disable")
+	}
+	t.Setenv("FLOCK_SCREENDETECT", "false")
+	if ScreenDetectEnabled() {
+		t.Fatal("false must disable")
 	}
 	t.Setenv("FLOCK_SCREENDETECT", "1")
 	if !ScreenDetectEnabled() {
-		t.Fatal("should enable")
+		t.Fatal("1 must enable")
 	}
 }

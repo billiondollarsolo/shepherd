@@ -165,6 +165,6 @@ See [deployment.md](deployment.md) for how this maps onto the production stack, 
 `flock-agentd` optionally maintains a minimal VT screen model per session and
 classifies agent UI state via TOML manifests (`screendetect_v1`). Status authority
 rules are documented in `docs/decisions/status-authority.md`. Screendetect defaults
-**off** (`FLOCK_SCREENDETECT`); Chat/structured transports never let screen override
+**on by default** (`FLOCK_SCREENDETECT=0|false|off` to disable); Chat/structured transports never let screen override
 transport status. Project-scoped automation tokens + REST/skill live under
 `agent_control_v1` without placing agentd control credentials in agent env.
