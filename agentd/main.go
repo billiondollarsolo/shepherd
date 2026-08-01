@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/billiondollarsolo/flock/agentd/internal/agentresume"
 	"github.com/billiondollarsolo/flock/agentd/internal/identity"
 	"github.com/billiondollarsolo/flock/agentd/internal/layout"
 	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
@@ -192,6 +193,31 @@ func serve(args []string) {
 	// unbounded across restarts.
 	sweepStaleConfigDirs()
 	mgr := session.NewManager()
+	// H3.3: load persisted native resume refs. Auto-relaunch only when
+	// FLOCK_AGENT_RESUME=1 (default: log candidates; orchestrator rebinds).
+	if store, storeErr := agentresume.OpenStore(filepath.Join(*stateDir, "resume")); storeErr != nil {
+		fmt.Fprintf(os.Stderr, "[flock-agentd] resume store: %v\n", storeErr)
+	} else {
+		mgr.SetResumeStore(store)
+		candidates := store.RelaunchCommands()
+		if len(candidates) > 0 {
+			fmt.Fprintf(os.Stderr, "[flock-agentd] resume: %d session(s) eligible for native relaunch\n", len(candidates))
+		}
+		if os.Getenv("FLOCK_AGENT_RESUME") == "1" {
+			for _, item := range candidates {
+				spec := session.Spec{
+					ID: item.Record.SessionID, Cwd: item.Record.Cwd,
+					Command: item.Command, Mode: item.Record.Mode,
+					Cols: 80, Rows: 24,
+				}
+				if _, openErr := mgr.Open(spec); openErr != nil {
+					fmt.Fprintf(os.Stderr, "[flock-agentd] resume relaunch %s: %v\n", item.Record.SessionID, openErr)
+				} else {
+					fmt.Fprintf(os.Stderr, "[flock-agentd] resume relaunched %s via %v\n", item.Record.SessionID, item.Command)
+				}
+			}
+		}
+	}
 	layouts, err := layout.Open(filepath.Join(*stateDir, "layouts"))
 	if err != nil {
 		fatal("open layout store", err)

@@ -41,6 +41,12 @@ async function buildApp(opts: {
   scopeProjectId?: string | null;
   waitImplemented?: boolean;
   prompt?: (id: string, text: string) => Promise<void>;
+  waitStatus?: (
+    id: string,
+    until: string[] | undefined,
+    timeoutMs: number,
+  ) => Promise<string>;
+  sendKeys?: (id: string, keys: string[]) => Promise<void>;
 }) {
   const app = Fastify({ logger: false });
   registerAutomationRoutes(app, {
@@ -57,6 +63,8 @@ async function buildApp(opts: {
             }),
     waitImplemented: opts.waitImplemented,
     prompt: opts.prompt,
+    waitStatus: opts.waitStatus,
+    sendKeys: opts.sendKeys,
   });
   await app.ready();
   return app;
@@ -139,6 +147,33 @@ describe('registerAutomationRoutes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, status: 'idle', sessionId: SESSION.id });
+  });
+
+  it('forwards waitStatus bridge (server-side wait) and returns matched status', async () => {
+    const waitStatus = vi.fn(async () => 'awaiting_input');
+    app = await buildApp({ scopeProjectId: SESSION.projectId, waitStatus });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/wait`,
+      headers: { cookie },
+      payload: { until: ['awaiting_input'], timeoutMs: 5000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, status: 'awaiting_input' });
+    expect(waitStatus).toHaveBeenCalledWith(SESSION.id, ['awaiting_input'], 5000);
+  });
+
+  it('forwards sendKeys when implementation is provided', async () => {
+    const sendKeys = vi.fn(async () => {});
+    app = await buildApp({ scopeProjectId: SESSION.projectId, sendKeys });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/keys`,
+      headers: { cookie },
+      payload: { keys: ['esc', 'enter'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(sendKeys).toHaveBeenCalledWith(SESSION.id, ['esc', 'enter']);
   });
 
   it('404s unknown sessions', async () => {

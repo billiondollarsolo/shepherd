@@ -4,6 +4,18 @@
   "preferredProtocolVersion": 2,
   "supportedProtocolVersions": [2],
   "requiredCapabilities": ["pty", "resize", "scrollback", "status", "node-info"],
+  "optionalCapabilities": [
+    "screendetect_v1",
+    "agent_control_v1",
+    "status_authority_v1",
+    "layout",
+    "acp",
+    "claude-stream",
+    "codex-app-server",
+    "listening_ports_v1",
+    "exec_v1",
+    "tcp_tunnel_v1"
+  ],
   "supportWindow": {
     "minorReleases": 1,
     "minimumDays": 90

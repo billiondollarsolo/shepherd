@@ -302,6 +302,8 @@ func (c *conn) handleControl(ctrl proto.Control) {
 			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
 			return
 		}
+		// Viewing a session counts as focus for D9 unseenIdle.
+		c.s.mgr.SetFocused(ctrl.ID, true)
 		sub := sess.Subscribe()
 		c.smu.Lock()
 		if old := c.subs[ctrl.ID]; old != nil {
@@ -310,6 +312,16 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		c.subs[ctrl.ID] = sub
 		c.smu.Unlock()
 		go c.stream(ctrl.ID, sess, sub)
+	case "session.focus":
+		// Explicit focus/unfocus for D9 (optional clients).
+		if ctrl.ID == "" {
+			c.sendControl(proto.Control{Op: "error", Message: "id required"})
+			return
+		}
+		// Message "0" / false → unfocus; default focus true.
+		focus := ctrl.Message != "0" && ctrl.Message != "false"
+		c.s.mgr.SetFocused(ctrl.ID, focus)
+		c.sendControl(proto.Control{Op: "session.focusOk", ID: ctrl.ID})
 	case "unsubscribe":
 		c.dropSub(ctrl.ID)
 	case "resize":
@@ -419,18 +431,24 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		}
 		c.sendControl(proto.Control{Op: "session.keysOk", ID: ctrl.ID})
 	case "session.wait_status":
-		// Snapshot wait: return immediately if current status matches; else error timeout
-		// (long poll is orchestrator-side). Pins occupant by requiring session still exists.
-		sess := c.s.mgr.Get(ctrl.ID)
-		if sess == nil {
-			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
-			return
-		}
-		_ = sess
-		// Read last status from manager
-		// Use status subscription snapshot path via mgr — simple list from lastStatus not exported;
-		// return based on timeoutMs=0 semantics: client polls. Here we report current if known.
-		c.sendControl(proto.Control{Op: "session.waitStatus", ID: ctrl.ID, State: ctrl.State, Message: "poll_client_side"})
+		// Server-side event-driven wait with timeout + occupant pin (H2.1).
+		// Runs in a goroutine so other control frames keep flowing on this connection.
+		go func(id string, until []string, timeoutMs int) {
+			ctx := c.ctx
+			if timeoutMs <= 0 {
+				timeoutMs = 600_000 // 10m hard cap when client omits timeout
+			}
+			if timeoutMs > 600_000 {
+				timeoutMs = 600_000
+			}
+			st, err := c.s.mgr.WaitStatus(ctx, id, until, timeoutMs)
+			if err != nil {
+				code, msg := session.FormatWaitError(err)
+				c.sendControl(proto.Control{Op: "error", ID: id, Message: code + ": " + msg})
+				return
+			}
+			c.sendControl(proto.Control{Op: "session.waitStatus", ID: id, State: st})
+		}(ctrl.ID, ctrl.Until, ctrl.TimeoutMS)
 	case "session.read_screen":
 		sess := c.s.mgr.Get(ctrl.ID)
 		if sess == nil {
@@ -788,11 +806,15 @@ func (c *conn) startStatusForwarder() {
 // statusControl converts a manager StatusEvent into the wire `status` frame. One
 // place to map the telemetry snapshot → Control (was two identical literals).
 func statusControl(ev session.StatusEvent) proto.Control {
-	return proto.Control{
+	ctrl := proto.Control{
 		Op: "status", ID: ev.ID,
 		State: ev.State, Tokens: ev.Tokens, Tool: ev.Tool,
 		Model: ev.Model, ContextTokens: ev.ContextTokens, ContextLimit: ev.ContextLimit, Plan: ev.Plan,
 	}
+	if ev.UnseenIdle != nil {
+		ctrl.UnseenIdle = *ev.UnseenIdle
+	}
+	return ctrl
 }
 
 func (c *conn) cleanup() {

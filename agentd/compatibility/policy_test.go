@@ -26,6 +26,7 @@ func TestPolicyMatchesCompatibilityJSON(t *testing.T) {
 		PreferredProtocolVersion  int      `json:"preferredProtocolVersion"`
 		SupportedProtocolVersions []int    `json:"supportedProtocolVersions"`
 		RequiredCapabilities      []string `json:"requiredCapabilities"`
+		OptionalCapabilities      []string `json:"optionalCapabilities"`
 		SupportWindow             struct {
 			MinorReleases int `json:"minorReleases"`
 			MinimumDays   int `json:"minimumDays"`
@@ -43,6 +44,7 @@ func TestPolicyMatchesCompatibilityJSON(t *testing.T) {
 		PreferredProtocolVersion:  file.PreferredProtocolVersion,
 		SupportedProtocolVersions: file.SupportedProtocolVersions,
 		RequiredCapabilities:      file.RequiredCapabilities,
+		OptionalCapabilities:      file.OptionalCapabilities,
 		SupportMinorReleases:      file.SupportWindow.MinorReleases,
 		SupportMinimumDays:        file.SupportWindow.MinimumDays,
 	}

@@ -12,6 +12,7 @@ type Policy struct {
 	PreferredProtocolVersion  int
 	SupportedProtocolVersions []int
 	RequiredCapabilities      []string
+	OptionalCapabilities      []string
 	SupportMinorReleases      int
 	SupportMinimumDays        int
 }
@@ -24,6 +25,7 @@ func Current() Policy {
 		PreferredProtocolVersion:  2,
 		SupportedProtocolVersions: []int{2},
 		RequiredCapabilities:      []string{"pty", "resize", "scrollback", "status", "node-info"},
+		OptionalCapabilities:      []string{"screendetect_v1", "agent_control_v1", "status_authority_v1", "layout", "acp", "claude-stream", "codex-app-server", "listening_ports_v1", "exec_v1", "tcp_tunnel_v1"},
 		SupportMinorReleases:      1,
 		SupportMinimumDays:        90,
 	}

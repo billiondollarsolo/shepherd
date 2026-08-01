@@ -22,6 +22,11 @@ export const AgentTelemetry = z.object({
   contextTokens: z.number().optional(),
   contextLimit: z.number().optional(),
   costUsd: z.number().optional(),
+  /**
+   * D9: true when the session became idle while not focused/opened — review badge
+   * only; wire status stays `idle` (not remapped to `done`).
+   */
+  unseenIdle: z.boolean().optional(),
 });
 export type AgentTelemetry = z.infer<typeof AgentTelemetry>;
 

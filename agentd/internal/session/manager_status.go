@@ -6,8 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/billiondollarsolo/flock/agentd/internal/agentcontrol"
 	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
+
+func agentcontrolNextUnseen(prev, next string, focused, prevUnseen bool) bool {
+	return agentcontrol.NextUnseenIdle(prev, next, focused, prevUnseen)
+}
 
 // hookOwnedAgentNames are CLIs whose live status is owned by Shepherd hooks
 // (not transcript tailing, not PTY-foreground). Their process stays in the
@@ -102,8 +107,26 @@ func (m *Manager) SubscribeStatus() *StatusSub {
 // emitStatus records the latest status for a session and fans it out. A slow
 // subscriber drops the event (status is last-write-wins; the snapshot on the
 // next subscribe corrects any miss) rather than blocking the watcher.
+// Applies D9 unseenIdle: transition into idle while not focused → true.
 func (m *Manager) emitStatus(ev StatusEvent) {
 	m.statusMu.Lock()
+	prev := m.lastStatus[ev.ID]
+	prevState := prev.State
+	prevUnseen := false
+	if prev.UnseenIdle != nil {
+		prevUnseen = *prev.UnseenIdle
+	}
+	focused := m.focused[ev.ID]
+	if ev.State != "" {
+		nextUnseen := agentcontrolNextUnseen(prevState, ev.State, focused, prevUnseen)
+		ev.UnseenIdle = &nextUnseen
+	} else if prev.UnseenIdle != nil {
+		ev.UnseenIdle = prev.UnseenIdle
+	}
+	// Merge non-empty state for storage
+	if ev.State == "" {
+		ev.State = prevState
+	}
 	m.lastStatus[ev.ID] = ev
 	subs := make([]chan StatusEvent, 0, len(m.statusSubs))
 	for _, ch := range m.statusSubs {
@@ -114,6 +137,23 @@ func (m *Manager) emitStatus(ev StatusEvent) {
 		select {
 		case ch <- ev:
 		default:
+		}
+	}
+}
+
+// SetFocused marks a session as focused/opened (clears unseenIdle on next emit).
+func (m *Manager) SetFocused(id string, focused bool) {
+	m.statusMu.Lock()
+	defer m.statusMu.Unlock()
+	if m.focused == nil {
+		m.focused = make(map[string]bool)
+	}
+	m.focused[id] = focused
+	if focused {
+		if ev, ok := m.lastStatus[id]; ok {
+			f := false
+			ev.UnseenIdle = &f
+			m.lastStatus[id] = ev
 		}
 	}
 }

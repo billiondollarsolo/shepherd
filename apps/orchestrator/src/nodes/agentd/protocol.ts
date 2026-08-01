@@ -80,6 +80,17 @@ export interface AgentdControl {
   // Native hook-config injection (US-19) on `open` (client→daemon).
   configFiles?: Record<string, string>;
   configBaseSubdir?: string;
+  // Master improvement plan: screendetect / agent_control
+  text?: string;
+  keys?: string[];
+  until?: string[];
+  match?: string;
+  regex?: string;
+  statusSource?: string;
+  matchedRule?: string;
+  unseenIdle?: boolean;
+  explain?: unknown;
+  matchedLine?: string;
 }
 
 export interface AgentdListeningPort {
@@ -101,7 +112,7 @@ export interface AgentdListeningPort {
  */
 export type AgentdStatusMeta = Pick<
   AgentdControl,
-  'tokens' | 'tool' | 'model' | 'contextTokens' | 'contextLimit' | 'plan'
+  'tokens' | 'tool' | 'model' | 'contextTokens' | 'contextLimit' | 'plan' | 'unseenIdle'
 >;
 
 /** Frame one type+payload into a Buffer (`[u32 len][type][payload]`). */

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/billiondollarsolo/flock/agentd/internal/agentresume"
 	"github.com/billiondollarsolo/flock/agentd/internal/metrics"
 	"github.com/billiondollarsolo/flock/agentd/internal/status"
 )
@@ -28,9 +29,57 @@ type Manager struct {
 	statusStops  map[string]context.CancelFunc // per-session watcher cancel
 	claimedFiles map[string]string             // transcript path → owning session id
 	creating     map[string]chan struct{}      // ids with an in-flight Open (dedup)
+	focused      map[string]bool               // D9: session focused/opened in a client
 
 	procMu      sync.Mutex
 	procSamples map[string]procSample // last CPU sample per session (for delta %)
+
+	resumeStore *agentresume.Store // optional H3.3 native resume persistence
+}
+
+// SetResumeStore attaches a durable resume store (called from main after OpenStore).
+func (m *Manager) SetResumeStore(s *agentresume.Store) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resumeStore = s
+}
+
+func (m *Manager) persistResume(spec Spec) {
+	m.mu.Lock()
+	store := m.resumeStore
+	m.mu.Unlock()
+	if store == nil {
+		return
+	}
+	ref := envValue(spec.Env, "FLOCK_RESUME_REF")
+	if ref == "" {
+		ref = envValue(spec.Env, "CLAUDE_SESSION_ID")
+	}
+	if ref == "" {
+		return
+	}
+	kind := status.DetectToolName(spec.Command)
+	if kind == "" {
+		kind = status.DetectAgent(spec.Command)
+	}
+	_ = store.Put(agentresume.Record{
+		SessionID: spec.ID,
+		AgentKind: kind,
+		ResumeRef: ref,
+		Cwd:       spec.Cwd,
+		Argv:      append([]string(nil), spec.Command...),
+		Mode:      spec.Mode,
+	})
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, e := range env {
+		if len(e) >= len(prefix) && e[:len(prefix)] == prefix {
+			return e[len(prefix):]
+		}
+	}
+	return ""
 }
 
 func NewManager() *Manager {
@@ -41,6 +90,7 @@ func NewManager() *Manager {
 		statusStops:  make(map[string]context.CancelFunc),
 		claimedFiles: make(map[string]string),
 		creating:     make(map[string]chan struct{}),
+		focused:      make(map[string]bool),
 		procSamples:  make(map[string]procSample),
 	}
 }
@@ -109,6 +159,9 @@ func (m *Manager) Open(spec Spec) (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Persist native resume metadata when env carries FLOCK_RESUME_REF (H3.3).
+		m.persistResume(spec)
 
 		// Start deriving live status — transcript tail (claude/codex) or PTY-activity
 		// (via spec.ActivityStatus); no-op for plain shells. ACP and

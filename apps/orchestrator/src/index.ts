@@ -840,6 +840,8 @@ export async function main(): Promise<void> {
               ? lookupModel(merged.model).contextLimit
               : undefined),
           costUsd: merged.costUsd,
+          // D9: review badge; wire status stays idle when unseenIdle is true.
+          unseenIdle: workMeta.unseenIdle,
         });
       }
       // T62: Codex reports its task list via update_plan on the status channel.
@@ -1548,6 +1550,78 @@ export async function main(): Promise<void> {
           const client = peekClientForNode(owner.nodeId);
           client?.close(ptyId); // kill the daemon shell PTY
           liveChannels.untrackSession(ptyId); // drop the shared PtySession (fresh on re-split)
+        }
+      : undefined,
+    // H2.2 automation façade: project-scoped ops via agentd agent_control_v1.
+    automation: useAgentd
+      ? {
+          getSession: async (id: string) => {
+            const open = await sessionRegistry.getSession(id).catch(() => null);
+            if (!open) return null;
+            const live = liveChannels.statusMap.get(id);
+            return {
+              id: open.id,
+              projectId: open.projectId,
+              status: live?.status ?? (open.status as string | null) ?? null,
+              agentType: open.agentType ?? null,
+              matchedRuleId: null,
+              statusSource: null,
+            };
+          },
+          prompt: async (sessionId: string, text: string) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            await client.sessionPrompt(sessionId, text);
+          },
+          sendKeys: async (sessionId: string, keys: string[]) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            await client.sessionSendKeys(sessionId, keys);
+          },
+          waitStatus: async (sessionId: string, until: string[] | undefined, timeoutMs: number) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            try {
+              return await client.sessionWaitStatus(sessionId, until, timeoutMs);
+            } catch (err) {
+              // Fallback: poll orchestrator StatusMap if agentd wait unavailable.
+              if (
+                err instanceof Error &&
+                /capability unavailable|agent_control_v1/i.test(err.message)
+              ) {
+                const deadline = Date.now() + timeoutMs;
+                const want = until?.length ? until : ['idle', 'done', 'awaiting_input'];
+                while (Date.now() < deadline) {
+                  const st = liveChannels.statusMap.get(sessionId)?.status;
+                  if (st && want.includes(st)) return st;
+                  await new Promise((r) => setTimeout(r, 200));
+                }
+                throw new Error('timeout: wait_status timed out');
+              }
+              throw err;
+            }
+          },
+          statusExplain: async (sessionId: string) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            return client.statusExplain(sessionId);
+          },
         }
       : undefined,
   });

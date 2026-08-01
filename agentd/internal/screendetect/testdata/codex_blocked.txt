@@ -1,3 +1,2 @@
 # OSC: Action Required
-some codex output
 press enter to confirm or esc to cancel

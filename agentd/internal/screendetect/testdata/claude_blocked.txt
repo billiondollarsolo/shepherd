@@ -1,0 +1,7 @@
+────────────────────────────────────────
+ Do you want to proceed?
+ bash command
+ ❯ 1. Yes
+   2. No
+ enter to select · esc to cancel
+ tab/arrow keys to navigate

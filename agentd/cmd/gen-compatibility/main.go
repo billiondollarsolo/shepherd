@@ -28,7 +28,9 @@ type policyJSON struct {
 	PreferredProtocolVersion  int      `json:"preferredProtocolVersion"`
 	SupportedProtocolVersions []int    `json:"supportedProtocolVersions"`
 	RequiredCapabilities      []string `json:"requiredCapabilities"`
-	SupportWindow             struct {
+	// OptionalCapabilities are negotiated at helloOk; missing ones degrade, not reject.
+	OptionalCapabilities []string `json:"optionalCapabilities"`
+	SupportWindow        struct {
 		MinorReleases int `json:"minorReleases"`
 		MinimumDays   int `json:"minimumDays"`
 	} `json:"supportWindow"`
@@ -73,6 +75,7 @@ func render(p policyJSON) []byte {
 	fmt.Fprint(&b, "\tPreferredProtocolVersion  int\n")
 	fmt.Fprint(&b, "\tSupportedProtocolVersions []int\n")
 	fmt.Fprint(&b, "\tRequiredCapabilities      []string\n")
+	fmt.Fprint(&b, "\tOptionalCapabilities      []string\n")
 	fmt.Fprint(&b, "\tSupportMinorReleases      int\n")
 	fmt.Fprint(&b, "\tSupportMinimumDays        int\n")
 	fmt.Fprint(&b, "}\n\n")
@@ -84,6 +87,7 @@ func render(p policyJSON) []byte {
 	fmt.Fprintf(&b, "\t\tPreferredProtocolVersion:  %d,\n", p.PreferredProtocolVersion)
 	fmt.Fprintf(&b, "\t\tSupportedProtocolVersions: %#v,\n", p.SupportedProtocolVersions)
 	fmt.Fprintf(&b, "\t\tRequiredCapabilities:      %#v,\n", p.RequiredCapabilities)
+	fmt.Fprintf(&b, "\t\tOptionalCapabilities:      %#v,\n", p.OptionalCapabilities)
 	fmt.Fprintf(&b, "\t\tSupportMinorReleases:      %d,\n", p.SupportWindow.MinorReleases)
 	fmt.Fprintf(&b, "\t\tSupportMinimumDays:        %d,\n", p.SupportWindow.MinimumDays)
 	fmt.Fprint(&b, "\t}\n")

@@ -61,8 +61,20 @@ export interface AutomationRouteDeps {
    */
   sendKeys?: (sessionId: string, keys: string[]) => Promise<void>;
   /**
-   * When true, wait returns `{ ok, status }` for a known session after authz
-   * (no long-poll). When false/omitted, wait returns 501 after authz.
+   * Server-side wait (agentd wait_status or StatusMap poll). Returns matched status.
+   */
+  waitStatus?: (
+    sessionId: string,
+    until: string[] | undefined,
+    timeoutMs: number,
+  ) => Promise<string>;
+  /**
+   * Optional live explain from agentd screendetect.
+   */
+  statusExplain?: (sessionId: string) => Promise<unknown>;
+  /**
+   * @deprecated use waitStatus
+   * When true and waitStatus is missing, wait returns current status only (no long-poll).
    */
   waitImplemented?: boolean;
 }
@@ -183,12 +195,32 @@ export function registerAutomationRoutes(app: FastifyInstance, deps: AutomationR
 
       const body = (request.body ?? {}) as { until?: unknown; timeoutMs?: unknown };
       try {
-        // Validate timeout even on the stub path.
-        normalizeWaitTimeoutMs(
-          typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
-        );
         if (body.until !== undefined && !Array.isArray(body.until)) {
           throw new AutomationBadRequestError('until must be an array of status strings when set.');
+        }
+
+        const timeoutMs = normalizeWaitTimeoutMs(
+          typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
+        );
+        const until = Array.isArray(body.until)
+          ? body.until.filter((u): u is string => typeof u === 'string')
+          : undefined;
+
+        if (deps.waitStatus) {
+          try {
+            const status = await deps.waitStatus(session.id, until, timeoutMs);
+            return reply.code(200).send({ ok: true, status, sessionId: session.id });
+          } catch (waitErr) {
+            const message = waitErr instanceof Error ? waitErr.message : String(waitErr);
+            if (/timeout/i.test(message)) {
+              return reply.code(408).send({
+                error: { code: 'wait_timeout', message },
+              });
+            }
+            return reply.code(409).send({
+              error: { code: 'wait_failed', message },
+            });
+          }
         }
 
         if (!deps.waitImplemented) {
@@ -217,6 +249,15 @@ export function registerAutomationRoutes(app: FastifyInstance, deps: AutomationR
       const session = await loadSession(request, reply);
       if (!session) return;
       if (!(await enforceAutomation(request, reply, session, 'read'))) return;
+
+      if (deps.statusExplain) {
+        try {
+          const live = await deps.statusExplain(session.id);
+          return reply.code(200).send(live);
+        } catch {
+          // fall through to local explain
+        }
+      }
 
       const explain = buildExplainResponse(
         session.agentType ?? 'unknown',

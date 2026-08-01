@@ -383,6 +383,78 @@ export class NodeAgentdClient {
     this.sock.write(encodePtyInput(id, data));
   }
 
+  /**
+   * Submit prompt text + Enter via agentd `session.prompt` (agent_control_v1).
+   * Falls back to raw PTY write when the capability is missing.
+   */
+  async sessionPrompt(id: string, text: string): Promise<void> {
+    if (this.supports('agent_control_v1')) {
+      this.send({ op: 'session.prompt', id, text });
+      const r = await this.await(
+        (c) =>
+          (c.op === 'session.promptOk' || c.op === 'error') && (c.id === id || c.op === 'error'),
+      );
+      if (r.op === 'error') throw new Error(`session.prompt failed: ${r.message}`);
+      return;
+    }
+    // Fallback: bracketed paste is not applied; append CR.
+    this.write(id, Buffer.from(`${text}\r`, 'utf8'));
+  }
+
+  /** Logical keys via agentd `session.send_keys` (agent_control_v1). */
+  async sessionSendKeys(id: string, keys: string[]): Promise<void> {
+    if (!this.supports('agent_control_v1')) {
+      throw new AgentdCapabilityUnavailableError('agent_control_v1');
+    }
+    this.send({ op: 'session.send_keys', id, keys });
+    const r = await this.await(
+      (c) =>
+        (c.op === 'session.keysOk' || c.op === 'error') && (c.id === id || !c.id || c.op === 'error'),
+    );
+    if (r.op === 'error') throw new Error(`session.send_keys failed: ${r.message}`);
+  }
+
+  /**
+   * Server-side status wait (timeout + occupant pin). Returns matched state.
+   */
+  async sessionWaitStatus(
+    id: string,
+    until: string[] | undefined,
+    timeoutMs: number,
+  ): Promise<string> {
+    if (!this.supports('agent_control_v1')) {
+      throw new AgentdCapabilityUnavailableError('agent_control_v1');
+    }
+    this.send({
+      op: 'session.wait_status',
+      id,
+      until: until && until.length ? until : undefined,
+      timeoutMs,
+    });
+    const r = await this.await(
+      (c) =>
+        (c.op === 'session.waitStatus' || c.op === 'error') &&
+        (c.id === id || c.op === 'error'),
+      // Wait slightly longer than daemon timeout so the error frame arrives.
+      Math.max(timeoutMs + 5_000, 15_000),
+    );
+    if (r.op === 'error') throw new Error(r.message ?? 'session.wait_status failed');
+    return r.state ?? '';
+  }
+
+  async statusExplain(id: string): Promise<unknown> {
+    if (!this.supports('screendetect_v1') && !this.supports('agent_control_v1')) {
+      // Still try — older servers may not advertise but ops exist on new builds.
+    }
+    this.send({ op: 'statusExplain', id });
+    const r = await this.await(
+      (c) =>
+        (c.op === 'statusExplain' || c.op === 'error') && (c.id === id || c.op === 'error'),
+    );
+    if (r.op === 'error') throw new Error(r.message ?? 'statusExplain failed');
+    return r.explain ?? { agent: null, state: r.state, matchedRuleId: r.matchedRule };
+  }
+
   resize(id: string, cols: number, rows: number): void {
     this.send({ op: 'resize', id, cols, rows });
   }

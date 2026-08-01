@@ -26,5 +26,8 @@ export function mergeAgentMeta(
     contextLimit,
     contextPct: contextPct(model, contextTokens, contextLimit),
     costUsd: estimateCostUsd(model, tokens),
+    // D9: boolean is meaningful when false (clear badge) — prefer incoming when defined.
+    unseenIdle:
+      typeof incoming.unseenIdle === 'boolean' ? incoming.unseenIdle : previous.unseenIdle,
   };
 }

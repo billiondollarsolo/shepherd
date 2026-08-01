@@ -57,6 +57,9 @@ type Update struct {
 	// Codex emits it via its `update_plan` tool (in the transcript); the orchestrator
 	// turns a changed plan into the same `plan` artifact Claude's TodoWrite produces.
 	Plan string
+	// UnseenIdle (D9): idle after turn complete while session not focused.
+	// Pointer so false can clear a previous true (omitempty on bool alone cannot).
+	UnseenIdle *bool
 }
 
 // DetectAgent maps a session's argv to the agent whose transcript we can tail, or

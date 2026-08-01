@@ -339,7 +339,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Deps:** H2.2, H1.5. **Risk:** **critical security** — threat-model addendum in `docs/security/agent-environment.md`.
 - **Out of scope:** whole-node tokens; plugin marketplace.
 
-#### [x] H2.4 — flock-tui / CLI parity for wait & explain
+#### [ ] H2.4 — flock-tui / CLI parity for wait & explain
 
 - **Why:** Local elite ops without browser.
 - **Scope:** `flock-tui` CLI: improve `sessions wait` to use server-side wait when cap present; add `sessions explain`, `sessions prompt`.
@@ -421,7 +421,7 @@ All rows below are binding. Implementers treat them as requirements, not options
 - **Validation:** staging.
 - **Deps:** H4.1. **Risk:** high (supply chain) — may defer indefinitely.
 
-#### [x] H4.3 — Alt-screen intelligent `read` for idle agents
+#### [ ] H4.3 — Alt-screen intelligent `read` for idle agents
 
 - **Why:** Full-screen agents don’t put history in host scrollback.
 - **Scope:** `session.read_screen` recent source: if idle recognized agent + alt-screen + mouse wheel reported, page-scroll capture (Herdr behavior), restore viewport.
