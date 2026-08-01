@@ -1,2 +1,6 @@
-allow command?
-press enter to confirm or esc to cancel
+about to write
+
+write to this file?
+proceed (y)
+reject & propose changes
+esc or n or p

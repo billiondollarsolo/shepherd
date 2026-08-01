@@ -48,7 +48,7 @@ const ORCHESTRATE_PREFIX = '/api/orchestrate/';
  * enforce project-scoped capability auth (D12).
  */
 const SESSION_AUTOMATION_RE =
-  /^\/api\/sessions\/[^/]+\/(prompt|wait|keys|status-explain)$/;
+  /^\/api\/sessions\/[^/]+\/(prompt|wait|keys|status-explain|screen|wait-output)$/;
 
 /**
  * Surfaces reachable WITHOUT a session cookie. Deliberately tiny: only the

@@ -1,1 +1,1 @@
-$ 
+session idle at prompt

@@ -5,6 +5,8 @@
  *   POST /api/sessions/:id/wait            { until?, timeoutMs? }
  *   GET  /api/sessions/:id/status-explain
  *   POST /api/sessions/:id/keys            { keys: string[] }
+ *   GET  /api/sessions/:id/screen
+ *   POST /api/sessions/:id/wait-output     { match?, regex?, timeoutMs? }
  *
  * Auth (either):
  *   - Browser cookie via `requireAuth` (human operator), or
@@ -91,6 +93,11 @@ export interface AutomationRouteDeps {
     timeoutMs: number,
   ) => Promise<string>;
   statusExplain?: (sessionId: string) => Promise<unknown>;
+  readScreen?: (sessionId: string) => Promise<string>;
+  waitOutput?: (
+    sessionId: string,
+    opts: { match?: string; regex?: string; timeoutMs?: number },
+  ) => Promise<{ matchedLine: string }>;
   /** @deprecated use waitStatus */
   waitImplemented?: boolean;
 }
@@ -350,6 +357,76 @@ export function registerAutomationRoutes(app: FastifyInstance, deps: AutomationR
       }
       await deps.sendKeys(session.id, payload.keys);
       return reply.code(200).send({ ok: true, op: payload.op });
+    } catch (err) {
+      const mapped = mapAutomationError(reply, err);
+      if (mapped) return mapped;
+      throw err;
+    }
+  });
+
+  app.get('/api/sessions/:id/screen', async (request, reply) => {
+    const session = await loadSession(request, reply);
+    if (!session) return;
+    if (!(await gate(request, reply, session, 'read'))) return;
+
+    if (!deps.readScreen) {
+      return reply.code(501).send({
+        error: {
+          code: 'automation_not_implemented',
+          message: 'session.read_screen is not wired on this orchestrator yet.',
+        },
+      });
+    }
+    try {
+      const text = await deps.readScreen(session.id);
+      return reply.code(200).send({ ok: true, text, sessionId: session.id });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(502).send({ error: { code: 'screen_read_failed', message } });
+    }
+  });
+
+  app.post('/api/sessions/:id/wait-output', async (request, reply) => {
+    const session = await loadSession(request, reply);
+    if (!session) return;
+    if (!(await gate(request, reply, session, 'wait'))) return;
+
+    const body = (request.body ?? {}) as {
+      match?: unknown;
+      regex?: unknown;
+      timeoutMs?: unknown;
+    };
+    try {
+      const match = typeof body.match === 'string' ? body.match : undefined;
+      const regex = typeof body.regex === 'string' ? body.regex : undefined;
+      if (!match && !regex) {
+        throw new AutomationBadRequestError('match or regex is required.');
+      }
+      const timeoutMs = normalizeWaitTimeoutMs(
+        typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
+      );
+      if (!deps.waitOutput) {
+        return reply.code(501).send({
+          error: {
+            code: 'automation_not_implemented',
+            message: 'session.wait_output is not wired on this orchestrator yet.',
+          },
+        });
+      }
+      try {
+        const result = await deps.waitOutput(session.id, { match, regex, timeoutMs });
+        return reply.code(200).send({
+          ok: true,
+          matchedLine: result.matchedLine,
+          sessionId: session.id,
+        });
+      } catch (waitErr) {
+        const message = waitErr instanceof Error ? waitErr.message : String(waitErr);
+        if (/timeout/i.test(message)) {
+          return reply.code(408).send({ error: { code: 'wait_timeout', message } });
+        }
+        return reply.code(409).send({ error: { code: 'wait_failed', message } });
+      }
     } catch (err) {
       const mapped = mapAutomationError(reply, err);
       if (mapped) return mapped;

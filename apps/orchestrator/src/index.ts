@@ -1631,6 +1631,24 @@ export async function main(): Promise<void> {
             if (!client) throw new Error('flock-agentd unreachable');
             return client.statusExplain(sessionId);
           },
+          readScreen: async (sessionId: string) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            return client.sessionReadScreen(sessionId);
+          },
+          waitOutput: async (sessionId, opts) => {
+            const open = (await sessionRegistry.listOpenSessions()).find((s) => s.id === sessionId);
+            if (!open) throw new Error('session not found');
+            const node = await nodes.getNode(open.nodeId);
+            if (!node) throw new Error('node not found');
+            const client = await agentdClientForNode(open.nodeId, node.kind);
+            if (!client) throw new Error('flock-agentd unreachable');
+            return client.sessionWaitOutput(sessionId, opts);
+          },
         }
       : undefined,
   });

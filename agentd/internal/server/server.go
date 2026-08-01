@@ -466,21 +466,16 @@ func (c *conn) handleControl(ctrl proto.Control) {
 		snap := sess.ScreenSnapshot()
 		c.sendControl(proto.Control{Op: "session.readScreen", ID: ctrl.ID, Text: snap.Text})
 	case "session.wait_output":
-		sess := c.s.mgr.Get(ctrl.ID)
-		if sess == nil {
-			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no such session"})
-			return
-		}
-		text := string(sess.ScrollbackBytes())
-		if text == "" {
-			text = sess.ScreenSnapshot().Text
-		}
-		line, ok := agentcontrol.OutputMatch(text, ctrl.Match, ctrl.Regex)
-		if !ok {
-			c.sendControl(proto.Control{Op: "error", ID: ctrl.ID, Message: "no_match"})
-			return
-		}
-		c.sendControl(proto.Control{Op: "session.waitOutput", ID: ctrl.ID, MatchedLine: line, Text: text})
+		// Real wait: poll scrollback until match / timeout / session end (H2.1).
+		go func(id, match, regex string, timeoutMs int) {
+			line, err := c.s.mgr.WaitOutput(c.ctx, id, match, regex, timeoutMs)
+			if err != nil {
+				code, msg := session.FormatWaitError(err)
+				c.sendControl(proto.Control{Op: "error", ID: id, Message: code + ": " + msg})
+				return
+			}
+			c.sendControl(proto.Control{Op: "session.waitOutput", ID: id, MatchedLine: line})
+		}(ctrl.ID, ctrl.Match, ctrl.Regex, ctrl.TimeoutMS)
 	case "reload_agent_manifests", "server.reload_agent_manifests":
 		if err := session.ReloadScreenManifests(); err != nil {
 			c.sendControl(proto.Control{Op: "error", Message: err.Error()})

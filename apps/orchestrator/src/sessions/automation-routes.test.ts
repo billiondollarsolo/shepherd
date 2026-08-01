@@ -53,6 +53,11 @@ async function buildApp(opts: {
     token: string,
     required: string,
   ) => Promise<{ projectId: string; sessionId: string } | null>;
+  readScreen?: (id: string) => Promise<string>;
+  waitOutput?: (
+    id: string,
+    opts: { match?: string; regex?: string; timeoutMs?: number },
+  ) => Promise<{ matchedLine: string }>;
 }) {
   const app = Fastify({ logger: false });
   registerAutomationRoutes(app, {
@@ -63,6 +68,8 @@ async function buildApp(opts: {
     waitStatus: opts.waitStatus,
     sendKeys: opts.sendKeys,
     authorizeAutomationToken: opts.authorizeAutomationToken as never,
+    readScreen: opts.readScreen,
+    waitOutput: opts.waitOutput,
   });
   await app.ready();
   return app;
@@ -213,6 +220,49 @@ describe('registerAutomationRoutes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(sendKeys).toHaveBeenCalledWith(SESSION.id, ['esc', 'enter']);
+  });
+
+  it('GET /screen with token returns text from readScreen bridge', async () => {
+    const readScreen = vi.fn(async () => 'visible pane text');
+    app = await buildApp({
+      readScreen,
+      authorizeAutomationToken: async () => ({
+        projectId: SESSION.projectId,
+        sessionId: 'c',
+      }),
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/${SESSION.id}/screen`,
+      headers: { authorization: 'Bearer t' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, text: 'visible pane text' });
+    expect(readScreen).toHaveBeenCalledWith(SESSION.id);
+  });
+
+  it('POST /wait-output with token waits via bridge', async () => {
+    const waitOutput = vi.fn(async () => ({ matchedLine: 'found LINE' }));
+    app = await buildApp({
+      waitOutput,
+      authorizeAutomationToken: async () => ({
+        projectId: SESSION.projectId,
+        sessionId: 'c',
+      }),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${SESSION.id}/wait-output`,
+      headers: { 'x-automation-token': 't' },
+      payload: { match: 'LINE', timeoutMs: 5000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, matchedLine: 'found LINE' });
+    expect(waitOutput).toHaveBeenCalledWith(SESSION.id, {
+      match: 'LINE',
+      regex: undefined,
+      timeoutMs: 5000,
+    });
   });
 
   it('404s unknown sessions', async () => {

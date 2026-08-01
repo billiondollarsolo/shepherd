@@ -1,1 +1,3 @@
-Working on your request…
+# OSC: ⠧ working - grok
+⠧ Waiting on subagent… 2.8s   13s ⇣29.7k [stop]
+Esc:cancel

@@ -455,6 +455,42 @@ export class NodeAgentdClient {
     return r.explain ?? { agent: null, state: r.state, matchedRuleId: r.matchedRule };
   }
 
+  async sessionReadScreen(id: string): Promise<string> {
+    this.send({ op: 'session.read_screen', id });
+    const r = await this.await(
+      (c) =>
+        (c.op === 'session.readScreen' || c.op === 'error') &&
+        (c.id === id || c.op === 'error'),
+    );
+    if (r.op === 'error') throw new Error(r.message ?? 'session.read_screen failed');
+    return r.text ?? '';
+  }
+
+  async sessionWaitOutput(
+    id: string,
+    opts: { match?: string; regex?: string; timeoutMs?: number },
+  ): Promise<{ matchedLine: string }> {
+    if (!this.supports('agent_control_v1')) {
+      throw new AgentdCapabilityUnavailableError('agent_control_v1');
+    }
+    const timeoutMs = opts.timeoutMs ?? 120_000;
+    this.send({
+      op: 'session.wait_output',
+      id,
+      match: opts.match,
+      regex: opts.regex,
+      timeoutMs,
+    });
+    const r = await this.await(
+      (c) =>
+        (c.op === 'session.waitOutput' || c.op === 'error') &&
+        (c.id === id || c.op === 'error'),
+      Math.max(timeoutMs + 5_000, 15_000),
+    );
+    if (r.op === 'error') throw new Error(r.message ?? 'session.wait_output failed');
+    return { matchedLine: r.matchedLine ?? '' };
+  }
+
   resize(id: string, cols: number, rows: number): void {
     this.send({ op: 'resize', id, cols, rows });
   }

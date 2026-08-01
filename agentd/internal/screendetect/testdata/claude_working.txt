@@ -1,2 +1,4 @@
-Thinking about the problem
-esc to interrupt
+some output
+
+/btw about this
+esc to close

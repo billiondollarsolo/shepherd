@@ -1,2 +1,2 @@
-Allow this action?
-[y/n]
+# OSC: ⚠ Action Required - grok
+permission dialog here

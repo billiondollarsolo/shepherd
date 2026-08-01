@@ -1,2 +1,3 @@
-Permission required
-[y/n]
+△ Permission required
+↑↓ select  ⇆ tab
+esc dismiss  enter confirm

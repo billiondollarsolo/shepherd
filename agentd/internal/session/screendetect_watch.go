@@ -109,8 +109,13 @@ func ClassifyScreen(agent, screenText, oscTitle string) (wireState string, resul
 }
 
 // watchScreenDetect polls the screen model and emits status when enabled (H1.3).
-// In Chat mode sessions this is never started. Terminal mode uses authority merge
-// so screen can supply awaiting_input when transcripts miss blockers.
+// Terminal mode only. Screen is a first-class source: we do NOT feed the last
+// wire status back as a fake Transcript (that sticky-locked awaiting_input after
+// a screen raise and blocked idle clear).
+//
+// Emit whenever screen authority produces a new wire state. Screen owns
+// transitions between blocked/working/idle for agents without active lifecycle
+// authority (hooks still emit through their own path and can reassert).
 func (m *Manager) watchScreenDetect(ctx context.Context, id string, s *Session) {
 	if !ScreenDetectEnabled() {
 		return
@@ -144,13 +149,11 @@ func (m *Manager) watchScreenDetect(ctx context.Context, id string, s *Session) 
 		if r.SkipStateUpdate {
 			continue
 		}
-		// Merge screen with current transcript status
-		m.statusMu.Lock()
-		cur := m.lastStatus[id]
-		m.statusMu.Unlock()
+		// Screen-only merge: no fake Transcript from last wire status.
+		// Current is only used as hold when screen cannot classify (unknown).
 		dec := authority.Merge(authority.Input{
 			Mode:           authority.ModeTerminal,
-			Current:        cur.State,
+			Current:        "", // do not hold previous screen raise as truth
 			ScreenDetectOn: true,
 			Screen: authority.Source{
 				State:           r.State,
@@ -159,19 +162,22 @@ func (m *Manager) watchScreenDetect(ctx context.Context, id string, s *Session) 
 				SkipStateUpdate: r.SkipStateUpdate,
 				FromScreen:      true,
 			},
-			Transcript: authority.Source{
-				State:          cur.State,
-				FromTranscript: true,
-			},
 		})
-		if dec.State == "" || dec.State == lastWire {
+		// Prefer explicit screen map when Merge yields default/current hold.
+		wire := dec.State
+		if dec.Source != "screen" {
+			if w := screendetect.MapToWire(r.State); w != "" {
+				wire = w
+				dec.Source = "screen"
+			}
+		}
+		if wire == "" || wire == lastWire {
 			continue
 		}
-		// Only let screen *raise* awaiting_input or fill idle/running when current empty
-		if dec.Source == "screen" || cur.State == "" ||
-			(dec.State == status.StateAwaiting && cur.State != status.StateAwaiting) {
-			lastWire = dec.State
-			m.emitStatus(StatusEvent{ID: id, Update: status.Update{State: dec.State}})
+		// Screen path may raise and clear Needs-you (blocked→idle/working).
+		if dec.Source == "screen" || lastWire == "" {
+			lastWire = wire
+			m.emitStatus(StatusEvent{ID: id, Update: status.Update{State: wire}})
 		}
 	}
 }
